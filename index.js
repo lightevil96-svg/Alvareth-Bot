@@ -77,32 +77,5 @@ function start(file) {
   }
 }
 
-// Minta nomor WhatsApp saat login jika BOT_NUMBER kosong.
-async function startWithLogin() {
-  if (!String(process.env.BOT_NUMBER || '').replace(/\D/g, '')) {
-    while (true) {
-      const answer = await new Promise(resolve => {
-        rl.question(
-          '📱 Masukkan nomor WhatsApp (contoh 6281234567890, kosong = QR): ',
-          resolve
-        );
-      });
-
-      if (!answer.trim()) break;
-
-      const number = answer.replace(/\D/g, '');
-      if (number.length < 10 || number.length > 15) {
-        console.log('❌ Nomor tidak valid. Gunakan kode negara, contoh 6281234567890.');
-        continue;
-      }
-
-      process.env.BOT_NUMBER = number;
-      console.log('✔ Mode pairing nomor telepon aktif.');
-      break;
-    }
-  }
-
-  start('main.js');
-}
-
-await startWithLogin();
+// Login WhatsApp menggunakan QR scan; tidak meminta nomor pairing.
+start('main.js');
