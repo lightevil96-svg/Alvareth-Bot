@@ -28,6 +28,8 @@ export async function handler(chatUpdate) {
     try {
     m = smsg(this, m) || m
     if (!m) return
+    // Ignore non-chat/system updates that do not contain a usable sender or chat JID.
+    if (typeof m.sender !== 'string' || !m.sender || typeof m.chat !== 'string' || !m.chat) return
 
     m.exp = 0
     m.limit = false
@@ -440,7 +442,7 @@ if (m.quoted?.sender?.endsWith('@lid')) {
         if (typeof m.text !== 'string') m.text = ''
 
         let resolvedSender = m.sender
-if (m.sender.endsWith('@lid')) {
+if (typeof m.sender === 'string' && m.sender.endsWith('@lid')) {
   const resolved = await conn.findUserId(m.sender).catch(() => null)
   if (resolved?.phoneNumber) resolvedSender = resolved.phoneNumber
 }
