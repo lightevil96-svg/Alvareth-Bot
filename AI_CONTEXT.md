@@ -124,3 +124,12 @@ Before modifying updater/deploy logic:
 6. Review the diff and ensure no secrets, session files, database data, or local env were committed.
 7. For update/deploy changes, test both the no-update path and the update path, plus failure/network and dirty-worktree cases.
 8. Never promise “100% understood” or “fully tested” from documentation alone; confirm behavior through actual inspection and tests.
+
+
+## 9. Cross-plugin message-method compatibility fix (2026-10-22)
+
+- A recurring runtime issue was observed: plugins such as `plugins/downloader/tiktok.js` and `plugins/downloader/play.js` call `m.react()` / `m.reply()`, but some serialized messages do not have these methods and throw `TypeError: m.react is not a function` or `m.reply is not a function`.
+- A central compatibility fallback was added in `handler.js` immediately after `m = smsg(this, m) || m`. If methods are missing, it defines safe `m.reply()` and `m.react()` implementations using `conn.sendMessage()`, preserving the quoted message where possible. This is intended to fix the shared root cause across plugins rather than patching every plugin individually.
+- Commit: `7d66ebf`.
+- Next steps: run `npm test` locally and test at least `.play`, `.tt`, plus another plugin that uses `m.reply()` or `m.react()`. This commit is not runtime-verified in a live WhatsApp session yet.
+- When a new plugin error appears, check whether it is another missing serializer helper (for example download/quoted helpers) before patching only the plugin. Extend the central compatibility layer only after confirming the expected method contract from `lib/simple.js`.
