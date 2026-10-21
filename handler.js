@@ -33,6 +33,38 @@ export async function handler(chatUpdate) {
     m = smsg(this, m) || m
     if (!m) return
 
+    // Compatibility layer: protobuf conversion in this Baileys fork can leave
+    // message objects without serializer methods. Add safe fallbacks centrally
+    // so every plugin can use m.reply() / m.react() instead of crashing.
+    if (typeof m.reply !== 'function') {
+        Object.defineProperty(m, 'reply', {
+            configurable: true,
+            enumerable: false,
+            writable: true,
+            value: function (text, chatId, options = {}) {
+                const target = typeof chatId === 'string' ? chatId : this.chat
+                const sendOptions = (chatId && typeof chatId === 'object' ? chatId : options) || {}
+                return conn.sendMessage(target, typeof text === 'string' ? { text } : text, {
+                    quoted: this,
+                    ...sendOptions
+                })
+            }
+        })
+    }
+    if (typeof m.react !== 'function') {
+        Object.defineProperty(m, 'react', {
+            configurable: true,
+            enumerable: false,
+            writable: true,
+            value: function (text) {
+                if (!this.chat || !this.key) return Promise.resolve(null)
+                return conn.sendMessage(this.chat, {
+                    react: { text: String(text ?? ''), key: this.key }
+                })
+            }
+        })
+    }
+
     // Restore routing metadata and derive command-critical fields from the original
     // Baileys event. This fork's protobuf conversion may retain key data but lose
     // the serializer prototype getters (chat/sender/mtype), so do not rely on getters.
