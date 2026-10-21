@@ -788,6 +788,10 @@ export async function participantsUpdate({ id, participants, action }) {
     if (opts['self'] || this.isInit) return
     if (global.db.data == null) await global.loadDatabase()
 
+    const groupAccess = global.db.data.settings?.groupAccess || { enabled: true, allowedGroups: [] }
+    if (groupAccess.enabled !== false &&
+        !(Array.isArray(groupAccess.allowedGroups) && groupAccess.allowedGroups.includes(id))) return
+
     let chat = global.db.data.chats[id]
     if (!chat || !chat.welcome) return
 
@@ -896,6 +900,9 @@ export async function groupsUpdate(groupsUpdate) {
     for (const groupUpdate of groupsUpdate) {
         const id = groupUpdate.id
         if (!id) continue
+        const groupAccess = global.db.data.settings?.groupAccess || { enabled: true, allowedGroups: [] }
+        if (groupAccess.enabled !== false &&
+            !(Array.isArray(groupAccess.allowedGroups) && groupAccess.allowedGroups.includes(id))) continue
         let chats = global.db.data.chats[id], text = ''
         if (!chats?.detect) continue
         if (groupUpdate.desc) text = (chats.sDesc || this.sDesc || 'Deskripsi telah diubah menjadi \n@desc').replace('@desc', groupUpdate.desc)
