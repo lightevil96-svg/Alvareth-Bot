@@ -1,7 +1,18 @@
 import { tiktokSearch, tiktokScrape } from '../../lib/scrape/tikwm.js'
 
+// Some messages in this Baileys fork are protobuf-converted objects without the
+// serializer prototype methods. Send reactions through the socket directly.
+async function reactSafe(conn, m, text) {
+  if (!m?.chat || !m?.key) return
+  try {
+    await conn.sendMessage(m.chat, { react: { text, key: m.key } })
+  } catch (error) {
+    console.warn('[TikTok] Gagal mengirim reaksi:', error?.message || error)
+  }
+}
+
 let handler = async (m, { conn, text, usedPrefix, command }) => {
-  await m.react('✨')
+  await reactSafe(conn, m, '✨')
 
   const input = m.quoted ? m.quoted.text : text
   if (!input) {
@@ -55,7 +66,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
         )
       }
 
-      await m.react('✅')
+      await reactSafe(conn, m, '✅')
       return
     }
 
@@ -81,10 +92,11 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
       )
     }
 
-    await m.react('✅')
+    await reactSafe(conn, m, '✅')
   } catch (e) {
-    await m.react('❌')
-    throw String(e)
+    await reactSafe(conn, m, '❌')
+    console.error('[TikTok Downloader]', e?.stack || e)
+    await conn.sendMessage(m.chat, { text: `Gagal memproses TikTok: ${String(e?.message || e)}` }, { quoted: m }).catch(() => {})
   }
 }
 
