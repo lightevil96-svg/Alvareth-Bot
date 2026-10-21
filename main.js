@@ -141,9 +141,12 @@ conn.findUserId = async (lid) => {
 
 // Pairing code.
 let pairingRequested = false
+let pairingAttempted = false
 async function requestPairingCode() {
-  if (pairingRequested || !global.pairing || state.creds.registered) return
+  // Batasi satu permintaan kode per proses agar reconnect tidak membanjiri terminal.
+  if (pairingRequested || pairingAttempted || !global.pairing || state.creds.registered) return
   pairingRequested = true
+  pairingAttempted = true
   try {
     const phoneNumber = String(global.pairing).replace(/\D/g, '')
     if (!phoneNumber) throw new Error('BOT_NUMBER tidak valid; periksa file .env')
@@ -278,12 +281,10 @@ async function connectionUpdate(update) {
       console.error(chalk.red('❌ WhatsApp logout. Hapus folder sessions/ lalu lakukan pairing ulang.'))
       process.exit(1)
     } else {
-      if (!state.creds.registered) pairingRequested = false
       console.log(chalk.yellow(`⚠️ Koneksi terputus (${statusCode}). Menyambung ulang...`))
       await global.reloadHandler(true).catch(console.error)
-      if (!state.creds.registered && global.pairing) {
-        setTimeout(() => requestPairingCode(), 5000)
-      }
+      // Jangan meminta kode pairing baru otomatis setiap koneksi terputus.
+      // Restart proses secara manual jika perlu meminta kode baru.
     }
   } else if (connection === 'open') {
     pairingRequested = true
