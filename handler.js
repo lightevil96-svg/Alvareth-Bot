@@ -29,7 +29,7 @@ export async function handler(chatUpdate) {
     m = smsg(this, m) || m
     if (!m) return
     // Temporary diagnostic: trace .menu through serialization and command parsing.
-    const isMenuDiagnostic = typeof m.text === 'string' && /^\\s*[.!/](menu|help)(?:\\s|$)/i.test(m.text)
+    const isMenuDiagnostic = typeof m.text === 'string' && /^\s*[.!/](menu|help)(?:\s|$)/i.test(m.text)
     if (isMenuDiagnostic) console.log('[DIAG menu-handler]', JSON.stringify({
         text: m.text,
         sender: m.sender || null,
