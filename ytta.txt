@@ -1,0 +1,195 @@
+Halo bang 
+
+Terima kasih udah pake source Ryo Yamada MD.
+
+Sebelum nanya error atau bilang bot ga jalan, baca info ini dulu ya 
+
+━━━━━━━━━━━━━━━━━━
+ PAIRING CODE
+━━━━━━━━━━━━━━━━━━
+
+Pengaturan Pairing Code berada di file:
+
+config.js
+
+Cari bagian:
+
+global.pairing
+
+Lalu isi dengan nomor WhatsApp yang ingin digunakan untuk login bot.
+
+Contoh:
+
+global.pairing = '628xxxxxxxxxx'
+
+Gunakan format nomor:
+
+628xxxxxxxxxx
+
+Jangan gunakan:
+
++628xxxxxxxxxx
+08xxxxxxxxxx
+
+Setelah nomor diisi, jalankan bot dan ikuti proses Pairing Code yang muncul di terminal.
+
+━━━━━━━━━━━━━━━━━━
+ THUMBNAIL MENU
+━━━━━━━━━━━━━━━━━━
+
+Mau ganti gambar menu?
+
+Gampang.
+
+Kirim atau reply foto lalu ketik:
+
+.setthumbmenu
+
+Bot bakal nyimpan foto tersebut sebagai thumbnail menu.
+
+━━━━━━━━━━━━━━━━━━
+ AUDIO MENU
+━━━━━━━━━━━━━━━━━━
+
+Mau ganti sound menu?
+
+Reply audio atau VN lalu ketik:
+
+.setaudio
+
+Audio bakal dipake buat menu bot.
+
+Disarankan:
+• Durasi pendek
+• Tidak terlalu besar
+• Format MP3 / Audio WhatsApp
+
+━━━━━━━━━━━━━━━━━━
+ NODEJS YANG DISARANKAN
+━━━━━━━━━━━━━━━━━━
+
+Gunakan:
+
+✓ NodeJS v20
+✓ NodeJS v21
+
+Tidak disarankan:
+
+✗ NodeJS terlalu lama
+✗ NodeJS modifikasi aneh-aneh
+
+Cek versi:
+
+node -v
+
+━━━━━━━━━━━━━━━━━━
+ SEBELUM MENJALANKAN BOT
+━━━━━━━━━━━━━━━━━━
+
+Pastikan seluruh module sudah terpasang.
+
+Jalankan perintah berikut:
+
+npm install
+
+Setelah proses selesai, jalankan bot dengan:
+
+npm start
+
+Jika terjadi error saat startup, pastikan semua module berhasil terinstall dan versi NodeJS yang digunakan sudah sesuai.
+
+━━━━━━━━━━━━━━━━━━
+ JIKA BOT FORCE CLOSE
+━━━━━━━━━━━━━━━━━━
+
+Biasanya karena:
+
+• Module rusak
+• Syntax error
+• RAM habis
+• Versi NodeJS tidak cocok
+• Plugin bermasalah
+
+Cek log error yang muncul di terminal.
+
+Jangan cuma kirim:
+
+"Bang error"
+
+Kirim sekalian screenshot atau log errornya 
+
+━━━━━━━━━━━━━━━━━━
+ TIPS PANEL
+━━━━━━━━━━━━━━━━━━
+
+• Gunakan RAM yang cukup
+• Jangan pasang module aneh
+• Jangan install package yang tidak diperlukan
+• Backup database secara berkala
+
+━━━━━━━━━━━━━━━━━━
+ SEBELUM BERTANYA
+━━━━━━━━━━━━━━━━━━
+
+Pastikan sudah:
+
+✓ npm install
+✓ NodeJS sesuai
+✓ Config terisi benar
+✓ Session tidak rusak
+✓ Membaca pesan error
+
+━━━━━━━━━━━━━━━━━━
+ MENGHARGAI CREATOR
+━━━━━━━━━━━━━━━━━━
+
+Catatan kecil.
+
+Kalau source ini membantu kamu belajar, mengembangkan bot, atau mempermudah pekerjaanmu, itu sudah lebih dari cukup.
+
+Silakan modifikasi sesuka hati.
+Silakan tambahkan fitur sebanyak yang kamu mau.
+Silakan jadikan sebagai tempat belajar dan bereksperimen.
+
+Satu hal yang saya minta:
+
+Jangan hapus credit.
+
+Credit tidak memakan RAM.
+Credit tidak membuat bot menjadi lebih lambat.
+Credit juga tidak mengurangi fungsi apa pun.
+
+Di balik setiap baris kode, ada waktu, tenaga, dan proses yang tidak sedikit.
+
+Menghargai credit adalah hal sederhana, tetapi sangat berarti bagi seseorang yang telah meluangkan waktunya untuk membuat dan membagikan karya ini.
+
+Terima kasih telah menghargai karya orang lain.
+
+━━━━━━━━━━━━━━━━━━
+ PESAN OWNER
+━━━━━━━━━━━━━━━━━━
+
+Kalau ada bug itu wajar.
+
+Namanya juga source yang terus dikembangkan.
+
+Kalau ketemu bug:
+lapor dengan baik.
+
+Kalau ketemu error:
+sertakan log.
+
+Kalau bot jalan lancar:
+jangan lupa bersyukur 😹
+
+━━━━━━━━━━━━━━━━━━
+
+ʀyᴏ yᴀᴍᴀᴅᴀ - ᴍᴅ
+
+Untuk informasi script, update fitur, dan pengumuman terbaru, silakan bergabung ke channel WhatsApp berikut:
+
+https://whatsapp.com/channel/0029VbAYjQgKrWQulDTYcg2K
+
+Terima kasih telah menggunakan ʀyᴏ yᴀᴍᴀᴅᴀ - ᴍᴅ.
+
+Good Luck & Have Fun 

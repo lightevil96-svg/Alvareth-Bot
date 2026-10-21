@@ -1,0 +1,421 @@
+// ═══════════════════════════════════════════════════════════════
+// ALVARETH BOT — main.js (clean rewrite)
+// Pairing code + QR, auto-reconnect, recursive plugin loader, lowdb
+// Isi BOT_NUMBER di .env untuk menggunakan pairing code.
+// ═══════════════════════════════════════════════════════════════
+
+import './config.js'
+
+import { join, dirname, relative, sep } from 'path'
+import { fileURLToPath, pathToFileURL } from 'url'
+import { readdirSync, readFileSync, existsSync, statSync, watch } from 'fs'
+import { format } from 'util'
+import yargs from 'yargs'
+import pino from 'pino'
+import chalk from 'chalk'
+import _ from 'lodash'
+import { Low } from 'lowdb'
+import { JSONFile } from 'lowdb/node'
+import syntaxerror from 'syntax-error'
+import * as Baileys from 'baileys'
+import { makeWASocket } from './lib/simple.js'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+
+// Interop export Baileys agar kompatibel dengan bentuk export fork yang dipakai proyek.
+const Named = Baileys.default?.default
+  ? Baileys.default
+  : (Baileys.default || Baileys)
+const {
+  useMultiFileAuthState,
+  fetchLatestBaileysVersion,
+  makeCacheableSignalKeyStore,
+  DisconnectReason
+} = Named
+
+// Helper path/URL yang kompatibel di Windows dan Linux.
+function urlToHttpURL(value) {
+  if (/^https?:\/\//i.test(value) || /^file:\/\//i.test(value)) return value
+  return pathToFileURL(value).href
+}
+global.__filename = (pathURL = import.meta.url, rmPrefix = process.platform !== 'win32') => {
+  if (!rmPrefix) return urlToHttpURL(pathURL)
+  return /^file:\/\//i.test(pathURL) ? fileURLToPath(pathURL) : pathURL
+}
+
+// Opsi CLI.
+const opts = yargs(process.argv.slice(2)).exitProcess(false).parse()
+global.opts = opts
+const prefixChars = opts.prefix || '‎xzXZ/i!#$%+£¢€¥^°=¶∆×÷π√✓©®:;?&.-'
+global.prefix = new RegExp('^[' + String(prefixChars).replace(/[|\\{}()[\]^$+*?.\-]/g, '\\$&') + ']')
+
+// Database lowdb.
+global.db = new Low(new JSONFile(join(__dirname, 'database.json')))
+global.loadDatabase = async function loadDatabase() {
+  if (global.db.READ) {
+    return new Promise((resolve) => {
+      const timer = setInterval(() => {
+        if (!global.db.READ) {
+          clearInterval(timer)
+          resolve(global.db.data == null ? global.loadDatabase() : global.db.data)
+        }
+      }, 100)
+    })
+  }
+  if (global.db.data !== null) return global.db.data
+
+  global.db.READ = true
+  try {
+    await global.db.read()
+  } catch (error) {
+    console.error(chalk.red('Gagal membaca database:'), error)
+  } finally {
+    global.db.READ = false
+  }
+
+  global.db.data = {
+    users: {}, chats: {}, stats: {}, msgs: {}, sticker: {}, settings: {},
+    ...(global.db.data || {})
+  }
+  global.db.chain = _.chain(global.db.data)
+  return global.db.data
+}
+await global.loadDatabase()
+
+// Session & socket.
+const SESSION_DIR = join(__dirname, 'sessions')
+const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR)
+const { version, isLatest } = await fetchLatestBaileysVersion()
+console.log(chalk.cyan(`WA Web version: v${version.join('.')} (latest: ${isLatest})`))
+
+if (!global.pairing) {
+  console.log(chalk.yellow('[!] BOT_NUMBER kosong di .env → mode QR code. Isi BOT_NUMBER untuk mode pairing.'))
+}
+
+// conn sengaja memakai let karena socket diganti ketika reconnect.
+let conn
+const silentLogger = pino({ level: 'silent' })
+const connectionOptions = {
+  version,
+  logger: silentLogger,
+  printQRInTerminal: !global.pairing,
+  auth: makeCacheableSignalKeyStore(state, silentLogger),
+  browser: ['Ubuntu', 'Chrome', '22.04.4'],
+  markOnlineOnConnect: true,
+  generateHighQualityLinkPreview: true,
+  msgRetryCounterCache: new Map(),
+  defaultQueryTimeoutMs: undefined,
+  getMessage: async (key) => {
+    try {
+      if (typeof conn?.loadMessage !== 'function') return undefined
+      const message = await conn.loadMessage(key?.id)
+      return message?.message || undefined
+    } catch {
+      return undefined
+    }
+  },
+  cachedGroupMetadata: async (jid) => {
+    try {
+      return await conn.groupMetadata(jid)
+    } catch {
+      return null
+    }
+  }
+}
+
+conn = global.conn = makeWASocket(connectionOptions)
+
+// Bind store agar cache kontak/grup tetap tersedia pada socket aktif.
+const storeModule = await import('./lib/store.js')
+const storeBind = storeModule.default?.bind || storeModule.bind
+if (typeof storeBind === 'function') storeBind(conn)
+
+// Resolver @lid → nomor untuk handler.js.
+conn.findUserId = async (lid) => {
+  try {
+    if (!lid || typeof lid !== 'string' || !lid.endsWith('@lid')) return null
+    const mapping = conn.signalRepository?.lidMapping
+    if (mapping && typeof mapping.getPhoneNumber === 'function') {
+      const phone = await mapping.getPhoneNumber(lid)
+      if (phone) {
+        const phoneNumber = String(phone)
+        return { phoneNumber: phoneNumber.includes('@') ? phoneNumber : `${phoneNumber}@s.whatsapp.net` }
+      }
+    }
+  } catch {
+    // Nomor tidak selalu bisa di-resolve; handler tetap dapat memakai LID.
+  }
+  return null
+}
+
+// Pairing code.
+let pairingRequested = false
+async function requestPairingCode() {
+  if (pairingRequested || !global.pairing || state.creds.registered) return
+  pairingRequested = true
+  try {
+    const phoneNumber = String(global.pairing).replace(/\D/g, '')
+    if (!phoneNumber) throw new Error('BOT_NUMBER tidak valid; periksa file .env')
+
+    console.log(chalk.yellow('📱 Meminta pairing code untuk nomor:'), chalk.cyan('+' + phoneNumber))
+    await new Promise(resolve => setTimeout(resolve, 3000))
+    const result = await conn.requestPairingCode(phoneNumber)
+    if (!result) throw new Error('Server tidak mengembalikan kode pairing')
+
+    const code = String(result).match(/.{1,4}/g)?.join('-') || String(result)
+    console.log('\n' + chalk.bgGreen.black('  PAIRING CODE  ') + '  ' + chalk.bgWhite.black(`  ${code}  `) + '\n')
+    console.log(chalk.gray([
+      'Cara menghubungkan perangkat:',
+      ' 1. Buka WhatsApp di HP nomor tersebut → Pengaturan → Perangkat Tertaut.',
+      ' 2. Pilih “Tautkan perangkat” → “Tautkan dengan nomor telepon saja”.',
+      ' 3. Masukkan kode di atas. Jika kedaluwarsa, jalankan ulang bot untuk meminta kode baru.'
+    ].join('\n')) + '\n')
+  } catch (error) {
+    pairingRequested = false
+    console.error(chalk.red('❌ Gagal meminta pairing code:'), error?.message || error)
+    console.error(chalk.yellow('💡 Jika sesi bermasalah, hentikan bot dan hapus folder sessions/ sebelum pairing ulang.'))
+  }
+}
+
+// Handler utama dan event koneksi.
+let { handler, participantsUpdate, groupsUpdate, deleteUpdate } = await import('./handler.js')
+let isInit = false
+
+global.reloadHandler = async function reloadHandler(restartSocket = false) {
+  try {
+    const loaded = await import(`./handler.js?update=${Date.now()}`).catch(error => {
+      console.error(chalk.red('Gagal memuat ulang handler:'), error)
+      return null
+    })
+    if (loaded?.handler) {
+      handler = loaded.handler
+      participantsUpdate = loaded.participantsUpdate
+      groupsUpdate = loaded.groupsUpdate
+      deleteUpdate = loaded.deleteUpdate
+    }
+  } catch (error) {
+    console.error(error)
+  }
+
+  if (restartSocket) {
+    const oldChats = global.conn?.chats || {}
+    const oldConn = global.conn
+    // Lepas listener terlebih dahulu supaya event close dari socket lama tidak memicu reconnect ganda.
+    try { oldConn?.ev?.removeAllListeners() } catch { /* socket sudah berhenti */ }
+    try { oldConn?.ws?.close() } catch {
+      try { oldConn?.end?.() } catch { /* socket sudah berhenti */ }
+    }
+
+    conn = global.conn = makeWASocket(connectionOptions, { chats: oldChats })
+    if (typeof storeBind === 'function') storeBind(conn)
+    conn.findUserId = async (lid) => {
+      try {
+        if (!lid || typeof lid !== 'string' || !lid.endsWith('@lid')) return null
+        const mapping = conn.signalRepository?.lidMapping
+        if (mapping && typeof mapping.getPhoneNumber === 'function') {
+          const phone = await mapping.getPhoneNumber(lid)
+          if (phone) {
+            const value = String(phone)
+            return { phoneNumber: value.includes('@') ? value : `${value}@s.whatsapp.net` }
+          }
+        }
+      } catch { /* ignore unresolved LID */ }
+      return null
+    }
+    isInit = true
+  }
+
+  if (!isInit) {
+    if (conn.handler) conn.ev.off('messages.upsert', conn.handler)
+    if (conn.participantsUpdate) conn.ev.off('group-participants.update', conn.participantsUpdate)
+    if (conn.groupsUpdate) conn.ev.off('groups.update', conn.groupsUpdate)
+    if (conn.onDelete) conn.ev.off('message.delete', conn.onDelete)
+    if (conn.connectionUpdate) conn.ev.off('connection.update', conn.connectionUpdate)
+    if (conn.credsUpdate) conn.ev.off('creds.update', conn.credsUpdate)
+  }
+
+  conn.welcome = 'Hai @user!\nSelamat datang di grup @subject\n\n@desc'
+  conn.bye = 'Selamat tinggal @user 👋'
+  conn.spromote = '@user sekarang menjadi admin ✨'
+  conn.sdemote = '@user tidak lagi menjadi admin ❌'
+  conn.sDesc = 'Deskripsi grup diubah menjadi:\n@desc'
+  conn.sSubject = 'Nama grup diubah menjadi:\n@subject'
+  conn.sIcon = 'Ikon grup telah diubah!'
+  conn.sRevoke = 'Link grup diubah menjadi:\n@revoke'
+  conn.sAnnounceOn = 'Grup ditutup, hanya admin yang bisa mengirim pesan.'
+  conn.sAnnounceOff = 'Grup dibuka, semua peserta bisa mengirim pesan.'
+  conn.sRestrictOn = 'Edit info grup: hanya admin.'
+  conn.sRestrictOff = 'Edit info grup: semua peserta.'
+
+  conn.handler = handler.bind(conn)
+  conn.participantsUpdate = (participantsUpdate || (() => {})).bind(conn)
+  conn.groupsUpdate = (groupsUpdate || (() => {})).bind(conn)
+  conn.onDelete = (deleteUpdate || (() => {})).bind(conn)
+  conn.connectionUpdate = connectionUpdate.bind(conn)
+  conn.credsUpdate = saveCreds.bind(conn)
+
+  conn.ev.on('messages.upsert', conn.handler)
+  conn.ev.on('group-participants.update', conn.participantsUpdate)
+  conn.ev.on('groups.update', conn.groupsUpdate)
+  conn.ev.on('message.delete', conn.onDelete)
+  conn.ev.on('connection.update', conn.connectionUpdate)
+  conn.ev.on('creds.update', conn.credsUpdate)
+  isInit = false
+  return true
+}
+
+async function connectionUpdate(update) {
+  const { connection, lastDisconnect, isNewLogin } = update
+  if (isNewLogin) conn.isInit = true
+
+  if (!state.creds.registered && global.pairing && connection === 'connecting') {
+    requestPairingCode()
+  }
+
+  if (connection === 'close') {
+    const statusCode = lastDisconnect?.error?.output?.statusCode
+      || lastDisconnect?.error?.statusCode
+      || 0
+
+    if (statusCode === DisconnectReason?.badSession) {
+      console.error(chalk.red('❌ Sesi rusak. Hapus folder sessions/ lalu lakukan pairing ulang.'))
+      process.exit(1)
+    } else if (statusCode === DisconnectReason?.connectionReplaced) {
+      console.error(chalk.red('❌ Sesi sedang dipakai koneksi lain. Tutup sesi ganda terlebih dahulu.'))
+      process.exit(1)
+    } else if (statusCode === DisconnectReason?.loggedOut) {
+      console.error(chalk.red('❌ WhatsApp logout. Hapus folder sessions/ lalu lakukan pairing ulang.'))
+      process.exit(1)
+    } else {
+      if (!state.creds.registered) pairingRequested = false
+      console.log(chalk.yellow(`⚠️ Koneksi terputus (${statusCode}). Menyambung ulang...`))
+      await global.reloadHandler(true).catch(console.error)
+      if (!state.creds.registered && global.pairing) {
+        setTimeout(() => requestPairingCode(), 5000)
+      }
+    }
+  } else if (connection === 'open') {
+    pairingRequested = true
+    const { jid, name } = conn.user || {}
+    console.log(chalk.greenBright('✅ Bot terhubung:'), chalk.white(name || '-'), chalk.gray(`(${jid || '-'})`))
+  }
+}
+
+// Loader plugin rekursif.
+const pluginFolder = join(__dirname, 'plugins')
+const pluginFilter = filename => /\.js$/i.test(filename)
+global.plugins = {}
+
+async function filesInit(folder = pluginFolder) {
+  if (!existsSync(folder)) {
+    console.warn(chalk.yellow(`Folder plugin tidak ditemukan: ${folder}`))
+    return
+  }
+  for (const filename of readdirSync(folder)) {
+    const filepath = join(folder, filename)
+    let stats
+    try { stats = statSync(filepath) } catch { continue }
+    if (stats.isDirectory()) {
+      await filesInit(filepath)
+      continue
+    }
+    if (!pluginFilter(filename)) continue
+
+    const key = relative(pluginFolder, filepath).split(sep).join('/')
+    try {
+      const module = await import(pathToFileURL(filepath).href)
+      global.plugins[key] = module.default || module
+    } catch (error) {
+      console.error(chalk.red(`Gagal memuat plugin '${key}':`), format(error))
+      delete global.plugins[key]
+    }
+  }
+}
+
+global.reload = async (_event, filename) => {
+  if (!filename) return
+  const key = String(filename).split(sep).join('/')
+  if (!pluginFilter(key)) return
+  const filepath = join(pluginFolder, key)
+  const exists = existsSync(filepath)
+
+  if (key in global.plugins) {
+    if (exists) console.log(chalk.cyan(`♻️ Plugin diperbarui: ${key}`))
+    else {
+      console.log(chalk.yellow(`🗑️ Plugin dihapus: ${key}`))
+      delete global.plugins[key]
+      return
+    }
+  } else {
+    if (!exists) return
+    console.log(chalk.green(`➕ Plugin baru: ${key}`))
+  }
+
+  let source
+  try { source = readFileSync(filepath, 'utf8') } catch (error) {
+    console.error(chalk.red(`Tidak dapat membaca plugin '${key}':`), error)
+    return
+  }
+
+  const error = syntaxerror(source, key, { sourceType: 'module' })
+  if (error) {
+    console.error(chalk.red(`Syntax error '${key}':\n${format(error)}`))
+    return
+  }
+  try {
+    const module = await import(pathToFileURL(filepath).href + '?update=' + Date.now())
+    global.plugins[key] = module.default || module
+  } catch (importError) {
+    console.error(chalk.red(`Error plugin '${key}':\n${format(importError)}`))
+  } finally {
+    global.plugins = Object.fromEntries(Object.entries(global.plugins).sort(([a], [b]) => a.localeCompare(b)))
+  }
+}
+
+const pluginWatchers = new Map()
+function watchPlugins(folder = pluginFolder) {
+  if (!existsSync(folder) || pluginWatchers.has(folder)) return
+  try {
+    const watcher = watch(folder, (_event, filename) => {
+      if (!filename) return
+      const filepath = join(folder, String(filename))
+      const key = relative(pluginFolder, filepath).split(sep).join('/')
+      global.reload(_event, key).catch(console.error)
+      // File watcher tidak selalu mengawasi subfolder baru; sinkronkan watcher setelah perubahan.
+      let changedDir = dirname(filepath)
+      try { if (existsSync(filepath) && statSync(filepath).isDirectory()) changedDir = filepath } catch { /* file dihapus saat event diproses */ }
+      if (changedDir.startsWith(pluginFolder)) watchPlugins(changedDir)
+    })
+    pluginWatchers.set(folder, watcher)
+  } catch (error) {
+    console.error(chalk.yellow(`Tidak dapat memantau folder plugin ${folder}:`), error?.message || error)
+    return
+  }
+  for (const filename of readdirSync(folder)) {
+    const filepath = join(folder, filename)
+    try {
+      if (statSync(filepath).isDirectory()) watchPlugins(filepath)
+    } catch { /* file mungkin dihapus saat proses berjalan */ }
+  }
+}
+
+// Pasang handler seawal mungkin agar event koneksi tidak terlewat ketika plugin sedang dimuat.
+await global.reloadHandler()
+await filesInit()
+console.log(chalk.green(`✔ ${Object.keys(global.plugins).length} plugin dimuat`))
+watchPlugins()
+
+// Fallback pairing jika event connecting tidak memicu permintaan kode.
+if (!state.creds.registered && global.pairing) {
+  setTimeout(() => requestPairingCode(), 8000)
+}
+
+// HTTP health-check opsional untuk hosting.
+if (opts.server || process.env.PORT) {
+  try {
+    const { default: connect } = await import('./server.js')
+    connect(Number(process.env.PORT || 3000))
+  } catch (error) {
+    console.error(chalk.red('Gagal menjalankan server.js:'), format(error))
+  }
+}
