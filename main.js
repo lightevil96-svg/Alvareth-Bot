@@ -209,7 +209,15 @@ global.reloadHandler = async function reloadHandler(restartSocket = false) {
   conn.sRestrictOn = 'Edit info grup: hanya admin.'
   conn.sRestrictOff = 'Edit info grup: semua peserta.'
 
-  conn.handler = handler.bind(conn)
+  // Baileys can batch multiple messages in one upsert. Process each item separately;
+  // otherwise a trailing system update without sender/chat can hide a real command.
+  conn.handler = async function handleMessageBatch(update) {
+    const messages = Array.isArray(update?.messages) ? update.messages : []
+    for (const message of messages) {
+      if (!message) continue
+      await handler.call(conn, { ...update, messages: [message] })
+    }
+  }
   conn.participantsUpdate = (participantsUpdate || (() => {})).bind(conn)
   conn.groupsUpdate = (groupsUpdate || (() => {})).bind(conn)
   conn.onDelete = (deleteUpdate || (() => {})).bind(conn)
