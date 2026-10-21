@@ -14,6 +14,14 @@
  * enabled=false disables the restriction and allows all groups.
  */
 const handler = async (m, { conn, args, usedPrefix, command }) => {
+  // This fork's serialized message may not expose reply(); use the connection fallback.
+  const reply = async text => {
+    if (typeof m.reply === 'function') return reply(text)
+    const chat = m.chat || m.key?.remoteJid
+    if (!chat || typeof conn?.sendMessage !== 'function') throw new Error('Tidak dapat membalas: chat atau conn.sendMessage tidak tersedia.')
+    return conn.sendMessage(chat, { text: String(text) }, m.key ? { quoted: m } : {})
+  }
+
   const settings = global.db.data.settings || (global.db.data.settings = {})
   const access = settings.groupAccess || (settings.groupAccess = {
     enabled: true,
@@ -57,10 +65,10 @@ const handler = async (m, { conn, args, usedPrefix, command }) => {
     'ID grup bisa dilihat pada log terminal saat ada pesan masuk dari grup.'
   ].join('\n')
 
-  if (action === 'help') return m.reply(help)
+  if (action === 'help') return reply(help)
 
   if (action === 'status') {
-    return m.reply([
+    return reply([
       '*🔐 STATUS AKSES GRUP*',
       'Pembatasan: ' + (access.enabled ? 'AKTIF (allowlist)' : 'NONAKTIF (semua grup diizinkan)'),
       'Jumlah grup diizinkan: ' + access.allowedGroups.length,
@@ -73,47 +81,47 @@ const handler = async (m, { conn, args, usedPrefix, command }) => {
 
   if (action === 'list') {
     if (!access.allowedGroups.length) {
-      return m.reply('Daftar izin grup masih kosong.\nTambahkan grup dengan:\n' + usedPrefix + command + ' add <ID_GRUP>')
+      return reply('Daftar izin grup masih kosong.\nTambahkan grup dengan:\n' + usedPrefix + command + ' add <ID_GRUP>')
     }
-    return m.reply('*📋 GRUP YANG DIIZINKAN*\n\n' + access.allowedGroups.map((id, i) => (i + 1) + '. ' + id).join('\n'))
+    return reply('*📋 GRUP YANG DIIZINKAN*\n\n' + access.allowedGroups.map((id, i) => (i + 1) + '. ' + id).join('\n'))
   }
 
   if (action === 'on') {
     access.enabled = true
     await save()
-    return m.reply('✅ Pembatasan grup AKTIF. Bot hanya merespons grup dalam daftar izin.')
+    return reply('✅ Pembatasan grup AKTIF. Bot hanya merespons grup dalam daftar izin.')
   }
 
   if (action === 'off') {
     access.enabled = false
     await save()
-    return m.reply('⚠️ Pembatasan grup NONAKTIF. Semua grup kembali dapat menggunakan bot.')
+    return reply('⚠️ Pembatasan grup NONAKTIF. Semua grup kembali dapat menggunakan bot.')
   }
 
   if (action === 'add') {
     if (!suppliedId || !suppliedId.endsWith('@g.us') || /\s/.test(suppliedId)) {
-      return m.reply('❌ ID grup tidak valid. ID harus berakhiran @g.us.\nContoh:\n' + usedPrefix + command + ' add 120363012345678901@g.us\n\nKetik ' + usedPrefix + command + ' help untuk panduan.')
+      return reply('❌ ID grup tidak valid. ID harus berakhiran @g.us.\nContoh:\n' + usedPrefix + command + ' add 120363012345678901@g.us\n\nKetik ' + usedPrefix + command + ' help untuk panduan.')
     }
     if (access.allowedGroups.includes(suppliedId)) {
-      return m.reply('ℹ️ Grup tersebut sudah ada dalam daftar izin:\n' + suppliedId)
+      return reply('ℹ️ Grup tersebut sudah ada dalam daftar izin:\n' + suppliedId)
     }
     access.allowedGroups.push(suppliedId)
     await save()
-    return m.reply('✅ Grup berhasil diizinkan:\n' + suppliedId + '\n\nStatus pembatasan: ' + (access.enabled ? 'AKTIF' : 'NONAKTIF') + '.')
+    return reply('✅ Grup berhasil diizinkan:\n' + suppliedId + '\n\nStatus pembatasan: ' + (access.enabled ? 'AKTIF' : 'NONAKTIF') + '.')
   }
 
   if (action === 'remove' || action === 'del' || action === 'delete') {
-    if (!suppliedId) return m.reply('Gunakan: ' + usedPrefix + command + ' remove <ID_GRUP>')
+    if (!suppliedId) return reply('Gunakan: ' + usedPrefix + command + ' remove <ID_GRUP>')
     const before = access.allowedGroups.length
     access.allowedGroups = access.allowedGroups.filter(id => id !== suppliedId)
     if (access.allowedGroups.length === before) {
-      return m.reply('ℹ️ Grup tidak ditemukan dalam daftar izin:\n' + suppliedId)
+      return reply('ℹ️ Grup tidak ditemukan dalam daftar izin:\n' + suppliedId)
     }
     await save()
-    return m.reply('✅ Izin grup dicabut:\n' + suppliedId + '\nJika pembatasan aktif, bot akan mengabaikan pesan berikutnya dari grup tersebut.')
+    return reply('✅ Izin grup dicabut:\n' + suppliedId + '\nJika pembatasan aktif, bot akan mengabaikan pesan berikutnya dari grup tersebut.')
   }
 
-  return m.reply('❓ Perintah tidak dikenal.\n\n' + help)
+  return reply('❓ Perintah tidak dikenal.\n\n' + help)
 }
 
 handler.help = ['groupaccess']
