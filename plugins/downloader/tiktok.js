@@ -38,10 +38,25 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
     const title = (res.title || '-').replace(/\s+/g, ' ').trim()
     const uploader = res.author || '-'
 
-    const caption = `*\`TikTok Downloader\`*
-
-✿ *\`Judul\`* : ${title.length > 80 ? title.slice(0, 80) + '...' : title}
-✿ *\`Uploader\`* : ${uploader}`
+    const displayTitle = title.length > 220 ? title.slice(0, 217).trimEnd() + '...' : title
+    const displayUploader = String(uploader).length > 80 ? String(uploader).slice(0, 77).trimEnd() + '...' : uploader
+    const mediaFormat = res.type === 'image' ? 'Photo / Slideshow' : res.video ? 'Video' : 'Media'
+    const caption = `╭━━━〔 🎬 *ALVARETH • TIKTOK* 〕━━━╮
+┃
+┃  ✦ *VIDEO BERHASIL DIUNDUH*
+┃  ───────────────────
+┃
+┃  📝 *JUDUL VIDEO*
+┃  ${displayTitle}
+┃
+┃  👤 *KREATOR*
+┃  ${displayUploader}
+┃
+┃  📥 *STATUS*  •  Siap ditonton
+┃  💠 *FORMAT*  •  ${mediaFormat}
+┃
+╰━━━━━━━━━━━━━━━━━━━━
+     ✨ _Downloaded by Alvareth Bot_ ✨`;
 
     if (res.type === 'image' && res.images.length > 0) {
       await conn.sendMessage(
