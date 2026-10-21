@@ -28,7 +28,7 @@ const readMore = more.repeat(4001)
 const botNumber = String(process.env.BOT_NUMBER || '').replace(/\D/g, '')
 const ownerNumber = String(process.env.OWNER_NUMBER || '').replace(/\D/g, '')
 const ownerName = process.env.OWNER_NAME || 'Light V'
-const botName = 'ᴀʟᴠᴀʀᴇᴛʜ ʙᴏᴛ'
+const botName = 'Alvareth Bot'
 
 global.pairing = botNumber
 global.owner = [[ownerNumber, ownerName, true]]
