@@ -741,8 +741,12 @@ for (let name in global.plugins) {
                     m.error = e
                     console.error(e)
                     if (e) {
-                        let text = format(e)
-                        m.reply(`*Error:* ${text}`)
+                        const errorText = `*Error:* ${format(e)}`
+                        if (typeof m.reply === 'function') {
+                            await m.reply(errorText).catch?.(sendError => console.error('ERROR REPLY:', sendError))
+                        } else if (m.chat && typeof this.sendMessage === 'function') {
+                            await this.sendMessage(m.chat, { text: errorText }, m.key ? { quoted: m } : {}).catch(sendError => console.error('ERROR REPLY:', sendError))
+                        }
                     }
                 } finally {
                     if (typeof plugin.after === 'function') {
@@ -752,7 +756,11 @@ for (let name in global.plugins) {
                             console.error(e)
                         }
                     }
-                    if (m.limit) m.reply(+m.limit + ' Limit terpakai')
+                    if (m.limit) {
+                        const limitText = +m.limit + ' Limit terpakai'
+                        if (typeof m.reply === 'function') await m.reply(limitText).catch(console.error)
+                        else if (m.chat && typeof this.sendMessage === 'function') await this.sendMessage(m.chat, { text: limitText }, m.key ? { quoted: m } : {}).catch(console.error)
+                    }
                 }
                 break
             }
@@ -948,7 +956,11 @@ global.dfail = (type, m, conn) => {
     restrict: '*`ʀᴇsᴛʀɪᴄᴛ ᴅɪsᴀʙʟᴇᴅ • ᴍᴏᴅᴇ ʀᴇsᴛʀɪᴄᴛ ʙᴇʟᴜᴍ ᴅɪᴀᴋᴛɪғᴋᴀɴ ᴅɪ ᴄʜᴀᴛ ɪɴɪ.`*'
   }
 
-  if (msg[type]) return m.reply(msg[type])
+  if (msg[type]) {
+    if (typeof m.reply === 'function') return m.reply(msg[type])
+    const chat = m.chat || m.key?.remoteJid
+    if (chat && typeof conn?.sendMessage === 'function') return conn.sendMessage(chat, { text: msg[type] }, m.key ? { quoted: m } : {})
+  }
 }
 let file = global.__filename(import.meta.url, true)
 watchFile(file, async () => {
