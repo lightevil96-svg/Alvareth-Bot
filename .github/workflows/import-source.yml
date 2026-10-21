@@ -1,0 +1,47 @@
+name: Import Alvareth-Bot source from ZIP
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  extract-source:
+    if: github.event.head_commit.message == 'Start import from uploaded ZIP'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Extract source files
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f Alvareth-Bot-updated.zip
+          unzip -t Alvareth-Bot-updated.zip
+          rm -rf Alvareth-Bot
+          unzip -q Alvareth-Bot-updated.zip
+          test -f Alvareth-Bot/package.json
+          test -f Alvareth-Bot/index.js
+          rsync -a Alvareth-Bot/ ./
+          rm -rf Alvareth-Bot
+          rm -f Alvareth-Bot-updated.zip
+          test -f package.json
+          test -f index.js
+          test -d plugins
+      - name: Commit extracted project
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No extracted changes to commit"
+            exit 0
+          fi
+          git commit -m "Extract Alvareth-Bot source from ZIP"
+          git push origin HEAD:main
