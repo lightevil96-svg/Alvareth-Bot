@@ -90,7 +90,7 @@ const connectionOptions = {
   version,
   logger: silentLogger,
   printQRInTerminal: !global.pairing,
-  auth: makeCacheableSignalKeyStore(state, silentLogger),
+  auth: { ...state, keys: makeCacheableSignalKeyStore(state.keys, silentLogger) },
   browser: ['Ubuntu', 'Chrome', '22.04.4'],
   markOnlineOnConnect: true,
   generateHighQualityLinkPreview: true,
