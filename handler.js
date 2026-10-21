@@ -30,6 +30,21 @@ export async function handler(chatUpdate) {
     m = smsg(this, m) || m
     if (!m) return
 
+    // Restore routing metadata from the original Baileys message if protobuf
+    // conversion dropped the key; command handling needs chat/sender/fromMe.
+    if (rawMessage?.key) {
+        if (!m.key) m.key = { ...rawMessage.key }
+        else {
+            for (const field of ['remoteJid', 'participant', 'fromMe', 'id', 'participantAlt', 'remoteJidAlt']) {
+                if ((m.key[field] === undefined || m.key[field] === null || m.key[field] === '') &&
+                    rawMessage.key[field] !== undefined && rawMessage.key[field] !== null) {
+                    m.key[field] = rawMessage.key[field]
+                }
+            }
+        }
+        m.conn = conn
+    }
+
     // Fallback text extraction for self-chat / LID messages when the serializer
     // does not expose m.text consistently. This keeps commands such as .menu usable
     // from the bot account itself without changing normal message processing.
