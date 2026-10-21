@@ -26,7 +26,7 @@ jobs:
           unzip -q Alvareth-Bot-updated.zip
           test -f Alvareth-Bot/package.json
           test -f Alvareth-Bot/index.js
-          rsync -a Alvareth-Bot/ ./
+          rsync -a --exclude='.github/workflows/deploy.yml' Alvareth-Bot/ ./
           rm -rf Alvareth-Bot
           rm -f Alvareth-Bot-updated.zip
           test -f package.json
