@@ -69,7 +69,7 @@ function start(file) {
   let opts = yargs(process.argv.slice(2)).exitProcess(false).parse();
   
   if (!opts['test']) {
-    if (!rl.listenerCount()) {
+    if (rl.listenerCount('line') === 0) {
       rl.on('line', line => {
         p.emit('message', line.trim());
       });
