@@ -16,7 +16,7 @@ import _ from 'lodash'
 import { Low } from 'lowdb'
 import { JSONFile } from 'lowdb/node'
 import syntaxerror from 'syntax-error'
-import { useMultiFileAuthState, fetchLatestBaileysVersion, makeCacheableSignalKeyStore, DisconnectReason } from 'baileys'
+import { useMultiFileAuthState, fetchLatestWaWebVersion, makeCacheableSignalKeyStore, DisconnectReason } from 'baileys'
 import { makeWASocket } from './lib/simple.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -75,7 +75,7 @@ await global.loadDatabase()
 // Session & socket.
 const SESSION_DIR = join(__dirname, 'sessions')
 const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR)
-const { version, isLatest } = await fetchLatestBaileysVersion()
+const { version, isLatest } = await fetchLatestWaWebVersion()
 console.log(chalk.cyan(`WA Web version: v${version.join('.')} (latest: ${isLatest})`))
 
 console.log(chalk.cyan('📷 Mode login QR aktif. Pindai QR dari WhatsApp > Perangkat Tertaut.'))
