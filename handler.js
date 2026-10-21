@@ -464,9 +464,8 @@ const isPrems = isROwner || global.db.data.users[m.sender].premiumTime > 0
             }, time)
         }
 
-// Some WhatsApp message IDs are 16 characters even for real incoming messages.
-// Only skip bot-generated messages sent by this account, not every short ID.
-if (m.isBaileys && m.fromMe) return
+// Do not filter messages by ID length: real WhatsApp messages may also
+// be classified as Baileys by the legacy helper. Command matching handles replies safely.
 
 if (global.db.data.chats[m.chat]?.autolevelup) {
     m.exp += Math.ceil(Math.random() * 10)
