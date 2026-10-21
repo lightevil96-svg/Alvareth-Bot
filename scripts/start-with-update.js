@@ -35,7 +35,7 @@ async function main() {
 
     await run('git', ['rev-parse', '--is-inside-work-tree']);
 
-    const { stdout: status } = await run('git', ['status', '--porcelain']);
+    const { stdout: status } = await run('git', ['status', '--porcelain', '--untracked-files=no']);
     if (status.trim()) {
       log('Ada perubahan lokal. Demi keamanan, update dilewati agar pekerjaan lokal tidak tertimpa.');
       await launchBot();
@@ -93,8 +93,7 @@ async function launchBot() {
     process.exitCode = 1;
   });
   child.on('exit', (code, signal) => {
-    if (signal) process.kill(process.pid, signal);
-    else process.exitCode = code ?? 1;
+    process.exitCode = code ?? (signal ? 1 : 0);
   });
 }
 
