@@ -9,3 +9,5 @@ After import, review `README.md`, `package.json`, and the environment configurat
 Import workflow trigger initialized.
 
 Import attempt restarted after removing a hard-coded deployment credential from the source.
+
+Source import retried with protected workflow excluded.
