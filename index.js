@@ -7,7 +7,6 @@ import { createRequire } from 'module';
 import { createInterface } from 'readline';
 import { setupMaster, fork } from 'cluster';
 import { watchFile, unwatchFile } from 'fs';
-import { startAutoUpdate } from './lib/auto-update.js';
 
 // Setup console output
 const { say } = cfonts;
@@ -80,4 +79,3 @@ function start(file) {
 
 // Login WhatsApp menggunakan QR scan; tidak meminta nomor pairing.
 start('main.js');
-startAutoUpdate();
