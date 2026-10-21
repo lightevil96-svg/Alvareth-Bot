@@ -533,6 +533,18 @@ if (typeof m.sender === 'string' && m.sender.endsWith('@lid')) {
 }
 const isROwner = [conn.decodeJid(global.conn.user.id), ...global.owner.map(([number]) => number)].map(v => v.replace(/[^0-9]/g, '') + '@s.whatsapp.net').includes(resolvedSender)
 const isOwner = isROwner || m.fromMe
+
+        // Group allowlist gate: when enabled, silently ignore every message from
+        // groups that are not explicitly approved. Private chats remain available
+        // so the owner can manage the list even when no group is approved.
+        const groupAccess = global.db.data.settings?.groupAccess || { enabled: true, allowedGroups: [] }
+        if (m.chat.endsWith('@g.us') && groupAccess.enabled !== false) {
+            const allowedGroups = Array.isArray(groupAccess.allowedGroups) ? groupAccess.allowedGroups : []
+            if (!allowedGroups.includes(m.chat)) {
+                console.log('[GROUP ACCESS] ignored message from unapproved group:', m.chat)
+                return
+            }
+        }
 const isMods = isOwner || global.mods.map(v => v.replace(/[^0-9]/g, '') + '@s.whatsapp.net').includes(resolvedSender)
 const isPrems = isROwner || global.db.data.users[m.sender].premiumTime > 0
         
