@@ -26,8 +26,25 @@ export async function handler(chatUpdate) {
     if (global.db.data == null) await global.loadDatabase()
     
     try {
+    const rawMessage = m
     m = smsg(this, m) || m
     if (!m) return
+
+    // Fallback text extraction for self-chat / LID messages when the serializer
+    // does not expose m.text consistently. This keeps commands such as .menu usable
+    // from the bot account itself without changing normal message processing.
+    if (typeof m.text !== 'string' || !m.text.trim()) {
+        const content = rawMessage?.message || {}
+        const rawText = content.conversation ||
+            content.extendedTextMessage?.text ||
+            content.imageMessage?.caption ||
+            content.videoMessage?.caption ||
+            content.documentMessage?.caption ||
+            content.buttonsResponseMessage?.selectedButtonId ||
+            content.listResponseMessage?.singleSelectReply?.selectedRowId
+        if (typeof rawText === 'string') m.text = rawText
+    }
+
     // Temporary diagnostic: trace .menu through serialization and command parsing.
     const isMenuDiagnostic = typeof m.text === 'string' && /^\s*[.!/](menu|help)(?:\s|$)/i.test(m.text)
     if (isMenuDiagnostic) console.log('[DIAG menu-handler]', JSON.stringify({
