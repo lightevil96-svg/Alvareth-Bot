@@ -28,8 +28,20 @@ export async function handler(chatUpdate) {
     try {
     m = smsg(this, m) || m
     if (!m) return
+    // Temporary diagnostic: trace .menu through serialization and command parsing.
+    const isMenuDiagnostic = typeof m.text === 'string' && /^\\s*[.!/](menu|help)(?:\\s|$)/i.test(m.text)
+    if (isMenuDiagnostic) console.log('[DIAG menu-handler]', JSON.stringify({
+        text: m.text,
+        sender: m.sender || null,
+        chat: m.chat || null,
+        fromMe: Boolean(m.fromMe),
+        messageType: m.mtype || null
+    }))
     // Ignore non-chat/system updates that do not contain a usable sender or chat JID.
-    if (typeof m.sender !== 'string' || !m.sender || typeof m.chat !== 'string' || !m.chat) return
+    if (typeof m.sender !== 'string' || !m.sender || typeof m.chat !== 'string' || !m.chat) {
+        if (isMenuDiagnostic) console.log('[DIAG menu-stop] missing sender/chat')
+        return
+    }
 
     m.exp = 0
     m.limit = false
@@ -539,6 +551,16 @@ for (let name in global.plugins) {
                 typeof _prefix === 'string' ? [[new RegExp(str2Regex(_prefix)).exec(m.text), new RegExp(str2Regex(_prefix))]] :
                 [[[], new RegExp]]
             ).find(p => p[1])
+            if (isMenuDiagnostic && (name === 'main/menu.js' || name.endsWith('/menu.js') || name.endsWith('menu.js'))) {
+                console.log('[DIAG menu-prefix]', JSON.stringify({
+                    plugin: name,
+                    text: m.text,
+                    prefixSource: plugin.customPrefix ? 'plugin.customPrefix' : conn.prefix ? 'conn.prefix' : 'global.prefix',
+                    prefixType: _prefix instanceof RegExp ? 'RegExp' : Array.isArray(_prefix) ? 'Array' : typeof _prefix,
+                    matched: Boolean(match?.[0]?.[0]),
+                    matchedText: match?.[0]?.[0] || null
+                }))
+            }
 
             if (typeof plugin.before === 'function') {
                 if (await plugin.before.call(this, m, {
@@ -571,6 +593,16 @@ for (let name in global.plugins) {
                     Array.isArray(plugin.command) ? plugin.command.some(cmd => cmd instanceof RegExp ? cmd.test(command) : cmd === command) :
                     typeof plugin.command === 'string' ? plugin.command === command : false
 
+                if (isMenuDiagnostic && (name === 'main/menu.js' || name.endsWith('/menu.js') || name.endsWith('menu.js'))) {
+                    console.log('[DIAG menu-command]', JSON.stringify({
+                        plugin: name,
+                        command,
+                        isAccept,
+                        isOwner,
+                        isROwner,
+                        disabled: Boolean(plugin.disabled)
+                    }))
+                }
                 if (!isAccept) continue
                 
                 m.plugin = name
