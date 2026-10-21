@@ -17,21 +17,12 @@ import _ from 'lodash'
 import { Low } from 'lowdb'
 import { JSONFile } from 'lowdb/node'
 import syntaxerror from 'syntax-error'
-import * as Baileys from 'baileys'
+import { useMultiFileAuthState, fetchLatestBaileysVersion, makeCacheableSignalKeyStore, DisconnectReason } from 'baileys'
 import { makeWASocket } from './lib/simple.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
-// Interop export Baileys agar kompatibel dengan bentuk export fork yang dipakai proyek.
-const Named = Baileys.default?.default
-  ? Baileys.default
-  : (Baileys.default || Baileys)
-const {
-  useMultiFileAuthState,
-  fetchLatestBaileysVersion,
-  makeCacheableSignalKeyStore,
-  DisconnectReason
-} = Named
+// Gunakan named exports resmi dari fork Baileys agar fungsi auth tidak undefined.
 
 // Helper path/URL yang kompatibel di Windows dan Linux.
 function urlToHttpURL(value) {
@@ -50,7 +41,7 @@ const prefixChars = opts.prefix || '‎xzXZ/i!#$%+£¢€¥^°=¶∆×÷π√✓
 global.prefix = new RegExp('^[' + String(prefixChars).replace(/[|\\{}()[\]^$+*?.\-]/g, '\\$&') + ']')
 
 // Database lowdb.
-global.db = new Low(new JSONFile(join(__dirname, 'database.json')))
+global.db = new Low(new JSONFile(join(__dirname, 'database.json')), { users: {}, chats: {}, stats: {}, msgs: {}, sticker: {}, settings: {} })
 global.loadDatabase = async function loadDatabase() {
   if (global.db.READ) {
     return new Promise((resolve) => {

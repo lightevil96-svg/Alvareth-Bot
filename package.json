@@ -11,8 +11,8 @@
   },
   "scripts": {
     "start": "node index.js",
-    "test": "node test.js",
-    "dev": "nodemon --experimental-specifier-resolution=node index.js"
+    "test": "node --check index.js && node --check main.js && node --check handler.js",
+    "dev": "node --watch index.js"
   },
   "keywords": [
     "alvareth-bot",
@@ -22,16 +22,16 @@
     "plugin-system",
     "github-auto-deploy"
   ],
-  "homepage": "https://github.com/",
+  "homepage": "https://github.com/lightevil96-svg/Alvareth-Bot",
   "author": {
     "name": "Light V"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/REPLACE_WITH_YOUR_USERNAME/Alvareth-Bot.git"
+    "url": "https://github.com/lightevil96-svg/Alvareth-Bot.git"
   },
   "bugs": {
-    "url": "https://github.com/REPLACE_WITH_YOUR_USERNAME/Alvareth-Bot/issues"
+    "url": "https://github.com/lightevil96-svg/Alvareth-Bot/issues"
   },
   "license": "GPL-3.0-or-later",
   "dependencies": {
@@ -42,7 +42,7 @@
     "archiver": "^7.0.1",
     "awesome-phonenumber": "^5.10.0",
     "axios": "^1.4.0",
-    "baileys": "npm:@itsliaaa/baileys@latest",
+    "baileys": "npm:@itsliaaa/baileys@0.3.18-final",
     "bing-translate-api": "^4.0.2",
     "brat-canvas": "^1.0.30",
     "canvas": "^2.11.2",
@@ -63,7 +63,7 @@
     "jszip": "^3.10.1",
     "link-preview-js": "^3.2.0",
     "lodash": "^4.17.21",
-    "lowdb": "^3.0.0",
+    "lowdb": "^6.1.1",
     "mime-types": "^2.1.35",
     "moment-timezone": "^0.5.43",
     "mongoose": "^7.4.4",
