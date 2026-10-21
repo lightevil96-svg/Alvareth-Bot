@@ -40,7 +40,7 @@ let handler = async (m, { conn, usedPrefix, command, text, isOwner }) => {
     const who = m.sender
     const user = global.db.data.users[who]
 
-    const botname = global.namebot || conn.user?.name || 'ᴀʟᴠᴀʀᴇᴛʜ ʙᴏᴛ'
+    const botname = 'Alvareth Bot'
 
     const limit = (isOwner || user.premiumTime >= 1) ? '∞ Unlimited' : user.limit
     const role = isOwner ? 'Owner' : (user.role || 'Newbie')
@@ -136,8 +136,8 @@ ${global.dmenuf || '┗––––––––––✦'}
 
           optionText: 'Pilih Menu',
           optionTitle: '📄 Menu Tersedia',
-          offerText: 'ʀyᴏ yᴀᴍᴀᴅᴀ ᴍᴜʟᴛɪ ᴅᴇᴠɪᴄᴇ',
-          offerCode: 'ryo acumalaka',
+          offerText: 'Alvareth Bot',
+          offerCode: 'Alvareth Bot',
           offerUrl: 'https://whatsapp.com/channel/0029VbAYjQgKrWQulDTYcg2G',
           offerExpiration: Date.now() + 86400000,
 
@@ -225,7 +225,7 @@ ${toSmallCaps('ketik salah satu menu di atas')}
           linkPreview: {
             'matched-text': MENU_LINK,
             title: botname,
-            description: 'WhatsApp Multi Device Bot',
+            description: 'Alvareth Bot — WhatsApp Bot',
             previewType: 0,
             jpegThumbnail: hdThumb,
             highQualityThumbnail: image,
@@ -267,7 +267,7 @@ ${toSmallCaps('ketik salah satu menu di atas')}
       linkPreview: {
         'matched-text': MENU_LINK,
         title: botname,
-        description: 'WhatsApp Multi Device Bot',
+        description: 'Alvareth Bot — WhatsApp Bot',
         previewType: 0,
         jpegThumbnail: hdThumbDetail,
         highQualityThumbnail: detailImage,
