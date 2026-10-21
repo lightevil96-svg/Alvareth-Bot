@@ -7,3 +7,5 @@ The source archive was uploaded to this repository. The GitHub Actions workflow 
 After import, review `README.md`, `package.json`, and the environment configuration before running the bot. Do not commit real WhatsApp session credentials, API keys, or a populated `.env` file.
 
 Import workflow trigger initialized.
+
+Import attempt restarted after removing a hard-coded deployment credential from the source.
