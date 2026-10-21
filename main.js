@@ -12,6 +12,7 @@ import { format } from 'util'
 import yargs from 'yargs'
 import pino from 'pino'
 import chalk from 'chalk'
+import QRCode from 'qrcode'
 import _ from 'lodash'
 import { Low } from 'lowdb'
 import { JSONFile } from 'lowdb/node'
@@ -226,8 +227,18 @@ global.reloadHandler = async function reloadHandler(restartSocket = false) {
 }
 
 async function connectionUpdate(update) {
-  const { connection, lastDisconnect, isNewLogin } = update
+  const { connection, lastDisconnect, isNewLogin, qr } = update
   if (isNewLogin) conn.isInit = true
+
+  // Render QR explicitly; some Baileys forks no longer honor printQRInTerminal.
+  if (qr) {
+    try {
+      console.log(chalk.cyan('\n📱 Pindai QR ini melalui WhatsApp > Perangkat tertaut > Tautkan perangkat:'))
+      console.log(await QRCode.toString(qr, { type: 'terminal', small: true }))
+    } catch (error) {
+      console.error(chalk.red('Gagal menampilkan QR WhatsApp:'), error?.message || error)
+    }
+  }
 
   if (connection === 'close') {
     const statusCode = lastDisconnect?.error?.output?.statusCode
