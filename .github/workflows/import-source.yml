@@ -16,7 +16,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Extract source files
+      - name: Extract and sanitize source
         shell: bash
         run: |
           set -euo pipefail
@@ -32,6 +32,17 @@ jobs:
           test -f package.json
           test -f index.js
           test -d plugins
+          # Never publish the hard-coded Vercel credential found in the archive.
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p = Path("plugins/tools/deploy.js")
+          if p.exists():
+              s = p.read_text()
+              s, n = re.subn(r"const TOKEN\s*=\s*(['\"]).*?\1", "const TOKEN = process.env.VERCEL_TOKEN || ''", s, count=1)
+              if n:
+                  p.write_text(s)
+          PY
       - name: Commit extracted project
         shell: bash
         run: |
