@@ -33,12 +33,13 @@ export async function handler(chatUpdate) {
     m = smsg(this, m) || m
     if (!m) return
 
-    // Restore routing metadata from the original Baileys message if protobuf
-    // conversion dropped the key; command handling needs chat/sender/fromMe.
+    // Restore routing metadata and derive command-critical fields from the original
+    // Baileys event. This fork's protobuf conversion may retain key data but lose
+    // the serializer prototype getters (chat/sender/mtype), so do not rely on getters.
     if (rawKeySnapshot) {
         if (!m.key) m.key = { ...rawKeySnapshot }
         else {
-            for (const field of ['remoteJid', 'participant', 'fromMe', 'id', 'participantAlt', 'remoteJidAlt']) {
+            for (const field of ['remoteJid', 'participant', 'fromMe', 'id', 'participantAlt', 'remoteJidAlt', 'addressingMode']) {
                 if ((m.key[field] === undefined || m.key[field] === null || m.key[field] === '') &&
                     rawKeySnapshot[field] !== undefined && rawKeySnapshot[field] !== null) {
                     m.key[field] = rawKeySnapshot[field]
@@ -46,6 +47,32 @@ export async function handler(chatUpdate) {
             }
         }
         m.conn = conn
+    }
+
+    const rawChat = typeof rawKeySnapshot?.remoteJid === 'string' ? rawKeySnapshot.remoteJid : ''
+    const rawFromMe = rawKeySnapshot?.fromMe === true
+    const rawSender = rawFromMe
+        ? (conn.user?.id || rawKeySnapshot?.remoteJidAlt || rawChat)
+        : (rawKeySnapshot?.participantAlt || rawKeySnapshot?.participant || rawKeySnapshot?.remoteJidAlt || rawChat)
+    const normalizeJid = value => typeof value === 'string' && value
+        ? (typeof conn.decodeJid === 'function' ? conn.decodeJid(value) : value)
+        : ''
+    const derivedChat = normalizeJid(rawChat)
+    const derivedSender = normalizeJid(rawSender)
+
+    // Override absent/broken prototype getters with stable own data properties.
+    if (typeof m.chat !== 'string' || !m.chat) {
+        Object.defineProperty(m, 'chat', { configurable: true, enumerable: true, writable: true, value: derivedChat })
+    }
+    if (typeof m.sender !== 'string' || !m.sender) {
+        Object.defineProperty(m, 'sender', { configurable: true, enumerable: true, writable: true, value: derivedSender })
+    }
+    if (typeof m.fromMe !== 'boolean' || (rawFromMe && m.fromMe !== true)) {
+        Object.defineProperty(m, 'fromMe', { configurable: true, enumerable: true, writable: true, value: rawFromMe })
+    }
+    if ((!m.mtype || typeof m.mtype !== 'string') && rawContentSnapshot) {
+        const rawType = Object.keys(rawContentSnapshot).find(key => key !== 'messageContextInfo' && key !== 'senderKeyDistributionMessage') || ''
+        if (rawType) Object.defineProperty(m, 'mtype', { configurable: true, enumerable: true, writable: true, value: rawType })
     }
 
     // Fallback text extraction for self-chat / LID messages when the serializer
@@ -69,10 +96,19 @@ export async function handler(chatUpdate) {
         text: m.text,
         rawKey: rawKeySnapshot,
         serializedKey: m.key || null,
+        rawMessageKeys: rawContentSnapshot ? Object.keys(rawContentSnapshot) : [],
+        serializedMessageKeys: m.message ? Object.keys(m.message) : [],
+        prototypeName: Object.getPrototypeOf(m)?.constructor?.name || null,
+        hasChatGetter: Boolean(Object.getOwnPropertyDescriptor(Object.getPrototypeOf(m) || {}, 'chat')?.get),
+        hasSenderGetter: Boolean(Object.getOwnPropertyDescriptor(Object.getPrototypeOf(m) || {}, 'sender')?.get),
+        connectionUser: conn.user?.id || null,
+        derivedChat: derivedChat || null,
+        derivedSender: derivedSender || null,
         sender: m.sender || null,
         chat: m.chat || null,
         fromMe: Boolean(m.fromMe),
-        messageType: m.mtype || null
+        messageType: m.mtype || null,
+        textType: typeof m.text
     }))
     // Ignore non-chat/system updates that do not contain a usable sender or chat JID.
     if (typeof m.sender !== 'string' || !m.sender || typeof m.chat !== 'string' || !m.chat) {
