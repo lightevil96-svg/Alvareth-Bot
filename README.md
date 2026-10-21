@@ -1,5 +1,7 @@
 # Alvareth Bot
 
+> Untuk AI/developer yang melanjutkan perbaikan, baca **[AI_CONTEXT.md](./AI_CONTEXT.md)** terlebih dahulu. Dokumen ini merangkum arsitektur, startup/update, data yang harus dilindungi, fitur yang sudah diperbaiki, workflow, dan hal yang belum diverifikasi.
+
 **Alvareth Bot** adalah bot WhatsApp Multi-Device berbasis Node.js, Baileys, dan sistem plugin. Nama owner yang ditampilkan: **Light V**.
 
 Struktur proyek ini dibuat dengan mempertahankan struktur SC yang diberikan: `index.js`, `main.js`, `handler.js`, `config.js`, `plugins/`, `lib/`, `json/`, dan aset di `media/`.
