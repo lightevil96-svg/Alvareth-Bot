@@ -16,7 +16,7 @@
 const handler = async (m, { conn, args, usedPrefix, command }) => {
   // This fork's serialized message may not expose reply(); use the connection fallback.
   const reply = async text => {
-    if (typeof m.reply === 'function') return reply(text)
+    if (typeof m.reply === 'function') return m.reply(text)
     const chat = m.chat || m.key?.remoteJid
     if (!chat || typeof conn?.sendMessage !== 'function') throw new Error('Tidak dapat membalas: chat atau conn.sendMessage tidak tersedia.')
     return conn.sendMessage(chat, { text: String(text) }, m.key ? { quoted: m } : {})
