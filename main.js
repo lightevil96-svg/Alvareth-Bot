@@ -215,6 +215,28 @@ global.reloadHandler = async function reloadHandler(restartSocket = false) {
     const messages = Array.isArray(update?.messages) ? update.messages : []
     for (const message of messages) {
       if (!message) continue
+      // Temporary, narrow diagnostics for live text messages to determine whether
+      // .menu reaches Baileys before command parsing.
+      if (update?.type === 'notify' && message.message) {
+        const content = message.message
+        const text = content.conversation ||
+          content.extendedTextMessage?.text ||
+          content.imageMessage?.caption ||
+          content.videoMessage?.caption ||
+          content.documentMessage?.caption ||
+          content.buttonsResponseMessage?.selectedButtonId ||
+          content.listResponseMessage?.singleSelectReply?.selectedRowId ||
+          ''
+        if (typeof text === 'string' && /^\\s*[.!/](menu|help)(?:\\s|$)/i.test(text)) {
+          console.log('[DIAG menu-upsert]', JSON.stringify({
+            type: update.type,
+            chat: message.key?.remoteJid || null,
+            participant: message.key?.participant || null,
+            fromMe: Boolean(message.key?.fromMe),
+            text
+          }))
+        }
+      }
       await handler.call(conn, { ...update, messages: [message] })
     }
   }
