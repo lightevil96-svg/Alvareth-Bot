@@ -27,18 +27,21 @@ export async function handler(chatUpdate) {
     
     try {
     const rawMessage = m
+    // Snapshot these before protobuf serialization; fromObject may normalize/drop fields.
+    const rawKeySnapshot = rawMessage?.key ? { ...rawMessage.key } : null
+    const rawContentSnapshot = rawMessage?.message ? { ...rawMessage.message } : null
     m = smsg(this, m) || m
     if (!m) return
 
     // Restore routing metadata from the original Baileys message if protobuf
     // conversion dropped the key; command handling needs chat/sender/fromMe.
-    if (rawMessage?.key) {
-        if (!m.key) m.key = { ...rawMessage.key }
+    if (rawKeySnapshot) {
+        if (!m.key) m.key = { ...rawKeySnapshot }
         else {
             for (const field of ['remoteJid', 'participant', 'fromMe', 'id', 'participantAlt', 'remoteJidAlt']) {
                 if ((m.key[field] === undefined || m.key[field] === null || m.key[field] === '') &&
-                    rawMessage.key[field] !== undefined && rawMessage.key[field] !== null) {
-                    m.key[field] = rawMessage.key[field]
+                    rawKeySnapshot[field] !== undefined && rawKeySnapshot[field] !== null) {
+                    m.key[field] = rawKeySnapshot[field]
                 }
             }
         }
@@ -49,7 +52,7 @@ export async function handler(chatUpdate) {
     // does not expose m.text consistently. This keeps commands such as .menu usable
     // from the bot account itself without changing normal message processing.
     if (typeof m.text !== 'string' || !m.text.trim()) {
-        const content = rawMessage?.message || {}
+        const content = rawContentSnapshot || rawMessage?.message || {}
         const rawText = content.conversation ||
             content.extendedTextMessage?.text ||
             content.imageMessage?.caption ||
@@ -64,6 +67,8 @@ export async function handler(chatUpdate) {
     const isMenuDiagnostic = typeof m.text === 'string' && /^\s*[.!/](menu|help)(?:\s|$)/i.test(m.text)
     if (isMenuDiagnostic) console.log('[DIAG menu-handler]', JSON.stringify({
         text: m.text,
+        rawKey: rawKeySnapshot,
+        serializedKey: m.key || null,
         sender: m.sender || null,
         chat: m.chat || null,
         fromMe: Boolean(m.fromMe),
