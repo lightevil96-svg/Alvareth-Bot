@@ -227,7 +227,7 @@ global.reloadHandler = async function reloadHandler(restartSocket = false) {
           content.buttonsResponseMessage?.selectedButtonId ||
           content.listResponseMessage?.singleSelectReply?.selectedRowId ||
           ''
-        if (typeof text === 'string' && /^\\s*[.!/](menu|help)(?:\\s|$)/i.test(text)) {
+        if (typeof text === 'string' && /^\s*[.!/](menu|help)(?:\s|$)/i.test(text)) {
           console.log('[DIAG menu-upsert]', JSON.stringify({
             type: update.type,
             chat: message.key?.remoteJid || null,
