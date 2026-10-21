@@ -10,8 +10,8 @@
     "plugins": "plugins"
   },
   "scripts": {
-    "start": "node index.js",
-    "test": "node --check index.js && node --check main.js && node --check handler.js && node --check lib/auto-update.js",
+    "start": "node scripts/start-with-update.js",
+    "test": "node --check index.js && node --check main.js && node --check handler.js && node --check lib/auto-update.js && node --check scripts/start-with-update.js",
     "dev": "node --watch index.js"
   },
   "keywords": [
