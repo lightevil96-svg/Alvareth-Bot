@@ -1,7 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
-// ALVARETH BOT — main.js (clean rewrite)
-// Pairing code + QR, auto-reconnect, recursive plugin loader, lowdb
-// Isi BOT_NUMBER di .env untuk menggunakan pairing code.
+// ALVARETH BOT — main.js
+// QR login, auto-reconnect, recursive plugin loader, lowdb
 // ═══════════════════════════════════════════════════════════════
 
 import './config.js'
@@ -79,9 +78,7 @@ const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR)
 const { version, isLatest } = await fetchLatestBaileysVersion()
 console.log(chalk.cyan(`WA Web version: v${version.join('.')} (latest: ${isLatest})`))
 
-if (!global.pairing) {
-  console.log(chalk.yellow('[!] BOT_NUMBER kosong di .env → mode QR code. Isi BOT_NUMBER untuk mode pairing.'))
-}
+console.log(chalk.cyan('📷 Mode login QR aktif. Pindai QR dari WhatsApp > Perangkat Tertaut.'))
 
 // conn sengaja memakai let karena socket diganti ketika reconnect.
 let conn
@@ -89,7 +86,7 @@ const silentLogger = pino({ level: 'silent' })
 const connectionOptions = {
   version,
   logger: silentLogger,
-  printQRInTerminal: !global.pairing,
+  printQRInTerminal: true,
   auth: { ...state, keys: makeCacheableSignalKeyStore(state.keys, silentLogger) },
   browser: ['Ubuntu', 'Chrome', '22.04.4'],
   markOnlineOnConnect: true,
@@ -139,37 +136,7 @@ conn.findUserId = async (lid) => {
   return null
 }
 
-// Pairing code.
-let pairingRequested = false
-let pairingAttempted = false
-async function requestPairingCode() {
-  // Batasi satu permintaan kode per proses agar reconnect tidak membanjiri terminal.
-  if (pairingRequested || pairingAttempted || !global.pairing || state.creds.registered) return
-  pairingRequested = true
-  pairingAttempted = true
-  try {
-    const phoneNumber = String(global.pairing).replace(/\D/g, '')
-    if (!phoneNumber) throw new Error('BOT_NUMBER tidak valid; periksa file .env')
-
-    console.log(chalk.yellow('📱 Meminta pairing code untuk nomor:'), chalk.cyan('+' + phoneNumber))
-    await new Promise(resolve => setTimeout(resolve, 3000))
-    const result = await conn.requestPairingCode(phoneNumber)
-    if (!result) throw new Error('Server tidak mengembalikan kode pairing')
-
-    const code = String(result).match(/.{1,4}/g)?.join('-') || String(result)
-    console.log('\n' + chalk.bgGreen.black('  PAIRING CODE  ') + '  ' + chalk.bgWhite.black(`  ${code}  `) + '\n')
-    console.log(chalk.gray([
-      'Cara menghubungkan perangkat:',
-      ' 1. Buka WhatsApp di HP nomor tersebut → Pengaturan → Perangkat Tertaut.',
-      ' 2. Pilih “Tautkan perangkat” → “Tautkan dengan nomor telepon saja”.',
-      ' 3. Masukkan kode di atas. Jika kedaluwarsa, jalankan ulang bot untuk meminta kode baru.'
-    ].join('\n')) + '\n')
-  } catch (error) {
-    pairingRequested = false
-    console.error(chalk.red('❌ Gagal meminta pairing code:'), error?.message || error)
-    console.error(chalk.yellow('💡 Jika sesi bermasalah, hentikan bot dan hapus folder sessions/ sebelum pairing ulang.'))
-  }
-}
+// Login hanya menggunakan QR; pairing code dinonaktifkan.
 
 // Handler utama dan event koneksi.
 let { handler, participantsUpdate, groupsUpdate, deleteUpdate } = await import('./handler.js')
@@ -262,10 +229,6 @@ async function connectionUpdate(update) {
   const { connection, lastDisconnect, isNewLogin } = update
   if (isNewLogin) conn.isInit = true
 
-  if (!state.creds.registered && global.pairing && connection === 'connecting') {
-    requestPairingCode()
-  }
-
   if (connection === 'close') {
     const statusCode = lastDisconnect?.error?.output?.statusCode
       || lastDisconnect?.error?.statusCode
@@ -283,11 +246,8 @@ async function connectionUpdate(update) {
     } else {
       console.log(chalk.yellow(`⚠️ Koneksi terputus (${statusCode}). Menyambung ulang...`))
       await global.reloadHandler(true).catch(console.error)
-      // Jangan meminta kode pairing baru otomatis setiap koneksi terputus.
-      // Restart proses secara manual jika perlu meminta kode baru.
     }
   } else if (connection === 'open') {
-    pairingRequested = true
     const { jid, name } = conn.user || {}
     console.log(chalk.greenBright('✅ Bot terhubung:'), chalk.white(name || '-'), chalk.gray(`(${jid || '-'})`))
   }
@@ -396,11 +356,6 @@ await global.reloadHandler()
 await filesInit()
 console.log(chalk.green(`✔ ${Object.keys(global.plugins).length} plugin dimuat`))
 watchPlugins()
-
-// Fallback pairing jika event connecting tidak memicu permintaan kode.
-if (!state.creds.registered && global.pairing) {
-  setTimeout(() => requestPairingCode(), 8000)
-}
 
 // HTTP health-check opsional untuk hosting.
 if (opts.server || process.env.PORT) {
