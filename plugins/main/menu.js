@@ -98,11 +98,21 @@ let handler = async (m, { conn, usedPrefix, command, text, isOwner }) => {
     }
 
     const playSound = async () => {
-      if (MENU_SOUND && fs.existsSync(MENU_SOUND)) {
-        await conn.sendFile(m.chat, MENU_SOUND, 'menu.mp3', '', m, true, {
-          mimetype: 'audio/mp4',
-          ptt: true
-        })
+      // Send the audio buffer directly. conn.sendFile() in this Baileys fork
+      // may create a timestamped temporary file under ./tmp and fail with
+      // ENOENT when that directory does not exist.
+      if (!MENU_SOUND || !fs.existsSync(MENU_SOUND)) return
+      try {
+        const audio = fs.readFileSync(MENU_SOUND)
+        await conn.sendMessage(m.chat, {
+          audio,
+          mimetype: 'audio/mpeg',
+          ptt: true,
+          fileName: 'menu.mp3'
+        }, { quoted: m })
+      } catch (error) {
+        // Menu content should still work even if optional sound playback fails.
+        console.error('[Menu] Gagal mengirim audio menu:', error?.stack || error)
       }
     }
 
