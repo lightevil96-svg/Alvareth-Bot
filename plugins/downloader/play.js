@@ -1,38 +1,56 @@
 import yts from 'yt-search'
 import fs from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
 import { prepareWAMessageMedia } from 'baileys'
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const BOT_LINK = 'https://spoo.me/Alvareth-Bot'
-const BOT_THUMB = './media/alvareth-character.png'
+const BOT_THUMB = path.resolve(__dirname, '../../media/alvareth-character.png')
 
 let handler = async (m, { conn, text, usedPrefix, command }) => {
   if (!text) {
-    // Kirim preview eksplisit di plugin .play agar tidak mewarisi preview lama dari m.reply().
-    const thumbnail = fs.readFileSync(BOT_THUMB)
-    const { imageMessage: highQualityThumbnail } = await prepareWAMessageMedia({
-      image: thumbnail
-    }, {
-      upload: conn.waUploadToServer,
-      mediaTypeOverride: 'thumbnail-link'
-    })
-    highQualityThumbnail.width = 1280
-    highQualityThumbnail.height = 720
+    const fallbackText = `${BOT_LINK}\n\nContoh: ${usedPrefix + command} judul lagu`
 
-    return conn.sendMessage(m.chat, {
-      text: `${BOT_LINK}\n\nContoh: ${usedPrefix + command} judul lagu`,
-      linkPreview: {
-        'matched-text': BOT_LINK,
-        title: 'Alvareth Bot',
-        description: 'WhatsApp Bot',
-        previewType: 0,
-        jpegThumbnail: thumbnail,
-        highQualityThumbnail,
-        linkPreviewMetadata: {
-          linkMediaDuration: 0,
-          socialMediaPostType: 4
-        }
+    try {
+      // Preview kustom bersifat tambahan: kegagalannya tidak boleh menghilangkan balasan .play.
+      const thumbnail = fs.readFileSync(BOT_THUMB)
+      const { imageMessage: highQualityThumbnail } = await prepareWAMessageMedia({
+        image: thumbnail
+      }, {
+        upload: conn.waUploadToServer,
+        mediaTypeOverride: 'thumbnail-link'
+      })
+
+      if (highQualityThumbnail) {
+        highQualityThumbnail.width = 1280
+        highQualityThumbnail.height = 720
       }
-    }, { quoted: m })
+
+      return await conn.sendMessage(m.chat, {
+        text: fallbackText,
+        linkPreview: {
+          'matched-text': BOT_LINK,
+          title: 'Alvareth Bot',
+          description: 'WhatsApp Bot',
+          previewType: 0,
+          jpegThumbnail: thumbnail,
+          ...(highQualityThumbnail ? { highQualityThumbnail } : {}),
+          linkPreviewMetadata: {
+            linkMediaDuration: 0,
+            socialMediaPostType: 4
+          }
+        }
+      }, { quoted: m })
+    } catch (error) {
+      console.error('[.play] Gagal mengirim preview kustom; mencoba balasan teks biasa:', error)
+      try {
+        return await conn.sendMessage(m.chat, { text: fallbackText }, { quoted: m })
+      } catch (sendError) {
+        console.error('[.play] Gagal mengirim balasan teks biasa:', sendError)
+        throw sendError
+      }
+    }
   }
 
   try {
