@@ -15,9 +15,9 @@ try {
 
 moment.locale('id')
 
-const MENU_IMAGE = './media/ryo.png'
+const MENU_IMAGE = './media/thumbnail.jpg'
 const MENU_SOUND = './media/tes.mp3'
-const MENU_LINK = global.repository || 'https://github.com/'
+const MENU_LINK = 'https://spoo.me/Alvareth-Bot'
 
 const smallCaps = {
   a:'ᴀ', b:'ʙ', c:'ᴄ', d:'ᴅ', e:'ᴇ', f:'ꜰ', g:'ɢ', h:'ʜ',
