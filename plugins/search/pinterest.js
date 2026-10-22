@@ -144,7 +144,7 @@ const handler = async (m, { conn, text, usedPrefix, command }) => {
 handler.help = ['pinterest <kata_kunci>', 'pin <kata_kunci>']
 handler.tags = ['search']
 handler.command = /^(pinterest|pin)$/i
-handler.register = true
+handler.register = false
 handler.limit = true
 
 export default handler
