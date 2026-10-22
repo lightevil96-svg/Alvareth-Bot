@@ -1,56 +1,13 @@
 import yts from 'yt-search'
-import fs from 'fs'
-import path from 'path'
-import { fileURLToPath } from 'url'
-import { prepareWAMessageMedia } from 'baileys'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const BOT_LINK = 'https://spoo.me/Alvareth-Bot'
-const BOT_THUMB = path.resolve(__dirname, '../../media/alvareth-character.png')
 
-let handler = async (m, { conn, text, usedPrefix, command }) => {
+let handler = async (m, { text, usedPrefix, command }) => {
   if (!text) {
-    const fallbackText = `${BOT_LINK}\n\nContoh: ${usedPrefix + command} judul lagu`
-
-    try {
-      // Preview kustom bersifat tambahan: kegagalannya tidak boleh menghilangkan balasan .play.
-      const thumbnail = fs.readFileSync(BOT_THUMB)
-      const { imageMessage: highQualityThumbnail } = await prepareWAMessageMedia({
-        image: thumbnail
-      }, {
-        upload: conn.waUploadToServer,
-        mediaTypeOverride: 'thumbnail-link'
-      })
-
-      if (highQualityThumbnail) {
-        highQualityThumbnail.width = 1280
-        highQualityThumbnail.height = 720
-      }
-
-      return await conn.sendMessage(m.chat, {
-        text: fallbackText,
-        linkPreview: {
-          'matched-text': BOT_LINK,
-          title: 'Alvareth Bot',
-          description: 'WhatsApp Bot',
-          previewType: 0,
-          jpegThumbnail: thumbnail,
-          ...(highQualityThumbnail ? { highQualityThumbnail } : {}),
-          linkPreviewMetadata: {
-            linkMediaDuration: 0,
-            socialMediaPostType: 4
-          }
-        }
-      }, { quoted: m })
-    } catch (error) {
-      console.error('[.play] Gagal mengirim preview kustom; mencoba balasan teks biasa:', error)
-      try {
-        return await conn.sendMessage(m.chat, { text: fallbackText }, { quoted: m })
-      } catch (sendError) {
-        console.error('[.play] Gagal mengirim balasan teks biasa:', sendError)
-        throw sendError
-      }
-    }
+    // Kirim balasan teks biasa terlebih dahulu. Jangan jadikan pembuatan/upload thumbnail
+    // sebagai prasyarat balasan karena kegagalan media bisa membuat .play tampak diam.
+    const replyText = `${BOT_LINK}\n\nContoh: ${usedPrefix + command} judul lagu`
+    return await m.reply(replyText)
   }
 
   try {
@@ -58,11 +15,10 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
     const videos = search.videos
 
     if (!videos.length) {
-      return m.reply('Tidak ditemukan.')
+      return await m.reply('Tidak ditemukan.')
     }
 
     const video = videos[0]
-
     const caption = `Play Music
 
 ✿ Title : ${video.title}
@@ -73,49 +29,10 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
 
 Silakan pilih format download di bawah.`
 
-    await conn.sendMessage(m.chat, {
-      image: { url: video.thumbnail },
-      caption,
-      footer: 'Alvareth Bot',
-      optionText: 'Pilih',
-      optionTitle: 'Download',
-      nativeFlow: [
-        {
-          text: 'Pilih Format',
-          sections: [
-            {
-              title: 'Downloader',
-              rows: [
-                {
-                  title: 'Audio MP3',
-                  description: 'Download sebagai MP3',
-                  id: `.ytmp3 ${video.url}`
-                },
-                {
-                  title: 'Audio MP3 V2',
-                  description: 'Download sebagai MP3 V2',
-                  id: `.ytmp3v2 ${video.url}`
-                },
-                {
-                  title: 'Video MP4',
-                  description: 'Download sebagai MP4',
-                  id: `.ytmp4 ${video.url}`
-                },
-                {
-                  title: 'Video MP4 V2',
-                  description: 'Download sebagai MP4 V2',
-                  id: `.ytmp4v2 ${video.url}`
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    }, { quoted: m })
-
-  } catch (e) {
-    console.error(e)
-    m.reply('Terjadi kesalahan.')
+    return await m.reply(caption + `\n\nLink video: ${video.url}\n\nDownload audio: .ytmp3 ${video.url}\nDownload video: .ytmp4 ${video.url}`)
+  } catch (error) {
+    console.error('[.play] Gagal mencari/mengirim hasil:', error)
+    return await m.reply('Pencarian lagu gagal. Coba lagi beberapa saat.')
   }
 }
 
