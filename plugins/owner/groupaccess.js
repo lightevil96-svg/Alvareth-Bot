@@ -25,7 +25,7 @@ const handler = async (m, { conn, args, usedPrefix, command }) => {
   const settings = global.db.data.settings || (global.db.data.settings = {})
   const access = settings.groupAccess || (settings.groupAccess = {
     enabled: true,
-    allowedGroups: [],
+    allowedGroups: ['120363424686467256@g.us'],
     updatedAt: 0,
     updatedBy: ''
   })
