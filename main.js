@@ -7,7 +7,7 @@ import './config.js'
 
 import { join, dirname, relative, sep, resolve } from 'path'
 import { fileURLToPath, pathToFileURL } from 'url'
-import { readdirSync, readFileSync, existsSync, statSync, watch, copyFileSync, cpSync, mkdirSync, unlinkSync } from 'fs'
+import { readdirSync, readFileSync, existsSync, statSync, watch, copyFileSync, cpSync, mkdirSync, unlinkSync, writeFileSync } from 'fs'
 import { homedir } from 'os'
 import { format } from 'util'
 import yargs from 'yargs'
@@ -37,10 +37,50 @@ const SESSION_DIR = process.env.WA_SESSION_DIR
   : join(RUNTIME_DATA_DIR, 'sessions')
 const DATABASE_BACKUP_DIR = join(RUNTIME_DATA_DIR, 'backups')
 
-// Copy (never move/delete) the old in-repository database on first migration.
-if (!existsSync(DATABASE_PATH) && existsSync(LEGACY_DATABASE_PATH)) {
-  copyFileSync(LEGACY_DATABASE_PATH, DATABASE_PATH)
-  console.log('Database lama disalin ke lokasi data persisten.')
+// Preserve user registrations across code updates and migrate older databases safely.
+// Never delete the original database. Merge legacy records only once: old values fill
+// missing fields, while values already in the persistent database always take priority.
+const DATABASE_MIGRATION_MARKER = join(RUNTIME_DATA_DIR, '.legacy-database-merged-v1')
+function mergeMissing(target, source) {
+  if (!source || typeof source !== 'object' || Array.isArray(source)) return target
+  if (!target || typeof target !== 'object' || Array.isArray(target)) target = {}
+  for (const [key, value] of Object.entries(source)) {
+    if (!(key in target) || target[key] == null) {
+      target[key] = value
+    } else if (
+      value && target[key] &&
+      typeof value === 'object' && typeof target[key] === 'object' &&
+      !Array.isArray(value) && !Array.isArray(target[key])
+    ) {
+      target[key] = mergeMissing(target[key], value)
+    }
+  }
+  return target
+}
+if (existsSync(LEGACY_DATABASE_PATH) && !existsSync(DATABASE_MIGRATION_MARKER)) {
+  try {
+    const legacyData = JSON.parse(readFileSync(LEGACY_DATABASE_PATH, 'utf8'))
+    let persistentData = {}
+    if (existsSync(DATABASE_PATH)) {
+      try {
+        persistentData = JSON.parse(readFileSync(DATABASE_PATH, 'utf8'))
+      } catch (error) {
+        // Keep the unreadable file for inspection; do not overwrite it automatically.
+        throw new Error(`database persisten tidak valid; file asli dipertahankan (${error.message})`)
+      }
+    }
+    const merged = mergeMissing(persistentData, legacyData)
+    if (existsSync(DATABASE_PATH)) {
+      copyFileSync(DATABASE_PATH, join(DATABASE_BACKUP_DIR, `database-before-legacy-merge-${Date.now()}.json`))
+    }
+    writeFileSync(DATABASE_PATH, JSON.stringify(merged, null, 2))
+    writeFileSync(DATABASE_MIGRATION_MARKER, new Date().toISOString())
+    console.log('Database lama digabung dengan data persisten; data yang sudah ada tidak ditimpa.')
+  } catch (error) {
+    console.error('[DATA MIGRATION] Gagal menggabungkan database lama; kedua file dipertahankan:', error.message)
+  }
+} else if (!existsSync(DATABASE_PATH) && !existsSync(LEGACY_DATABASE_PATH)) {
+  console.log('[DATA] Database baru akan dibuat. Pastikan direktori data lama yang berisi pendaftaran tersedia sebelum menjalankan bot.')
 }
 
 // Migrate existing WhatsApp session files without deleting the originals.
