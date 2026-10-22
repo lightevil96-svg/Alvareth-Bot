@@ -10,7 +10,7 @@ let handler = async (m, { usedPrefix, command }) => {
     }
 
     const buffer = await quoted.download()
-    fs.writeFileSync('./media/ryo.jpg', buffer)
+    fs.writeFileSync('./media/thumbnail.jpg', buffer)
     global.thumb = buffer
 
     m.reply('✅ Thumbnail menu berhasil diupdate!')
