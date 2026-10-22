@@ -176,3 +176,12 @@ Before modifying updater/deploy logic:
 - Fix in `plugins/search/pinterest.js`: send the intro text in its own message, then send a second payload containing `cards` and `footer` but deliberately no top-level `text`. This lets the library reach its carousel branch. Card URL buttons now set `useWebview: true`. Commit: `c33c13e`.
 - The plugin checks that the carousel send returns a message key before reacting ✅. A send failure should enter the existing catch path and react ❌ with an error message.
 - The syntax workflow is still running after this commit at the time of this note; verify GitHub Actions before telling the user it passed. Actual WhatsApp carousel rendering/button click must still be verified on the user's device.
+
+## 14. Pinterest images found but carousel send failed (2026-10-22)
+
+- User observed that .pin could find 10 results and send the intro message, then fail while sending the actual carousel.
+- plugins/search/pinterest.js now downloads and validates each image URL first (18-second timeout, 8 MB maximum per image); broken/non-image URLs are skipped so one bad media URL cannot make all results fail.
+- Native carousel cards now receive an in-memory image Buffer to avoid re-fetching remote Pinterest image URLs during carousel construction. Each card has a native-flow URL button.
+- If sending the native carousel fails, the plugin logs the exact carousel error and falls back to individual image cards with a “Buka Pinterest” URL button. It only reacts ✅ after carousel or fallback delivery has produced message IDs; if no image can be sent, it reacts ❌ and reports the media-send failure.
+- A duplicate displayValue declaration found by CI was removed. GitHub JavaScript syntax workflow passed for commit ae635c7.
+- Live rendering of native carousel and fallback image buttons must still be verified in WhatsApp; successful syntax CI alone does not prove delivery.
