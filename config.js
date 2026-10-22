@@ -86,7 +86,7 @@ global.apikey = "-" // apikey / plta lu
 global.capikey = "-" // capikey / pltc lu
 
 /*============= CHANNEL =============*/
-global.linkch = process.env.WHATSAPP_CHANNEL_URL || ''
+global.linkch = global.botLink
 global.chId = process.env.WHATSAPP_CHANNEL_ID || ''
 global.newsletterName = 'Alvareth Bot' 
 
