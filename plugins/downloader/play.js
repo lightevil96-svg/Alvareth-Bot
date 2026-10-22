@@ -1,13 +1,39 @@
 import yts from 'yt-search'
 
 const BOT_LINK = 'https://spoo.me/Alvareth-Bot'
+const BOT_THUMB = 'https://raw.githubusercontent.com/lightevil96-svg/Alvareth-Bot/main/media/alvareth-character.png'
 
-let handler = async (m, { text, usedPrefix, command }) => {
+let handler = async (m, { conn, text, usedPrefix, command }) => {
   if (!text) {
-    // Kirim balasan teks biasa terlebih dahulu. Jangan jadikan pembuatan/upload thumbnail
-    // sebagai prasyarat balasan karena kegagalan media bisa membuat .play tampak diam.
-    const replyText = `${BOT_LINK}\n\nContoh: ${usedPrefix + command} judul lagu`
-    return await m.reply(replyText)
+    // Jangan taruh URL Spoo.me di teks pesan: WhatsApp akan mengambil OG metadata
+    // dari shortlink lama (Ryo Yamada). Gunakan externalAdReply yang eksplisit.
+    const replyText = `Gunakan perintah: ${usedPrefix + command} judul lagu`
+    const message = {
+      text: replyText,
+      contextInfo: {
+        externalAdReply: {
+          title: 'Alvareth Bot',
+          body: 'WhatsApp Bot',
+          thumbnailUrl: BOT_THUMB,
+          sourceUrl: BOT_LINK,
+          mediaType: 1,
+          renderLargerThumbnail: true,
+          showAdAttribution: false
+        }
+      }
+    }
+
+    try {
+      return await conn.sendMessage(m.chat, message, { quoted: m })
+    } catch (error) {
+      console.error('[.play] Gagal mengirim preview Alvareth; mencoba teks biasa:', error)
+      try {
+        return await conn.sendMessage(m.chat, { text: replyText }, { quoted: m })
+      } catch (sendError) {
+        console.error('[.play] Gagal mengirim balasan teks:', sendError)
+        throw sendError
+      }
+    }
   }
 
   try {
