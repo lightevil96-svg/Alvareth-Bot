@@ -167,3 +167,12 @@ Before modifying updater/deploy logic:
 - The card caption normalizes pinner/author values to avoid `[object Object]` if the API returns an object.
 - The repository's upstream library README documents `cards` + `nativeFlow` as the native carousel API. Actual WhatsApp rendering still requires testing in the user's chat.
 - Latest plugin change: `027b312`; GitHub JavaScript syntax workflow completed successfully for this commit. Live message rendering/button behavior has not yet been tested.
+
+
+## 13. Pinterest cards invisible when sent with top-level text (2026-10-22)
+
+- User reported that `.pin` sent a ✅ reaction but no image/card message.
+- Root cause found in the upstream `@itsliaaa/baileys` `generateWAMessageContent` implementation: the `message.text` branch is checked before `message.cards`, so a payload containing both top-level `text` and `cards` takes the plain-text branch and discards the cards.
+- Fix in `plugins/search/pinterest.js`: send the intro text in its own message, then send a second payload containing `cards` and `footer` but deliberately no top-level `text`. This lets the library reach its carousel branch. Card URL buttons now set `useWebview: true`. Commit: `c33c13e`.
+- The plugin checks that the carousel send returns a message key before reacting ✅. A send failure should enter the existing catch path and react ❌ with an error message.
+- The syntax workflow is still running after this commit at the time of this note; verify GitHub Actions before telling the user it passed. Actual WhatsApp carousel rendering/button click must still be verified on the user's device.
