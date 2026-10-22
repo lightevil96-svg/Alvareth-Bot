@@ -150,3 +150,11 @@ Before modifying updater/deploy logic:
 - Runtime storage was moved outside the Git working tree. By default, lowdb uses `~/.alvareth-bot-data/database.json`; backups are in `~/.alvareth-bot-data/backups/` (up to 10 startup snapshots). Set `ALVARETH_DATA_DIR` to override the root.
 - WhatsApp session data now uses `~/.alvareth-bot-data/sessions/` by default; set `WA_SESSION_DIR` to override. On first startup, existing `./database.json` and `./sessions/` are copied to the new location without deleting the old copies. This keeps future Git updates away from these persistent files.
 - After this change, run `git pull --ff-only origin main`, then `npm test`, then start the bot. On first boot, watch the log for migration messages. Do not delete the old `database.json` or `sessions/` until you have confirmed the bot has loaded registered data and logged in successfully from the new persistent location.
+
+
+## 12. Pinterest registration gate and safer database migration (2026-10-22)
+
+- `plugins/search/pinterest.js` now sets `handler.register = false`; the `.pin` / `.pinterest` search commands can be used before registration, so the registration gate no longer prevents testing the feature. Commit: `7253d8e`.
+- `main.js` now performs a one-time merge of the ignored legacy `./database.json` into the persistent `~/.alvareth-bot-data/database.json` when the marker `.legacy-database-merged-v1` is absent. Missing old users/fields are filled in; existing persistent values take priority. Original legacy database is not deleted. If the persistent database exists, a pre-merge backup is stored under `~/.alvareth-bot-data/backups/`. Commits: `57e13b7` and `aef772b`.
+- Important operational limit: no code update can recover registration data if the old database file has already been deleted or if the bot is running under a different OS user / `ALVARETH_DATA_DIR`. Before restart, preserve any available `database.json` and inspect `~/.alvareth-bot-data/database.json`; never delete either copy during troubleshooting.
+- After pulling, run `npm test`, then start the bot and check startup logs for `Database lama digabung dengan data persisten`. Live database migration and live Pinterest API/WhatsApp response have not yet been verified in this session.
