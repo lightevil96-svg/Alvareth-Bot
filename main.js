@@ -5,9 +5,10 @@
 
 import './config.js'
 
-import { join, dirname, relative, sep } from 'path'
+import { join, dirname, relative, sep, resolve } from 'path'
 import { fileURLToPath, pathToFileURL } from 'url'
-import { readdirSync, readFileSync, existsSync, statSync, watch } from 'fs'
+import { readdirSync, readFileSync, existsSync, statSync, watch, copyFileSync, cpSync, mkdirSync, unlinkSync } from 'fs'
+import { homedir } from 'os'
 import { format } from 'util'
 import yargs from 'yargs'
 import pino from 'pino'
@@ -21,6 +22,62 @@ import { useMultiFileAuthState, fetchLatestWaWebVersion, makeCacheableSignalKeyS
 import { makeWASocket } from './lib/simple.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
+
+// Keep user data outside the Git checkout so code updates cannot replace it.
+const RUNTIME_DATA_DIR = process.env.ALVARETH_DATA_DIR
+  ? resolve(process.env.ALVARETH_DATA_DIR)
+  : join(homedir(), '.alvareth-bot-data')
+mkdirSync(RUNTIME_DATA_DIR, { recursive: true })
+
+const LEGACY_DATABASE_PATH = join(__dirname, 'database.json')
+const DATABASE_PATH = join(RUNTIME_DATA_DIR, 'database.json')
+const LEGACY_SESSION_DIR = join(__dirname, 'sessions')
+const SESSION_DIR = process.env.WA_SESSION_DIR
+  ? resolve(process.env.WA_SESSION_DIR)
+  : join(RUNTIME_DATA_DIR, 'sessions')
+const DATABASE_BACKUP_DIR = join(RUNTIME_DATA_DIR, 'backups')
+
+// Copy (never move/delete) the old in-repository database on first migration.
+if (!existsSync(DATABASE_PATH) && existsSync(LEGACY_DATABASE_PATH)) {
+  copyFileSync(LEGACY_DATABASE_PATH, DATABASE_PATH)
+  console.log(chalkSafeData('Database lama disalin ke lokasi data persisten.'))
+}
+
+// Migrate existing WhatsApp session files without deleting the originals.
+if (existsSync(LEGACY_SESSION_DIR)) {
+  mkdirSync(SESSION_DIR, { recursive: true })
+  if (readdirSync(SESSION_DIR).length === 0) {
+    for (const entry of readdirSync(LEGACY_SESSION_DIR)) {
+      cpSync(join(LEGACY_SESSION_DIR, entry), join(SESSION_DIR, entry), { recursive: true })
+    }
+    if (readdirSync(LEGACY_SESSION_DIR).length > 0) {
+      console.log(chalkSafeData('Sesi WhatsApp lama disalin ke lokasi data persisten.'))
+    }
+  }
+}
+
+// Keep up to 10 startup snapshots for recovery if a database write goes wrong.
+function backupPersistentDatabase() {
+  if (!existsSync(DATABASE_PATH)) return
+  try {
+    mkdirSync(DATABASE_BACKUP_DIR, { recursive: true })
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+    copyFileSync(DATABASE_PATH, join(DATABASE_BACKUP_DIR, `database-${stamp}.json`))
+    const backups = readdirSync(DATABASE_BACKUP_DIR)
+      .filter(name => /^database-.*\.json$/.test(name))
+      .sort()
+    while (backups.length > 10) {
+      unlinkSync(join(DATABASE_BACKUP_DIR, backups.shift()))
+    }
+  } catch (error) {
+    console.warn('[DATA BACKUP] Gagal membuat backup database:', error?.message || error)
+  }
+}
+backupPersistentDatabase()
+
+function chalkSafeData(message) {
+  return message
+}
 
 // Gunakan named exports resmi dari fork Baileys agar fungsi auth tidak undefined.
 
@@ -41,7 +98,7 @@ const prefixChars = opts.prefix || '‎xzXZ/i!#$%+£¢€¥^°=¶∆×÷π√✓
 global.prefix = new RegExp('^[' + String(prefixChars).replace(/[|\\{}()[\]^$+*?.\-]/g, '\\$&') + ']')
 
 // Database lowdb.
-global.db = new Low(new JSONFile(join(__dirname, 'database.json')), { users: {}, chats: {}, stats: {}, msgs: {}, sticker: {}, settings: {} })
+global.db = new Low(new JSONFile(DATABASE_PATH), { users: {}, chats: {}, stats: {}, msgs: {}, sticker: {}, settings: {} })
 global.loadDatabase = async function loadDatabase() {
   if (global.db.READ) {
     return new Promise((resolve) => {
@@ -74,7 +131,6 @@ global.loadDatabase = async function loadDatabase() {
 await global.loadDatabase()
 
 // Session & socket.
-const SESSION_DIR = join(__dirname, 'sessions')
 const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR)
 const { version, isLatest } = await fetchLatestWaWebVersion()
 console.log(chalk.cyan(`WA Web version: v${version.join('.')} (latest: ${isLatest})`))
