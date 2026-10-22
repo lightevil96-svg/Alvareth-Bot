@@ -19,7 +19,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
     highQualityThumbnail.height = 720
 
     return conn.sendMessage(m.chat, {
-      text: `${BOT_LINK}\\n\\nContoh: ${usedPrefix + command} judul lagu`,
+      text: `${BOT_LINK}\n\nContoh: ${usedPrefix + command} judul lagu`,
       linkPreview: {
         'matched-text': BOT_LINK,
         title: 'Alvareth Bot',
