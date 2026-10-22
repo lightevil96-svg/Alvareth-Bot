@@ -185,3 +185,11 @@ Before modifying updater/deploy logic:
 - If sending the native carousel fails, the plugin logs the exact carousel error and falls back to individual image cards with a “Buka Pinterest” URL button. It only reacts ✅ after carousel or fallback delivery has produced message IDs; if no image can be sent, it reacts ❌ and reports the media-send failure.
 - A duplicate displayValue declaration found by CI was removed. GitHub JavaScript syntax workflow passed for commit ae635c7.
 - Live rendering of native carousel and fallback image buttons must still be verified in WhatsApp; successful syntax CI alone does not prove delivery.
+
+## 15. Pinterest reverted from carousel to normal image album (2026-10-22)
+
+- User explicitly cancelled the interactive card/carousel UI and requested the original regular image output instead.
+- Current `plugins/search/pinterest.js` downloads/validates image URLs (maximum 8 MB each), skips failed URLs, then sends multiple results using the fork's `{ album: [{ image: Buffer, caption }] }` structure. Single surviving result is sent as one ordinary image.
+- Each image caption includes query, title, pinner, likes (if available), direct Pinterest/search link, and Alvareth Bot branding. No card carousel or card buttons are intentionally sent.
+- Success reaction is sent only after WhatsApp send resolves with a message key; send failures log the error and react ❌ with an error reply.
+- Change commit: `a3710f2`. GitHub syntax workflow was still running at the time this note was written; inspect Actions result and test `.pin` in live WhatsApp before calling runtime behavior verified.
