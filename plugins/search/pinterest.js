@@ -111,47 +111,108 @@ const handler = async (m, { conn, text, usedPrefix, command }) => {
       return fallback
     }
 
-    // Use the cards/nativeFlow feature provided by this repository's
-    // @itsliaaa/baileys fork. This sends one true swipeable WhatsApp carousel,
-    // not a normal album of separate pictures.
-    const cards = items.map((item, index) => {
+    // Download and validate media first: one blocked URL must not fail every carousel card.
+    const mediaItems = await Promise.all(items.map(async (item, index) => {
+      try {
+        const response = await axios.get(item.image, {
+          responseType: 'arraybuffer',
+          timeout: 18000,
+          maxContentLength: 8 * 1024 * 1024,
+          maxBodyLength: 8 * 1024 * 1024,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/124.0 Mobile Safari/537.36',
+            Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
+          }
+        })
+        const mime = String(response.headers?.['content-type'] || '').split(';')[0].trim().toLowerCase()
+        const imageBuffer = Buffer.from(response.data)
+        if (!imageBuffer.length || (mime && !mime.startsWith('image/'))) throw new Error('Respons URL bukan file gambar')
+        return { ...item, imageBuffer }
+      } catch (error) {
+        console.warn(`[PINTEREST MEDIA ${index + 1}] Gambar dilewati:`, error.message)
+        return null
+      }
+    }))
+    const readyItems = mediaItems.filter(Boolean).slice(0, 10)
+
+    if (readyItems.length === 0) {
+      await react('❌')
+      return m.reply('❌ Pinterest menemukan hasil, tetapi gambar tidak bisa diunduh dari sumbernya. Coba kata kunci lain atau ulangi nanti.')
+    }
+
+    const displayValue = (value, fallback = '-') => {
+      if (typeof value === 'string' || typeof value === 'number') {
+        const result = String(value).trim()
+        return result || fallback
+      }
+      if (value && typeof value === 'object') {
+        const result = value.name || value.username || value.full_name || value.title
+        return typeof result === 'string' && result.trim() ? result.trim() : fallback
+      }
+      return fallback
+    }
+
+    const makeCaption = (item, index, total) => {
       const title = displayValue(item.title, `Gambar ${index + 1}`)
       const pinner = displayValue(item.pinner || item.username || item.author, 'Pengguna Pinterest')
       const rawLikes = Number(item.likes)
       const likes = item.likes !== undefined && item.likes !== null && item.likes !== '' && Number.isFinite(rawLikes)
         ? `\n❤️ *Likes:* ${rawLikes.toLocaleString('id-ID')}`
         : ''
-      const pinLink = typeof item.link === 'string' && /^https?:\/\//i.test(item.link)
-        ? item.link
-        : `https://www.pinterest.com/search/pins/?q=${encodeURIComponent(query)}`
-
-      return {
-        image: { url: item.image },
-        caption: `🔎 *Pencarian:* ${query}\n🖼️ *Judul:* ${title.slice(0, 180)}\n👤 *Pinner:* ${pinner}${likes}`,
-        footer: `📌 Pinterest • ${index + 1}/${items.length} • ${global.namebot || 'Alvareth Bot'}`,
-        nativeFlow: [{
-          text: '📌 Buka Pinterest',
-          url: pinLink,
-          useWebview: true
-        }]
-      }
-    })
-
-    // IMPORTANT: the library checks top-level `text` before `cards`.
-    // Sending both in one payload makes it choose plain text and discard the cards.
-    // Send the intro separately, then send a payload containing cards without text.
-    await client.sendMessage(m.chat, {
-      text: `📌 *PINTEREST CAROUSEL*\nDitemukan *${cards.length}* gambar untuk *"${query}"*. Geser kartu ke samping untuk melihat hasil lain.`
-    }, { quoted: m })
-
-    const carouselMessage = await client.sendMessage(m.chat, {
-      footer: `© ${global.namebot || 'Alvareth Bot'}`,
-      cards
-    }, { quoted: m })
-
-    if (!carouselMessage?.key?.id) {
-      throw new Error('WhatsApp tidak mengembalikan ID pesan untuk carousel Pinterest.')
+      return `🔎 *Pencarian:* ${query}\n🖼️ *Judul:* ${title.slice(0, 180)}\n👤 *Pinner:* ${pinner}${likes}\n📌 Pinterest • ${index + 1}/${total}`
     }
+
+    const makePinLink = item => typeof item.link === 'string' && /^https?:\/\//i.test(item.link)
+      ? item.link
+      : `https://www.pinterest.com/search/pins/?q=${encodeURIComponent(query)}`
+
+    // Use a Buffer for every card so carousel preparation does not have to re-fetch Pinterest URLs.
+    let carouselSent = false
+    if (readyItems.length >= 2) {
+      const cards = readyItems.map((item, index) => ({
+        image: item.imageBuffer,
+        caption: makeCaption(item, index, readyItems.length),
+        footer: `📌 Pinterest • ${index + 1}/${readyItems.length} • ${global.namebot || 'Alvareth Bot'}`,
+        nativeFlow: [{ text: '📌 Buka Pinterest', url: makePinLink(item), useWebview: true }]
+      }))
+
+      try {
+        const carouselMessage = await client.sendMessage(m.chat, {
+          footer: `© ${global.namebot || 'Alvareth Bot'}`,
+          cards
+        }, { quoted: m })
+        if (!carouselMessage?.key?.id) throw new Error('Pengiriman carousel tidak mengembalikan ID pesan.')
+        carouselSent = true
+      } catch (carouselError) {
+        console.error('[PINTEREST CAROUSEL SEND FAILED]', carouselError?.stack || carouselError)
+      }
+    }
+
+    // If native carousel is rejected, still deliver real image messages with a URL button.
+    if (!carouselSent) {
+      const fallbackItems = readyItems.slice(0, 10)
+      let sentCount = 0
+      for (let index = 0; index < fallbackItems.length; index++) {
+        const item = fallbackItems[index]
+        try {
+          const sent = await client.sendMessage(m.chat, {
+            image: item.imageBuffer,
+            caption: makeCaption(item, index, fallbackItems.length),
+            footer: `© ${global.namebot || 'Alvareth Bot'}`,
+            buttons: [{ text: '📌 Buka Pinterest', url: makePinLink(item), useWebview: true }]
+          }, { quoted: m })
+          if (sent?.key?.id) sentCount++
+        } catch (fallbackError) {
+          console.error(`[PINTEREST IMAGE FALLBACK ${index + 1}]`, fallbackError?.message || fallbackError)
+        }
+      }
+      if (sentCount === 0) {
+        await react('❌')
+        return m.reply('❌ Gagal mengirim gambar Pinterest. Periksa log terminal untuk detail error media.')
+      }
+      console.warn(`[PINTEREST] Carousel tidak tersedia; terkirim ${sentCount}/${fallbackItems.length} kartu gambar dengan tombol.`)
+    }
+
     await react('✅')
   } catch (error) {
     const status = error.response?.status
