@@ -131,16 +131,27 @@ const handler = async (m, { conn, text, usedPrefix, command }) => {
         footer: `📌 Pinterest • ${index + 1}/${items.length} • ${global.namebot || 'Alvareth Bot'}`,
         nativeFlow: [{
           text: '📌 Buka Pinterest',
-          url: pinLink
+          url: pinLink,
+          useWebview: true
         }]
       }
     })
 
+    // IMPORTANT: the library checks top-level `text` before `cards`.
+    // Sending both in one payload makes it choose plain text and discard the cards.
+    // Send the intro separately, then send a payload containing cards without text.
     await client.sendMessage(m.chat, {
-      text: `📌 *PINTEREST CAROUSEL*\nDitemukan *${cards.length}* gambar untuk *"${query}"*. Geser kartu ke samping untuk melihat hasil lain.`,
+      text: `📌 *PINTEREST CAROUSEL*\nDitemukan *${cards.length}* gambar untuk *"${query}"*. Geser kartu ke samping untuk melihat hasil lain.`
+    }, { quoted: m })
+
+    const carouselMessage = await client.sendMessage(m.chat, {
       footer: `© ${global.namebot || 'Alvareth Bot'}`,
       cards
     }, { quoted: m })
+
+    if (!carouselMessage?.key?.id) {
+      throw new Error('WhatsApp tidak mengembalikan ID pesan untuk carousel Pinterest.')
+    }
     await react('✅')
   } catch (error) {
     const status = error.response?.status
