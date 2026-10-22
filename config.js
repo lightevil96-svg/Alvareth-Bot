@@ -50,7 +50,7 @@ global.adReply = {
         externalAdReply: {
             title: 'Alvareth Bot',
             body: 'WhatsApp Bot',
-            thumbnailUrl: 'https://raw.githubusercontent.com/lightevil96-svg/Alvareth-Bot/main/media/thumbnail.jpg',
+            thumbnailUrl: 'https://raw.githubusercontent.com/lightevil96-svg/Alvareth-Bot/main/media/alvareth-preview.jpg',
             sourceUrl: global.botLink,
             mediaType: 1,
             renderLargerThumbnail: true
