@@ -5,6 +5,7 @@ import path, { join } from 'path'
 import { unwatchFile, watchFile } from 'fs'
 import chalk from 'chalk'
 import fetch from 'node-fetch'
+import { recordGroupMessage } from './lib/group-digest.js'
 
 /**
  * @type {import('baileys')}
@@ -186,6 +187,15 @@ if (m.quoted?.sender?.endsWith('@lid')) {
         if (m.pushName && m.sender) {
             if (!global.nameCache) global.nameCache = {}
             global.nameCache[m.sender] = m.pushName
+        }
+
+        // Record new group text before the regular group-access gate. This feature
+        // observes messages from every group, while the bot's normal command access
+        // rules below remain unchanged.
+        try {
+            await recordGroupMessage(this, m, chatUpdate?.type)
+        } catch (error) {
+            console.error('[GROUP DIGEST] Gagal memproses pesan grup:', error?.message || error)
         }
 
         // Detect group icon change (stub type 22 = GROUP_CHANGE_ICON)
