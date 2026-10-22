@@ -5,7 +5,7 @@ let handler = async (m, { conn }) => {
   const channel = global.linkch || 'Belum dikonfigurasi (atur WHATSAPP_CHANNEL_URL di .env).'
   await conn.sendMessage(m.chat, {
     orderText: `Hai kak! 👋\n\n❏ Script *Alvareth Bot*\n\n✿ *Repository:*\n${repository}\n\n✿ *Channel:*\n${channel}`,
-    thumbnail: fs.readFileSync('./media/thumbnail.jpg')
+    thumbnail: fs.readFileSync('./media/alvareth-preview.jpg')
   }, { quoted: m })
 }
 
