@@ -44,7 +44,7 @@ handler.before = async function (m, { match, usedPrefix }) {
             title: 'Alvareth Bot',
             description: 'WhatsApp Multi Device Bot',
             previewType: 0,
-            jpegThumbnail: fs.readFileSync('./media/thumbnail.jpg')
+            jpegThumbnail: fs.readFileSync('./media/alvareth-preview.jpg')
           }
         },
         { quoted: m }
