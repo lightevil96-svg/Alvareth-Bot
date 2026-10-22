@@ -133,3 +133,11 @@ Before modifying updater/deploy logic:
 - Commit: `7d66ebf`.
 - Next steps: run `npm test` locally and test at least `.play`, `.tt`, plus another plugin that uses `m.reply()` or `m.react()`. This commit is not runtime-verified in a live WhatsApp session yet.
 - When a new plugin error appears, check whether it is another missing serializer helper (for example download/quoted helpers) before patching only the plugin. Extend the central compatibility layer only after confirming the expected method contract from `lib/simple.js`.
+
+
+## 10. Menu audio and initial group allowlist defaults (2026-10-22)
+
+- The menu's optional `media/tes.mp3` is now sent as a regular audio message with `mimetype: 'audio/mpeg'`; do not mark an MP3 buffer as `ptt: true` (WhatsApp voice notes require compatible voice-note encoding, typically Ogg/Opus). The menu should still be delivered if audio transmission fails. Commit: `16bfb17`.
+- Fresh group-access settings now seed `allowedGroups` with `120363424686467256@g.us` and keep restriction enabled by default. The three allowlist fallback points in `handler.js` use the same initial allowlist. Commits: `81bbee7` and `458b0f4`.
+- These defaults apply when group-access settings are first created or absent. An already-existing `database.json` may contain a persisted `settings.groupAccess`; existing saved settings take precedence. If that existing list is empty, use `.groupaccess add 120363424686467256@g.us` once rather than resetting the full database.
+- These changes have been committed to GitHub, but neither audio playback nor fresh-install group gating has yet been verified in a live WhatsApp session.
