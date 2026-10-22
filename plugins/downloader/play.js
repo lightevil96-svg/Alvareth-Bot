@@ -3,7 +3,7 @@ import fs from 'fs'
 import { prepareWAMessageMedia } from 'baileys'
 
 const BOT_LINK = 'https://spoo.me/Alvareth-Bot'
-const BOT_THUMB = './media/alvareth-character.jpg'
+const BOT_THUMB = './media/alvareth-character.png'
 
 let handler = async (m, { conn, text, usedPrefix, command }) => {
   if (!text) {
