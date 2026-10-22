@@ -115,11 +115,11 @@ const handler = async (m, { conn, text, usedPrefix, command }) => {
     // @itsliaaa/baileys fork. This sends one true swipeable WhatsApp carousel,
     // not a normal album of separate pictures.
     const cards = items.map((item, index) => {
-      const title = displayValue(item.title, `Gambar ${index + 1}')
+      const title = displayValue(item.title, `Gambar ${index + 1}`)
       const pinner = displayValue(item.pinner || item.username || item.author, 'Pengguna Pinterest')
       const rawLikes = Number(item.likes)
       const likes = item.likes !== undefined && item.likes !== null && item.likes !== '' && Number.isFinite(rawLikes)
-        ? `\\n❤️ *Likes:* ${rawLikes.toLocaleString('id-ID')}`
+        ? `\n❤️ *Likes:* ${rawLikes.toLocaleString('id-ID')}`
         : ''
       const pinLink = typeof item.link === 'string' && /^https?:\\/\\//i.test(item.link)
         ? item.link
@@ -127,7 +127,7 @@ const handler = async (m, { conn, text, usedPrefix, command }) => {
 
       return {
         image: { url: item.image },
-        caption: `🔎 *Pencarian:* ${query}\\n🖼️ *Judul:* ${title.slice(0, 180)}\\n👤 *Pinner:* ${pinner}${likes}`,
+        caption: `🔎 *Pencarian:* ${query}\n🖼️ *Judul:* ${title.slice(0, 180)}\n👤 *Pinner:* ${pinner}${likes}`,
         footer: `📌 Pinterest • ${index + 1}/${items.length} • ${global.namebot || 'Alvareth Bot'}`,
         nativeFlow: [{
           text: '📌 Buka Pinterest',
@@ -137,7 +137,7 @@ const handler = async (m, { conn, text, usedPrefix, command }) => {
     })
 
     await client.sendMessage(m.chat, {
-      text: `📌 *PINTEREST CAROUSEL*\\nDitemukan *${cards.length}* gambar untuk *"${query}"*. Geser kartu ke samping untuk melihat hasil lain.`,
+      text: `📌 *PINTEREST CAROUSEL*\nDitemukan *${cards.length}* gambar untuk *"${query}"*. Geser kartu ke samping untuk melihat hasil lain.`,
       footer: `© ${global.namebot || 'Alvareth Bot'}`,
       cards
     }, { quoted: m })
