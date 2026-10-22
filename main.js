@@ -20,7 +20,6 @@ import { JSONFile } from 'lowdb/node'
 import syntaxerror from 'syntax-error'
 import { useMultiFileAuthState, fetchLatestWaWebVersion, makeCacheableSignalKeyStore, DisconnectReason } from 'baileys'
 import { makeWASocket } from './lib/simple.js'
-import { startGroupDigestScheduler } from './lib/group-digest.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -492,8 +491,6 @@ await filesInit()
 console.log(chalk.green(`✔ ${Object.keys(global.plugins).length} plugin dimuat`))
 watchPlugins()
 
-// Kirim ringkasan grup secara otomatis setiap hari (WIB); data diproses lokal.
-startGroupDigestScheduler(() => global.conn)
 
 // HTTP health-check opsional untuk hosting.
 if (opts.server || process.env.PORT) {
