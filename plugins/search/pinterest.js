@@ -98,27 +98,49 @@ const handler = async (m, { conn, text, usedPrefix, command }) => {
       return m.reply(`❌ Tidak ada gambar Pinterest yang bisa dimuat untuk *"${query}"*. Kedua layanan pencarian gagal atau tidak mengembalikan gambar valid.`)
     }
 
-    const album = items.map((item, index) => {
-      const title = typeof item.title === 'string' && item.title.trim()
-        ? item.title.trim()
-        : `Gambar ${index + 1}`
-      const pinner = item.pinner || item.username || 'Pengguna Pinterest'
-      const likes = item.likes !== undefined && item.likes !== null && item.likes !== ''
-        ? `\n❤️ Likes: ${Number(item.likes).toLocaleString('id-ID')}`
+    const displayValue = (value, fallback = '-') => {
+      if (typeof value === 'string' || typeof value === 'number') {
+        const result = String(value).trim()
+        return result || fallback
+      }
+      if (value && typeof value === 'object') {
+        // API responses sometimes return author/pinner as an object instead of a string.
+        const result = value.name || value.username || value.full_name || value.title
+        return typeof result === 'string' && result.trim() ? result.trim() : fallback
+      }
+      return fallback
+    }
+
+    // Use the cards/nativeFlow feature provided by this repository's
+    // @itsliaaa/baileys fork. This sends one true swipeable WhatsApp carousel,
+    // not a normal album of separate pictures.
+    const cards = items.map((item, index) => {
+      const title = displayValue(item.title, `Gambar ${index + 1}')
+      const pinner = displayValue(item.pinner || item.username || item.author, 'Pengguna Pinterest')
+      const rawLikes = Number(item.likes)
+      const likes = item.likes !== undefined && item.likes !== null && item.likes !== '' && Number.isFinite(rawLikes)
+        ? `\\n❤️ *Likes:* ${rawLikes.toLocaleString('id-ID')}`
         : ''
-      const pinLink = typeof item.link === 'string' && /^https?:\/\//i.test(item.link)
+      const pinLink = typeof item.link === 'string' && /^https?:\\/\\//i.test(item.link)
         ? item.link
         : `https://www.pinterest.com/search/pins/?q=${encodeURIComponent(query)}`
 
       return {
         image: { url: item.image },
-        caption: `📌 *Pinterest • ${index + 1}/${items.length}*\n\n🔎 *Pencarian:* ${query}\n🖼️ *Judul:* ${title.slice(0, 180)}\n👤 *Pinner:* ${pinner}${likes}\n🔗 ${pinLink}\n\n© ${global.namebot || 'Alvareth Bot'}`
+        caption: `🔎 *Pencarian:* ${query}\\n🖼️ *Judul:* ${title.slice(0, 180)}\\n👤 *Pinner:* ${pinner}${likes}`,
+        footer: `📌 Pinterest • ${index + 1}/${items.length} • ${global.namebot || 'Alvareth Bot'}`,
+        nativeFlow: [{
+          text: '📌 Buka Pinterest',
+          url: pinLink
+        }]
       }
     })
 
-    // Use the album feature already supported by this repository's Baileys fork.
-    // Avoid ruby-baileys/src helper imports, which are not present in this project.
-    await client.sendMessage(m.chat, { album }, { quoted: m })
+    await client.sendMessage(m.chat, {
+      text: `📌 *PINTEREST CAROUSEL*\\nDitemukan *${cards.length}* gambar untuk *"${query}"*. Geser kartu ke samping untuk melihat hasil lain.`,
+      footer: `© ${global.namebot || 'Alvareth Bot'}`,
+      cards
+    }, { quoted: m })
     await react('✅')
   } catch (error) {
     const status = error.response?.status
