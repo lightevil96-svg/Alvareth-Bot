@@ -40,7 +40,7 @@ global.nameown = ownerName
 global.version = '1.0.0'
 global.autotyping = false
 global.autorecording = false
-global.repository = process.env.REPOSITORY_URL || 'https://github.com/lightevil96-svg/Alvareth-Bot'
+global.repository = 'https://github.com/lightevil96-svg/Alvareth-Bot'
 
 // ===== LINK PREVIEW DEFAULT =====
 // Gunakan satu identitas untuk preview balasan bot, bukan metadata Ryo dari SC asal.
