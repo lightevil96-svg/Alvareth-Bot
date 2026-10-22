@@ -1,8 +1,4 @@
-/*
-creator : hilman 
-ryo Yamada md
-follow my channel https://whatsapp.com/channel/0029VbAYjQgKrWQulDTYcg2K
-*/
+/* Alvareth Bot menu */
 
 import moment from 'moment-timezone'
 import fs from 'fs'
@@ -147,7 +143,7 @@ ${global.dmenuf || '┗––––––––––✦'}
           optionTitle: '📄 Menu Tersedia',
           offerText: 'Alvareth Bot',
           offerCode: 'Alvareth Bot',
-          offerUrl: 'https://whatsapp.com/channel/0029VbAYjQgKrWQulDTYcg2G',
+          offerUrl: global.botLink,
           offerExpiration: Date.now() + 86400000,
 
           nativeFlow: [
@@ -178,7 +174,7 @@ ${global.dmenuf || '┗––––––––––✦'}
             },
             {
               text: '❏ Channel',
-              url: 'https://whatsapp.com/channel/0029VbAYjQgKrWQulDTYcg2G',
+              url: global.botLink,
               useWebview: true,
               icon: 'image'
             }
