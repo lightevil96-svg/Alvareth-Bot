@@ -30,7 +30,7 @@ const handler = async (m, { conn, text, usedPrefix, command }) => {
     const params = { q: query }
     if (apiKey) params.apikey = apiKey
 
-    const { data } = await axios.get(`${baseUrl.replace(/\\/$/, '')}/api/search/pinterest-v2`, {
+    const { data } = await axios.get(`${baseUrl.replace(/\/$/, '')}/api/search/pinterest-v2`, {
       params,
       timeout: 20000,
       headers: { Accept: 'application/json' }
@@ -53,11 +53,15 @@ const handler = async (m, { conn, text, usedPrefix, command }) => {
       if (!apiKey && /api.?key|unauthori[sz]ed|forbidden|auth/i.test(apiMessage)) {
         return m.reply('❌ API Kyzz membutuhkan API key. Isi KYZZ_API_KEY di file .env, lalu restart bot.')
       }
-      return m.reply(`❌ Tidak ada gambar Pinterest ditemukan untuk *"${query}"*.${apiMessage ? `\\nDetail API: ${apiMessage.slice(0, 180)}` : ''}`)
+      return m.reply(`❌ Tidak ada gambar Pinterest ditemukan untuk *"${query}"*.${apiMessage ? `\nDetail API: ${apiMessage.slice(0, 180)}` : ''}`)
     }
 
-    const items = data.result
-      .filter(item => typeof item?.image === 'string' && /^https?:\/\//i.test(item.image))
+    const items = resultList
+      .map(item => ({
+        ...item,
+        image: item?.image || item?.image_url || item?.images_url || item?.url || item?.thumbnail
+      }))
+      .filter(item => typeof item.image === 'string' && /^https?:\/\//i.test(item.image))
       .slice(0, 10)
 
     if (!items.length) {
