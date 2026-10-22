@@ -15,7 +15,7 @@ try {
 
 moment.locale('id')
 
-const MENU_IMAGE = './media/ryo.jpg'
+const MENU_IMAGE = './media/ryo.png'
 const MENU_SOUND = './media/tes.mp3'
 const MENU_LINK = global.repository || 'https://github.com/'
 
