@@ -15,7 +15,7 @@ try {
 
 moment.locale('id')
 
-const MENU_IMAGE = './media/thumbnail.jpg'
+const MENU_IMAGE = './media/alvareth-preview.jpg'
 const MENU_SOUND = './media/tes.mp3'
 const MENU_LINK = 'https://spoo.me/Alvareth-Bot'
 
