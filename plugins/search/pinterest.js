@@ -140,18 +140,6 @@ const handler = async (m, { conn, text, usedPrefix, command }) => {
       return m.reply('❌ Pinterest menemukan hasil, tetapi gambar tidak bisa diunduh dari sumbernya. Coba kata kunci lain atau ulangi nanti.')
     }
 
-    const displayValue = (value, fallback = '-') => {
-      if (typeof value === 'string' || typeof value === 'number') {
-        const result = String(value).trim()
-        return result || fallback
-      }
-      if (value && typeof value === 'object') {
-        const result = value.name || value.username || value.full_name || value.title
-        return typeof result === 'string' && result.trim() ? result.trim() : fallback
-      }
-      return fallback
-    }
-
     const makeCaption = (item, index, total) => {
       const title = displayValue(item.title, `Gambar ${index + 1}`)
       const pinner = displayValue(item.pinner || item.username || item.author, 'Pengguna Pinterest')
