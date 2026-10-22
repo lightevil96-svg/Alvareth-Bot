@@ -47,8 +47,8 @@ User adalah orang yang cukup dekat dan menarik perhatianmu.
 
     const { prepareWAMessageMedia } = await import('baileys')
 
-    const urlB = global.repository || 'https://github.com/'
-    const img = "https://files.catbox.moe/qmy241.jpg"
+    const urlB = global.botLink || 'https://spoo.me/Alvareth-Bot'
+    const img = 'https://raw.githubusercontent.com/lightevil96-svg/Alvareth-Bot/main/media/thumbnail.jpg'
 
     const { imageMessage: image } = await prepareWAMessageMedia({
       image: { url: img }
@@ -68,8 +68,8 @@ User adalah orang yang cukup dekat dan menarik perhatianmu.
       text: `${urlB}${invisible}\n\n${result}`,
       linkPreview: {
         'matched-text': urlB,
-        title: "Ryo Yamada AI",
-        description: "Bocchi the Rock!",
+        title: 'Alvareth Bot',
+        description: 'WhatsApp Bot',
         previewType: 0,
         jpegThumbnail: thumb,
         highQualityThumbnail: image,
