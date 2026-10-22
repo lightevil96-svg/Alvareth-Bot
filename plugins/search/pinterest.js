@@ -30,43 +30,72 @@ const handler = async (m, { conn, text, usedPrefix, command }) => {
     const params = { q: query }
     if (apiKey) params.apikey = apiKey
 
-    const { data } = await axios.get(`${baseUrl.replace(/\/$/, '')}/api/search/pinterest-v2`, {
-      params,
-      timeout: 20000,
-      headers: { Accept: 'application/json' }
-    })
-
-    const apiMessage = String(data?.message || data?.msg || data?.error || '')
-    const resultList = Array.isArray(data?.result)
-      ? data.result
-      : Array.isArray(data?.data)
-        ? data.data
-        : []
-
-    if (data?.status === false && /api.?key|unauthori[sz]ed|forbidden|auth/i.test(apiMessage)) {
-      await react('❌')
-      return m.reply('❌ API Kyzz menolak akses. Periksa KYZZ_API_KEY di file .env atau APIKeys di config.js.')
-    }
-
-    if (!resultList.length) {
-      await react('❌')
-      if (!apiKey && /api.?key|unauthori[sz]ed|forbidden|auth/i.test(apiMessage)) {
-        return m.reply('❌ API Kyzz membutuhkan API key. Isi KYZZ_API_KEY di file .env, lalu restart bot.')
-      }
-      return m.reply(`❌ Tidak ada gambar Pinterest ditemukan untuk *"${query}"*.${apiMessage ? `\nDetail API: ${apiMessage.slice(0, 180)}` : ''}`)
-    }
-
-    const items = resultList
-      .map(item => ({
+    let items = []
+    let primaryError = null
+    let primaryMessage = ''
+    try {
+      const { data } = await axios.get(`${baseUrl.replace(/\/$/, '')}/api/search/pinterest-v2`, {
+        params,
+        timeout: 20000,
+        headers: { Accept: 'application/json' }
+      })
+      primaryMessage = String(data?.message || data?.msg || data?.error || '')
+      const results = Array.isArray(data?.result)
+        ? data.result
+        : Array.isArray(data?.data)
+          ? data.data
+          : []
+      items = results.map(item => ({
         ...item,
-        image: item?.image || item?.image_url || item?.images_url || item?.url || item?.thumbnail
-      }))
-      .filter(item => typeof item.image === 'string' && /^https?:\/\//i.test(item.image))
-      .slice(0, 10)
+        image: item?.image || item?.image_url || item?.images_url || item?.thumbnail,
+        title: item?.title || item?.grid_title || item?.name,
+        pinner: item?.pinner || item?.username || item?.author,
+        link: item?.link || item?.pin_url || ''
+      })).filter(item => typeof item.image === 'string' && /^https?:\/\//i.test(item.image)).slice(0, 10)
+      if (!items.length && data?.status === false) {
+        primaryError = new Error(primaryMessage || 'Kyzz API mengembalikan status gagal')
+      }
+    } catch (error) {
+      primaryError = error
+      console.warn('[PINTEREST] Kyzz v2 gagal:', error.response?.status || error.message)
+    }
+
+    // Fallback to the SC's previous Nexray search endpoint when Kyzz is down,
+    // refuses the API key, or returns no usable image results.
+    if (!items.length && global.APIs?.nexray) {
+      try {
+        const fallbackUrl = `${String(global.APIs.nexray).replace(/\/$/, '')}/search/pinterest`
+        const { data } = await axios.get(fallbackUrl, {
+          params: { q: query },
+          timeout: 20000,
+          headers: { Accept: 'application/json' }
+        })
+        const fallbackResults = Array.isArray(data?.result) ? data.result : []
+        items = fallbackResults.map(item => ({
+          ...item,
+          image: item?.image || item?.image_url || item?.images_url || item?.thumbnail,
+          title: item?.title || item?.grid_title || item?.name,
+          pinner: item?.pinner || item?.username || item?.author,
+          link: item?.link || item?.pin_url || ''
+        })).filter(item => typeof item.image === 'string' && /^https?:\/\//i.test(item.image)).slice(0, 10)
+      } catch (fallbackError) {
+        console.warn('[PINTEREST] Nexray fallback gagal:', fallbackError.response?.status || fallbackError.message)
+      }
+    }
 
     if (!items.length) {
       await react('❌')
-      return m.reply('❌ Hasil ditemukan, tetapi tidak ada URL gambar valid yang dapat dimuat.')
+      const status = primaryError?.response?.status
+      if (status === 401 || status === 403 || /api.?key|unauthori[sz]ed|forbidden|auth/i.test(`${primaryMessage} ${primaryError?.message || ''}`)) {
+        return m.reply('❌ API Kyzz menolak akses dan hasil cadangan tidak tersedia. Isi API key Kyzz yang valid pada KYZZ_API_KEY di file .env, lalu restart bot.')
+      }
+      if (status === 404) {
+        return m.reply('❌ Endpoint Pinterest Kyzz tidak ditemukan dan pencarian cadangan gagal. Periksa alamat API atau coba lagi nanti.')
+      }
+      if (status === 429) {
+        return m.reply('❌ Batas permintaan API Pinterest tercapai. Coba lagi beberapa saat.')
+      }
+      return m.reply(`❌ Tidak ada gambar Pinterest yang bisa dimuat untuk *"${query}"*. Kedua layanan pencarian gagal atau tidak mengembalikan gambar valid.`)
     }
 
     const album = items.map((item, index) => {
