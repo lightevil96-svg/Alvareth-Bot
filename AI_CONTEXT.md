@@ -158,3 +158,12 @@ Before modifying updater/deploy logic:
 - `main.js` now performs a one-time merge of the ignored legacy `./database.json` into the persistent `~/.alvareth-bot-data/database.json` when the marker `.legacy-database-merged-v1` is absent. Missing old users/fields are filled in; existing persistent values take priority. Original legacy database is not deleted. If the persistent database exists, a pre-merge backup is stored under `~/.alvareth-bot-data/backups/`. Commits: `57e13b7` and `aef772b`.
 - Important operational limit: no code update can recover registration data if the old database file has already been deleted or if the bot is running under a different OS user / `ALVARETH_DATA_DIR`. Before restart, preserve any available `database.json` and inspect `~/.alvareth-bot-data/database.json`; never delete either copy during troubleshooting.
 - After pulling, run `npm test`, then start the bot and check startup logs for `Database lama digabung dengan data persisten`. Live database migration and live Pinterest API/WhatsApp response have not yet been verified in this session.
+
+
+## 12. Native Pinterest carousel (2026-10-22)
+
+- User reported that `.pin` looked like a normal image album instead of swipeable cards with buttons.
+- `plugins/search/pinterest.js` now uses the installed `@itsliaaa/baileys` fork's native `sendMessage({ text, footer, cards })` API. Each card carries an image, caption, footer, and `nativeFlow: [{ text: '📌 Buka Pinterest', url: pinLink }]`; it should render as a swipeable carousel with an individual URL button per card instead of an album.
+- The card caption normalizes pinner/author values to avoid `[object Object]` if the API returns an object.
+- The repository's upstream library README documents `cards` + `nativeFlow` as the native carousel API. Actual WhatsApp rendering still requires testing in the user's chat.
+- Latest plugin change: `027b312`; GitHub JavaScript syntax workflow completed successfully for this commit. Live message rendering/button behavior has not yet been tested.
