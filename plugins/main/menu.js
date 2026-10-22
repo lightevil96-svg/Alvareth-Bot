@@ -107,7 +107,6 @@ let handler = async (m, { conn, usedPrefix, command, text, isOwner }) => {
         await conn.sendMessage(m.chat, {
           audio,
           mimetype: 'audio/mpeg',
-          ptt: true,
           fileName: 'menu.mp3'
         }, { quoted: m })
       } catch (error) {
