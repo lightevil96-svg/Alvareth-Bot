@@ -141,3 +141,12 @@ Before modifying updater/deploy logic:
 - Fresh group-access settings now seed `allowedGroups` with `120363424686467256@g.us` and keep restriction enabled by default. The three allowlist fallback points in `handler.js` use the same initial allowlist. Commits: `81bbee7` and `458b0f4`.
 - These defaults apply when group-access settings are first created or absent. An already-existing `database.json` may contain a persisted `settings.groupAccess`; existing saved settings take precedence. If that existing list is empty, use `.groupaccess add 120363424686467256@g.us` once rather than resetting the full database.
 - These changes have been committed to GitHub, but neither audio playback nor fresh-install group gating has yet been verified in a live WhatsApp session.
+
+
+## 11. Pinterest fallback and persistent user-data storage (2026-10-22)
+
+- `plugins/search/pinterest.js` now reads `KYZZ_API_KEY` from `.env` (or `global.APIKeys[baseUrl]`), normalizes likely result fields, and tries the existing `global.APIs.nexray + /search/pinterest` endpoint if Kyzz v2 fails or returns no usable image URLs. It reports useful status-specific errors instead of only a generic failure. Commit: `8442500` (fallback) plus following integration commits.
+- `.env.example` documents `KYZZ_API_KEY`, but the live `.env` is intentionally not committed or changed. A real key may be required by the Kyzz endpoint; if the primary service rejects requests, set a valid key in the user's local `.env`. Nexray fallback may still depend on external service availability. Live Pinterest API/WhatsApp delivery is not yet confirmed.
+- Runtime storage was moved outside the Git working tree. By default, lowdb uses `~/.alvareth-bot-data/database.json`; backups are in `~/.alvareth-bot-data/backups/` (up to 10 startup snapshots). Set `ALVARETH_DATA_DIR` to override the root.
+- WhatsApp session data now uses `~/.alvareth-bot-data/sessions/` by default; set `WA_SESSION_DIR` to override. On first startup, existing `./database.json` and `./sessions/` are copied to the new location without deleting the old copies. This keeps future Git updates away from these persistent files.
+- After this change, run `git pull --ff-only origin main`, then `npm test`, then start the bot. On first boot, watch the log for migration messages. Do not delete the old `database.json` or `sessions/` until you have confirmed the bot has loaded registered data and logged in successfully from the new persistent location.
