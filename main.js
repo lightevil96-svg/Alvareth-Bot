@@ -71,6 +71,7 @@ if (existsSync(LEGACY_DATABASE_PATH) && !existsSync(DATABASE_MIGRATION_MARKER)) 
     }
     const merged = mergeMissing(persistentData, legacyData)
     if (existsSync(DATABASE_PATH)) {
+      mkdirSync(DATABASE_BACKUP_DIR, { recursive: true })
       copyFileSync(DATABASE_PATH, join(DATABASE_BACKUP_DIR, `database-before-legacy-merge-${Date.now()}.json`))
     }
     writeFileSync(DATABASE_PATH, JSON.stringify(merged, null, 2))
