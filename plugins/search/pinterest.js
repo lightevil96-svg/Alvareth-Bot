@@ -154,53 +154,36 @@ const handler = async (m, { conn, text, usedPrefix, command }) => {
       ? item.link
       : `https://www.pinterest.com/search/pins/?q=${encodeURIComponent(query)}`
 
-    // Use a Buffer for every card so carousel preparation does not have to re-fetch Pinterest URLs.
-    let carouselSent = false
-    if (readyItems.length >= 2) {
-      const cards = readyItems.map((item, index) => ({
-        image: item.imageBuffer,
-        caption: makeCaption(item, index, readyItems.length),
-        footer: `📌 Pinterest • ${index + 1}/${readyItems.length} • ${global.namebot || 'Alvareth Bot'}`,
-        nativeFlow: [{ text: '📌 Buka Pinterest', url: makePinLink(item), useWebview: true }]
-      }))
+    // User opted for the original normal image album instead of interactive cards/carousel.
+    // This fork supports { album: [{ image: Buffer, caption }] } and sends each image as an album item.
+    const album = readyItems.map((item, index) => ({
+      image: item.imageBuffer,
+      caption: `${makeCaption(item, index, readyItems.length)}\n🔗 ${makePinLink(item)}\n\n© ${global.namebot || 'Alvareth Bot'}`
+    }))
 
-      try {
-        const carouselMessage = await client.sendMessage(m.chat, {
-          footer: `© ${global.namebot || 'Alvareth Bot'}`,
-          cards
+    let delivered = false
+    try {
+      if (album.length >= 2) {
+        const sent = await client.sendMessage(m.chat, { album }, { quoted: m })
+        delivered = Boolean(sent?.key?.id)
+      } else {
+        const item = readyItems[0]
+        const sent = await client.sendMessage(m.chat, {
+          image: item.imageBuffer,
+          caption: `${makeCaption(item, 0, 1)}\n🔗 ${makePinLink(item)}\n\n© ${global.namebot || 'Alvareth Bot'}`
         }, { quoted: m })
-        if (!carouselMessage?.key?.id) throw new Error('Pengiriman carousel tidak mengembalikan ID pesan.')
-        carouselSent = true
-      } catch (carouselError) {
-        console.error('[PINTEREST CAROUSEL SEND FAILED]', carouselError?.stack || carouselError)
+        delivered = Boolean(sent?.key?.id)
       }
+    } catch (sendError) {
+      console.error('[PINTEREST ALBUM SEND FAILED]', sendError?.stack || sendError)
+      await react('❌')
+      return m.reply('❌ Gambar Pinterest sudah ditemukan, tetapi gagal dikirim. Periksa log terminal untuk detail error media.')
     }
 
-    // If native carousel is rejected, still deliver real image messages with a URL button.
-    if (!carouselSent) {
-      const fallbackItems = readyItems.slice(0, 10)
-      let sentCount = 0
-      for (let index = 0; index < fallbackItems.length; index++) {
-        const item = fallbackItems[index]
-        try {
-          const sent = await client.sendMessage(m.chat, {
-            image: item.imageBuffer,
-            caption: makeCaption(item, index, fallbackItems.length),
-            footer: `© ${global.namebot || 'Alvareth Bot'}`,
-            buttons: [{ text: '📌 Buka Pinterest', url: makePinLink(item), useWebview: true }]
-          }, { quoted: m })
-          if (sent?.key?.id) sentCount++
-        } catch (fallbackError) {
-          console.error(`[PINTEREST IMAGE FALLBACK ${index + 1}]`, fallbackError?.message || fallbackError)
-        }
-      }
-      if (sentCount === 0) {
-        await react('❌')
-        return m.reply('❌ Gagal mengirim gambar Pinterest. Periksa log terminal untuk detail error media.')
-      }
-      console.warn(`[PINTEREST] Carousel tidak tersedia; terkirim ${sentCount}/${fallbackItems.length} kartu gambar dengan tombol.`)
+    if (!delivered) {
+      await react('❌')
+      return m.reply('❌ Pengiriman hasil Pinterest tidak mengembalikan ID pesan. Coba lagi nanti.')
     }
-
     await react('✅')
   } catch (error) {
     const status = error.response?.status
