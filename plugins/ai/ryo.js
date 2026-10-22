@@ -1,8 +1,4 @@
-/*
-creator : hilman 
-ryo Yamada md
-follow my channel https://whatsapp.com/channel/0029VbAYjQgKrWQulDTYcg2K
-*/
+/* Alvareth Bot AI plugin */
 
 import fetch from "node-fetch"
 
