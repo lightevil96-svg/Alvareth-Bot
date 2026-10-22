@@ -9,7 +9,7 @@ let handler = async (m, { conn }) => {
 
     let img = await q.download()
 
-    fs.writeFileSync('./thumbnail.jpg', img)
+    fs.writeFileSync('./media/alvareth-preview.jpg', img)
 
     m.reply('✅ Done wok')
 }
