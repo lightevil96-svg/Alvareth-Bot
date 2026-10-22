@@ -44,7 +44,7 @@ User adalah orang yang cukup dekat dan menarik perhatianmu.
     const { prepareWAMessageMedia } = await import('baileys')
 
     const urlB = global.botLink || 'https://spoo.me/Alvareth-Bot'
-    const img = 'https://raw.githubusercontent.com/lightevil96-svg/Alvareth-Bot/main/media/alvareth-character.jpg'
+    const img = 'https://raw.githubusercontent.com/lightevil96-svg/Alvareth-Bot/main/media/alvareth-character.png'
 
     const { imageMessage: image } = await prepareWAMessageMedia({
       image: { url: img }
