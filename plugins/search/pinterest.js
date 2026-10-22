@@ -22,22 +22,38 @@ const handler = async (m, { conn, text, usedPrefix, command }) => {
   await react('⏳')
 
   try {
-    const baseUrl = global.APIs?.kyzzz || global.APIs?.kyzz
-    if (!baseUrl) throw new Error('API Pinterest belum dikonfigurasi.')
-
-    const apiKey = global.APIKeys?.[baseUrl]
+    const baseUrl = global.APIs?.kyzzz || global.APIs?.kyzz || 'https://api.kyzzz.eu.cc'
+    const configuredKey = process.env.KYZZ_API_KEY || global.APIKeys?.[baseUrl] || ''
+    const apiKey = typeof configuredKey === 'string' && !/^ISI_APIKEY$/i.test(configuredKey.trim())
+      ? configuredKey.trim()
+      : ''
     const params = { q: query }
-    if (apiKey && apiKey !== 'ISI_APIKEY') params.apikey = apiKey
+    if (apiKey) params.apikey = apiKey
 
-    const { data } = await axios.get(`${baseUrl.replace(/\/$/, '')}/api/search/pinterest-v2`, {
+    const { data } = await axios.get(`${baseUrl.replace(/\\/$/, '')}/api/search/pinterest-v2`, {
       params,
       timeout: 20000,
       headers: { Accept: 'application/json' }
     })
 
-    if (!data?.status || !Array.isArray(data.result) || data.result.length === 0) {
+    const apiMessage = String(data?.message || data?.msg || data?.error || '')
+    const resultList = Array.isArray(data?.result)
+      ? data.result
+      : Array.isArray(data?.data)
+        ? data.data
+        : []
+
+    if (data?.status === false && /api.?key|unauthori[sz]ed|forbidden|auth/i.test(apiMessage)) {
       await react('❌')
-      return m.reply(`❌ Tidak ada gambar Pinterest ditemukan untuk *"${query}"*.`)
+      return m.reply('❌ API Kyzz menolak akses. Periksa KYZZ_API_KEY di file .env atau APIKeys di config.js.')
+    }
+
+    if (!resultList.length) {
+      await react('❌')
+      if (!apiKey && /api.?key|unauthori[sz]ed|forbidden|auth/i.test(apiMessage)) {
+        return m.reply('❌ API Kyzz membutuhkan API key. Isi KYZZ_API_KEY di file .env, lalu restart bot.')
+      }
+      return m.reply(`❌ Tidak ada gambar Pinterest ditemukan untuk *"${query}"*.${apiMessage ? `\\nDetail API: ${apiMessage.slice(0, 180)}` : ''}`)
     }
 
     const items = data.result
@@ -72,9 +88,23 @@ const handler = async (m, { conn, text, usedPrefix, command }) => {
     await client.sendMessage(m.chat, { album }, { quoted: m })
     await react('✅')
   } catch (error) {
-    console.error('[PINTEREST SEARCH ERROR]', error.response?.data || error.stack || error.message)
+    const status = error.response?.status
+    const detail = error.response?.data?.message || error.response?.data?.msg || error.message || 'Unknown error'
+    console.error('[PINTEREST SEARCH ERROR]', { status, detail })
     await react('❌')
-    return m.reply('❌ Gagal mencari gambar Pinterest. Coba lagi nanti atau periksa konfigurasi API Kyzz.')
+    if (status === 401 || status === 403) {
+      return m.reply('❌ API Kyzz menolak akses (401/403). Isi atau periksa KYZZ_API_KEY di file .env.')
+    }
+    if (status === 404) {
+      return m.reply('❌ Endpoint Pinterest Kyzz tidak ditemukan (404). Periksa alamat endpoint API.')
+    }
+    if (status === 429) {
+      return m.reply('❌ Batas permintaan API Kyzz tercapai. Coba lagi beberapa saat.')
+    }
+    if (error.code === 'ECONNABORTED') {
+      return m.reply('❌ API Pinterest terlalu lama merespons (timeout). Coba lagi nanti.')
+    }
+    return m.reply('❌ Gagal mencari gambar Pinterest. Periksa koneksi/API Kyzz dan lihat log terminal untuk detailnya.')
   }
 }
 
