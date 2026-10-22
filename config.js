@@ -116,7 +116,7 @@ global.APIs = {
 
 global.APIKeys = {
     'https://api.blckrose.my.id': 'ISI_APIKEY', // isi apikey 
-    'https://api.kyzzz.eu.cc': 'ISI_APIKEY'  // isi apikey 
+    'https://api.kyzzz.eu.cc': process.env.KYZZ_API_KEY || 'ISI_APIKEY'  // isi apikey 
 }
 
 global.flaaa2 = [
