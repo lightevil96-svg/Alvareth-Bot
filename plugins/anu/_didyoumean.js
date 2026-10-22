@@ -32,7 +32,7 @@ handler.before = async function (m, { match, usedPrefix }) {
 ❏ Kemiripan : ${similarityPercentage}%
 `.trim()
 
-      const urlA = global.repository || 'https://github.com/'
+      const urlA = global.botLink || 'https://spoo.me/Alvareth-Bot'
       const invisible = '\u200B'.repeat(400)
 
       await this.sendMessage(
