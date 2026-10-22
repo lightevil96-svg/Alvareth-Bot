@@ -59,6 +59,10 @@ Jalankan perintah yang ditampilkan oleh `pm2 startup` jika diminta. Setelah itu,
 
 Jika nama branch utama bukan `main`, ubah bagian `on.push.branches` di `.github/workflows/deploy.yml` sesuai branch yang dipakai.
 
+### Data pengguna dan sesi tetap aman saat update
+
+Versi terbaru menyimpan database pendaftaran dan data bot di `~/.alvareth-bot-data/database.json`, di luar folder repository, serta sesi WhatsApp di `~/.alvareth-bot-data/sessions/`. Pada startup pertama setelah pembaruan, file lama `database.json` dan folder `sessions/` akan **disalin**, bukan dihapus. Database juga mendapat hingga 10 snapshot backup startup di `~/.alvareth-bot-data/backups/`. Pastikan bot berhasil memuat data pendaftaran dan sesi baru sebelum menghapus file lama secara manual. Lokasi data dapat diubah melalui `ALVARETH_DATA_DIR` dan `WA_SESSION_DIR` pada `.env`.
+
 ### Perhatian soal `.env` dan sesi
 
 Workflow sengaja mengecualikan `.env`, `sessions/`, `auth_info/`, `auth_info_baileys/`, `.baileys_auth_info/`, `database/`, `database.json`, `data.json`, `lib/chat.json`, dan `node_modules/` saat sinkronisasi. Database chat akan dibuat otomatis jika belum ada dan tidak ditimpa pada deployment berikutnya. Buat `.env` langsung di VPS sebelum deployment pertama. Folder sesi tidak boleh masuk GitHub karena berisi kredensial login WhatsApp. Kode dari setiap commit yang berhasil di-push akan dijalankan di server; hanya push perubahan dari sumber yang kamu percaya.
