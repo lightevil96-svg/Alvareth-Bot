@@ -40,7 +40,7 @@ const DATABASE_BACKUP_DIR = join(RUNTIME_DATA_DIR, 'backups')
 // Copy (never move/delete) the old in-repository database on first migration.
 if (!existsSync(DATABASE_PATH) && existsSync(LEGACY_DATABASE_PATH)) {
   copyFileSync(LEGACY_DATABASE_PATH, DATABASE_PATH)
-  console.log(chalkSafeData('Database lama disalin ke lokasi data persisten.'))
+  console.log('Database lama disalin ke lokasi data persisten.')
 }
 
 // Migrate existing WhatsApp session files without deleting the originals.
@@ -51,7 +51,7 @@ if (existsSync(LEGACY_SESSION_DIR)) {
       cpSync(join(LEGACY_SESSION_DIR, entry), join(SESSION_DIR, entry), { recursive: true })
     }
     if (readdirSync(LEGACY_SESSION_DIR).length > 0) {
-      console.log(chalkSafeData('Sesi WhatsApp lama disalin ke lokasi data persisten.'))
+      console.log('Sesi WhatsApp lama disalin ke lokasi data persisten.')
     }
   }
 }
@@ -74,10 +74,6 @@ function backupPersistentDatabase() {
   }
 }
 backupPersistentDatabase()
-
-function chalkSafeData(message) {
-  return message
-}
 
 // Gunakan named exports resmi dari fork Baileys agar fungsi auth tidak undefined.
 
