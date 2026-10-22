@@ -569,7 +569,7 @@ const isOwner = isROwner || m.fromMe
         // Group allowlist gate: when enabled, silently ignore every message from
         // groups that are not explicitly approved. Private chats remain available
         // so the owner can manage the list even when no group is approved.
-        const groupAccess = global.db.data.settings?.groupAccess || { enabled: true, allowedGroups: [] }
+        const groupAccess = global.db.data.settings?.groupAccess || { enabled: true, allowedGroups: ['120363424686467256@g.us'] }
         if (m.chat.endsWith('@g.us') && groupAccess.enabled !== false) {
             const allowedGroups = Array.isArray(groupAccess.allowedGroups) ? groupAccess.allowedGroups : []
             if (!allowedGroups.includes(m.chat)) {
@@ -828,7 +828,7 @@ export async function participantsUpdate({ id, participants, action }) {
     if (opts['self'] || this.isInit) return
     if (global.db.data == null) await global.loadDatabase()
 
-    const groupAccess = global.db.data.settings?.groupAccess || { enabled: true, allowedGroups: [] }
+    const groupAccess = global.db.data.settings?.groupAccess || { enabled: true, allowedGroups: ['120363424686467256@g.us'] }
     if (groupAccess.enabled !== false &&
         !(Array.isArray(groupAccess.allowedGroups) && groupAccess.allowedGroups.includes(id))) return
 
@@ -940,7 +940,7 @@ export async function groupsUpdate(groupsUpdate) {
     for (const groupUpdate of groupsUpdate) {
         const id = groupUpdate.id
         if (!id) continue
-        const groupAccess = global.db.data.settings?.groupAccess || { enabled: true, allowedGroups: [] }
+        const groupAccess = global.db.data.settings?.groupAccess || { enabled: true, allowedGroups: ['120363424686467256@g.us'] }
         if (groupAccess.enabled !== false &&
             !(Array.isArray(groupAccess.allowedGroups) && groupAccess.allowedGroups.includes(id))) continue
         let chats = global.db.data.chats[id], text = ''
