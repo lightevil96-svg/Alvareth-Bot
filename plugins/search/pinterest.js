@@ -121,7 +121,7 @@ const handler = async (m, { conn, text, usedPrefix, command }) => {
       const likes = item.likes !== undefined && item.likes !== null && item.likes !== '' && Number.isFinite(rawLikes)
         ? `\n❤️ *Likes:* ${rawLikes.toLocaleString('id-ID')}`
         : ''
-      const pinLink = typeof item.link === 'string' && /^https?:\\/\\//i.test(item.link)
+      const pinLink = typeof item.link === 'string' && /^https?:\/\//i.test(item.link)
         ? item.link
         : `https://www.pinterest.com/search/pins/?q=${encodeURIComponent(query)}`
 
