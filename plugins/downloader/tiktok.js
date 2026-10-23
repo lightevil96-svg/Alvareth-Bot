@@ -13,12 +13,60 @@ const MAX_INLINE_VIDEO_BYTES = 50 * 1024 * 1024
 
 // Some messages in this Baileys fork are protobuf-converted objects without the
 // serializer prototype methods. Send reactions through the socket directly.
+function isSocketReady(conn) {
+  const ws = conn?.ws
+  if (!ws) return false
+  if (typeof ws.isOpen === 'boolean') return ws.isOpen
+  if (typeof ws.readyState === 'number') return ws.readyState === 1
+  return false
+}
+
+// A .tt task can take several minutes. During that time main.js may replace
+// global.conn, so never keep using the socket captured when the command began.
+async function waitForActiveConnection(fallbackConn, timeoutMs = 90000) {
+  const deadline = Date.now() + timeoutMs
+  let lastNotice = 0
+
+  while (Date.now() < deadline) {
+    const candidate = globalThis.conn?.sendMessage ? globalThis.conn : fallbackConn
+    if (isSocketReady(candidate)) return candidate
+
+    if (Date.now() - lastNotice >= 10000) {
+      console.log('[TikTok] Menunggu koneksi WhatsApp pulih sebelum mengirim hasil...')
+      lastNotice = Date.now()
+    }
+    await new Promise(resolve => setTimeout(resolve, 1000))
+  }
+
+  throw new Error('Koneksi WhatsApp belum pulih setelah 90 detik. Jalankan ulang perintah .tt.')
+}
+
+async function sendMessageWithReconnect(fallbackConn, ...args) {
+  let active = await waitForActiveConnection(fallbackConn)
+  try {
+    return await active.sendMessage(...args)
+  } catch (error) {
+    if (!/connection closed|connection is closed/i.test(String(error?.message || error))) throw error
+
+    console.warn('[TikTok] Socket tertutup saat mengirim; menunggu koneksi terbaru untuk mencoba lagi.')
+    active = await waitForActiveConnection(active)
+    return active.sendMessage(...args)
+  }
+}
+
 async function reactSafe(conn, m, text) {
   if (!m?.chat || !m?.key) return
+  const active = globalThis.conn?.sendMessage && isSocketReady(globalThis.conn)
+    ? globalThis.conn
+    : conn
+  if (!isSocketReady(active)) return
   try {
-    await conn.sendMessage(m.chat, { react: { text, key: m.key } })
+    await active.sendMessage(m.chat, { react: { text, key: m.key } })
   } catch (error) {
-    console.warn('[TikTok] Gagal mengirim reaksi:', error?.message || error)
+    // Reaction is optional; a stale socket must not make a successful download fail.
+    if (!/connection closed|connection is closed/i.test(String(error?.message || error))) {
+      console.warn('[TikTok] Gagal mengirim reaksi:', error?.message || error)
+    }
   }
 }
 
@@ -299,7 +347,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
       '     ✨ _Downloaded by Alvareth Bot_ ✨'
 
     if (res.type === 'image' && Array.isArray(res.images) && res.images.length > 0) {
-      await conn.sendMessage(
+      await sendMessageWithReconnect(conn, 
         m.chat,
         {
           album: res.images.map((img, i) => ({
@@ -311,7 +359,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
       )
 
       if (res.audio) {
-        await conn.sendMessage(
+        await sendMessageWithReconnect(conn, 
           m.chat,
           {
             audio: { url: res.audio },
@@ -331,7 +379,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
 
       if (prepared.size > MAX_INLINE_VIDEO_BYTES) {
         // Send large files as MP4 documents rather than risk a failed inline-video upload.
-        await conn.sendMessage(
+        await sendMessageWithReconnect(conn, 
           m.chat,
           {
             document: prepared.buffer,
@@ -342,7 +390,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
           { quoted: m }
         )
       } else {
-        await conn.sendMessage(
+        await sendMessageWithReconnect(conn, 
           m.chat,
           {
             video: prepared.buffer,
@@ -358,7 +406,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
     }
 
     if (res.audio) {
-      await conn.sendMessage(
+      await sendMessageWithReconnect(conn, 
         m.chat,
         {
           audio: { url: res.audio },
@@ -372,7 +420,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
   } catch (e) {
     await reactSafe(conn, m, '❌')
     console.error('[TikTok Downloader]', e?.stack || e)
-    await conn.sendMessage(m.chat, {
+    await sendMessageWithReconnect(conn, m.chat, {
       text: 'Gagal memproses TikTok: ' + String(e?.message || e)
     }, { quoted: m }).catch(() => {})
   }
