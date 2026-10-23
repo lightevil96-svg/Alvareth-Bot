@@ -60,7 +60,7 @@ function terminalProgress(label, percent, elapsedSeconds, etaSeconds, detail = '
 function runFfmpeg(args, { durationSeconds = 0, label = 'Konversi MP4' } = {}) {
   return new Promise((resolve, reject) => {
     const startedAt = Date.now()
-    const child = spawn('ffmpeg', [...args, '-progress', 'pipe:1', '-nostats'], { stdio: ['ignore', 'pipe', 'pipe'] })
+    const child = spawn('ffmpeg', [...args.slice(0, -1), '-progress', 'pipe:1', '-nostats', args[args.length - 1]], { stdio: ['ignore', 'pipe', 'pipe'] })
     let stderr = ''
     let stdoutBuffer = ''
     let lastPercent = -1
