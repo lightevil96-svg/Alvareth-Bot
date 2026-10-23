@@ -54,7 +54,7 @@ function terminalProgress(label, percent, elapsedSeconds, etaSeconds, detail = '
     (detail ? ' | ' + detail : '')
   // A carriage return updates the same terminal line; periodic updates reflect
   // bytes/FFmpeg timestamps from the actual process, not a decorative animation.
-  process.stdout.write('\\r' + line + ' '.repeat(Math.max(0, 12)))
+  process.stdout.write('\r' + line + ' '.repeat(Math.max(0, 12)))
 }
 
 function runFfmpeg(args, { durationSeconds = 0, label = 'Konversi MP4' } = {}) {
@@ -67,10 +67,10 @@ function runFfmpeg(args, { durationSeconds = 0, label = 'Konversi MP4' } = {}) {
 
     child.stdout.on('data', chunk => {
       stdoutBuffer += chunk.toString()
-      const lines = stdoutBuffer.split(/\\r?\\n/)
+      const lines = stdoutBuffer.split(/\r?\n/)
       stdoutBuffer = lines.pop() || ''
       for (const line of lines) {
-        const match = line.match(/^out_time_(?:ms|us)=(\\d+)$/)
+        const match = line.match(/^out_time_(?:ms|us)=(\d+)$/)
         if (!match || !(durationSeconds > 0)) continue
         const currentSeconds = Number(match[1]) / 1000000
         const percent = Math.min(99.9, currentSeconds / durationSeconds * 100)
@@ -86,7 +86,7 @@ function runFfmpeg(args, { durationSeconds = 0, label = 'Konversi MP4' } = {}) {
       stderr = (stderr + chunk.toString()).slice(-4000)
     })
     child.once('error', error => {
-      process.stdout.write('\\n')
+      process.stdout.write('\n')
       reject(error)
     })
     child.once('close', code => {
