@@ -3,7 +3,7 @@
 > Purpose: handoff notes for an AI or developer continuing maintenance of this repository.
 > Repository: https://github.com/lightevil96-svg/Alvareth-Bot
 > Main branch: `main`
-> Last reviewed: 2026-10-22
+> Last reviewed: 2026-10-23
 >
 > This document summarizes the state visible in the repository. It is not a guarantee that every feature works at runtime. Always inspect the current code and run checks before claiming a fix is verified.
 
@@ -45,7 +45,7 @@
 - `plugins/`: extensive feature/plugin set. Do not replace the directory with a small sample.
 - `lib/`: helpers, socket wrapper, store, print helpers, auto-update module, and other shared logic.
 - `json/`: static JSON data used by game and other plugins.
-- `media/`: image/media assets. `media/ryo.jpg` and `media/thumbnail.jpg` still come from the source archive; branding visual assets have not been fully replaced.
+- `media/`: image/audio assets. The tracked set includes `alvareth-character.png`, `alvareth-character.jpg`, `alvareth-preview.jpg`, legacy `ryo.png` / `ryo1.jpg` / `ryo2.jpg` / `ryo3.jpg`, and audio files. Keep legacy assets until a complete reference audit confirms they are unused.
 - `database.json`: lowdb runtime data; ignored by Git.
 - `sessions/`: WhatsApp multi-file auth data; ignored by Git.
 - `.env`: local secrets/runtime configuration; ignored by Git. Never read out, commit, or overwrite actual secrets.
@@ -54,7 +54,7 @@
 - `lib/auto-update.js`: legacy/separate PM2 periodic updater; not imported by the current launcher.
 - `.github/workflows/javascript-syntax.yml`: syntax validation for JS files on push/PR.
 - `.github/workflows/import-source.yml`: special ZIP import workflow triggered only when a push commit message is exactly `Start import from uploaded ZIP`; it extracts `Alvareth-Bot-updated.zip` and commits sanitized source. This is not a general SC upstream sync workflow.
-- There is no confirmed active `.github/workflows/deploy.yml` in the current tree. README mentions one, so deployment documentation may be stale and must not be trusted until checked against the actual workflow files.
+- There is no active `.github/workflows/deploy.yml` in the current tree. README was corrected on 2026-10-23 to state that pushes do not deploy to a VPS automatically; the current workflows are the JavaScript syntax check and the special ZIP import workflow.
 
 ## 4. Environment and common commands
 
@@ -193,3 +193,12 @@ Before modifying updater/deploy logic:
 - Each image caption includes query, title, pinner, likes (if available), direct Pinterest/search link, and Alvareth Bot branding. No card carousel or card buttons are intentionally sent.
 - Success reaction is sent only after WhatsApp send resolves with a message key; send failures log the error and react ❌ with an error reply.
 - Change commit: `a3710f2`. GitHub syntax workflow was still running at the time this note was written; inspect Actions result and test `.pin` in live WhatsApp before calling runtime behavior verified.
+
+
+## 10. Repository cleanup (2026-10-23)
+
+- Removed root `speed.py`, a standalone Speedtest CLI script not wired to the package scripts or the core `.ping` plugin.
+- Removed root `ytta.txt`, an outdated Ryo-branded setup guide that described pairing-code login, inconsistent with the current QR login.
+- Added `assets/pingcanvas/` to `.gitignore`; the `.ping` plugin downloads font files there at runtime.
+- Updated README deployment instructions: there is no active VPS deploy workflow in the repository.
+- Legacy media files were deliberately retained because a repository-wide reference check has not yet established that every old asset is unused. Do not delete them based on filename alone.
