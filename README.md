@@ -1,71 +1,76 @@
 # Alvareth Bot
 
-> Untuk AI/developer yang melanjutkan perbaikan, baca **[AI_CONTEXT.md](./AI_CONTEXT.md)** terlebih dahulu. Dokumen ini merangkum arsitektur, startup/update, data yang harus dilindungi, fitur yang sudah diperbaiki, workflow, dan hal yang belum diverifikasi.
+Bot WhatsApp Multi-Device berbasis Node.js, Baileys, dan sistem plugin. Nama bot: **Alvareth Bot**; nama owner ditentukan lewat `OWNER_NAME` di `.env`.
 
-**Alvareth Bot** adalah bot WhatsApp Multi-Device berbasis Node.js, Baileys, dan sistem plugin. Nama owner yang ditampilkan: **Light V**.
+## Struktur proyek
 
-Struktur proyek ini dibuat dengan mempertahankan struktur SC yang diberikan: `index.js`, `main.js`, `handler.js`, `config.js`, `plugins/`, `lib/`, `json/`, dan aset di `media/`.
+```text
+.
+├── index.js                    # Supervisor proses
+├── main.js                     # Socket WhatsApp, sesi, database, loader plugin
+├── handler.js                  # Normalisasi pesan dan routing perintah
+├── config.js                   # Konfigurasi global
+├── .env.example                # Contoh variabel lingkungan
+├── plugins/                    # Fitur bot, dikelompokkan berdasarkan kategori
+├── lib/                        # Helper dan integrasi bersama
+├── json/                       # Data statis untuk sejumlah fitur/game
+├── src/                        # Font, latar, dan aset fitur
+├── media/                      # Gambar dan audio
+├── scripts/start-with-update.js# Update aman sebelum proses bot dijalankan
+├── AI_CONTEXT.md               # Catatan teknis untuk pemeliharaan
+└── package.json                # Dependency dan perintah npm
+```
 
-## Fitur
+## Kebutuhan
 
-- Sistem plugin untuk menu, utilitas, downloader, permainan, sticker, AI, dan manajemen grup.
-- Konfigurasi identitas bot serta nomor bot/owner melalui `.env`.
-- GitHub Actions untuk mengirim kode terbaru ke VPS ketika ada `push` ke branch `main`.
-- Restart otomatis dengan PM2 setelah kode dikirim.
-- File sesi WhatsApp dan `.env` dikecualikan dari sinkronisasi agar tidak terhapus saat deployment.
+Gunakan Node.js 22+ dan npm. Beberapa fitur multimedia memerlukan FFmpeg serta tools gambar yang sesuai dengan fitur yang dipakai. Git diperlukan agar updater saat startup dapat mengambil perubahan dari remote.
 
-## Persiapan lokal / VPS
-
-Kebutuhan runtime: Node.js 22+, npm, Git (opsional), FFmpeg, ImageMagick, WebP tools, dan PM2. Pada VPS berbasis Debian/Ubuntu, pasang juga `rsync` karena workflow GitHub menggunakannya.
+## Instalasi dan menjalankan
 
 ```bash
 cp .env.example .env
-nano .env
+# Edit .env dan isi BOT_NUMBER, OWNER_NUMBER, serta OWNER_NAME.
 npm install
 npm start
 ```
 
-Isi `BOT_NUMBER` dengan nomor akun WhatsApp yang akan dipasangkan dan `OWNER_NUMBER` dengan nomor WhatsApp owner, dalam format internasional **angka saja** (tanpa `+` atau spasi). `OWNER_NAME` sudah diset ke `Light V`. Jangan jalankan bot sebelum nomor owner diganti dari contoh pada `.env.example`.
+Nomor WhatsApp di `.env` menggunakan angka internasional saja tanpa tanda `+` atau spasi. Jangan commit `.env`, sesi WhatsApp, atau database runtime.
 
-Untuk menjalankan stabil di VPS:
+- `npm start` menjalankan `scripts/start-with-update.js`, yang mencoba mengambil pembaruan dari `origin/main` secara fast-forward sebelum memulai bot.
+- `AUTO_UPDATE_ENABLED=false` menonaktifkan pembaruan startup.
+- `AUTO_UPDATE_BRANCH` mengubah branch yang diperiksa; default-nya `main`.
+- `npm run dev` menjalankan mode watch untuk `index.js` dan melewati updater startup.
+- `npm test` menjalankan pemeriksaan sintaks pada file entry dan beberapa modul utama. GitHub Actions juga menjalankan pemeriksaan sintaks terhadap seluruh file JavaScript.
+
+## Menjalankan dengan PM2
+
+Untuk menjalankan jalur updater saat startup:
 
 ```bash
 npm install -g pm2
-pm2 start index.js --name alvareth-bot
+pm2 start npm --name alvareth-bot -- start
 pm2 save
 pm2 startup
+pm2 logs alvareth-bot
 ```
 
-Jalankan perintah yang ditampilkan oleh `pm2 startup` jika diminta. Setelah itu, pantau log dengan `pm2 logs alvareth-bot`.
+Ikuti instruksi yang dikeluarkan oleh `pm2 startup` jika diminta. Hindari menjalankan dua instance bot menggunakan sesi WhatsApp yang sama.
 
-## Aktifkan auto-deploy GitHub
+## Database dan sesi
 
-1. Buat repository GitHub milikmu dan push isi proyek ini ke branch `main`.
-2. Di VPS, siapkan folder deploy (default `/opt/alvareth-bot`), Node.js, npm, `rsync`, dependensi sistem di atas, serta PM2. Pastikan user SSH punya hak menulis ke folder tersebut.
-3. Buat file `.env` di folder deploy. **Jangan commit `.env` ke GitHub.**
-4. Tambahkan repository secrets berikut di **Settings → Secrets and variables → Actions**:
+Data runtime disimpan di luar checkout Git secara default:
 
-   | Secret | Isi |
-   | --- | --- |
-   | `DEPLOY_HOST` | IP/domain VPS |
-   | `DEPLOY_USER` | User SSH untuk deploy |
-   | `DEPLOY_SSH_KEY` | Private SSH key khusus deployment |
-   | `DEPLOY_PORT` | Port SSH; opsional, default `22` |
-   | `DEPLOY_PATH` | Folder bot; opsional, default `/opt/alvareth-bot` |
-   | `DEPLOY_KNOWN_HOST` | Baris host key SSH yang sudah diverifikasi; direkomendasikan |
+- Database: `~/.alvareth-bot-data/database.json`
+- Sesi WhatsApp: `~/.alvareth-bot-data/sessions/`
+- Backup database startup: `~/.alvareth-bot-data/backups/`
 
-5. Pastikan public key pasangan `DEPLOY_SSH_KEY` sudah ditambahkan ke `~/.ssh/authorized_keys` milik user deploy di VPS. Untuk keamanan, gunakan user khusus yang hanya bisa mengelola folder bot, bukan login root.
-6. Push commit ke `main`. Buka tab **Actions** di GitHub untuk melihat status deploy. Workflow akan upload kode, menjalankan `npm install`, lalu me-restart proses `alvareth-bot` melalui PM2.
+Lokasi dapat diubah melalui `ALVARETH_DATA_DIR` dan `WA_SESSION_DIR`. Saat migrasi dari instalasi lama, kode menyalin data lama ke lokasi baru; jangan hapus salinan lama sampai bot berhasil memuat data dan sesi dengan benar.
 
-Jika nama branch utama bukan `main`, ubah bagian `on.push.branches` di `.github/workflows/deploy.yml` sesuai branch yang dipakai.
+## GitHub Actions dan deployment
 
-### Data pengguna dan sesi tetap aman saat update
+Workflow yang ada saat ini **belum mengonfigurasi auto-deploy ke VPS**. Workflow yang tersedia adalah pemeriksaan sintaks JavaScript dan workflow khusus untuk mengimpor arsip ZIP dengan commit pemicu tertentu. Push ke GitHub saja tidak me-restart bot di VPS.
 
-Versi terbaru menyimpan database pendaftaran dan data bot di `~/.alvareth-bot-data/database.json`, di luar folder repository, serta sesi WhatsApp di `~/.alvareth-bot-data/sessions/`. Pada startup pertama setelah pembaruan, file lama `database.json` dan folder `sessions/` akan **disalin**, bukan dihapus. Database juga mendapat hingga 10 snapshot backup startup di `~/.alvareth-bot-data/backups/`. Pastikan bot berhasil memuat data pendaftaran dan sesi baru sebelum menghapus file lama secara manual. Lokasi data dapat diubah melalui `ALVARETH_DATA_DIR` dan `WA_SESSION_DIR` pada `.env`.
-
-### Perhatian soal `.env` dan sesi
-
-Workflow sengaja mengecualikan `.env`, `sessions/`, `auth_info/`, `auth_info_baileys/`, `.baileys_auth_info/`, `database/`, `database.json`, `data.json`, `lib/chat.json`, dan `node_modules/` saat sinkronisasi. Database chat akan dibuat otomatis jika belum ada dan tidak ditimpa pada deployment berikutnya. Buat `.env` langsung di VPS sebelum deployment pertama. Folder sesi tidak boleh masuk GitHub karena berisi kredensial login WhatsApp. Kode dari setiap commit yang berhasil di-push akan dijalankan di server; hanya push perubahan dari sumber yang kamu percaya.
+Untuk server, siapkan `.env` dan dependensi di server. Setelah memperbarui checkout dengan aman, jalankan `npm install` jika dependency berubah, lalu restart proses PM2 yang sesuai. Jangan membuat atau mengandalkan workflow `deploy.yml` sebelum file tersebut benar-benar ditambahkan dan konfigurasi akses server diverifikasi.
 
 ## Docker (opsional)
 
@@ -75,12 +80,6 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-## Catatan audit kode
+## Keamanan dan atribusi
 
-`main.js` telah diganti dengan implementasi yang dapat dibaca untuk pairing code/QR, reconnect, loader plugin rekursif, dan lowdb. Perubahan ini menghilangkan obfuscation pada `main.js`, tetapi **bukan audit keamanan menyeluruh** atas semua plugin, dependensi, atau endpoint pihak ketiga. Tetap periksa sumber plugin dan jangan commit `.env` atau `sessions/`.
-
-Beberapa fitur menggunakan API pihak ketiga dan dapat berubah sewaktu-waktu. Aset gambar di `media/` masih memakai aset dari arsip sumber; ganti `media/ryo.jpg` dan `media/thumbnail.jpg` jika ingin branding visual yang sepenuhnya baru.
-
-## Lisensi dan atribusi
-
-Berkas `LICENSE` dari SC sumber tetap disertakan. Karena proyek ini memanfaatkan struktur dan kode yang diwarisi dari arsip sumber, pertahankan lisensi dan atribusi yang berlaku saat kamu membagikan ulang atau memodifikasinya.
+Repository ini mewarisi struktur dan sebagian kode dari source sebelumnya. Pertahankan `LICENSE` dan atribusi yang berlaku ketika membagikan ulang atau memodifikasinya. Audit keamanan menyeluruh atas seluruh plugin, dependency, dan API pihak ketiga belum dilakukan. Periksa log dan sumber plugin saat mengatasi error, serta jangan pernah memasukkan token, `.env`, atau sesi WhatsApp ke repository.
