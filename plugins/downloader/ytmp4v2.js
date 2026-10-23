@@ -1,45 +1,22 @@
-let handler = async (m, { conn, text, usedPrefix, command }) => {
-  await m.react('✨')
+import ytmp4Handler from './ytmp4.js'
+
+// Reuse the established multi-provider MP4 downloader and default V2 to 720p.
+// An explicitly supplied resolution (URL|360, URL|480, etc.) is preserved.
+let handler = async (m, context = {}) => {
+  const text = String(context.text || '').trim()
 
   if (!text) {
-    return conn.reply(
-      m.chat,
-      `Example : ${usedPrefix + command} https://youtu.be/cii6ruuycQA`,
-      m
-    )
+    const prefix = context.usedPrefix || '.'
+    return m.reply('Contoh:\\n' + prefix + 'ytmp4v2 https://youtu.be/dQw4w9WgXcQ\\n' + prefix + 'ytmp4v2 https://youtu.be/dQw4w9WgXcQ|720')
   }
 
-  try {
-    let res = await fetch(`${global.APIs.faa}/faa/ytmp4?url=${encodeURIComponent(text)}`)
-    let json = await res.json()
+  const hasResolution = /\|\s*\d+\s*$/.test(text)
+  const downloadText = hasResolution ? text : text + '|720'
 
-    if (!json.status) throw 'API error'
-
-    let video = json.result.download_url
-
-    let head = await fetch(video, { method: 'HEAD' })
-    let size = Number(head.headers.get('content-length') || 0)
-
-    if (size > 50 * 1024 * 1024) {
-      await conn.sendMessage(m.chat, {
-        document: { url: video },
-        mimetype: 'video/mp4',
-        fileName: 'video.mp4'
-      }, { quoted: m })
-    } else {
-      await conn.sendMessage(m.chat, {
-        video: { url: video },
-        mimetype: 'video/mp4'
-      }, { quoted: m })
-    }
-
-  } catch (e) {
-    console.error(e)
-    conn.reply(m.chat, '⚠️ Gagal mengambil video.', m)
-  }
+  return ytmp4Handler(m, { ...context, text: downloadText })
 }
 
-handler.help = ['ytmp4v2 <url>']
+handler.help = ['ytmp4v2 <url atau judul>']
 handler.tags = ['downloader']
 handler.command = /^ytmp4v2$/i
 handler.limit = true
