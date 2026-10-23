@@ -257,6 +257,46 @@ async function normalizeVideoToMp4(input, output) {
   return { buffer, size: info.size }
 }
 
+async function downloadToBuffer(url, maxBytes = MAX_VIDEO_BYTES) {
+  const response = await axios.get(url, {
+    responseType: 'arraybuffer', timeout: 120000, maxRedirects: 5, maxContentLength: maxBytes,
+    headers: { 'user-agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/132.0.0.0 Mobile Safari/537.36', referer: 'https://www.tikwm.com/' }
+  })
+  const buffer = Buffer.from(response.data)
+  if (!buffer.length || buffer.length > maxBytes) throw new Error('Media TikTok kosong atau melebihi batas ukuran.')
+  return buffer
+}
+
+async function renderSinglePhotoWithMusic(imageUrl, audioUrl, outputPath) {
+  if (!audioUrl) throw new Error('Musik postingan tidak tersedia dari provider TikTok.')
+  const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'alvareth-tiktok-photo-'))
+  const imagePath = path.join(tempDir, 'photo.jpg')
+  const audioPath = path.join(tempDir, 'music.bin')
+  try {
+    const [imageBuffer, audioBuffer] = await Promise.all([
+      downloadToBuffer(imageUrl, 20 * 1024 * 1024),
+      downloadToBuffer(audioUrl, 30 * 1024 * 1024)
+    ])
+    await Promise.all([fsp.writeFile(imagePath, imageBuffer), fsp.writeFile(audioPath, audioBuffer)])
+    const audioDuration = await getMediaDuration(audioPath)
+    if (!(audioDuration > 0)) throw new Error('Durasi musik TikTok tidak dapat dibaca.')
+    const duration = Math.min(audioDuration, 60)
+    await runFfmpeg([
+      '-hide_banner', '-loglevel', 'error', '-y',
+      '-loop', '1', '-framerate', '30', '-i', imagePath, '-i', audioPath,
+      '-t', String(duration), '-map', '0:v:0', '-map', '1:a:0',
+      '-vf', 'scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2,format=yuv420p',
+      '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23',
+      '-c:a', 'aac', '-b:a', '128k', '-shortest', '-movflags', '+faststart', outputPath
+    ], { durationSeconds: duration, label: 'Render foto + musik' })
+    const info = await fsp.stat(outputPath)
+    if (info.size < 4096 || info.size > MAX_VIDEO_BYTES) throw new Error('Hasil video foto tidak valid atau terlalu besar.')
+    return { buffer: await fsp.readFile(outputPath), size: info.size, duration }
+  } finally {
+    await fsp.rm(tempDir, { recursive: true, force: true }).catch(() => {})
+  }
+}
+
 async function prepareBestTikTokVideo(res) {
   const candidates = Array.isArray(res.videoCandidates) && res.videoCandidates.length
     ? res.videoCandidates
@@ -355,28 +395,35 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
       '     ✨ _Downloaded by Alvareth Bot_ ✨'
 
     if (res.type === 'image' && Array.isArray(res.images) && res.images.length > 0) {
-      await sendMessageWithReconnect(conn, 
-        m.chat,
-        {
-          album: res.images.map((img, i) => ({
-            image: { url: img },
-            caption: i === 0 ? caption : ''
-          }))
-        },
-        { quoted: m, noAlvarethPreview: true }
-      )
-
-      if (res.audio) {
-        await sendMessageWithReconnect(conn, 
-          m.chat,
-          {
-            audio: { url: res.audio },
-            mimetype: 'audio/mpeg'
-          },
-          { quoted: m, noAlvarethPreview: true }
-        )
+      if (res.images.length === 1 && !/^ttfoto$/i.test(command)) {
+        const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'alvareth-tiktok-single-'))
+        const outputPath = path.join(tempDir, 'tiktok-photo.mp4')
+        try {
+          const rendered = await renderSinglePhotoWithMusic(res.images[0], res.audio, outputPath)
+          await sendMessageWithReconnect(conn, m.chat, {
+            video: rendered.buffer,
+            mimetype: 'video/mp4',
+            fileName: safeFilename(title),
+            caption: caption + '\\n\\n🎵 Foto tunggal dirender menjadi video dengan musik asli, maksimal 60 detik.'
+          }, { quoted: m, noAlvarethPreview: true })
+          await sendMessageWithReconnect(conn, m.chat, {
+            text: 'Mau foto aslinya saja?',
+            footer: 'Alvareth Bot',
+            templateButtons: [{
+              index: 1,
+              quickReplyButton: { displayText: 'Ambil Foto', id: '.ttfoto ' + url }
+            }]
+          }, { quoted: m, noAlvarethPreview: true })
+        } finally {
+          await fsp.rm(tempDir, { recursive: true, force: true }).catch(() => {})
+        }
+      } else {
+        const imageMessages = res.images.map((img, i) => ({
+          image: { url: img },
+          caption: i === 0 ? caption : ''
+        }))
+        await sendMessageWithReconnect(conn, m.chat, { album: imageMessages }, { quoted: m, noAlvarethPreview: true })
       }
-
       await reactSafe(conn, m, '✅')
       return
     }
@@ -436,7 +483,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
 
 handler.help = ['tt', 'tiktok']
 handler.tags = ['downloader']
-handler.command = /^(tt|tiktok)$/i
+handler.command = /^(tt|tiktok|ttfoto)$/i
 handler.limit = true
 handler.register = false
 
