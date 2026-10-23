@@ -28,7 +28,34 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
     } catch (error) {
       console.error('[.play] Gagal mengirim preview Alvareth; mencoba teks biasa:', error)
       try {
-        return await conn.sendMessage(m.chat, {
+        return await conn.sendMessage(m.chat, { text: replyText }, { quoted: m })
+      } catch (sendError) {
+        console.error('[.play] Gagal mengirim balasan teks:', sendError)
+        throw sendError
+      }
+    }
+  }
+
+  try {
+    const search = await yts(text)
+    const videos = search.videos
+
+    if (!videos.length) {
+      return await m.reply('Tidak ditemukan.')
+    }
+
+    const video = videos[0]
+    const caption = `Play Music
+
+✿ Title : ${video.title}
+✿ Duration : ${video.timestamp || '-'}
+✿ Views : ${formatNumber(video.views)}
+✿ Channel : ${video.author.name}${video.author.verified ? ' ✓' : ''}
+✿ Upload : ${video.ago || '-'}
+
+Silakan pilih format download di bawah.`
+
+    return await conn.sendMessage(m.chat, {
       image: { url: video.thumbnail },
       caption,
       footer: 'Alvareth Bot',
