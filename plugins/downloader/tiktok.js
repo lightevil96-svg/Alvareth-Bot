@@ -91,7 +91,7 @@ function runFfmpeg(args, { durationSeconds = 0, label = 'Konversi MP4' } = {}) {
     })
     child.once('close', code => {
       const elapsed = (Date.now() - startedAt) / 1000
-      process.stdout.write('\\r[TikTok] ' + label + (code === 0 ? ' | 100.0% | selesai dalam ' : ' | GAGAL setelah ') + formatDuration(elapsed) + '                    \\n')
+      process.stdout.write('\r[TikTok] ' + label + (code === 0 ? ' | 100.0% | selesai dalam ' : ' | GAGAL setelah ') + formatDuration(elapsed) + '                    \n')
       if (code === 0) return resolve()
       reject(new Error('FFmpeg gagal (kode ' + code + '): ' + (stderr.trim() || 'output MP4 tidak dapat dibuat')))
     })
@@ -162,7 +162,7 @@ async function downloadVideoFile(url, destination) {
 
   await pipeline(response.data, limiter, fs.createWriteStream(destination))
   const downloadElapsed = (Date.now() - startedAt) / 1000
-  process.stdout.write('\\r[TikTok] Unduh video | 100.0% | selesai dalam ' + formatDuration(downloadElapsed) + '                    \\n')
+  process.stdout.write('\r[TikTok] Unduh video | 100.0% | selesai dalam ' + formatDuration(downloadElapsed) + '                    \n')
   const info = await fsp.stat(destination)
   if (info.size < 4096) throw new Error('File video terlalu kecil atau tidak lengkap.')
   if (info.size > MAX_VIDEO_BYTES) throw new Error('File video melebihi batas aman 150 MB.')
