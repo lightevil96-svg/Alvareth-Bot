@@ -2,7 +2,7 @@ import { smsg } from './lib/simple.js'
 import { format } from 'util'
 import { fileURLToPath } from 'url'
 import path, { join } from 'path'
-import { unwatchFile, watchFile } from 'fs'
+import { watchFile } from 'fs'
 import chalk from 'chalk'
 import fetch from 'node-fetch'
 
@@ -994,9 +994,21 @@ global.dfail = (type, m, conn) => {
     if (chat && typeof conn?.sendMessage === 'function') return conn.sendMessage(chat, { text: msg[type] }, m.key ? { quoted: m } : {})
   }
 }
-let file = global.__filename(import.meta.url, true)
-watchFile(file, async () => {
-    unwatchFile(file)
-    console.log(chalk.redBright("Update 'handler.js'"))
-    if (global.reloadHandler) console.log(await global.reloadHandler())
-})
+const handlerFile = global.__filename(import.meta.url, true)
+
+// handler.js is imported with a cache-busting query on reconnect. Share one watcher
+// across those module instances so each reconnect does not add another StatWatcher listener.
+if (!global.__alvarethHandlerFileWatcher) {
+    global.__alvarethHandlerFileWatcher = true
+    watchFile(handlerFile, async (current, previous) => {
+        if (current.mtimeMs === previous.mtimeMs && current.size === previous.size) return
+        console.log(chalk.redBright("Update 'handler.js'"))
+        if (global.reloadHandler) {
+            try {
+                console.log(await global.reloadHandler())
+            } catch (error) {
+                console.error(chalk.red('Gagal memuat ulang handler:'), error)
+            }
+        }
+    })
+}
