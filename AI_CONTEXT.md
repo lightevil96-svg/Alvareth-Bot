@@ -203,3 +203,12 @@ Before modifying updater/deploy logic:
 - Updated README deployment instructions: there is no active VPS deploy workflow in the repository.
 - After the 2026-10-23 reference scan, unused legacy artwork and thumbnail files were removed only after code references had been redirected to `media/alvareth-preview.jpg` or the current Alvareth character assets.
 - The branded chat assistant now lives in `plugins/ai/alvareth.js` with commands `.alvarethai` and `.alva`; the automatic AI persona in `plugins/anu/_autogpt.js` also uses Alvareth identity. Other named anime-persona plugins and unrelated trivia data remain as intentional features.
+
+
+## 16. Legacy SC Ryo branding sweep (2026-10-23)
+
+- An automated GitHub Actions scan checked tracked paths and text sources for legacy signatures such as `SC Ryo`, `Ryo Yamada`, `ryoyamada`, the old Spoo.me alias, and Ryo-named image files.
+- Result: no tracked file paths contain `Ryo` or `Yamada`; no legacy SC Ryo branding signatures remain in tracked source/documentation text.
+- The scan's only non-self match for `Konbanwa` is `plugins/anu/_allfake.js`, where it is a generic Japanese evening greeting in fake-chat output; it is not the old bot identity and was intentionally retained.
+- The temporary scan workflow `.github/workflows/branding-audit-temp.yml` was removed after the scan. It is not part of the project's permanent CI.
+- Preserve intentional anime-persona features and upstream contributor attribution. This audit replaces branding references; it does not rename unrelated character personas or erase credits.
