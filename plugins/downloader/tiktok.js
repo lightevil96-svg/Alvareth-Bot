@@ -48,9 +48,17 @@ async function sendMessageWithReconnect(fallbackConn, ...args) {
   } catch (error) {
     if (!/connection closed|connection is closed/i.test(String(error?.message || error))) throw error
 
-    console.warn('[TikTok] Socket tertutup saat mengirim; menunggu koneksi terbaru untuk mencoba lagi.')
-    active = await waitForActiveConnection(active)
-    return active.sendMessage(...args)
+    console.warn('[TikTok] Socket tertutup saat mengirim; menunggu socket pengganti...')
+    const deadline = Date.now() + 90000
+    while (Date.now() < deadline) {
+      const next = globalThis.conn
+      if (next && next !== active && typeof next.sendMessage === 'function' && isSocketReady(next)) {
+        console.log('[TikTok] Socket pengganti aktif; mengirim hasil yang sudah diproses.')
+        return next.sendMessage(...args)
+      }
+      await new Promise(resolve => setTimeout(resolve, 1000))
+    }
+    throw new Error('Socket WhatsApp baru tidak tersedia setelah 90 detik. Video sudah diproses; coba ulang .tt setelah bot tersambung.')
   }
 }
 
