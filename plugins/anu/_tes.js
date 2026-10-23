@@ -1,15 +1,15 @@
 let handler = async (m) => {
-  const ryo = `*\`Ryo Yamada\`*
+  const statusMessage = `*\`Alvareth Bot\`*
 
 ✿ *\`Status\`* : Online.
 ✿ *\`Info\`* : Ketik *.menu* untuk melihat semua fitur.
 
-Jangan ganggu aku lagi latihan bass...`
+Ketik *.menu* untuk melihat fitur yang tersedia.`
 
-  m.reply(ryo)
+  m.reply(statusMessage)
 }
 
-handler.customPrefix = /^(tes|bot|ryo|yamadabot|test)$/i
+handler.customPrefix = /^(tes|bot|alvareth|alvarethbot|test)$/i
 handler.command = new RegExp
 
 export default handler

@@ -18,7 +18,7 @@ await conn.sendMessage(m.chat, {
 ❏ RAM : ${(os.totalmem() / 1024 / 1024).toFixed(0)} MB
 
 ✨ Alvareth Bot`,
-thumbnail: fs.readFileSync('./media/thumbnail.jpg')
+thumbnail: fs.readFileSync('./media/alvareth-preview.jpg')
 }, {
 quoted: m
 })

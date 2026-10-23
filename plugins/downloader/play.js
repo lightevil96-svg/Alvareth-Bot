@@ -6,7 +6,7 @@ const BOT_THUMB = 'https://raw.githubusercontent.com/lightevil96-svg/Alvareth-Bo
 let handler = async (m, { conn, text, usedPrefix, command }) => {
   if (!text) {
     // Jangan taruh URL Spoo.me di teks pesan: WhatsApp akan mengambil OG metadata
-    // dari shortlink lama (Ryo Yamada). Gunakan externalAdReply yang eksplisit.
+    // dari identitas tautan lama. Gunakan externalAdReply yang eksplisit.
     const replyText = `Gunakan perintah: ${usedPrefix + command} judul lagu`
     const message = {
       text: replyText,

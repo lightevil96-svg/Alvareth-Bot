@@ -6,7 +6,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
   if (!text) {
     return conn.reply(
       m.chat,
-      `*Example :* ${usedPrefix + command} Siapa Ryo Yamada`,
+      `*Example :* ${usedPrefix + command} Bagaimana cara belajar coding?`,
       m
     )
   }

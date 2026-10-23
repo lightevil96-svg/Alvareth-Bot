@@ -6,7 +6,7 @@ let handler = async (m, { conn, text }) => {
   if (!text) {
     return conn.reply(
       m.chat,
-      '*Example :* .gptprompt Seolah kamu Ryo Yamada | Halo',
+      '*Example :* .gptprompt Seolah kamu asisten virtual yang santai | Halo',
       m
     )
   }
@@ -15,7 +15,7 @@ let handler = async (m, { conn, text }) => {
   if (!prompt || !isi) {
     return conn.reply(
       m.chat,
-      '*Example :* .gptprompt Seolah kamu Ryo Yamada | Halo',
+      '*Example :* .gptprompt Seolah kamu asisten virtual yang santai | Halo',
       m
     )
   }

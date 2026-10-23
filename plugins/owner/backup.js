@@ -5,7 +5,7 @@ import path from 'path'
 const handler = async (m, { conn }) => {
   try {
     const tmpDir = './tmp'
-    const tmpFile = path.join(tmpDir, 'ryo.tmp')
+    const tmpFile = path.join(tmpDir, 'alvareth.tmp')
 
     if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true })
     if (!fs.existsSync(tmpFile)) fs.writeFileSync(tmpFile, '')

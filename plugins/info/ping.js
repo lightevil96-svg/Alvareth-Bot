@@ -1,9 +1,7 @@
 /*
-creator : hilman 
-ryo Yamada md
-follow my channel https://whatsapp.com/channel/0029VbAYjQgKrWQulDTYcg2K
+Original creator: Hilman.
+Adapted and maintained for Alvareth Bot.
 */
-
 import os from 'os'
 import moment from 'moment-timezone'
 import { performance } from 'perf_hooks'

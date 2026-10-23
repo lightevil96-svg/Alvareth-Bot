@@ -6,7 +6,7 @@ let handler = async (m, { conn, text }) => {
 
   if (args.length < 4) {
     throw `Contoh:
-.fakegroup Ryo Yamada|500|Mabar bot|06/03/26 15:31`
+.fakegroup Nama User|500|Mabar bot|06/03/26 15:31`
   }
 
   const [name, members, desc, date] = args

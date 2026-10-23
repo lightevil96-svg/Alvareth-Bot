@@ -1,10 +1,8 @@
 /*
-creator : hilman 
-ryo Yamada md
-follow my channel https://whatsapp.com/channel/0029VbAYjQgKrWQulDTYcg2K
+Original creator: Hilman.
+Adapted and maintained for Alvareth Bot.
 note : klo masi kurang sesuain lagi aja ya 
 */
-
 import axios from 'axios'
 import FormData from 'form-data'
 

@@ -19,7 +19,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
     return m.reply(
       `Contoh:\n` +
       `${usedPrefix + command} https://vt.tiktok.com/xxxx\n` +
-      `${usedPrefix + command} ryo yamada edit`
+      `${usedPrefix + command} anime edit`
     )
   }
 

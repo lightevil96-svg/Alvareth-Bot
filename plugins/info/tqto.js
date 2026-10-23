@@ -6,7 +6,7 @@ import { prepareWAMessageMedia } from 'baileys'
 let handler = async (m, { conn }) => {
     const urlB = global.repository || 'https://github.com/'
 
-    const thumb = fs.readFileSync('./media/thumbnail.jpg')
+    const thumb = fs.readFileSync('./media/alvareth-preview.jpg')
 
     const { imageMessage: image } = await prepareWAMessageMedia({
         image: thumb
@@ -51,7 +51,7 @@ let handler = async (m, { conn }) => {
 ❏ Tester
 
 ❏ Light V (Owner Alvareth Bot)
-❏ Hilman (Pembuat SC sumber Ryo Yamada MD)
+❏ Hilman (Kontributor source upstream)
 
 ❏ Semua Supporter
 ❏ Semua User Alvareth Bot

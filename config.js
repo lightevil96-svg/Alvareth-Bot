@@ -43,7 +43,7 @@ global.autorecording = false
 global.repository = 'https://github.com/lightevil96-svg/Alvareth-Bot'
 
 // ===== LINK PREVIEW DEFAULT =====
-// Gunakan satu identitas untuk preview balasan bot, bukan metadata Ryo dari SC asal.
+// Identitas preview bersama untuk balasan Alvareth Bot.
 global.botLink = 'https://spoo.me/Alvareth-Bot'
 global.adReply = {
     contextInfo: {

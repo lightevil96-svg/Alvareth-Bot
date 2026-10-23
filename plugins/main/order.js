@@ -42,7 +42,7 @@ Contoh:
 .sewa G30
 
 ✨ Terima kasih telah menggunakan Alvareth Bot`,
-      thumbnail: fs.readFileSync('./media/thumbnail.jpg')
+      thumbnail: fs.readFileSync('./media/alvareth-preview.jpg')
     }, {
       quoted: m
     })
@@ -75,7 +75,7 @@ Contoh:
 ❏ Mohon tunggu konfirmasi ya.
 
 ✨ Terima kasih telah melakukan pemesanan.`,
-    thumbnail: fs.readFileSync('./media/thumbnail.jpg')
+    thumbnail: fs.readFileSync('./media/alvareth-preview.jpg')
   }, {
     quoted: m
   })

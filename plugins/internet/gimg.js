@@ -4,7 +4,7 @@ let handler = async (m, { conn, text }) => {
   await m.react('✨')
 
   if (!text) {
-    return conn.reply(m.chat, '*Example :* .gimg Ryo Yamada', m)
+    return conn.reply(m.chat, '*Example :* .gimg pemandangan gunung', m)
   }
 
   let url = `${global.APIs.faa}/faa/google-image?query=${encodeURIComponent(text)}`

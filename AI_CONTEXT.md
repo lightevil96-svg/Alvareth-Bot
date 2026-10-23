@@ -45,7 +45,7 @@
 - `plugins/`: extensive feature/plugin set. Do not replace the directory with a small sample.
 - `lib/`: helpers, socket wrapper, store, print helpers, auto-update module, and other shared logic.
 - `json/`: static JSON data used by game and other plugins.
-- `media/`: image/audio assets. The tracked set includes `alvareth-character.png`, `alvareth-character.jpg`, `alvareth-preview.jpg`, legacy `ryo.png` / `ryo1.jpg` / `ryo2.jpg` / `ryo3.jpg`, and audio files. Keep legacy assets until a complete reference audit confirms they are unused.
+- `media/`: image/audio assets. Gunakan aset beridentitas Alvareth Bot; file aset yang tidak dipakai dihapus setelah pemeriksaan referensi.
 - `database.json`: lowdb runtime data; ignored by Git.
 - `sessions/`: WhatsApp multi-file auth data; ignored by Git.
 - `.env`: local secrets/runtime configuration; ignored by Git. Never read out, commit, or overwrite actual secrets.
@@ -198,7 +198,7 @@ Before modifying updater/deploy logic:
 ## 10. Repository cleanup (2026-10-23)
 
 - Removed root `speed.py`, a standalone Speedtest CLI script not wired to the package scripts or the core `.ping` plugin.
-- Removed root `ytta.txt`, an outdated Ryo-branded setup guide that described pairing-code login, inconsistent with the current QR login.
+- Removed root `ytta.txt`, an outdated setup guide describing a login method that is not used by the current QR-login flow.
 - Added `assets/pingcanvas/` to `.gitignore`; the `.ping` plugin downloads font files there at runtime.
 - Updated README deployment instructions: there is no active VPS deploy workflow in the repository.
 - Legacy media files were deliberately retained because a repository-wide reference check has not yet established that every old asset is unused. Do not delete them based on filename alone.

@@ -49,14 +49,14 @@ let handler = async (m, { text, usedPrefix, command, conn }) => {
 
 ✿ *\`Status\`* : Data berhasil disimpan`
 
-  const thumbnail = fs.readFileSync('./media/ryo1.jpg')
+  const thumbnail = fs.readFileSync('./media/alvareth-preview.jpg')
 
   await conn.sendMessage(
     m.chat,
     {
       image: thumbnail,
       caption,
-      footer: 'ʀʏᴏ ʏᴀᴍᴀᴅᴀ - ᴍᴅ',
+      footer: 'Alvareth Bot',
       optionText: 'Pilih Menu',
       optionTitle: 'Daftar',
       nativeFlow: [

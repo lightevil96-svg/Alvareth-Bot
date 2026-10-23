@@ -1,10 +1,8 @@
 import fs from 'fs'
 import moment from 'moment-timezone'
 
-const fallbackThumb = 'https://eiiuzfmbewjlwfjz.public.blob.vercel-storage.com/YnU5WMiCgO_file.jpeg'
-
-const LINK_URL = 'https://spoo.me/ryoyamada-emdeh'
-const LINK_TITLE = '✿ ʀyᴏ yᴀᴍᴀᴅᴀ'
+const LINK_URL = global.botLink || 'https://spoo.me/Alvareth-Bot'
+const LINK_TITLE = 'Alvareth Bot'
 
 let handler = m => m
 
@@ -15,9 +13,9 @@ handler.all = async function (m) {
         thumb = await (await fetch(pp)).buffer()
     } catch {
         try {
-            thumb = fs.readFileSync('./thumbnail.jpg')
+            thumb = fs.readFileSync('./media/alvareth-preview.jpg')
         } catch {
-            thumb = await (await fetch(fallbackThumb)).buffer()
+            thumb = fs.readFileSync('./media/alvareth-character.jpg')
         }
     }
 
@@ -38,7 +36,7 @@ handler.all = async function (m) {
             participant: '0@s.whatsapp.net',
             remoteJid: 'status@broadcast',
             fromMe: false,
-            id: 'RyoYamada'
+            id: 'AlvarethBot'
         },
         message: {
             locationMessage: {

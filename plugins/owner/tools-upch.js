@@ -58,7 +58,7 @@ const handler = async (m, { conn, text, command }) => {
           forwardedNewsletterMessageInfo: {
             newsletterJid: chidList[0], 
             serverMessageId: null,
-            newsletterName: "Ryo Yamada",
+            newsletterName: global.newsletterName || "Alvareth Bot",
           },
           externalAdReplyOffOffOff: {
             title: "Cihuyy",
