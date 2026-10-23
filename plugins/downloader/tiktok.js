@@ -363,7 +363,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
             caption: i === 0 ? caption : ''
           }))
         },
-        { quoted: m }
+        { quoted: m, noAlvarethPreview: true }
       )
 
       if (res.audio) {
@@ -373,7 +373,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
             audio: { url: res.audio },
             mimetype: 'audio/mpeg'
           },
-          { quoted: m }
+          { quoted: m, noAlvarethPreview: true }
         )
       }
 
@@ -395,7 +395,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
             fileName,
             caption
           },
-          { quoted: m }
+          { quoted: m, noAlvarethPreview: true }
         )
       } else {
         await sendMessageWithReconnect(conn, 
@@ -406,7 +406,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
             fileName,
             caption
           },
-          { quoted: m }
+          { quoted: m, noAlvarethPreview: true }
         )
       }
     } else if (!res.audio) {
@@ -420,7 +420,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
           audio: { url: res.audio },
           mimetype: 'audio/mpeg'
         },
-        { quoted: m }
+        { quoted: m, noAlvarethPreview: true }
       )
     }
 
