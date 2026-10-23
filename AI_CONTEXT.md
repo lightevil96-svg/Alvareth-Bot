@@ -201,4 +201,5 @@ Before modifying updater/deploy logic:
 - Removed root `ytta.txt`, an outdated setup guide describing a login method that is not used by the current QR-login flow.
 - Added `assets/pingcanvas/` to `.gitignore`; the `.ping` plugin downloads font files there at runtime.
 - Updated README deployment instructions: there is no active VPS deploy workflow in the repository.
-- Legacy media files were deliberately retained because a repository-wide reference check has not yet established that every old asset is unused. Do not delete them based on filename alone.
+- After the 2026-10-23 reference scan, unused legacy artwork and thumbnail files were removed only after code references had been redirected to `media/alvareth-preview.jpg` or the current Alvareth character assets.
+- The branded chat assistant now lives in `plugins/ai/alvareth.js` with commands `.alvarethai` and `.alva`; the automatic AI persona in `plugins/anu/_autogpt.js` also uses Alvareth identity. Other named anime-persona plugins and unrelated trivia data remain as intentional features.
