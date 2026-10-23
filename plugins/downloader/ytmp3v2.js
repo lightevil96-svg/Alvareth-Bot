@@ -7,7 +7,7 @@ let handler = async (m, context = {}) => {
 
   if (!text) {
     const prefix = context.usedPrefix || '.'
-    return m.reply('Contoh:\\n' + prefix + 'ytmp3v2 https://youtu.be/dQw4w9WgXcQ\\n' + prefix + 'ytmp3v2 judul lagu')
+    return m.reply('Contoh:\n' + prefix + 'ytmp3v2 https://youtu.be/dQw4w9WgXcQ\n' + prefix + 'ytmp3v2 judul lagu')
   }
 
   return ytmp3Handler(m, { ...context, text })

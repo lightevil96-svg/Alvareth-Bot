@@ -7,7 +7,7 @@ let handler = async (m, context = {}) => {
 
   if (!text) {
     const prefix = context.usedPrefix || '.'
-    return m.reply('Contoh:\\n' + prefix + 'ytmp4v2 https://youtu.be/dQw4w9WgXcQ\\n' + prefix + 'ytmp4v2 https://youtu.be/dQw4w9WgXcQ|720')
+    return m.reply('Contoh:\n' + prefix + 'ytmp4v2 https://youtu.be/dQw4w9WgXcQ\n' + prefix + 'ytmp4v2 https://youtu.be/dQw4w9WgXcQ|720')
   }
 
   const hasResolution = /\|\s*\d+\s*$/.test(text)
