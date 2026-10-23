@@ -53,7 +53,7 @@
 - `scripts/start-with-update.js`: update-before-start launcher.
 - `lib/auto-update.js`: legacy/separate PM2 periodic updater; not imported by the current launcher.
 - `.github/workflows/javascript-syntax.yml`: syntax validation for JS files on push/PR.
-- `.github/workflows/import-source.yml`: special ZIP import workflow triggered only when a push commit message is exactly `Start import from uploaded ZIP`; it extracts `Alvareth-Bot-updated.zip` and commits sanitized source. This is not a general SC upstream sync workflow.
+- `.github/workflows/import-source.yml`: special ZIP import workflow triggered only when a push commit message is exactly `Start import from uploaded ZIP`; it extracts `Alvareth-Bot-updated.zip` and commits sanitized source. This is not a general upstream source synchronization workflow.
 - There is no active `.github/workflows/deploy.yml` in the current tree. README was corrected on 2026-10-23 to state that pushes do not deploy to a VPS automatically; the current workflows are the JavaScript syntax check and the special ZIP import workflow.
 
 ## 4. Environment and common commands
@@ -195,7 +195,7 @@ Before modifying updater/deploy logic:
 - Change commit: `a3710f2`. GitHub syntax workflow was still running at the time this note was written; inspect Actions result and test `.pin` in live WhatsApp before calling runtime behavior verified.
 
 
-## 10. Repository cleanup (2026-10-23)
+## 10. Repository cleanup and branding audit (2026-10-23)
 
 - Removed root `speed.py`, a standalone Speedtest CLI script not wired to the package scripts or the core `.ping` plugin.
 - Removed an outdated root setup guide whose login instructions did not match the current QR-login flow.
