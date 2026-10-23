@@ -198,7 +198,7 @@ Before modifying updater/deploy logic:
 ## 10. Repository cleanup (2026-10-23)
 
 - Removed root `speed.py`, a standalone Speedtest CLI script not wired to the package scripts or the core `.ping` plugin.
-- Removed root `ytta.txt`, an outdated setup guide describing a login method that is not used by the current QR-login flow.
+- Removed an outdated root setup guide whose login instructions did not match the current QR-login flow.
 - Added `assets/pingcanvas/` to `.gitignore`; the `.ping` plugin downloads font files there at runtime.
 - Updated README deployment instructions: there is no active VPS deploy workflow in the repository.
 - After the 2026-10-23 reference scan, unused legacy artwork and thumbnail files were removed only after code references had been redirected to `media/alvareth-preview.jpg` or the current Alvareth character assets.
