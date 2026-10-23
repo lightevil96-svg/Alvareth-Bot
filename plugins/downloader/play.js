@@ -55,7 +55,45 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
 
 Silakan pilih format download di bawah.`
 
-    return await m.reply(caption + `\n\nLink video: ${video.url}\n\nDownload audio: .ytmp3 ${video.url}\nDownload video: .ytmp4 ${video.url}`)
+    return await conn.sendMessage(m.chat, {
+      text: caption,
+      footer: 'Alvareth Bot',
+      optionText: 'Pilih Format',
+      optionTitle: 'Download',
+      nativeFlow: [
+        {
+          text: 'Pilih Format Download',
+          sections: [
+            {
+              title: 'Downloader',
+              rows: [
+                {
+                  title: 'Audio MP3',
+                  description: 'Download sebagai MP3',
+                  id: `${usedPrefix}ytmp3 ${video.url}`
+                },
+                {
+                  title: 'Audio MP3 V2',
+                  description: 'Download sebagai MP3 V2',
+                  id: `${usedPrefix}ytmp3v2 ${video.url}`
+                },
+                {
+                  title: 'Video MP4',
+                  description: 'Download sebagai MP4',
+                  id: `${usedPrefix}ytmp4 ${video.url}`
+                },
+                {
+                  title: 'Video MP4 V2',
+                  description: 'Download sebagai MP4 V2',
+                  id: `${usedPrefix}ytmp4v2 ${video.url}`
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      interactiveAsTemplate: false
+    }, { quoted: m })
   } catch (error) {
     console.error('[.play] Gagal mencari/mengirim hasil:', error)
     return await m.reply('Pencarian lagu gagal. Coba lagi beberapa saat.')
