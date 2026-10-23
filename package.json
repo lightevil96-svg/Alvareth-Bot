@@ -1,7 +1,7 @@
 {
   "name": "alvareth-bot",
   "version": "1.0.0",
-  "description": "Alvareth Bot - WhatsApp Multi-Device Bot with GitHub auto-deploy",
+  "description": "Alvareth Bot - WhatsApp Multi-Device Bot with plugin system and startup updater",
   "main": "index.js",
   "type": "module",
   "directories": {
@@ -20,7 +20,7 @@
     "multi-device",
     "baileys",
     "plugin-system",
-    "github-auto-deploy"
+    "startup-auto-update"
   ],
   "homepage": "https://github.com/lightevil96-svg/Alvareth-Bot",
   "author": {
