@@ -1,0 +1,26 @@
+name: Temporary branding audit
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan tracked filenames and text for legacy Ryo branding
+        shell: bash
+        run: |
+          set -uo pipefail
+          echo '=== TRACKED FILENAMES ==='
+          git ls-files | grep -niE 'ryo|yamada' || true
+          echo
+          echo '=== STRONG LEGACY BRANDING MATCHES ==='
+          git grep -nIiE 'SC[[:space:]_-]*Ryo|Ryo[[:space:]_-]*Yamada|ryoyamada|Konbanwa|Ryo Yamada MD|Ryo Yamada - MD|source.{0,30}Ryo|Ryo.{0,30}(creator|source|bot)' -- '*.js' '*.mjs' '*.cjs' '*.json' '*.md' '*.txt' '*.py' '*.html' '*.yml' '*.yaml' '*.sh' 'Dockerfile' '.env.example' '.gitignore' || true
+          echo
+          echo '=== ALL WHOLE-WORD RYO / YAMADA TEXT (MANUAL CLASSIFICATION) ==='
+          git grep -nIiE '\\bRyo\\b|\\bYamada\\b|ryoyamada' -- '*.js' '*.mjs' '*.cjs' '*.json' '*.md' '*.txt' '*.py' '*.html' '*.yml' '*.yaml' '*.sh' 'Dockerfile' '.env.example' '.gitignore' || true
+          echo
+          echo '=== LEGACY SHORTLINK / SOURCE IDENTIFIER MATCHES ==='
+          git grep -nIiE 'spoo\\.me/ryo|ryo[0-9]*\\.(png|jpe?g)|ryo-yamada|ryo_yamada|ryo-yamada-md|Ryo Yamada' -- . || true
