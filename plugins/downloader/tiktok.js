@@ -40,18 +40,76 @@ function extractTikTokUrl(input) {
   return ''
 }
 
-function runFfmpeg(args) {
-  return new Promise((resolve, reject) => {
-    const child = spawn('ffmpeg', args, { stdio: ['ignore', 'ignore', 'pipe'] })
-    let stderr = ''
+function formatDuration(seconds) {
+  if (!Number.isFinite(seconds) || seconds < 0) return '--:--'
+  const total = Math.ceil(seconds)
+  return String(Math.floor(total / 60)).padStart(2, '0') + ':' + String(total % 60).padStart(2, '0')
+}
 
+function terminalProgress(label, percent, elapsedSeconds, etaSeconds, detail = '') {
+  const pct = Number.isFinite(percent) ? Math.max(0, Math.min(100, percent)).toFixed(1) + '%' : '--'
+  const line = '[TikTok] ' + label + ' | ' + pct +
+    ' | berjalan ' + formatDuration(elapsedSeconds) +
+    ' | sisa ' + formatDuration(etaSeconds) +
+    (detail ? ' | ' + detail : '')
+  // A carriage return updates the same terminal line; periodic updates reflect
+  // bytes/FFmpeg timestamps from the actual process, not a decorative animation.
+  process.stdout.write('\\r' + line + ' '.repeat(Math.max(0, 12)))
+}
+
+function runFfmpeg(args, { durationSeconds = 0, label = 'Konversi MP4' } = {}) {
+  return new Promise((resolve, reject) => {
+    const startedAt = Date.now()
+    const child = spawn('ffmpeg', [...args, '-progress', 'pipe:1', '-nostats'], { stdio: ['ignore', 'pipe', 'pipe'] })
+    let stderr = ''
+    let stdoutBuffer = ''
+    let lastPercent = -1
+
+    child.stdout.on('data', chunk => {
+      stdoutBuffer += chunk.toString()
+      const lines = stdoutBuffer.split(/\\r?\\n/)
+      stdoutBuffer = lines.pop() || ''
+      for (const line of lines) {
+        const match = line.match(/^out_time_(?:ms|us)=(\\d+)$/)
+        if (!match || !(durationSeconds > 0)) continue
+        const currentSeconds = Number(match[1]) / 1000000
+        const percent = Math.min(99.9, currentSeconds / durationSeconds * 100)
+        if (percent - lastPercent < 0.5 && percent < 99) continue
+        lastPercent = percent
+        const elapsed = (Date.now() - startedAt) / 1000
+        const rate = currentSeconds / Math.max(elapsed, 0.1)
+        const eta = rate > 0 ? Math.max(0, (durationSeconds - currentSeconds) / rate) : NaN
+        terminalProgress(label, percent, elapsed, eta, 'FFmpeg')
+      }
+    })
     child.stderr.on('data', chunk => {
       stderr = (stderr + chunk.toString()).slice(-4000)
     })
-    child.once('error', reject)
+    child.once('error', error => {
+      process.stdout.write('\\n')
+      reject(error)
+    })
     child.once('close', code => {
+      const elapsed = (Date.now() - startedAt) / 1000
+      process.stdout.write('\\r[TikTok] ' + label + (code === 0 ? ' | 100.0% | selesai dalam ' : ' | GAGAL setelah ') + formatDuration(elapsed) + '                    \\n')
       if (code === 0) return resolve()
       reject(new Error('FFmpeg gagal (kode ' + code + '): ' + (stderr.trim() || 'output MP4 tidak dapat dibuat')))
+    })
+  })
+}
+
+async function getMediaDuration(filePath) {
+  return new Promise(resolve => {
+    const child = spawn('ffprobe', [
+      '-v', 'error', '-show_entries', 'format=duration',
+      '-of', 'default=noprint_wrappers=1:nokey=1', filePath
+    ], { stdio: ['ignore', 'pipe', 'ignore'] })
+    let output = ''
+    child.stdout.on('data', chunk => { output += chunk.toString() })
+    child.once('error', () => resolve(0))
+    child.once('close', code => {
+      const duration = Number(output.trim())
+      resolve(code === 0 && Number.isFinite(duration) && duration > 0 ? duration : 0)
     })
   })
 }
@@ -77,17 +135,34 @@ async function downloadVideoFile(url, destination) {
   }
 
   let bytes = 0
+  const startedAt = Date.now()
+  const contentLength = Number(response.headers['content-length']) || 0
+  let lastUpdate = 0
   const limiter = new Transform({
     transform(chunk, encoding, callback) {
       bytes += chunk.length
       if (bytes > MAX_VIDEO_BYTES) {
         return callback(new Error('Video melebihi batas aman 150 MB.'))
       }
+      const now = Date.now()
+      if (now - lastUpdate >= 500) {
+        lastUpdate = now
+        const elapsed = (now - startedAt) / 1000
+        const speed = bytes / Math.max(elapsed, 0.1)
+        const percent = contentLength > 0 ? bytes / contentLength * 100 : NaN
+        const eta = contentLength > bytes && speed > 0 ? (contentLength - bytes) / speed : NaN
+        const detail = (bytes / 1024 / 1024).toFixed(2) + ' MB' +
+          (contentLength > 0 ? ' / ' + (contentLength / 1024 / 1024).toFixed(2) + ' MB' : '') +
+          ' @ ' + (speed / 1024 / 1024).toFixed(2) + ' MB/s'
+        terminalProgress('Unduh video', percent, elapsed, eta, detail)
+      }
       callback(null, chunk)
     }
   })
 
   await pipeline(response.data, limiter, fs.createWriteStream(destination))
+  const downloadElapsed = (Date.now() - startedAt) / 1000
+  process.stdout.write('\\r[TikTok] Unduh video | 100.0% | selesai dalam ' + formatDuration(downloadElapsed) + '                    \\n')
   const info = await fsp.stat(destination)
   if (info.size < 4096) throw new Error('File video terlalu kecil atau tidak lengkap.')
   if (info.size > MAX_VIDEO_BYTES) throw new Error('File video melebihi batas aman 150 MB.')
@@ -97,6 +172,7 @@ async function downloadVideoFile(url, destination) {
 // Re-encode to broadly compatible H.264/AAC MP4 and move the MP4 index to the
 // front. This avoids sending an unverified remote URL or a badly packaged file.
 async function normalizeVideoToMp4(input, output) {
+  const durationSeconds = await getMediaDuration(input)
   await runFfmpeg([
     '-hide_banner', '-loglevel', 'error', '-y',
     '-i', input,
@@ -112,7 +188,7 @@ async function normalizeVideoToMp4(input, output) {
     '-movflags', '+faststart',
     '-sn', '-dn',
     output
-  ])
+  ], { durationSeconds, label: 'Konversi MP4' })
 
   const info = await fsp.stat(output)
   if (info.size < 4096) throw new Error('Hasil konversi MP4 tidak lengkap.')
@@ -146,6 +222,7 @@ async function prepareBestTikTokVideo(res) {
       const outputPath = path.join(tempDir, 'alvareth-tiktok-' + i + '.mp4')
 
       try {
+        console.log('\\n[TikTok] Memproses varian ' + (candidate.label || ('#' + (i + 1))) + '...')
         await downloadVideoFile(candidate.url, sourcePath)
         const normalized = await normalizeVideoToMp4(sourcePath, outputPath)
         console.log('[TikTok] Berhasil menyiapkan video dari varian:', candidate.label || ('#' + (i + 1)))
