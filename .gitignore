@@ -17,3 +17,6 @@ database.json
 data.json
 session/
 baileys_auth_info/
+
+# Cache font yang diunduh oleh plugin .ping; dibuat ulang otomatis.
+assets/pingcanvas/
