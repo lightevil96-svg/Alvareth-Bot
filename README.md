@@ -16,7 +16,7 @@ Bot WhatsApp Multi-Device berbasis Node.js, Baileys, dan sistem plugin. Nama bot
 ├── json/                       # Data statis untuk sejumlah fitur/game
 ├── src/                        # Font, latar, dan aset fitur
 ├── media/                      # Gambar dan audio
-├── scripts/start-with-update.js# Update aman sebelum proses bot dijalankan
+├── scripts/start-with-update.js # Update aman sebelum proses bot dijalankan
 ├── AI_CONTEXT.md               # Catatan teknis untuk pemeliharaan
 └── package.json                # Dependency dan perintah npm
 ```
