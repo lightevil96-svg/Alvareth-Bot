@@ -404,25 +404,36 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
             video: rendered.buffer,
             mimetype: 'video/mp4',
             fileName: safeFilename(title),
-            caption: caption + '\\n\\n🎵 Foto tunggal dirender menjadi video dengan musik asli, maksimal 60 detik.'
+            caption: caption + '\n\n🎵 Foto tunggal dirender menjadi video dengan musik asli, maksimal 60 detik.'
           }, { quoted: m, noAlvarethPreview: true })
-          await sendMessageWithReconnect(conn, m.chat, {
+          const buttonResult = await sendMessageWithReconnect(conn, m.chat, {
             text: 'Mau foto aslinya saja?',
             footer: 'Alvareth Bot',
             templateButtons: [{
-              index: 1,
-              quickReplyButton: { displayText: 'Ambil Foto', id: '.ttfoto ' + url }
+              text: '📷 Ambil Foto',
+              id: '.ttfoto ' + url
             }]
           }, { quoted: m, noAlvarethPreview: true })
+          if (!buttonResult?.key?.id) {
+            throw new Error('Pesan tombol Ambil Foto tidak mengembalikan ID pesan.')
+          }
         } finally {
           await fsp.rm(tempDir, { recursive: true, force: true }).catch(() => {})
         }
       } else {
-        const imageMessages = res.images.map((img, i) => ({
-          image: { url: img },
-          caption: i === 0 ? caption : ''
-        }))
-        await sendMessageWithReconnect(conn, m.chat, { album: imageMessages }, { quoted: m, noAlvarethPreview: true })
+        if (res.images.length === 1) {
+          // .ttfoto returns the original image directly; an album wrapper is unnecessary for one photo.
+          await sendMessageWithReconnect(conn, m.chat, {
+            image: { url: res.images[0] },
+            caption
+          }, { quoted: m, noAlvarethPreview: true })
+        } else {
+          const imageMessages = res.images.map((img, i) => ({
+            image: { url: img },
+            caption: i === 0 ? caption : ''
+          }))
+          await sendMessageWithReconnect(conn, m.chat, { album: imageMessages }, { quoted: m, noAlvarethPreview: true })
+        }
       }
       await reactSafe(conn, m, '✅')
       return
