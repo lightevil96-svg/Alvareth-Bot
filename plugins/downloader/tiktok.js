@@ -18,6 +18,51 @@ const SINGLE_PHOTO_CACHE_MAX_ENTRIES = 10
 const SINGLE_PHOTO_CACHE_MAX_BYTES = 10 * 1024 * 1024
 const singlePhotoCache = new Map()
 
+// A WhatsApp interactive-button reply can be delivered more than once by some
+// clients/session states. Make .ttfoto idempotent per chat, sender, and source URL.
+const PHOTO_ACTION_PROCESSING_TTL_MS = 3 * 60 * 1000
+const PHOTO_ACTION_SENT_TTL_MS = 60 * 1000
+const PHOTO_ACTION_MAX_ENTRIES = 100
+const photoActionDedup = new Map()
+
+function claimPhotoAction(chat, sender, url) {
+  const now = Date.now()
+  for (const [key, entry] of photoActionDedup) {
+    if (!entry || entry.expiresAt <= now) photoActionDedup.delete(key)
+  }
+
+  const key = [String(chat || ''), String(sender || ''), normalizeTikTokCacheKey(url)].join('|')
+  const existing = photoActionDedup.get(key)
+  if (existing && existing.expiresAt > now) {
+    return { key, acquired: false, state: existing.state }
+  }
+
+  photoActionDedup.set(key, {
+    state: 'processing',
+    expiresAt: now + PHOTO_ACTION_PROCESSING_TTL_MS
+  })
+  while (photoActionDedup.size > PHOTO_ACTION_MAX_ENTRIES) {
+    const oldestKey = photoActionDedup.keys().next().value
+    if (oldestKey === undefined) break
+    photoActionDedup.delete(oldestKey)
+  }
+  return { key, acquired: true }
+}
+
+function markPhotoActionSent(key) {
+  if (!key) return
+  photoActionDedup.set(key, {
+    state: 'sent',
+    expiresAt: Date.now() + PHOTO_ACTION_SENT_TTL_MS
+  })
+}
+
+function releasePhotoAction(key) {
+  if (key && photoActionDedup.get(key)?.state === 'processing') {
+    photoActionDedup.delete(key)
+  }
+}
+
 function normalizeTikTokCacheKey(input) {
   try {
     const parsed = new URL(String(input || '').trim())
@@ -408,6 +453,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
     ? (text || m.quoted?.text || m.quoted?.caption || '')
     : (m.quoted ? (m.quoted.text || m.quoted.caption || text || '') : (text || ''))
   ).trim()
+  let photoActionKey = null
   if (!input) {
     return m.reply(
       'Contoh:\n' +
@@ -433,6 +479,19 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
       url = results[0].url
     }
 
+    if (isPhotoOnlyCommand) {
+      const claim = claimPhotoAction(m.chat, m.sender, url)
+      if (!claim.acquired) {
+        console.info('[TikTok] Mengabaikan pemanggilan .ttfoto duplikat:', {
+          chat: m.chat,
+          sender: m.sender,
+          state: claim.state
+        })
+        return
+      }
+      photoActionKey = claim.key
+    }
+
     // If this came from the action button, send the exact source photo cached
     // during .tt. This fast path avoids TikWM being called a second time.
     if (isPhotoOnlyCommand) {
@@ -446,6 +505,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
           image: cachedPhoto.imageBuffer,
           caption: photoCaption
         }, { quoted: m, noAlvarethPreview: true })
+        markPhotoActionSent(photoActionKey)
         await reactSafe(conn, m, '✅')
         return
       }
@@ -490,6 +550,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
           '👤 *Kreator:* ' + uploader + '\n\n' +
           '✨ _Downloaded by ' + (global.namebot || 'Alvareth Bot') + '_'
       }, { quoted: m, noAlvarethPreview: true })
+      markPhotoActionSent(photoActionKey)
       await reactSafe(conn, m, '✅')
       return
     }
@@ -602,6 +663,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
 
     await reactSafe(conn, m, '✅')
   } catch (e) {
+    releasePhotoAction(photoActionKey)
     await reactSafe(conn, m, '❌')
     console.error('[TikTok Downloader]', e?.stack || e)
     await sendMessageWithReconnect(conn, m.chat, {
