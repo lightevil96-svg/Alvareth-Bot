@@ -406,13 +406,24 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
             fileName: safeFilename(title),
             caption: caption + '\n\n🎵 Foto tunggal dirender menjadi video dengan musik asli, maksimal 60 detik.'
           }, { quoted: m, noAlvarethPreview: true })
+          // Reuse the same nativeFlow button format as plugins/main/menu.js.
+          // This SC's Baileys fork handles menu actions through nativeFlow; a raw
+          // templateButtons payload can be silently ignored by this sendMessage path.
           const buttonResult = await sendMessageWithReconnect(conn, m.chat, {
-            text: 'Mau foto aslinya saja?',
-            footer: 'Alvareth Bot',
-            templateButtons: [{
-              text: '📷 Ambil Foto',
-              id: '.ttfoto ' + url
-            }]
+            text: 'Foto tunggal sudah dijadikan video. Mau foto aslinya?',
+            footer: global.namebot || 'Alvareth Bot',
+            optionText: 'Pilih Aksi',
+            optionTitle: '📷 Foto TikTok',
+            offerText: global.namebot || 'Alvareth Bot',
+            offerCode: global.namebot || 'Alvareth Bot',
+            offerUrl: global.botLink || 'https://spoo.me/Alvareth-Bot',
+            offerExpiration: Date.now() + 86400000,
+            nativeFlow: [{
+              text: '📷 Ambil Foto Asli',
+              id: `${usedPrefix}ttfoto ${url}`,
+              icon: 'image'
+            }],
+            interactiveAsTemplate: false
           }, { quoted: m, noAlvarethPreview: true })
           if (!buttonResult?.key?.id) {
             throw new Error('Pesan tombol Ambil Foto tidak mengembalikan ID pesan.')
