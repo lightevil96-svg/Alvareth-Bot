@@ -77,10 +77,10 @@ let handler = async (m, { conn, args, text, command }) => {
   try {
     parsed = new URL(input)
   } catch {
-    return m.reply('❌ Tautan Instagram tidak valid.')
+    return conn.sendMessage(m.chat, { text: '❌ Tautan Instagram tidak valid.' }, { quoted: m, noAlvarethPreview: true })
   }
-  if (!/(^|\\.)instagram\\.com$|(^|\\.)instagr\\.am$/i.test(parsed.hostname)) {
-    return m.reply('❌ Kirim tautan dari Instagram yang valid.')
+  if (!/^(?:[a-z0-9-]+\.)*instagram\.com$|^(?:[a-z0-9-]+\.)*instagr\.am$/i.test(parsed.hostname)) {
+    return conn.sendMessage(m.chat, { text: '❌ Kirim tautan dari Instagram yang valid.' }, { quoted: m, noAlvarethPreview: true })
   }
 
   await m.react('🕒')
@@ -92,7 +92,8 @@ let handler = async (m, { conn, args, text, command }) => {
     for (let i = 0; i < result.download.length; i++) {
       const media = await fetchInstagramMedia(result.download[i])
       const baseName = `instagram-${Date.now()}-${i + 1}`
-      const caption = `✅ *Instagram Downloader*\\nMedia ${i + 1} dari ${result.download.length}`
+      const caption = `✅ *Instagram Downloader*
+Media ${i + 1} dari ${result.download.length}`
       let message
 
       if (media.mime.startsWith('video/')) {
@@ -131,7 +132,7 @@ let handler = async (m, { conn, args, text, command }) => {
   } catch (error) {
     console.error('[IG Downloader]', error?.stack || error)
     await m.react('❌')
-    return m.reply('❌ Gagal mengunduh/mengirim media Instagram: ' + String(error?.message || error))
+    return conn.sendMessage(m.chat, { text: '❌ Gagal mengunduh/mengirim media Instagram: ' + String(error?.message || error) }, { quoted: m, noAlvarethPreview: true })
   }
 }
 
