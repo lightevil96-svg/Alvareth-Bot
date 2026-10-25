@@ -107,11 +107,30 @@ export async function handler(chatUpdate) {
         if (rawType) Object.defineProperty(m, 'mtype', { configurable: true, enumerable: true, writable: true, value: rawType })
     }
 
-    // Fallback text extraction for self-chat / LID messages when the serializer
-    // does not expose m.text consistently. This keeps commands such as .menu usable
-    // from the bot account itself without changing normal message processing.
-    if (typeof m.text !== 'string' || !m.text.trim()) {
-        const content = rawContentSnapshot || rawMessage?.message || {}
+    // Prefer the selected command ID from interactive button/list replies.
+    // Template buttons may expose their visible label via m.text, which must not
+    // shadow the selectedId needed to route commands such as ".ttfoto <url>".
+    const content = rawContentSnapshot || rawMessage?.message || {}
+    let nativeFlowSelectedId = ''
+    const nativeFlowParams = content.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson
+    if (typeof nativeFlowParams === 'string') {
+        try {
+            const parsed = JSON.parse(nativeFlowParams)
+            nativeFlowSelectedId = parsed.id || parsed.selectedId || parsed.row_id || parsed.button_id || ''
+        } catch {
+            // Not all interactive responses contain JSON command parameters.
+        }
+    }
+    const selectedButtonId =
+        content.templateButtonReplyMessage?.selectedId ||
+        content.buttonsResponseMessage?.selectedButtonId ||
+        content.listResponseMessage?.singleSelectReply?.selectedRowId ||
+        nativeFlowSelectedId
+    if (typeof selectedButtonId === 'string' && selectedButtonId.trim()) {
+        m.text = selectedButtonId.trim()
+    } else if (typeof m.text !== 'string' || !m.text.trim()) {
+        // Fallback text extraction for self-chat / LID messages when the serializer
+        // does not expose m.text consistently. This keeps commands such as .menu usable.
         const rawText = content.conversation ||
             content.extendedTextMessage?.text ||
             content.imageMessage?.caption ||
