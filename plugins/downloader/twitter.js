@@ -67,15 +67,30 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
         caption += `*⏱️ Durasi:* ${duration}\n`;
         caption += `*🎞️ Kualitas:* ${best.quality}\n`;
 
-        await conn.sendMessage(
+        let jpegThumbnail
+        if (thumbnail) {
+            try {
+                const thumbResponse = await fetch(thumbnail)
+                if (thumbResponse.ok) {
+                    jpegThumbnail = Buffer.from(await thumbResponse.arrayBuffer())
+                }
+            } catch (error) {
+                console.warn('[Twitter Downloader] Thumbnail dilewati:', error?.message || error)
+            }
+        }
+
+        const sent = await conn.sendMessage(
             m.chat,
             {
                 video: { url: best.url },
+                mimetype: 'video/mp4',
+                fileName: 'twitter-video.mp4',
                 caption,
-                jpegThumbnail: thumbnail ? await (await fetch(thumbnail)).arrayBuffer() : null
+                ...(jpegThumbnail ? { jpegThumbnail } : {})
             },
-            { quoted: m }
-        );
+            { quoted: m, noAlvarethPreview: true }
+        )
+        if (!sent?.key?.id) throw new Error('WhatsApp tidak mengembalikan ID pesan video Twitter.')
 
     } catch (e) {
         await m.reply(`*Terjadi kesalahan saat memproses video 🍂*\n\n${e.message}`);
