@@ -518,24 +518,23 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
     const uploader = res.author || '-'
     const displayTitle = title.length > 220 ? title.slice(0, 217).trimEnd() + '...' : title
     const displayUploader = String(uploader).length > 80 ? String(uploader).slice(0, 77).trimEnd() + '...' : uploader
-    const mediaFormat = res.type === 'image' ? 'Photo / Slideshow' : res.video ? 'Video MP4' : 'Media'
-    const caption = '╭━━━〔 🎬 *ALVARETH • TIKTOK* 〕━━━╮\n' +
-      '┃\n' +
-      '┃  ✦ *VIDEO BERHASIL DIUNDUH*\n' +
-      '┃  ───────────────────\n' +
-      '┃\n' +
-      '┃  📝 *JUDUL VIDEO*\n' +
-      '┃  ' + displayTitle + '\n' +
-      '┃\n' +
-      '┃  👤 *KREATOR*\n' +
-      '┃  ' + displayUploader + '\n' +
-      '┃\n' +
-      '┃  📥 *STATUS*  •  Siap ditonton\n' +
-      '┃  💠 *FORMAT*  •  ' + mediaFormat + '\n' +
-      '┃\n' +
-      '╰━━━━━━━━━━━━━━━━━━━━\n' +
-      '     ✨ _Downloaded by Alvareth Bot_ ✨'
-
+    const mediaFormat = res.type === 'image' ? 'Foto / Slideshow' : res.video ? 'Video MP4' : 'Media'
+    const caption = [
+      '🎬 *ALVARETH TIKTOK DOWNLOADER*',
+      '',
+      '✅ *Video berhasil diunduh*',
+      '',
+      '📝 *Judul*',
+      displayTitle,
+      '',
+      '👤 *Kreator*',
+      displayUploader,
+      '',
+      '📥 *Status:* Siap ditonton',
+      '💠 *Format:* ' + mediaFormat,
+      '',
+      '✨ _Downloaded by Alvareth Bot_ ✨'
+    ].join('\n')
     // .ttfoto must never fall through into the video sender. If no cached
     // photo exists, fetch just the original photo and stop with a clear error if
     // the provider has no images, rather than re-sending the rendered video.
