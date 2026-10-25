@@ -11,6 +11,58 @@ import { Transform } from 'node:stream'
 const MAX_VIDEO_BYTES = 150 * 1024 * 1024
 const MAX_INLINE_VIDEO_BYTES = 50 * 1024 * 1024
 
+// Cache the original photo from a successful .tt render so the button doesn't
+// have to call TikWM again. Short TikTok URLs can fail on a second scrape.
+const SINGLE_PHOTO_CACHE_TTL_MS = 15 * 60 * 1000
+const SINGLE_PHOTO_CACHE_MAX_ENTRIES = 30
+const singlePhotoCache = new Map()
+
+function normalizeTikTokCacheKey(input) {
+  try {
+    const parsed = new URL(String(input || '').trim())
+    parsed.hash = ''
+    parsed.search = ''
+    parsed.pathname = parsed.pathname.replace(/\\/+$/, '') || '/'
+    return parsed.origin.toLowerCase() + parsed.pathname
+  } catch {
+    return String(input || '').trim().replace(/[?#].*$/, '').replace(/\\/+$/, '')
+  }
+}
+
+function pruneSinglePhotoCache() {
+  const now = Date.now()
+  for (const [key, value] of singlePhotoCache) {
+    if (!value || value.expiresAt <= now) singlePhotoCache.delete(key)
+  }
+  while (singlePhotoCache.size > SINGLE_PHOTO_CACHE_MAX_ENTRIES) {
+    const oldestKey = singlePhotoCache.keys().next().value
+    if (oldestKey === undefined) break
+    singlePhotoCache.delete(oldestKey)
+  }
+}
+
+function getCachedSinglePhoto(url) {
+  pruneSinglePhotoCache()
+  const key = normalizeTikTokCacheKey(url)
+  const cached = singlePhotoCache.get(key)
+  if (!cached || cached.expiresAt <= Date.now()) return null
+  singlePhotoCache.delete(key)
+  singlePhotoCache.set(key, cached)
+  return cached
+}
+
+function cacheSinglePhoto(url, photo) {
+  if (!url || !Buffer.isBuffer(photo?.imageBuffer) || !photo.imageBuffer.length) return
+  pruneSinglePhotoCache()
+  const key = normalizeTikTokCacheKey(url)
+  singlePhotoCache.delete(key)
+  singlePhotoCache.set(key, {
+    ...photo,
+    expiresAt: Date.now() + SINGLE_PHOTO_CACHE_TTL_MS
+  })
+  pruneSinglePhotoCache()
+}
+
 // Some messages in this Baileys fork are protobuf-converted objects without the
 // serializer prototype methods. Send reactions through the socket directly.
 function isSocketReady(conn) {
@@ -291,7 +343,7 @@ async function renderSinglePhotoWithMusic(imageUrl, audioUrl, outputPath) {
     ], { durationSeconds: duration, label: 'Render foto + musik' })
     const info = await fsp.stat(outputPath)
     if (info.size < 4096 || info.size > MAX_VIDEO_BYTES) throw new Error('Hasil video foto tidak valid atau terlalu besar.')
-    return { buffer: await fsp.readFile(outputPath), size: info.size, duration }
+    return { buffer: await fsp.readFile(outputPath), imageBuffer, size: info.size, duration }
   } finally {
     await fsp.rm(tempDir, { recursive: true, force: true }).catch(() => {})
   }
@@ -369,6 +421,26 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
       url = results[0].url
     }
 
+    const isPhotoOnlyCommand = /^ttfoto$/i.test(command)
+
+    // If this came from the action button, send the exact source photo cached
+    // during .tt. This fast path avoids TikWM being called a second time.
+    if (isPhotoOnlyCommand) {
+      const cachedPhoto = getCachedSinglePhoto(url)
+      if (cachedPhoto) {
+        const photoCaption = '📷 *FOTO ASLI TIKTOK*\\n\\n' +
+          '📝 *Judul:* ' + cachedPhoto.title + '\\n' +
+          '👤 *Kreator:* ' + cachedPhoto.author + '\\n\\n' +
+          '✨ _Downloaded by ' + (global.namebot || 'Alvareth Bot') + '_'
+        await sendMessageWithReconnect(conn, m.chat, {
+          image: cachedPhoto.imageBuffer,
+          caption: photoCaption
+        }, { quoted: m, noAlvarethPreview: true })
+        await reactSafe(conn, m, '✅')
+        return
+      }
+    }
+
     const res = await tiktokScrape(url)
     if (!res) throw new Error('Gagal mengambil data TikTok. Pastikan tautan masih aktif dan dapat diakses.')
 
@@ -394,6 +466,24 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
       '╰━━━━━━━━━━━━━━━━━━━━\n' +
       '     ✨ _Downloaded by Alvareth Bot_ ✨'
 
+    // .ttfoto must never fall through into the video sender. If no cached
+    // photo exists, fetch just the original photo and stop with a clear error if
+    // the provider has no images, rather than re-sending the rendered video.
+    if (isPhotoOnlyCommand) {
+      if (!Array.isArray(res.images) || res.images.length === 0) {
+        throw new Error('Foto asli tidak tersedia dari provider TikTok saat ini. Jalankan .tt lagi untuk membuat video dan tombol foto baru; perintah .ttfoto tidak akan mengirim ulang video.')
+      }
+      await sendMessageWithReconnect(conn, m.chat, {
+        image: { url: res.images[0] },
+        caption: '📷 *FOTO ASLI TIKTOK*\\n\\n' +
+          '📝 *Judul:* ' + title + '\\n' +
+          '👤 *Kreator:* ' + uploader + '\\n\\n' +
+          '✨ _Downloaded by ' + (global.namebot || 'Alvareth Bot') + '_'
+      }, { quoted: m, noAlvarethPreview: true })
+      await reactSafe(conn, m, '✅')
+      return
+    }
+
     if (res.type === 'image' && Array.isArray(res.images) && res.images.length > 0) {
       if (res.images.length === 1 && !/^ttfoto$/i.test(command)) {
         const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'alvareth-tiktok-single-'))
@@ -406,6 +496,13 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
             fileName: safeFilename(title),
             caption: caption + '\n\n🎵 Foto tunggal dirender menjadi video dengan musik asli, maksimal 60 detik.'
           }, { quoted: m, noAlvarethPreview: true })
+          // Keep the original downloaded image for the button, so the selected
+          // action doesn't re-scrape TikTok or accidentally re-send the video.
+          cacheSinglePhoto(url, {
+            imageBuffer: rendered.imageBuffer,
+            title,
+            author: String(uploader || '-')
+          })
           // Reuse the same nativeFlow button format as plugins/main/menu.js.
           // This SC's Baileys fork handles menu actions through nativeFlow; a raw
           // templateButtons payload can be silently ignored by this sendMessage path.
