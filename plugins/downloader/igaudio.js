@@ -34,10 +34,14 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
 
     if (!mp3Link) throw 'Audio tidak tersedia di reel ini.'
 
-    await conn.sendMessage(m.chat, {
+    // Quote the triggering request, not the global status-message object.
+    // A status quote can carry an unrelated chat key and break recipient delivery.
+    const sent = await conn.sendMessage(m.chat, {
       audio: { url: mp3Link },
-      mimetype: 'audio/mpeg'
-    }, { quoted: global.fstatus })
+      mimetype: 'audio/mpeg',
+      ptt: false
+    }, { quoted: m, noAlvarethPreview: true })
+    if (!sent?.key?.id) throw new Error('WhatsApp tidak mengembalikan ID pesan audio.')
 
   } catch (e) {
     m.reply(typeof e === 'string' ? e : '❌ Gagal mengambil audio Instagram.')
