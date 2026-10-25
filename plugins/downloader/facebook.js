@@ -3,6 +3,10 @@ Downloader Facebook
 Source Scrape : https://whatsapp.com/channel/0029VbBJKfE0gcfCAJZEVh3R/125
 */
 import axios from "axios";
+import { fileTypeFromBuffer } from "file-type";
+
+const MAX_MEDIA_BYTES = 150 * 1024 * 1024;
+const MAX_INLINE_VIDEO_BYTES = 50 * 1024 * 1024;
 
 async function getToken() {
   const url = "https://fbdownloader.to/id";
@@ -71,9 +75,37 @@ let handler = async (m, { conn, text }) => {
 
     const videoUrl = results[0].url;
 
-    const { data: buffer } = await axios.get(videoUrl, { responseType: 'arraybuffer' });
+    const mediaResponse = await axios.get(videoUrl, {
+      responseType: 'arraybuffer',
+      timeout: 90000,
+      maxContentLength: MAX_MEDIA_BYTES,
+      maxBodyLength: MAX_MEDIA_BYTES,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/132.0.0.0 Mobile Safari/537.36',
+        Accept: 'video/mp4,video/*,application/octet-stream,*/*'
+      },
+      validateStatus: status => status >= 200 && status < 300
+    });
+    const buffer = Buffer.from(mediaResponse.data);
+    if (!buffer.length || buffer.length > MAX_MEDIA_BYTES) {
+      throw new Error('File video kosong atau melebihi batas 150 MB.');
+    }
 
-    await conn.sendMessage(m.chat, { video: buffer, caption: `📥 Download dari Facebook\nKualitas: ${results[0].quality}` }, { quoted: m });
+    const detected = await fileTypeFromBuffer(buffer);
+    const responseMime = String(mediaResponse.headers?.['content-type'] || '').split(';')[0].trim().toLowerCase();
+    const mime = detected?.mime || responseMime;
+    if (!mime.startsWith('video/') || responseMime.includes('text/html') || responseMime.includes('application/json')) {
+      throw new Error('Tautan Facebook tidak mengembalikan file video yang valid.');
+    }
+
+    const fileName = `facebook-video.${detected?.ext || 'mp4'}`;
+    const caption = `📥 Download dari Facebook\nKualitas: ${results[0].quality}`;
+    const message = buffer.length > MAX_INLINE_VIDEO_BYTES
+      ? { document: buffer, fileName, mimetype: mime, caption }
+      : { video: buffer, fileName, mimetype: mime, caption };
+
+    const sent = await conn.sendMessage(m.chat, message, { quoted: m, noAlvarethPreview: true });
+    if (!sent?.key?.id) throw new Error('WhatsApp tidak mengembalikan ID pesan video Facebook.');
   } catch (e) {
     m.reply("❌ Gagal mengunduh video: " + e.message);
   }
