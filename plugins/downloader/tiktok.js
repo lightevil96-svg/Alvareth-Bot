@@ -22,10 +22,10 @@ function normalizeTikTokCacheKey(input) {
     const parsed = new URL(String(input || '').trim())
     parsed.hash = ''
     parsed.search = ''
-    parsed.pathname = parsed.pathname.replace(/\\/+$/, '') || '/'
+    parsed.pathname = parsed.pathname.replace(/\/+$/, '') || '/'
     return parsed.origin.toLowerCase() + parsed.pathname
   } catch {
-    return String(input || '').trim().replace(/[?#].*$/, '').replace(/\\/+$/, '')
+    return String(input || '').trim().replace(/[?#].*$/, '').replace(/\/+$/, '')
   }
 }
 
