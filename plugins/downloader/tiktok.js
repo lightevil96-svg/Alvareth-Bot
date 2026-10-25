@@ -14,7 +14,8 @@ const MAX_INLINE_VIDEO_BYTES = 50 * 1024 * 1024
 // Cache the original photo from a successful .tt render so the button doesn't
 // have to call TikWM again. Short TikTok URLs can fail on a second scrape.
 const SINGLE_PHOTO_CACHE_TTL_MS = 15 * 60 * 1000
-const SINGLE_PHOTO_CACHE_MAX_ENTRIES = 30
+const SINGLE_PHOTO_CACHE_MAX_ENTRIES = 10
+const SINGLE_PHOTO_CACHE_MAX_BYTES = 10 * 1024 * 1024
 const singlePhotoCache = new Map()
 
 function normalizeTikTokCacheKey(input) {
@@ -53,6 +54,7 @@ function getCachedSinglePhoto(url) {
 
 function cacheSinglePhoto(url, photo) {
   if (!url || !Buffer.isBuffer(photo?.imageBuffer) || !photo.imageBuffer.length) return
+  if (photo.imageBuffer.length > SINGLE_PHOTO_CACHE_MAX_BYTES) return
   pruneSinglePhotoCache()
   const key = normalizeTikTokCacheKey(url)
   singlePhotoCache.delete(key)
@@ -419,6 +421,10 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
 
     if (!url && /^https?:\/\//i.test(input)) {
       throw new Error('Link bukan link TikTok yang dikenali. Kirim tautan TikTok seperti https://www.tiktok.com/... atau https://vt.tiktok.com/...')
+    }
+
+    if (!url && isPhotoOnlyCommand) {
+      throw new Error('Perintah .ttfoto memerlukan tautan TikTok yang sama dengan perintah .tt sebelumnya. Kirim ulang .tt dengan tautan tersebut untuk membuat tombol foto baru.')
     }
 
     if (!url) {
