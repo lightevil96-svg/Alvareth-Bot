@@ -370,7 +370,7 @@ async function prepareBestTikTokVideo(res) {
       const outputPath = path.join(tempDir, 'alvareth-tiktok-' + i + '.mp4')
 
       try {
-        console.log('\\n[TikTok] Memproses varian ' + (candidate.label || ('#' + (i + 1))) + '...')
+        console.log('\n[TikTok] Memproses varian ' + (candidate.label || ('#' + (i + 1))) + '...')
         await downloadVideoFile(candidate.url, sourcePath)
         const normalized = await normalizeVideoToMp4(sourcePath, outputPath)
         console.log('[TikTok] Berhasil menyiapkan video dari varian:', candidate.label || ('#' + (i + 1)))
@@ -428,9 +428,9 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
     if (isPhotoOnlyCommand) {
       const cachedPhoto = getCachedSinglePhoto(url)
       if (cachedPhoto) {
-        const photoCaption = '📷 *FOTO ASLI TIKTOK*\\n\\n' +
-          '📝 *Judul:* ' + cachedPhoto.title + '\\n' +
-          '👤 *Kreator:* ' + cachedPhoto.author + '\\n\\n' +
+        const photoCaption = '📷 *FOTO ASLI TIKTOK*\n\n' +
+          '📝 *Judul:* ' + cachedPhoto.title + '\n' +
+          '👤 *Kreator:* ' + cachedPhoto.author + '\n\n' +
           '✨ _Downloaded by ' + (global.namebot || 'Alvareth Bot') + '_'
         await sendMessageWithReconnect(conn, m.chat, {
           image: cachedPhoto.imageBuffer,
@@ -475,9 +475,9 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
       }
       await sendMessageWithReconnect(conn, m.chat, {
         image: { url: res.images[0] },
-        caption: '📷 *FOTO ASLI TIKTOK*\\n\\n' +
-          '📝 *Judul:* ' + title + '\\n' +
-          '👤 *Kreator:* ' + uploader + '\\n\\n' +
+        caption: '📷 *FOTO ASLI TIKTOK*\n\n' +
+          '📝 *Judul:* ' + title + '\n' +
+          '👤 *Kreator:* ' + uploader + '\n\n' +
           '✨ _Downloaded by ' + (global.namebot || 'Alvareth Bot') + '_'
       }, { quoted: m, noAlvarethPreview: true })
       await reactSafe(conn, m, '✅')
