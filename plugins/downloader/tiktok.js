@@ -399,7 +399,13 @@ function safeFilename(value) {
 let handler = async (m, { conn, text, usedPrefix, command }) => {
   await reactSafe(conn, m, '✨')
 
-  const input = String(m.quoted ? (m.quoted.text || m.quoted.caption || text || '') : (text || '')).trim()
+  const isPhotoOnlyCommand = /^ttfoto$/i.test(command)
+  // For .ttfoto, the command's URL must win over the quoted button/message text.
+  // Otherwise a quoted caption can replace the URL and trigger a failed scrape.
+  const input = String(isPhotoOnlyCommand
+    ? (text || m.quoted?.text || m.quoted?.caption || '')
+    : (m.quoted ? (m.quoted.text || m.quoted.caption || text || '') : (text || ''))
+  ).trim()
   if (!input) {
     return m.reply(
       'Contoh:\n' +
@@ -420,8 +426,6 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
       if (!results.length) throw new Error('Hasil TikTok tidak ditemukan.')
       url = results[0].url
     }
-
-    const isPhotoOnlyCommand = /^ttfoto$/i.test(command)
 
     // If this came from the action button, send the exact source photo cached
     // during .tt. This fast path avoids TikWM being called a second time.
