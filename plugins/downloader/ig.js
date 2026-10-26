@@ -53,6 +53,10 @@ async function getInstagramMedia(inputUrl) {
     const declaredType = String(item?.type || '').toLowerCase()
     const type = declaredType === 'mp4' || declaredType.includes('video')
       ? 'video'
+      : declaredType
+        ? 'image'
+        : ''
+      ? 'video'
       : declaredType.startsWith('image') || declaredType === 'jpg' || declaredType === 'jpeg' || declaredType === 'png' || declaredType === 'webp'
         ? 'image'
         : ''
