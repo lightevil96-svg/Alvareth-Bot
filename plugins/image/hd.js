@@ -6,35 +6,79 @@ import { fileTypeFromBuffer } from 'file-type'
 const MAX_IMAGE_BYTES = 25 * 1024 * 1024
 const IMAGE_URL_TIMEOUT_MS = 90000
 
+function findImagePayload(value, depth = 0, visited = new Set()) {
+  if (!value || typeof value !== 'object' || depth > 12 || visited.has(value)) return null
+  visited.add(value)
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findImagePayload(item, depth + 1, visited)
+      if (found) return found
+    }
+    return null
+  }
+
+  // Direct image message, including a photo whose outer message was wrapped
+  // as ephemeral/view-once/document-with-caption by WhatsApp.
+  if (value.imageMessage && typeof value.imageMessage === 'object') return value.imageMessage
+
+  const wrapperKeys = [
+    'ephemeralMessage',
+    'viewOnceMessage',
+    'viewOnceMessageV2',
+    'viewOnceMessageV2Extension',
+    'documentWithCaptionMessage',
+    'editedMessage',
+    'message'
+  ]
+  for (const key of wrapperKeys) {
+    const child = value[key]
+    if (!child) continue
+    const found = findImagePayload(child.message || child, depth + 1, visited)
+    if (found) return found
+  }
+
+  // Handle protobuf wrappers that contain their useful message below another
+  // key not known to this Baileys fork, while ignoring context-only fields.
+  for (const [key, child] of Object.entries(value)) {
+    if (['contextInfo', 'messageContextInfo', 'senderKeyDistributionMessage'].includes(key)) continue
+    if (!child || typeof child !== 'object') continue
+    const found = findImagePayload(child, depth + 1, visited)
+    if (found) return found
+  }
+  return null
+}
+
 function getQuotedOrCurrentImage(message) {
   const source = message?.quoted || message
-  const mediaMessage = source?.mediaMessage
+  const candidates = [
+    source?.mediaMessage,
+    source?.messages,
+    source?.vM?.message,
+    source?.message,
+    source?.msg,
+    message?.msg?.contextInfo?.quotedMessage,
+    message?.message?.extendedTextMessage?.contextInfo?.quotedMessage,
+    source
+  ]
 
-  if (mediaMessage && typeof mediaMessage === 'object') {
-    const entries = Object.entries(mediaMessage)
-    const imageEntry = entries.find(([type, payload]) =>
-      /imageMessage/i.test(type) && payload && typeof payload === 'object'
-    )
-    if (imageEntry) return { source, type: 'image', payload: imageEntry[1] }
-  }
-
-  const candidates = [source?.msg, source]
-  for (const payload of candidates) {
-    const mime = String(payload?.mimetype || '').toLowerCase()
-    if (mime.startsWith('image/')) return { source, type: 'image', payload }
-  }
-
-  const mediaType = String(source?.mediaType || source?.mtype || '').toLowerCase()
-  if (mediaType.includes('image') && mediaMessage) {
-    const payload = mediaMessage[Object.keys(mediaMessage)[0]]
+  for (const candidate of candidates) {
+    const payload = findImagePayload(candidate)
     if (payload) return { source, type: 'image', payload }
   }
 
+  // Fallback for wrappers which the current Baileys serializer exposes only as
+  // an image MIME object and not as its complete raw message.
+  for (const candidate of [source?.msg, source]) {
+    const mime = String(candidate?.mimetype || '').toLowerCase()
+    if (mime.startsWith('image/')) return { source, type: 'image', payload: candidate }
+  }
   return null
 }
 
 async function replyWithoutLimit(m, conn, text) {
   m.skipLimit = true
+  m.limit = false
   return conn.sendMessage(m.chat, { text }, { quoted: m, noAlvarethPreview: true })
 }
 
@@ -71,11 +115,19 @@ let handler = async (m, { conn }) => {
       return
     }
 
-    const media = typeof image.source?.download === 'function'
-      ? await image.source.download()
-      : (image.payload?.url || image.payload?.directPath)
-        ? await conn.downloadM(image.payload, 'image')
-        : null
+    let media = null
+    // Download the actual nested imageMessage payload first; quoted.download()
+    // can be unavailable when Baileys wraps the quoted image as view-once/media.
+    if (image.payload?.url || image.payload?.directPath) {
+      try {
+        media = await conn.downloadM(image.payload, 'image')
+      } catch (error) {
+        console.warn('[HD] Download gambar langsung gagal, mencoba quoted.download():', error?.message || error)
+      }
+    }
+    if ((!Buffer.isBuffer(media) || !media.length) && typeof image.source?.download === 'function') {
+      media = await image.source.download()
+    }
 
     if (!Buffer.isBuffer(media) || !media.length) {
       await replyWithoutLimit(m, conn, '❌ Gagal membaca data gambar yang direply. Coba kirim ulang foto tersebut lalu reply dengan .hd.')
