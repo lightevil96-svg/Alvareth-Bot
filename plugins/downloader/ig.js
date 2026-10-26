@@ -55,7 +55,7 @@ function normalizeMediaType(value) {
 function inferTypeFromKey(key) {
   const value = String(key || '').toLowerCase()
   if (/video|mp4|reel|clip|hdplay|video_hd/.test(value)) return 'video'
-  if (/image|photo|picture|display_url|image_url|url_list/.test(value)) return 'image'
+  if (/image|photo|picture|display_url|image_url/.test(value)) return 'image'
   return ''
 }
 
@@ -390,12 +390,11 @@ async function tryProvider(provider, inputUrl, requireVideo) {
   const result = await getApiMedia(provider, inputUrl)
   let candidates = result.media
   if (requireVideo) {
-    // A Reel must result in a real video payload; don't accept its cover image.
-    candidates = candidates.filter(item => item.type !== 'image')
-    candidates.sort((a, b) => Number(b.type === 'video') - Number(a.type === 'video'))
-    if (!candidates.length) {
-      throw new Error(provider.name + ' hanya mengembalikan gambar/thumbnail untuk sebuah Reel.')
-    }
+    // Try video-labelled results first, then unknown/image-labelled URLs as a
+    // last candidate. The downloaded file signature decides; a cover image can
+    // never pass this branch, even if the provider labels it incorrectly.
+    const rank = item => item.type === 'video' ? 0 : item.type === 'image' ? 2 : 1
+    candidates.sort((a, b) => rank(a) - rank(b))
 
     const failures = []
     for (const candidate of candidates) {
