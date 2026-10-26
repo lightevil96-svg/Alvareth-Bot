@@ -5,8 +5,6 @@ const BOT_THUMB = 'https://raw.githubusercontent.com/lightevil96-svg/Alvareth-Bo
 
 let handler = async (m, { conn, text, usedPrefix, command }) => {
   if (!text) {
-    // Jangan taruh URL Spoo.me di teks pesan: WhatsApp akan mengambil OG metadata
-    // dari identitas tautan lama. Gunakan externalAdReply yang eksplisit.
     const replyText = `Gunakan perintah: ${usedPrefix + command} judul lagu`
     const message = {
       text: replyText,
@@ -27,66 +25,93 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
       return await conn.sendMessage(m.chat, message, { quoted: m })
     } catch (error) {
       console.error('[.play] Gagal mengirim preview Alvareth; mencoba teks biasa:', error)
-      try {
-        return await conn.sendMessage(m.chat, { text: replyText }, { quoted: m })
-      } catch (sendError) {
-        console.error('[.play] Gagal mengirim balasan teks:', sendError)
-        throw sendError
-      }
+      return await conn.sendMessage(m.chat, { text: replyText }, { quoted: m, noAlvarethPreview: true })
     }
   }
 
   try {
     const search = await yts(text)
-    const videos = search.videos
-
-    if (!videos.length) {
-      return await m.reply('Tidak ditemukan.')
+    const video = search.videos?.[0]
+    if (!video) {
+      return await conn.sendMessage(m.chat, {
+        text: 'Tidak ditemukan lagu/video yang cocok dengan pencarian itu.'
+      }, { quoted: m, noAlvarethPreview: true })
     }
 
-    const video = videos[0]
-    const caption = `Play Music
+    const clean = value => String(value || '-').replace(/[\r\n]+/g, ' ').trim()
+    const caption = [
+      '🎵 *PLAY MUSIC — ALVARETH*',
+      '',
+      '📝 *Judul:* ' + clean(video.title),
+      '⏱️ *Durasi:* ' + clean(video.timestamp),
+      '👁️ *Views:* ' + formatNumber(video.views),
+      '🎤 *Channel:* ' + clean(video.author?.name) + (video.author?.verified ? ' ✓' : ''),
+      '📅 *Upload:* ' + clean(video.ago),
+    ].join('\n')
 
-✿ Title : ${video.title}
-✿ Duration : ${video.timestamp || '-'}
-✿ Views : ${formatNumber(video.views)}
-✿ Channel : ${video.author.name}${video.author.verified ? ' ✓' : ''}
-✿ Upload : ${video.ago || '-'}
-
-Silakan pilih format download di bawah.`
-
-    return await conn.sendMessage(m.chat, {
+    // Keep media and the interactive picker as two separate messages. The old
+    // combined image+nativeFlow payload was being rewritten by the global link
+    // preview wrapper, and sender-side display alone did not prove recipient delivery.
+    const thumbnailMessage = await conn.sendMessage(m.chat, {
       image: { url: video.thumbnail },
-      caption,
-      footer: 'Alvareth Bot',
-      optionText: 'Pilih Format',
-      optionTitle: 'Download',
+      caption
+    }, { quoted: m, noAlvarethPreview: true })
+
+    if (!thumbnailMessage?.key?.id) {
+      throw new Error('WhatsApp tidak mengembalikan ID pesan thumbnail.')
+    }
+
+    const prefix = usedPrefix || '.'
+    const audioBest = `${prefix}ytmp3 ${video.url}|320`
+    const audioLow = `${prefix}ytmp3 ${video.url}|128`
+    const videoBest = `${prefix}ytmp4 ${video.url}|best`
+    const videoLow = `${prefix}ytmp4 ${video.url}|360`
+
+    const pickerCaption = [
+      '🎚️ *PILIH KUALITAS DOWNLOAD*',
+      '',
+      '🎧 Audio terbaik: sumber audio tertinggi yang tersedia, MP3 320 kbps.',
+      '🎧 Audio hemat: MP3 128 kbps, ukuran file lebih kecil.',
+      '🎬 Video terbaik: resolusi tertinggi yang tersedia (HD/4K jika tersedia).',
+      '🎬 Video hemat: target 360p untuk menghemat data.'
+    ].join('\n')
+
+    const pickerMessage = await conn.sendMessage(m.chat, {
+      text: pickerCaption,
+      footer: 'Alvareth Bot • Pilih format dan kualitas',
+      optionText: 'Pilih Kualitas',
+      optionTitle: 'Audio / Video',
       nativeFlow: [
         {
           text: 'Pilih Format Download',
           sections: [
             {
-              title: 'Downloader',
+              title: '🎧 AUDIO MP3',
               rows: [
                 {
-                  title: 'Audio MP3',
-                  description: 'Download sebagai MP3',
-                  id: `${usedPrefix}ytmp3 ${video.url}`
+                  title: '✨ Kualitas Terbaik',
+                  description: 'Sumber terbaik • MP3 320 kbps',
+                  id: audioBest
                 },
                 {
-                  title: 'Audio MP3 V2',
-                  description: 'Download sebagai MP3 V2',
-                  id: `${usedPrefix}ytmp3v2 ${video.url}`
+                  title: '📦 Kualitas Hemat',
+                  description: 'MP3 128 kbps • file lebih kecil',
+                  id: audioLow
+                }
+              ]
+            },
+            {
+              title: '🎬 VIDEO MP4',
+              rows: [
+                {
+                  title: '✨ Kualitas Tertinggi (HD)',
+                  description: 'Resolusi maksimum yang tersedia',
+                  id: videoBest
                 },
                 {
-                  title: 'Video MP4',
-                  description: 'Download sebagai MP4',
-                  id: `${usedPrefix}ytmp4 ${video.url}`
-                },
-                {
-                  title: 'Video MP4 V2',
-                  description: 'Download sebagai MP4 V2',
-                  id: `${usedPrefix}ytmp4v2 ${video.url}`
+                  title: '📦 Kualitas Hemat (360p)',
+                  description: 'Lebih ringan untuk kuota',
+                  id: videoLow
                 }
               ]
             }
@@ -94,10 +119,18 @@ Silakan pilih format download di bawah.`
         }
       ],
       interactiveAsTemplate: false
-    }, { quoted: m })
+    }, { quoted: m, noAlvarethPreview: true })
+
+    if (!pickerMessage?.key?.id) {
+      throw new Error('WhatsApp tidak mengembalikan ID pesan menu kualitas.')
+    }
+
+    console.log('[.play] Thumbnail dan menu kualitas dikirim ke chat:', m.chat)
   } catch (error) {
-    console.error('[.play] Gagal mencari/mengirim hasil:', error)
-    return await m.reply('Pencarian lagu gagal. Coba lagi beberapa saat.')
+    console.error('[.play] Gagal mencari/mengirim hasil:', error?.stack || error)
+    await conn.sendMessage(m.chat, {
+      text: '❌ Pencarian atau pengiriman menu Play gagal: ' + String(error?.message || error)
+    }, { quoted: m, noAlvarethPreview: true })
   }
 }
 
