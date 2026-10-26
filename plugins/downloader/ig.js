@@ -215,8 +215,7 @@ async function resolveWithInstagramPublicGraphql(inputUrl, requireVideo) {
           'x-asbd-id': operation.asbdId,
           'x-requested-with': 'XMLHttpRequest',
           ...(session.csrf ? { 'x-csrftoken': session.csrf } : {}),
-          ...(session.cookie ? { cookie: session.cookie } : {}),
-          ...(session.fbDtsg ? { 'x-fb-lsd': session.fbDtsg } : {})
+          ...(session.cookie ? { cookie: session.cookie } : {})
         },
         validateStatus: status => status >= 200 && status < 300
       })
