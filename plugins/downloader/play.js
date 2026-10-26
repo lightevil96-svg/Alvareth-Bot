@@ -1,6 +1,6 @@
 import yts from 'yt-search'
 
-const BOT_LINK = 'https://spoo.me/Alvareth-Bot'
+const BOT_LINK = 'https://github.com/lightevil96-svg/Alvareth-Bot'
 const BOT_THUMB = 'https://raw.githubusercontent.com/lightevil96-svg/Alvareth-Bot/main/media/alvareth-character.png'
 
 let handler = async (m, { conn, text, usedPrefix, command }) => {
