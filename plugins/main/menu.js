@@ -13,7 +13,7 @@ moment.locale('id')
 
 const MENU_IMAGE = './media/alvareth-preview.jpg'
 const MENU_SOUND = './media/tes.mp3'
-const MENU_LINK = 'https://spoo.me/Alvareth-Bot'
+const MENU_LINK = 'https://github.com/lightevil96-svg/Alvareth-Bot'
 
 const smallCaps = {
   a:'ᴀ', b:'ʙ', c:'ᴄ', d:'ᴅ', e:'ᴇ', f:'ꜰ', g:'ɢ', h:'ʜ',
