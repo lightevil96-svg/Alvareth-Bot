@@ -804,7 +804,7 @@ for (let name in global.plugins) {
 
                 try {
                     await plugin.call(this, m, extra)
-                    if (!isPrems) m.limit = m.limit || plugin.limit || false
+                    if (!isPrems && !m.skipLimit) m.limit = m.limit || plugin.limit || false
                 } catch (e) {
                     m.error = e
                     console.error(e)
