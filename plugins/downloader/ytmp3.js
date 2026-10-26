@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import { fileTypeFromBuffer } from 'file-type'
 import yts from 'yt-search'
 import {
   downloadYoutubeAudio,
@@ -8,6 +9,38 @@ import {
 
 const MAX_INLINE_AUDIO_BYTES = 50 * 1024 * 1024
 const MAX_AUDIO_BYTES = 150 * 1024 * 1024
+const RECENT_REQUEST_TTL_MS = 3 * 60 * 1000
+const MAX_RECENT_REQUESTS = 200
+const recentRequests = new Map()
+
+function claimRequestOnce(m) {
+  const messageId = String(m?.key?.id || '').trim()
+  if (!messageId) return true
+
+  const now = Date.now()
+  for (const [key, expiresAt] of recentRequests) {
+    if (expiresAt <= now) recentRequests.delete(key)
+  }
+
+  const key = String(m.chat || m.key?.remoteJid || '') + ':' + messageId
+  if (recentRequests.has(key)) return false
+
+  recentRequests.set(key, now + RECENT_REQUEST_TTL_MS)
+  while (recentRequests.size > MAX_RECENT_REQUESTS) {
+    const oldestKey = recentRequests.keys().next().value
+    if (oldestKey === undefined) break
+    recentRequests.delete(oldestKey)
+  }
+  return true
+}
+
+function conciseDownloadError(error) {
+  const message = String(error?.message || error || 'Kesalahan tidak diketahui')
+  if (/FFmpeg gagal|Invalid data found when processing input|audio-input\\.bin|bukan file audio|bukan file media|operation was aborted|timeout|timed out/i.test(message)) {
+    return 'Sumber unduhan mengembalikan data yang tidak valid atau waktu unduhan habis. Semua sumber cadangan sudah dicoba; silakan coba lagi beberapa saat.'
+  }
+  return message.replace(/[\\r\\n]+/g, ' ').slice(0, 500)
+}
 
 async function getFallbackAudio(url, targetBitrate) {
   const apiBase = String(global.APIs?.nexray || 'https://api.nexray.eu.cc').replace(/\/+$/, '')
@@ -28,9 +61,23 @@ async function getFallbackAudio(url, targetBitrate) {
 
       const mediaResponse = await fetch(mediaUrl, { signal: AbortSignal.timeout(90000) })
       if (!mediaResponse.ok) throw new Error('Unduhan audio HTTP ' + mediaResponse.status)
+
+      const responseMime = String(mediaResponse.headers.get('content-type') || '')
+        .split(';')[0].trim().toLowerCase()
+      if (/^(text\\/html|text\\/plain|application\\/json|application\\/xml)/i.test(responseMime)) {
+        throw new Error('Provider audio mengembalikan ' + responseMime + ', bukan file audio.')
+      }
+
       const buffer = Buffer.from(await mediaResponse.arrayBuffer())
       if (!buffer.length) throw new Error('File audio kosong.')
       if (buffer.length > MAX_AUDIO_BYTES) throw new Error('File audio melebihi batas 150 MB.')
+
+      const detected = await fileTypeFromBuffer(buffer)
+      const actualMime = String(detected?.mime || '').toLowerCase()
+      if (!detected || (!actualMime.startsWith('audio/') && !actualMime.startsWith('video/'))) {
+        throw new Error('Provider audio mengembalikan data yang bukan file media' +
+          (responseMime ? ' (Content-Type: ' + responseMime + ')' : '') + '.')
+      }
 
       const encoded = await encodeAudioBufferToMp3(buffer, targetBitrate)
       return {
@@ -61,10 +108,19 @@ Kualitas: |320 = terbaik yang tersedia, |128 = hemat.`
   const targetBitrate = Number(String(bitratePart || '320').trim()) === 128 ? 128 : 320
   if (!query) throw new Error('Judul lagu atau URL YouTube tidak boleh kosong.')
 
-  await m.react('🕒')
+  if (!claimRequestOnce(m)) {
+    console.warn('[YTMP3] Mengabaikan pemrosesan duplikat untuk pesan:', m?.key?.id)
+    return
+  }
+
   let outputDir = null
+  let audioSent = false
 
   try {
+    await m.react('🕒').catch(error => {
+      console.warn('[YTMP3] Gagal memasang reaksi proses:', error?.message || error)
+    })
+
     let url = query
     if (!/^https?:\/\//i.test(query)) {
       const search = await yts(query)
@@ -109,15 +165,30 @@ Kualitas: |320 = terbaik yang tersedia, |128 = hemat.`
           caption
         }, { quoted: m, noAlvarethPreview: true })
 
-    if (!sent?.key?.id) throw new Error('WhatsApp tidak mengembalikan ID pesan audio.')
-    await m.react('✅')
+    // Once sendMessage resolves, delivery was accepted. A failed reaction or
+    // post-send bookkeeping must not claim the audio failed and send a second error.
+    audioSent = true
+    if (!sent?.key?.id) {
+      console.warn('[YTMP3] Pesan terkirim tetapi WhatsApp tidak mengembalikan ID pesan.')
+    }
+    await m.react('✅').catch(error => {
+      console.warn('[YTMP3] Audio sudah terkirim; reaksi sukses gagal:', error?.message || error)
+    })
     console.log('[YTMP3] Terkirim ke', m.chat, '| bitrate MP3', bitrate)
   } catch (error) {
     console.error('[YTMP3]', error?.stack || error)
-    await m.react('❌')
+
+    if (audioSent) {
+      console.warn('[YTMP3] Menekan pesan gagal karena audio sudah berhasil dikirim.')
+      return
+    }
+
+    await m.react('❌').catch(() => {})
     await conn.sendMessage(m.chat, {
-      text: '❌ Gagal mengunduh/mengirim audio: ' + String(error?.message || error)
-    }, { quoted: m, noAlvarethPreview: true })
+      text: '❌ Gagal mengunduh/mengirim audio: ' + conciseDownloadError(error)
+    }, { quoted: m, noAlvarethPreview: true }).catch(sendError => {
+      console.error('[YTMP3] Gagal mengirim pesan error:', sendError?.message || sendError)
+    })
   } finally {
     if (outputDir) await cleanupDownload(outputDir).catch(() => {})
   }
