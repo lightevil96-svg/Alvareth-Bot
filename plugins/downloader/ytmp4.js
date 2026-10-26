@@ -1,107 +1,95 @@
+import fs from 'node:fs'
 import yts from 'yt-search'
-import fs from 'fs'
-import os from 'os'
-import path from 'path'
-import { exec } from 'child_process'
-import { promisify } from 'util'
-import { downloadYoutubeVideo, cleanupDownload } from '../../lib/scrape/youtube.js'
+import {
+  downloadYoutubeVideo,
+  downloadYoutubeVideoBest,
+  cleanupDownload
+} from '../../lib/scrape/youtube.js'
 
-const execAsync = promisify(exec)
+const MAX_INLINE_VIDEO_BYTES = 50 * 1024 * 1024
+const ALLOWED_QUALITIES = new Set([144, 240, 360, 480, 720, 1080, 1440, 2160])
 
-let handler = async (m, { conn, text }) => {
-  if (!text) throw `Contoh:
-.playvid https://youtu.be/dQw4w9WgXcQ
-.playvid dj remix
-.playvid dj remix|720`
+function cleanFilename(value) {
+  return String(value || 'video')
+    .replace(/[\\/:*?"<>|]/g, '')
+    .replace(/[\r\n]+/g, ' ')
+    .trim()
+    .slice(0, 160) || 'video'
+}
+
+let handler = async (m, { conn, text, usedPrefix, command }) => {
+  const rawInput = String(text || '').trim()
+  if (!rawInput) {
+    throw `Contoh:
+${usedPrefix || '.'}${command} https://youtu.be/dQw4w9WgXcQ|best
+${usedPrefix || '.'}${command} https://youtu.be/dQw4w9WgXcQ|360
+
+Kualitas: |best = resolusi tertinggi yang tersedia, |360 = hemat data.`
+  }
+
+  const [queryPart, qualityPart = '360'] = rawInput.split('|')
+  const query = String(queryPart || '').trim()
+  const qualityToken = String(qualityPart || '360').trim().toLowerCase()
+  const useBest = ['best', 'max', 'highest', 'hd'].includes(qualityToken)
+  const numericQuality = Number(qualityToken)
+  const targetQuality = ALLOWED_QUALITIES.has(numericQuality) ? numericQuality : 360
+  if (!query) throw new Error('Judul video atau URL YouTube tidak boleh kosong.')
 
   await m.react('🕒')
-
   let result
 
   try {
-    let [query, resolusi = '360'] = text.split('|')
-
     let url = query
-
-    if (!/^https?:\/\//.test(query)) {
+    if (!/^https?:\/\//i.test(query)) {
       const search = await yts(query)
-      const video = search.videos[0]
-      if (!video) throw 'Video tidak ditemukan.'
+      const video = search.videos?.[0]
+      if (!video) throw new Error('Video tidak ditemukan.')
       url = video.url
     }
 
-    try {
-      const res = await fetch(`${global.APIs.nexray}/downloader/ytmp4?url=${encodeURIComponent(url)}&resolusi=${resolusi}`)
-      const json = await res.json()
-
-      if (!json.status) throw new Error(json.message || 'Gagal mengambil video')
-
-      const data = json.result
-
-      const input = path.join(os.tmpdir(), `${Date.now()}-input.mp4`)
-      const output = path.join(os.tmpdir(), `${Date.now()}-output.mp4`)
-
-      const video = await fetch(data.url)
-      fs.writeFileSync(input, Buffer.from(await video.arrayBuffer()))
-
-      await execAsync(`ffmpeg -y -i "${input}" -c copy -movflags +faststart "${output}"`)
-
-      const size = fs.statSync(output).size
-      const caption = `❏ Author      : ${data.author || '-'}
-❏ Duration    : ${data.duration || '-'} Detik
-❏ Title       : ${data.title || '-'}`
-
-      if (size > 50 * 1024 * 1024) {
-        await conn.sendMessage(m.chat, {
-          document: fs.readFileSync(output),
-          fileName: `${data.title || 'video'}.mp4`,
-          mimetype: 'video/mp4',
-          caption
-        }, { quoted: m })
-      } else {
-        await conn.sendMessage(m.chat, {
-          video: fs.readFileSync(output),
-          caption
-        }, { quoted: m })
-      }
-
-      fs.unlinkSync(input)
-      fs.unlinkSync(output)
-
-      await m.react('✅')
-      return
-    } catch (e) {
-      console.log('[YTMP4] Nexray gagal:', e.message)
-    }
-
-    result = await downloadYoutubeVideo(url, Number(resolusi) || 360)
+    // Use format metadata to choose the actual highest available resolution.
+    // "best" is not translated to a guessed 720p/1080p target.
+    result = useBest
+      ? await downloadYoutubeVideoBest(url)
+      : await downloadYoutubeVideo(url, targetQuality)
 
     const buffer = fs.readFileSync(result.path)
+    if (!buffer.length) throw new Error('File video hasil unduhan kosong.')
     const size = fs.statSync(result.path).size
+    const actualQuality = result.quality || targetQuality
+    const caption = [
+      '🎬 *' + cleanFilename(result.title || 'Video YouTube') + '*',
+      '📺 Kualitas: ' + actualQuality + (typeof actualQuality === 'number' ? 'p' : ''),
+      useBest ? '✨ Mode: kualitas tertinggi yang tersedia' : '📦 Mode: hemat data',
+      '📁 Format: MP4'
+    ].join('\n')
 
-    if (size > 50 * 1024 * 1024) {
-      await conn.sendMessage(m.chat, {
-        document: buffer,
-        mimetype: 'video/mp4',
-        fileName: `${result.title}.mp4`
-      }, { quoted: m })
-    } else {
-      await conn.sendMessage(m.chat, {
-        video: buffer,
-        caption: `📹 ${result.title}\nKualitas: ${result.quality}p`
-      }, { quoted: m })
-    }
+    const fileName = cleanFilename(result.title) + '-' + actualQuality + 'p.mp4'
+    const sent = size > MAX_INLINE_VIDEO_BYTES
+      ? await conn.sendMessage(m.chat, {
+          document: buffer,
+          mimetype: 'video/mp4',
+          fileName,
+          caption
+        }, { quoted: m, noAlvarethPreview: true })
+      : await conn.sendMessage(m.chat, {
+          video: buffer,
+          mimetype: 'video/mp4',
+          fileName,
+          caption
+        }, { quoted: m, noAlvarethPreview: true })
 
-    await cleanupDownload(result.outputDir)
+    if (!sent?.key?.id) throw new Error('WhatsApp tidak mengembalikan ID pesan video.')
     await m.react('✅')
-  } catch (e) {
-    if (result?.outputDir) {
-      await cleanupDownload(result.outputDir).catch(() => {})
-    }
-
-    console.error(e)
+    console.log('[YTMP4] Terkirim ke', m.chat, '| kualitas', actualQuality, '| best=', useBest)
+  } catch (error) {
+    console.error('[YTMP4]', error?.stack || error)
     await m.react('❌')
-    throw e.message || 'Terjadi kesalahan.'
+    await conn.sendMessage(m.chat, {
+      text: '❌ Gagal mengunduh/mengirim video: ' + String(error?.message || error)
+    }, { quoted: m, noAlvarethPreview: true })
+  } finally {
+    if (result?.outputDir) await cleanupDownload(result.outputDir).catch(() => {})
   }
 }
 
