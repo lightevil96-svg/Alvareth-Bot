@@ -92,6 +92,23 @@ export async function handler(chatUpdate) {
     const derivedChat = normalizeJid(rawChat)
     const derivedSender = normalizeJid(rawSender)
 
+    // WhatsApp group JIDs are authoritative. In this Baileys fork the
+    // serialized message may expose an incorrect m.isGroup=false even while
+    // m.chat/raw remoteJid is a valid @g.us JID. Normalize the flag before
+    // plugin permissions run so group-only commands (including .swgc) work.
+    const isGroupJid = value => typeof value === 'string' && /@g\\.us$/i.test(value)
+    const normalizedIsGroup = isGroupJid(rawChat) || isGroupJid(derivedChat) ||
+        isGroupJid(m.chat) || m.isGroup === true
+    if (m.isGroup !== normalizedIsGroup ||
+        Object.getOwnPropertyDescriptor(m, 'isGroup')?.writable !== true) {
+        Object.defineProperty(m, 'isGroup', {
+            configurable: true,
+            enumerable: true,
+            writable: true,
+            value: normalizedIsGroup
+        })
+    }
+
     // Override absent/broken prototype getters with stable own data properties.
     if (typeof m.chat !== 'string' || !m.chat) {
         Object.defineProperty(m, 'chat', { configurable: true, enumerable: true, writable: true, value: derivedChat })
