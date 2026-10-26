@@ -75,6 +75,159 @@ async function withTimeout(work, timeoutMs, label) {
   }
 }
 
+
+const INSTAGRAM_PUBLIC_GRAPHQL_DOC_ID = process.env.INSTAGRAM_PUBLIC_GRAPHQL_DOC_ID || '27128499623469141'
+
+function extractInstagramShortcode(inputUrl) {
+  const parsed = new URL(inputUrl)
+  const parts = parsed.pathname.split('/').filter(Boolean)
+  const markerIndex = parts.findIndex(part => /^(reel|reels|p|tv)$/i.test(part))
+  if (markerIndex < 0 || !parts[markerIndex + 1]) {
+    throw new Error('Shortcode Instagram tidak ditemukan pada URL.')
+  }
+  return parts[markerIndex + 1]
+}
+
+async function getInstagramCsrfSession() {
+  const response = await axios.get('https://www.instagram.com/', {
+    timeout: API_TIMEOUT_MS,
+    maxContentLength: 10 * 1024 * 1024,
+    headers: {
+      accept: 'text/html,application/xhtml+xml',
+      'user-agent': USER_AGENT,
+      'accept-language': 'en-US,en;q=0.9'
+    },
+    validateStatus: status => status >= 200 && status < 300
+  })
+
+  const cookies = response.headers?.['set-cookie'] || []
+  const cookieMap = new Map()
+  for (const line of cookies) {
+    const pair = String(line).split(';', 1)[0]
+    const equals = pair.indexOf('=')
+    if (equals > 0) cookieMap.set(pair.slice(0, equals), pair.slice(equals + 1))
+  }
+
+  const html = String(response.data || '')
+  let csrf = cookieMap.get('csrftoken')
+  if (!csrf) {
+    const match = html.match(/["']csrf_token["']\s*:\s*["']([^"']+)["']/i)
+    if (match) csrf = match[1]
+  }
+  if (!csrf) throw new Error('Instagram tidak memberikan cookie CSRF untuk query publik.')
+
+  cookieMap.set('csrftoken', csrf)
+  return {
+    csrf,
+    cookie: [...cookieMap.entries()].map(([key, value]) => key + '=' + value).join('; ')
+  }
+}
+
+function pickHighestUrl(candidates) {
+  if (!Array.isArray(candidates)) return ''
+  const sorted = candidates
+    .filter(item => item && isHttpMediaUrl(item.url))
+    .sort((a, b) =>
+      Number(b.width || 0) * Number(b.height || 0) -
+      Number(a.width || 0) * Number(a.height || 0)
+    )
+  return sorted[0]?.url || ''
+}
+
+function parseInstagramGraphqlItem(item) {
+  if (!item || typeof item !== 'object') return null
+  const isVideo = item.is_video === true || Number(item.media_type) === 2
+  if (isVideo) {
+    const url = pickHighestUrl(item.video_versions) ||
+      String(item.video_url || item.videoUrl || '').trim()
+    return isHttpMediaUrl(url) ? { url, type: 'video' } : null
+  }
+  const url = pickHighestUrl(item.image_versions2?.candidates) ||
+    String(item.display_url || item.image_url || '').trim()
+  return isHttpMediaUrl(url) ? { url, type: 'image' } : null
+}
+
+async function resolveWithInstagramPublicGraphql(inputUrl, requireVideo) {
+  const shortcode = extractInstagramShortcode(inputUrl)
+  const session = await getInstagramCsrfSession()
+  const variables = {
+    shortcode,
+    __relay_internal__pv__PolarisAIGMMediaWebLabelEnabledrelayprovider: false
+  }
+  const body = new URLSearchParams({
+    doc_id: INSTAGRAM_PUBLIC_GRAPHQL_DOC_ID,
+    variables: JSON.stringify(variables)
+  })
+
+  const response = await axios.post('https://www.instagram.com/graphql/query', body.toString(), {
+    timeout: API_TIMEOUT_MS,
+    maxContentLength: 10 * 1024 * 1024,
+    headers: {
+      accept: '*/*',
+      'content-type': 'application/x-www-form-urlencoded',
+      'user-agent': USER_AGENT,
+      origin: 'https://www.instagram.com',
+      referer: 'https://www.instagram.com/',
+      'x-ig-app-id': '936619743392459',
+      'x-csrftoken': session.csrf,
+      cookie: session.cookie,
+      'x-requested-with': 'XMLHttpRequest'
+    },
+    validateStatus: status => status >= 200 && status < 300
+  })
+
+  const payload = response.data
+  const mediaContainer = payload?.data?.xdt_api__v1__media__shortcode__web_info
+  const post = mediaContainer?.items?.[0] ||
+    payload?.data?.xdt_shortcode_media ||
+    payload?.data?.shortcode_media
+
+  if (!post) {
+    const message = payload?.errors?.[0]?.message ||
+      payload?.errors?.[0]?.description ||
+      'Instagram GraphQL tidak mengembalikan data media; doc_id mungkin berubah atau request dibatasi.'
+    throw new Error(String(message))
+  }
+
+  const sourceItems = Array.isArray(post.carousel_media) && post.carousel_media.length
+    ? post.carousel_media
+    : [post]
+  const media = sourceItems.map(parseInstagramGraphqlItem).filter(Boolean)
+
+  if (requireVideo) {
+    const video = media.find(item => item.type === 'video')
+    if (!video) throw new Error('GraphQL hanya mengembalikan thumbnail/foto, bukan video Reel.')
+    return {
+      files: [await fetchValidatedMedia(video, 1)],
+      metadata: {
+        username: String(post.user?.username || post.owner?.username || ''),
+        title: String(post.caption?.text || post.edge_media_to_caption?.edges?.[0]?.node?.text || '')
+      },
+      provider: 'Instagram public GraphQL'
+    }
+  }
+
+  if (!media.length) throw new Error('GraphQL tidak menemukan file foto/video yang valid.')
+  const files = []
+  let totalBytes = 0
+  for (let i = 0; i < media.length; i++) {
+    const file = await fetchValidatedMedia(media[i], i + 1)
+    totalBytes += file.buffer.length
+    if (totalBytes > MAX_TOTAL_MEDIA_BYTES) {
+      throw new Error('Total media melebihi batas pengiriman 250 MB.')
+    }
+    files.push(file)
+  }
+  return {
+    files,
+    metadata: {
+      username: String(post.user?.username || post.owner?.username || ''),
+      title: String(post.caption?.text || post.edge_media_to_caption?.edges?.[0]?.node?.text || '')
+    },
+    provider: 'Instagram public GraphQL'
+  }
+}
+
 async function resolveWithInstagramUrlDirect(inputUrl, requireVideo) {
   // Lazy import lets the rest of the bot still load if npm installation fails.
   // The package resolves public post media directly instead of relying on one
@@ -541,8 +694,20 @@ async function resolveInstagramMedia(inputUrl) {
   const requireVideo = isReelUrl(inputUrl)
   const failures = []
 
-  // First try the local resolver package: this avoids depending on the broken
-  // TiklyDown/SiputZX/FAA/Agatz/Vreden URLs that were reported by the live logs.
+  // Try the current public Instagram GraphQL operation first. The older package
+  // resolver used a retired doc_id and returned 401 in the live logs.
+  try {
+    const result = await resolveWithInstagramPublicGraphql(inputUrl, requireVideo)
+    console.log('[IG Downloader] Resolver berhasil:', result.provider, result.files.length + ' media')
+    return result
+  } catch (error) {
+    const message = String(error?.message || error)
+    failures.push('Instagram public GraphQL: ' + message)
+    console.warn('[IG Downloader] GraphQL publik gagal:', message.slice(0, 240))
+  }
+
+  // Secondary fallback: keep the package resolver in case GraphQL is temporarily
+  // blocked or Instagram changes its current operation.
   try {
     const result = await resolveWithInstagramUrlDirect(inputUrl, requireVideo)
     console.log('[IG Downloader] Resolver berhasil:', result.provider, result.files.length + ' media')
@@ -550,7 +715,7 @@ async function resolveInstagramMedia(inputUrl) {
   } catch (error) {
     const message = String(error?.message || error)
     failures.push('instagram-url-direct: ' + message)
-    console.warn('[IG Downloader] Resolver langsung gagal:', message.slice(0, 240))
+    console.warn('[IG Downloader] Resolver paket gagal:', message.slice(0, 240))
   }
 
   for (const provider of getProviders()) {
