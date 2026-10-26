@@ -96,7 +96,7 @@ export async function handler(chatUpdate) {
     // serialized message may expose an incorrect m.isGroup=false even while
     // m.chat/raw remoteJid is a valid @g.us JID. Normalize the flag before
     // plugin permissions run so group-only commands (including .swgc) work.
-    const isGroupJid = value => typeof value === 'string' && /@g\\.us$/i.test(value)
+    const isGroupJid = value => typeof value === 'string' && /@g\.us$/i.test(value)
     const normalizedIsGroup = isGroupJid(rawChat) || isGroupJid(derivedChat) ||
         isGroupJid(m.chat) || m.isGroup === true
     if (m.isGroup !== normalizedIsGroup ||
