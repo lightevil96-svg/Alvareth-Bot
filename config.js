@@ -44,7 +44,7 @@ global.repository = 'https://github.com/lightevil96-svg/Alvareth-Bot'
 
 // ===== LINK PREVIEW DEFAULT =====
 // Identitas preview bersama untuk balasan Alvareth Bot.
-global.botLink = 'https://spoo.me/Alvareth-Bot'
+global.botLink = 'https://github.com/lightevil96-svg/Alvareth-Bot'
 global.adReply = {
     contextInfo: {
         externalAdReply: {
