@@ -36,10 +36,10 @@ function claimRequestOnce(m) {
 
 function conciseDownloadError(error) {
   const message = String(error?.message || error || 'Kesalahan tidak diketahui')
-  if (/FFmpeg gagal|Invalid data found when processing input|audio-input\\.bin|bukan file audio|bukan file media|operation was aborted|timeout|timed out/i.test(message)) {
+  if (/FFmpeg gagal|Invalid data found when processing input|audio-input\.bin|bukan file audio|bukan file media|operation was aborted|timeout|timed out/i.test(message)) {
     return 'Sumber unduhan mengembalikan data yang tidak valid atau waktu unduhan habis. Semua sumber cadangan sudah dicoba; silakan coba lagi beberapa saat.'
   }
-  return message.replace(/[\\r\\n]+/g, ' ').slice(0, 500)
+  return message.replace(/[\r\n]+/g, ' ').slice(0, 500)
 }
 
 async function getFallbackAudio(url, targetBitrate) {
@@ -64,7 +64,7 @@ async function getFallbackAudio(url, targetBitrate) {
 
       const responseMime = String(mediaResponse.headers.get('content-type') || '')
         .split(';')[0].trim().toLowerCase()
-      if (/^(text\\/html|text\\/plain|application\\/json|application\\/xml)/i.test(responseMime)) {
+      if (/^(text\/html|text\/plain|application\/json|application\/xml)/i.test(responseMime)) {
         throw new Error('Provider audio mengembalikan ' + responseMime + ', bukan file audio.')
       }
 
