@@ -2,6 +2,7 @@ import axios from 'axios'
 import * as cheerio from 'cheerio'
 import { fileTypeFromBuffer } from 'file-type'
 
+
 const MAX_MEDIA_BYTES = 150 * 1024 * 1024
 const MAX_INLINE_VIDEO_BYTES = 50 * 1024 * 1024
 const MAX_TOTAL_MEDIA_BYTES = 250 * 1024 * 1024
@@ -11,13 +12,8 @@ const MEDIA_TIMEOUT_MS = 60000
 const USER_AGENT = 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Mobile Safari/537.36'
 
 const FALLBACK_PROVIDERS = [
-  { name: 'TiklyDown', endpoint: 'https://api.tiklydown.eu.org/api/download/ig' },
-  { name: 'SiputZX', endpoint: 'https://api.siputzx.my.id/api/d/igdl' },
-  { name: 'FAA', endpoint: 'https://api.faa.my.id/api/download/instagram' },
-  { name: 'Agatz', endpoint: 'https://api.agatz.xyz/api/instagram' },
-  { name: 'Vreden', endpoint: 'https://api.vreden.my.id/api/igdownload' },
-  { name: 'Widipe', endpoint: 'https://widipe.com/igdl' },
-  { name: 'Ryzumi', endpoint: 'https://api.ryzumi.vip/api/downloader/igdl' }
+  // Current all-in-one endpoint listed by Ryzumi's public API directory.
+  { name: 'Ryzumi All-in-One', endpoint: 'https://api.ryzumi.net/api/downloader/all-in-one' }
 ]
 
 const EXCLUDED_KEYS = /thumbnail|thumb|cover|poster|preview|avatar|profile|music|audio|song|icon|logo|author|username|caption|description|duration|likes?|comments?|views?|followers?|owner|user|watermark|artwork/i
@@ -50,6 +46,116 @@ function normalizeMediaType(value) {
   if (type === '2' || /video|mp4|reel|clip/.test(type)) return 'video'
   if (type === '1' || /image|photo|picture|jpeg|jpg|png|webp|still/.test(type)) return 'image'
   return ''
+}
+
+function normalizeInstagramInput(input) {
+  const parsed = new URL(String(input || '').trim())
+  if (!isInstagramHost(parsed.hostname) || !/^https?:$/.test(parsed.protocol)) {
+    throw new Error('Tautan Instagram tidak valid.')
+  }
+  // Share/tracking query parameters are not part of the post identity. Removing
+  // them avoids providers parsing the tracking suffix as part of a shortcode.
+  parsed.search = ''
+  parsed.hash = ''
+  if (!parsed.pathname.endsWith('/')) parsed.pathname += '/'
+  return parsed.toString()
+}
+
+async function withTimeout(work, timeoutMs, label) {
+  let timer
+  try {
+    return await Promise.race([
+      Promise.resolve().then(work),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(label + ' melewati batas waktu ' + Math.round(timeoutMs / 1000) + ' detik.')), timeoutMs)
+      })
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
+async function resolveWithInstagramUrlDirect(inputUrl, requireVideo) {
+  // Lazy import lets the rest of the bot still load if npm installation fails.
+  // The package resolves public post media directly instead of relying on one
+  // of the third-party HTTP APIs that failed in the user's diagnostic screenshot.
+  const module = await import('instagram-url-direct')
+  if (typeof module.instagramGetUrl !== 'function') {
+    throw new Error('instagram-url-direct tidak menyediakan instagramGetUrl().')
+  }
+
+  const data = await withTimeout(
+    () => module.instagramGetUrl(inputUrl, { retries: 1, delay: 700 }),
+    16000,
+    'Resolver Instagram lokal'
+  )
+
+  const mediaDetails = Array.isArray(data?.media_details) ? data.media_details : []
+  let media = mediaDetails
+    .map(item => ({
+      url: String(item?.url || '').trim(),
+      type: normalizeMediaType(item?.type)
+    }))
+    .filter(item => isHttpMediaUrl(item.url))
+
+  // Older/variant responses may contain only url_list. Infer media type from
+  // the URL when possible; otherwise trust the downloaded file signature later.
+  if (!media.length && Array.isArray(data?.url_list)) {
+    media = data.url_list
+      .map(url => ({
+        url: String(url || '').trim(),
+        type: inferTypeFromKey(String(url || ''))
+      }))
+      .filter(item => isHttpMediaUrl(item.url))
+  }
+
+  const seen = new Set()
+  media = media.filter(item => {
+    if (seen.has(item.url)) return false
+    seen.add(item.url)
+    return true
+  })
+
+  if (requireVideo) {
+    media = media
+      .filter(item => item.type !== 'image')
+      .sort((a, b) => Number(b.type === 'video') - Number(a.type === 'video'))
+  }
+  if (!media.length) {
+    throw new Error(requireVideo
+      ? 'Resolver langsung tidak menemukan file video untuk tautan Reel ini.'
+      : 'Resolver langsung tidak menemukan file media untuk tautan ini.')
+  }
+
+  const files = []
+  let totalBytes = 0
+  for (let i = 0; i < media.length; i++) {
+    try {
+      const file = await fetchValidatedMedia(media[i], i + 1)
+      if (requireVideo && file.type !== 'video') {
+        throw new Error('Sumber hanya mengembalikan gambar, bukan video Reel.')
+      }
+      totalBytes += file.buffer.length
+      if (totalBytes > MAX_TOTAL_MEDIA_BYTES) {
+        throw new Error('Total media melebihi batas pengiriman 250 MB.')
+      }
+      files.push(file)
+      if (requireVideo) break
+    } catch (error) {
+      if (requireVideo) throw error
+      throw error
+    }
+  }
+
+  if (!files.length) throw new Error('Resolver langsung tidak menghasilkan file media yang valid.')
+  return {
+    files,
+    metadata: {
+      username: String(data?.post_info?.owner_username || ''),
+      title: String(data?.post_info?.caption || '')
+    },
+    provider: 'instagram-url-direct'
+  }
 }
 
 function inferTypeFromKey(key) {
@@ -435,6 +541,18 @@ async function resolveInstagramMedia(inputUrl) {
   const requireVideo = isReelUrl(inputUrl)
   const failures = []
 
+  // First try the local resolver package: this avoids depending on the broken
+  // TiklyDown/SiputZX/FAA/Agatz/Vreden URLs that were reported by the live logs.
+  try {
+    const result = await resolveWithInstagramUrlDirect(inputUrl, requireVideo)
+    console.log('[IG Downloader] Resolver berhasil:', result.provider, result.files.length + ' media')
+    return result
+  } catch (error) {
+    const message = String(error?.message || error)
+    failures.push('instagram-url-direct: ' + message)
+    console.warn('[IG Downloader] Resolver langsung gagal:', message.slice(0, 240))
+  }
+
   for (const provider of getProviders()) {
     try {
       const result = await tryProvider(provider, inputUrl, requireVideo)
@@ -491,8 +609,8 @@ let handler = async (m, { conn, args, text, command }) => {
 
   await m.react('🕒')
   try {
-    const parsedUrl = new URL(input)
-    const result = await resolveInstagramMedia(parsedUrl.toString())
+    const parsedUrl = normalizeInstagramInput(input)
+    const result = await resolveInstagramMedia(parsedUrl)
     let sentCount = 0
 
     for (let i = 0; i < result.files.length; i++) {
