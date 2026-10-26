@@ -360,7 +360,13 @@ async function getInstagramPageFallback(inputUrl, requireVideo) {
   const videoTagRegex = /<video[^>]+src=["']([^"']+)["']/gi
   for (const found of cleanedHtml.matchAll(videoTagRegex)) add(found[1], 'video')
 
-  if (!requireVideo) {
+  const pageLooksVideo = /video\.other|video_url|video_versions|is_video["']?\s*:\s*true/i.test(
+    ($('meta[property="og:type"]').attr('content') || '') + '\n' + cleanedHtml
+  )
+
+  // og:image is often only a cover image for a Reel. Use image metadata here
+  // only when the public embed doesn't look like a video page.
+  if (!requireVideo && !pageLooksVideo) {
     add($('meta[property="og:image"]').attr('content'), 'image')
     const imageRegex = /"(?:display_url|image_url|imageUrl)"\s*:\s*"([^"]+)"/gi
     for (const found of cleanedHtml.matchAll(imageRegex)) add(found[1], 'image')
