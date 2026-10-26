@@ -56,10 +56,7 @@ async function getInstagramMedia(inputUrl) {
       : declaredType
         ? 'image'
         : ''
-      ? 'video'
-      : declaredType.startsWith('image') || declaredType === 'jpg' || declaredType === 'jpeg' || declaredType === 'png' || declaredType === 'webp'
-        ? 'image'
-        : ''
+
 
     if (!type) {
       throw new Error('Jenis media Instagram ke-' + (index + 1) + ' tidak dikenali oleh API.')
