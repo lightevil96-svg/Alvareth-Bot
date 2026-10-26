@@ -639,26 +639,106 @@ if (global.db.data.chats[m.chat]?.autolevelup) {
         const groupMetadata = m.isGroup ? await conn.groupMetadata(m.chat).catch(() => ({})) : {}
         const participants = m.isGroup ?(groupMetadata.participants || []) : []
         
-let userIds = await conn.findUserId(m.sender).catch(() => ({}))
-let botIds = await conn.findUserId(conn.user.id).catch(() => ({}))
+const normalizeIdentity = value => {
+  const values = new Set()
+  if (typeof value !== 'string') return values
+  const input = value.trim()
+  if (!input) return values
 
-const idsUser = [
+  const add = jid => {
+    if (!jid || typeof jid !== 'string') return
+    const trimmed = jid.trim()
+    if (!trimmed) return
+    values.add(trimmed)
+    values.add(trimmed.replace(/:\d+(?=@)/, ''))
+    if (trimmed.endsWith('@c.us')) values.add(trimmed.replace(/@c\.us$/i, '@s.whatsapp.net'))
+    if (typeof conn.decodeJid === 'function') {
+      try {
+        const decoded = conn.decodeJid(trimmed)
+        if (decoded) {
+          values.add(decoded)
+          values.add(decoded.replace(/:\d+(?=@)/, ''))
+          if (decoded.endsWith('@c.us')) values.add(decoded.replace(/@c\.us$/i, '@s.whatsapp.net'))
+        }
+      } catch {}
+    }
+  }
+
+  if (/@/.test(input)) {
+    add(input)
+  } else if (/^\+?[\d\s().-]+$/.test(input)) {
+    const digits = input.replace(/\D/g, '')
+    if (digits) add(digits + '@s.whatsapp.net')
+  } else {
+    add(input)
+  }
+  return values
+}
+
+const participantIdentityValues = participant => [
+  participant?.id,
+  participant?.jid,
+  participant?.phoneNumber,
+  participant?.phone_number,
+  participant?.lid,
+  participant?.pn,
+  participant?.participant,
+  participant?.participantAlt
+].filter(value => typeof value === 'string' && value)
+
+const expandIdentityAliases = async values => {
+  const aliases = new Set()
+  for (const value of values) {
+    for (const alias of normalizeIdentity(value)) aliases.add(alias)
+  }
+
+  // LID and phone-number JIDs are different namespaces. Resolve LIDs through
+  // the active Baileys mapping so participant metadata can match either form.
+  for (const alias of [...aliases]) {
+    if (!alias.endsWith('@lid') || typeof conn.findUserId !== 'function') continue
+    const resolved = await conn.findUserId(alias).catch(() => null)
+    for (const value of [resolved?.phoneNumber, resolved?.lid]) {
+      for (const normalized of normalizeIdentity(value)) aliases.add(normalized)
+    }
+  }
+  return aliases
+}
+
+const userIds = await conn.findUserId(m.sender).catch(() => null)
+const botIds = await conn.findUserId(conn.user?.id).catch(() => null)
+const senderAliases = await expandIdentityAliases([
+  m.sender,
+  m.senderPN,
+  m.key?.participant,
+  m.key?.participantAlt,
+  m.key?.remoteJidAlt,
   userIds?.phoneNumber,
   userIds?.lid
-].filter(v => v && v !== 'id-not-found')
-
-const idsBot = [
+])
+const botAliases = await expandIdentityAliases([
+  conn.user?.id,
+  conn.user?.lid,
   botIds?.phoneNumber,
   botIds?.lid
-].filter(v => v && v !== 'id-not-found')
+])
 
-const groupUser = m.isGroup
-  ? participants.find(u => idsUser.includes(u.id))
-  : {}
+const participantMatches = async (participant, aliases) => {
+  const identities = await expandIdentityAliases(participantIdentityValues(participant))
+  for (const identity of identities) {
+    if (aliases.has(identity)) return true
+  }
+  return false
+}
 
-const bot = m.isGroup
-  ? participants.find(u => idsBot.includes(u.id))
-  : {}
+let groupUser = {}
+let bot = {}
+if (m.isGroup) {
+  for (const participant of participants) {
+    if (!groupUser.admin && await participantMatches(participant, senderAliases)) groupUser = participant
+    if (!bot.admin && await participantMatches(participant, botAliases)) bot = participant
+    if (groupUser.admin && bot.admin) break
+  }
+}
 
 const isRAdmin = groupUser?.admin === 'superadmin'
 const isAdmin = isRAdmin || groupUser?.admin === 'admin'
