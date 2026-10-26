@@ -146,14 +146,19 @@ async function getInstagramCsrfSession() {
   if (!fbDtsg) {
     fbDtsg = html.match(/["']fb_dtsg["']\s*:\s*["']([^"']+)["']/i)?.[1] || ''
   }
-  if (!csrf && !fbDtsg) {
-    throw new Error('Instagram tidak memberikan token CSRF/fb_dtsg. Halaman mungkin dibatasi atau struktur web berubah.')
+  let lsd = html.match(/"LSD",\[\],\{"token":"([^"]+)"/)?.[1] || ''
+  if (!lsd) {
+    lsd = html.match(/["']lsd["']\s*:\s*["']([^"']+)["']/i)?.[1] || ''
+  }
+  if (!csrf && !fbDtsg && !lsd) {
+    throw new Error('Instagram tidak memberikan token CSRF/fb_dtsg/LSD. Halaman mungkin dibatasi atau struktur web berubah.')
   }
 
   if (csrf) cookieMap.set('csrftoken', csrf)
   return {
     csrf: csrf || '',
     fbDtsg,
+    lsd,
     cookie: [...cookieMap.entries()].map(([key, value]) => key + '=' + value).join('; ')
   }
 }
@@ -201,6 +206,7 @@ async function resolveWithInstagramPublicGraphql(inputUrl, requireVideo) {
         variables: JSON.stringify(variables)
       })
       if (session.fbDtsg) body.set('fb_dtsg', session.fbDtsg)
+      if (session.lsd) body.set('lsd', session.lsd)
 
       const response = await axios.post(operation.endpoint, body.toString(), {
         timeout: API_TIMEOUT_MS,
@@ -215,6 +221,7 @@ async function resolveWithInstagramPublicGraphql(inputUrl, requireVideo) {
           'x-asbd-id': operation.asbdId,
           'x-requested-with': 'XMLHttpRequest',
           ...(session.csrf ? { 'x-csrftoken': session.csrf } : {}),
+          ...(session.lsd ? { 'x-fb-lsd': session.lsd } : {}),
           ...(session.cookie ? { cookie: session.cookie } : {})
         },
         validateStatus: status => status >= 200 && status < 300
