@@ -1,100 +1,129 @@
 import fs from 'node:fs'
 import yts from 'yt-search'
-import { downloadYoutubeAudio, cleanupDownload } from '../../lib/scrape/youtube.js'
+import {
+  downloadYoutubeAudio,
+  cleanupDownload,
+  encodeAudioBufferToMp3
+} from '../../lib/scrape/youtube.js'
 
-let handler = async (m, { conn, text }) => {
-  if (!text) throw `Contoh:
-.ytmp3 https://youtube.com/watch?v=337-Aroj1Ew
-.ytmp3 dj 30 detik`
+const MAX_INLINE_AUDIO_BYTES = 50 * 1024 * 1024
+const MAX_AUDIO_BYTES = 150 * 1024 * 1024
+
+async function getFallbackAudio(url, targetBitrate) {
+  const apiBase = String(global.APIs?.nexray || 'https://api.nexray.eu.cc').replace(/\/+$/, '')
+  const endpoints = [
+    apiBase + '/downloader/savetube?url=' + encodeURIComponent(url) + '&quality=mp3',
+    apiBase + '/downloader/v1/ytmp3?url=' + encodeURIComponent(url)
+  ]
+  const failures = []
+
+  for (const endpoint of endpoints) {
+    try {
+      const response = await fetch(endpoint, { signal: AbortSignal.timeout(45000) })
+      if (!response.ok) throw new Error('API audio HTTP ' + response.status)
+      const json = await response.json()
+      const data = json?.result
+      const mediaUrl = data?.url || data?.dl
+      if (!json?.status || !mediaUrl) throw new Error(json?.message || 'API tidak mengembalikan URL audio.')
+
+      const mediaResponse = await fetch(mediaUrl, { signal: AbortSignal.timeout(90000) })
+      if (!mediaResponse.ok) throw new Error('Unduhan audio HTTP ' + mediaResponse.status)
+      const buffer = Buffer.from(await mediaResponse.arrayBuffer())
+      if (!buffer.length) throw new Error('File audio kosong.')
+      if (buffer.length > MAX_AUDIO_BYTES) throw new Error('File audio melebihi batas 150 MB.')
+
+      const encoded = await encodeAudioBufferToMp3(buffer, targetBitrate)
+      return {
+        ...encoded,
+        title: data.title || 'audio',
+        sourceBitrate: null
+      }
+    } catch (error) {
+      failures.push(String(error?.message || error))
+    }
+  }
+
+  throw new Error(failures.join(' | ') || 'Semua sumber audio gagal.')
+}
+
+let handler = async (m, { conn, text, usedPrefix, command }) => {
+  const rawInput = String(text || '').trim()
+  if (!rawInput) {
+    throw `Contoh:
+${usedPrefix || '.'}${command} https://youtube.com/watch?v=337-Aroj1Ew|320
+${usedPrefix || '.'}${command} judul lagu|128
+
+Kualitas: |320 = terbaik yang tersedia, |128 = hemat.`
+  }
+
+  const [queryPart, bitratePart] = rawInput.split('|')
+  const query = String(queryPart || '').trim()
+  const targetBitrate = Number(String(bitratePart || '320').trim()) === 128 ? 128 : 320
+  if (!query) throw new Error('Judul lagu atau URL YouTube tidak boleh kosong.')
 
   await m.react('🕒')
-
-  let result
+  let outputDir = null
 
   try {
-    let url = text
-
-    if (!/^https?:\/\//i.test(text)) {
-      const search = await yts(text)
-      const video = search.videos[0]
-      if (!video) throw 'Video tidak ditemukan.'
+    let url = query
+    if (!/^https?:\/\//i.test(query)) {
+      const search = await yts(query)
+      const video = search.videos?.[0]
+      if (!video) throw new Error('Video tidak ditemukan.')
       url = video.url
     }
 
+    let result
     try {
-      result = await downloadYoutubeAudio(url)
+      result = await downloadYoutubeAudio(url, targetBitrate)
+    } catch (localError) {
+      console.warn('[YTMP3] Downloader utama gagal; mencoba fallback:', localError?.message || localError)
+      result = await getFallbackAudio(url, targetBitrate)
+    }
+    outputDir = result.outputDir
 
-      const buffer = fs.readFileSync(result.path)
-      const size = fs.statSync(result.path).size
+    const buffer = result.buffer || fs.readFileSync(result.path)
+    if (!buffer?.length) throw new Error('File MP3 kosong.')
+    if (buffer.length > MAX_AUDIO_BYTES) throw new Error('File MP3 melebihi batas 150 MB.')
 
-      if (size > 50 * 1024 * 1024) {
-        await conn.sendMessage(m.chat, {
+    const bitrate = Number(result.bitrate || targetBitrate)
+    const caption = [
+      '🎵 *' + String(result.title || 'Audio YouTube').replace(/[\r\n]+/g, ' ').slice(0, 180) + '*',
+      '🎧 Format: MP3',
+      '⚙️ Encoding: ' + bitrate + ' kbps',
+      result.sourceBitrate ? '📡 Bitrate sumber: sekitar ' + Math.round(result.sourceBitrate) + ' kbps' : '',
+    ].filter(Boolean).join('\n')
+
+    const sent = buffer.length > MAX_INLINE_AUDIO_BYTES
+      ? await conn.sendMessage(m.chat, {
           document: buffer,
           mimetype: 'audio/mpeg',
-          fileName: `${result.title}.mp3`
-        }, { quoted: m })
-      } else {
-        await conn.sendMessage(m.chat, {
+          fileName: `Alvareth-${bitrate}kbps.mp3`,
+          caption
+        }, { quoted: m, noAlvarethPreview: true })
+      : await conn.sendMessage(m.chat, {
           audio: buffer,
           mimetype: 'audio/mpeg',
-          fileName: `${result.title}.mp3`,
-          ptt: false
-        }, { quoted: m })
-      }
+          fileName: `Alvareth-${bitrate}kbps.mp3`,
+          ptt: false,
+          caption
+        }, { quoted: m, noAlvarethPreview: true })
 
-      await cleanupDownload(result.outputDir)
-      await m.react('✅')
-      return
-    } catch (e) {
-      console.log('[YTMP3] Local downloader gagal:', e.message)
-      if (result?.outputDir) await cleanupDownload(result.outputDir).catch(() => {})
-    }
-
-    let data
-
-    try {
-      const res = await fetch(`${global.APIs.nexray}/downloader/savetube?url=${encodeURIComponent(url)}&quality=mp3`)
-      const json = await res.json()
-
-      if (!json.status) throw new Error()
-
-      data = json.result
-    } catch {
-      const res = await fetch(`${global.APIs.nexray}/downloader/v1/ytmp3?url=${encodeURIComponent(url)}`)
-      const json = await res.json()
-
-      if (!json.status) throw new Error(json.message || 'Gagal mengambil audio.')
-
-      data = json.result
-    }
-
-    const res = await fetch(data.url)
-    const buffer = Buffer.from(await res.arrayBuffer())
-
-    if (buffer.length > 50 * 1024 * 1024) {
-      await conn.sendMessage(m.chat, {
-        document: buffer,
-        mimetype: 'audio/mpeg',
-        fileName: `${data.title || 'audio'}.mp3`
-      }, { quoted: m })
-    } else {
-      await conn.sendMessage(m.chat, {
-        audio: buffer,
-        mimetype: 'audio/mpeg',
-        fileName: `${data.title || 'audio'}.mp3`,
-        ptt: false
-      }, { quoted: m })
-    }
-
+    if (!sent?.key?.id) throw new Error('WhatsApp tidak mengembalikan ID pesan audio.')
     await m.react('✅')
-  } catch (e) {
-    console.error(e)
+    console.log('[YTMP3] Terkirim ke', m.chat, '| bitrate MP3', bitrate)
+  } catch (error) {
+    console.error('[YTMP3]', error?.stack || error)
     await m.react('❌')
-    throw e.message || 'Terjadi kesalahan.'
+    await conn.sendMessage(m.chat, {
+      text: '❌ Gagal mengunduh/mengirim audio: ' + String(error?.message || error)
+    }, { quoted: m, noAlvarethPreview: true })
+  } finally {
+    if (outputDir) await cleanupDownload(outputDir).catch(() => {})
   }
 }
 
-handler.help = ['ytmp3']
+handler.help = ['ytmp3 <URL/judul>|320 atau |128']
 handler.tags = ['downloader']
 handler.command = /^ytmp3$/i
 handler.limit = true
