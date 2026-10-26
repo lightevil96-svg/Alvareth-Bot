@@ -9,14 +9,14 @@ function isInstagramUrl(input) {
   try {
     const parsed = new URL(String(input || '').trim())
     return /^https?:$/.test(parsed.protocol) &&
-      /^(?:[a-z0-9-]+\\.)*instagram\\.com$|^(?:[a-z0-9-]+\\.)*instagr\\.am$/i.test(parsed.hostname)
+      /^(?:[a-z0-9-]+\.)*instagram\.com$|^(?:[a-z0-9-]+\.)*instagr\.am$/i.test(parsed.hostname)
   } catch {
     return false
   }
 }
 
 function getApiBase() {
-  return String(global.APIs?.nexray || 'https://api.nexray.eu.cc').replace(/\\/+$/, '')
+  return String(global.APIs?.nexray || 'https://api.nexray.eu.cc').replace(/\/+$/, '')
 }
 
 // Use the same documented NexRay v2 media schema already used by .ig3.
@@ -46,7 +46,7 @@ async function getInstagramMedia(inputUrl) {
 
   const media = mediaList.map((item, index) => {
     const url = String(item?.url || item?.download_url || item?.downloadUrl || '').trim()
-    if (!/^https?:\\/\\//i.test(url)) {
+    if (!/^https?:\/\//i.test(url)) {
       throw new Error('API Instagram mengembalikan tautan media ke-' + (index + 1) + ' yang tidak valid.')
     }
 
@@ -143,10 +143,10 @@ let handler = async (m, { conn, args, text, command }) => {
         '✅ *Instagram Downloader*',
         '',
         result.username !== '-' ? '👤 *Kreator:* ' + result.username : '',
-        result.title ? '📝 *Judul:* ' + result.title.replace(/\\s+/g, ' ').slice(0, 300) : '',
+        result.title ? '📝 *Judul:* ' + result.title.replace(/\s+/g, ' ').slice(0, 300) : '',
         '📦 *Media:* ' + (i + 1) + ' dari ' + result.media.length
       ].filter(Boolean)
-      const caption = parts.join('\\n')
+      const caption = parts.join('\n')
 
       let message
       if (media.type === 'video') {
