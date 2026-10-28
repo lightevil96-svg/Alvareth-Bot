@@ -1,110 +1,96 @@
 let handler = async (m, { conn, text, usedPrefix, command }) => {
-if (!m.isGroup) return m.reply('Khusus grup.')
+  if (!m.isGroup) return m.reply('Khusus grup.')
 
-let message
-
-if (m.quoted?.mediaMessage) {
-const mediaType = Object.keys(m.quoted.mediaMessage)[0]
-const media = m.quoted.mediaMessage[mediaType]
-
-media.contextInfo = {
-  ...(media.contextInfo || {}),
-  statusSourceType: 4,
-  statusAttributions: [
-    {
-      type: 10
-    }
-  ],
-  statusAudienceMetadata: {
-    audienceType: 1
+  const statusContextInfo = {
+    forwardingScore: 0,
+    featureEligibilities: {
+      canBeReshared: true,
+      canReceiveMultiReact: true
+    },
+    statusSourceType: 4,
+    statusAttributions: [{ type: 10 }],
+    statusAudienceMetadata: { audienceType: 1 }
   }
-}
 
-message = {
-  [mediaType]: media
-}
+  const captionOverride = typeof text === 'string' ? text.trim() : ''
+  const quotedMessage =
+    m.message?.extendedTextMessage?.contextInfo?.quotedMessage ||
+    m.quoted?.message ||
+    null
 
-} else if (m.quoted) {
-message = {
-extendedTextMessage: {
-text: m.quoted.text || m.quoted.caption || '',
-textArgb: 4294967295,
-backgroundArgb: 4280669030,
-font: 5,
-previewType: 0,
-contextInfo: {
-forwardingScore: 0,
-featureEligibilities: {
-canBeReshared: true,
-canReceiveMultiReact: true
-},
-statusSourceType: 4,
-statusAttributions: [
-{
-type: 10
-}
-],
-statusAudienceMetadata: {
-audienceType: 1
-}
-},
-inviteLinkGroupTypeV2: 0
-}
-}
-} else if (text) {
-message = {
-extendedTextMessage: {
-text,
-textArgb: 4294967295,
-backgroundArgb: 4280669030,
-font: 5,
-previewType: 0,
-contextInfo: {
-forwardingScore: 0,
-featureEligibilities: {
-canBeReshared: true,
-canReceiveMultiReact: true
-},
-statusSourceType: 4,
-statusAttributions: [
-{
-type: 10
-}
-],
-statusAudienceMetadata: {
-audienceType: 1
-}
-},
-inviteLinkGroupTypeV2: 0
-}
-}
-} else {
-return m.reply(
-"Contoh:\n${usedPrefix + command} Halo semua\n\nAtau reply media/pesan"
-)
-}
+  let message
 
-try {
-await conn.relayMessage(
-m.chat,
-{
-messageContextInfo: {
-messageSecret:
-'BrRzGQ6/B0ddqBuasejEf+rJKLQ2pauxHtAw1nIMPvw='
-},
-groupStatusMessageV2: {
-message
-}
-},
-{}
-)
+  // Reply media: forward the actual media payload into the group status.
+  const mediaContainer = m.quoted?.mediaMessage || quotedMessage
+  if (mediaContainer) {
+    const mediaType = [
+      'imageMessage',
+      'videoMessage',
+      'documentMessage',
+      'audioMessage',
+      'stickerMessage'
+    ].find(type => mediaContainer[type])
 
-m.reply('✅ Status grup berhasil dikirim')
+    if (mediaType) {
+      const media = { ...mediaContainer[mediaType] }
+      const originalCaption =
+        media.caption ||
+        m.quoted?.caption ||
+        m.quoted?.text ||
+        ''
 
-} catch (e) {
-console.error(e)
-m.reply("❌ Gagal mengirim status grup\n\n${e.message || e}")
-}
+      // Explicit text after .swgc takes priority; otherwise preserve media caption.
+      if (mediaType === 'imageMessage' || mediaType === 'videoMessage' || mediaType === 'documentMessage') {
+        media.caption = captionOverride || originalCaption
+      }
+
+      media.contextInfo = {
+        ...(media.contextInfo || {}),
+        ...statusContextInfo
+      }
+
+      message = { [mediaType]: media }
+    }
+  }
+
+  // If no media was quoted, publish the provided text or quoted text as a text status.
+  if (!message) {
+    const statusText = captionOverride || m.quoted?.text || m.quoted?.caption || ''
+    if (!statusText) {
+      return m.reply(
+        `Cara pakai:\n${usedPrefix + command} teks status\n\nAtau reply foto/video dengan .swgc [caption opsional]`
+      )
+    }
+
+    message = {
+      extendedTextMessage: {
+        text: statusText,
+        textArgb: 4294967295,
+        backgroundArgb: 4280669030,
+        font: 5,
+        previewType: 0,
+        contextInfo: statusContextInfo
+      }
+    }
+  }
+
+  try {
+    await conn.relayMessage(
+      m.chat,
+      {
+        messageContextInfo: {
+          messageSecret: 'BrRzGQ6/B0ddqBuasejEf+rJKLQ2pauxHtAw1nIMPvw='
+        },
+        groupStatusMessageV2: { message }
+      },
+      {}
+    )
+
+    await m.reply('✅ Status grup berhasil dikirim.')
+  } catch (e) {
+    console.error('[swgc]', e)
+    await m.reply(`❌ Gagal mengirim status grup.\n\n${e.message || e}`)
+  }
 }
 
 handler.help = ['swgc']
