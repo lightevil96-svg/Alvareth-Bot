@@ -4,7 +4,8 @@ import yts from 'yt-search'
 import {
   downloadYoutubeAudio,
   cleanupDownload,
-  encodeAudioBufferToMp3
+  encodeAudioBufferToMp3,
+  downloadYoutubeAudioYtDlp
 } from '../../lib/scrape/youtube.js'
 
 const MAX_INLINE_AUDIO_BYTES = 50 * 1024 * 1024
@@ -133,8 +134,21 @@ Kualitas: |320 = terbaik yang tersedia, |128 = hemat.`
     try {
       result = await downloadYoutubeAudio(url, targetBitrate)
     } catch (localError) {
-      console.warn('[YTMP3] Downloader utama gagal; mencoba fallback:', localError?.message || localError)
-      result = await getFallbackAudio(url, targetBitrate)
+      console.warn('[YTMP3] Downloader utama gagal; mencoba API cadangan:', localError?.message || localError)
+      try {
+        result = await getFallbackAudio(url, targetBitrate)
+      } catch (apiError) {
+        console.warn('[YTMP3] API cadangan gagal; mencoba yt-dlp resmi lokal:', apiError?.message || apiError)
+        try {
+          result = await downloadYoutubeAudioYtDlp(url, targetBitrate)
+        } catch (ytDlpError) {
+          throw new Error(
+            'Semua downloader gagal. API utama: ' + String(localError?.message || localError).slice(0, 180) +
+            ' | API cadangan: ' + String(apiError?.message || apiError).slice(0, 180) +
+            ' | yt-dlp: ' + String(ytDlpError?.message || ytDlpError).slice(0, 220)
+          )
+        }
+      }
     }
     outputDir = result.outputDir
 
