@@ -114,11 +114,11 @@ const handler = async (m, { conn, isOwner }) => {
     }
 
     const list = [
-      changed.length ? `Diubah (${changed.length}):\\n${changed.slice(0, 20).map(f => '• ' + f).join('\\n')}` : '',
-      added.length ? `Ditambahkan (${added.length}):\\n${added.slice(0, 20).map(f => '• ' + f).join('\\n')}` : ''
-    ].filter(Boolean).join('\\n\\n')
-    const extra = changed.length + added.length > 40 ? '\\n...daftar dipotong.' : ''
-    await m.reply(`✅ Update berhasil diterapkan.\\n\\n${list}${extra}\\n\\n🔄 Bot akan restart sekarang. Sesi WhatsApp, .env, database, dan file lokal yang tidak berubah tetap dipertahankan.`)
+      changed.length ? `Diubah (${changed.length}):\n${changed.slice(0, 20).map(f => '• ' + f).join('\n')}` : '',
+      added.length ? `Ditambahkan (${added.length}):\n${added.slice(0, 20).map(f => '• ' + f).join('\n')}` : ''
+    ].filter(Boolean).join('\n\n')
+    const extra = changed.length + added.length > 40 ? '\n...daftar dipotong.' : ''
+    await m.reply(`✅ Update berhasil diterapkan.\n\n${list}${extra}\n\n🔄 Bot akan restart sekarang. Sesi WhatsApp, .env, database, dan file lokal yang tidak berubah tetap dipertahankan.`)
 
     // index.js supervises this worker; the reset IPC asks the supervisor to
     // restart the worker so the panel's long-running parent process stays alive.
@@ -128,7 +128,7 @@ const handler = async (m, { conn, isOwner }) => {
     }, 1500)
   } catch (error) {
     console.error('[Alvareth updater]', error)
-    await m.reply('❌ Update gagal dan restart dibatalkan.\\n' + (error?.message || String(error)))
+    await m.reply('❌ Update gagal dan restart dibatalkan.\n' + (error?.message || String(error)))
   } finally {
     global.__alvarethUpdateRunning = false
   }
