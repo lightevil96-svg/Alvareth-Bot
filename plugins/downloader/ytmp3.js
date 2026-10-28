@@ -131,21 +131,31 @@ Kualitas: |320 = terbaik yang tersedia, |128 = hemat.`
     }
 
     let result
+    let ytDlpError
+    let localError
+    let apiError
+
+    // Try the local yt-dlp path first. Third-party endpoints may hang for several
+    // minutes before failing, leaving the user with only the clock reaction.
+    // yt-dlp is cached after the first run; API providers remain fallbacks.
     try {
-      result = await downloadYoutubeAudio(url, targetBitrate)
-    } catch (localError) {
-      console.warn('[YTMP3] Downloader utama gagal; mencoba API cadangan:', localError?.message || localError)
+      result = await downloadYoutubeAudioYtDlp(url, targetBitrate)
+    } catch (error) {
+      ytDlpError = error
+      console.warn('[YTMP3] yt-dlp gagal; mencoba downloader utama:', error?.message || error)
       try {
-        result = await getFallbackAudio(url, targetBitrate)
-      } catch (apiError) {
-        console.warn('[YTMP3] API cadangan gagal; mencoba yt-dlp resmi lokal:', apiError?.message || apiError)
+        result = await downloadYoutubeAudio(url, targetBitrate)
+      } catch (error2) {
+        localError = error2
+        console.warn('[YTMP3] Downloader utama gagal; mencoba API cadangan:', error2?.message || error2)
         try {
-          result = await downloadYoutubeAudioYtDlp(url, targetBitrate)
-        } catch (ytDlpError) {
+          result = await getFallbackAudio(url, targetBitrate)
+        } catch (error3) {
+          apiError = error3
           throw new Error(
-            'Semua downloader gagal. API utama: ' + String(localError?.message || localError).slice(0, 180) +
-            ' | API cadangan: ' + String(apiError?.message || apiError).slice(0, 180) +
-            ' | yt-dlp: ' + String(ytDlpError?.message || ytDlpError).slice(0, 220)
+            'Semua downloader gagal. yt-dlp: ' + String(ytDlpError?.message || ytDlpError).slice(0, 220) +
+            ' | API utama: ' + String(localError?.message || localError).slice(0, 180) +
+            ' | API cadangan: ' + String(apiError?.message || apiError).slice(0, 180)
           )
         }
       }
