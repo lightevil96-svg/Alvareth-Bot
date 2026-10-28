@@ -4,13 +4,12 @@ import crypto from 'node:crypto'
 import { spawn } from 'node:child_process'
 import JSZip from 'jszip'
 
-const REPO = 'https://github.com/lightevil96-svg/Alvareth-Bot'
 const BRANCH = process.env.AUTO_UPDATE_BRANCH || 'main'
 const MAX_ARCHIVE_BYTES = 100 * 1024 * 1024
 
 // These are runtime/local files: never replace them from the repository.
 const protectedPath = (rel) => {
-  const p = rel.replace(/\\\\/g, '/').replace(/^\\/+/, '')
+  const p = rel.replaceAll('\\\\', '/').replace(/^\\/+/, '')
   const parts = p.split('/')
   return (
     !p || p.startsWith('.git/') || p === '.git' ||
@@ -23,7 +22,7 @@ const protectedPath = (rel) => {
     p === 'data' || p.startsWith('data/') ||
     p.startsWith('.alvareth-bot-data/') ||
     parts.some(part => part === '..') ||
-    p.includes('\\0')
+    p.includes(String.fromCharCode(0))
   )
 }
 
