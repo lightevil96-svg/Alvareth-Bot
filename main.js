@@ -57,31 +57,45 @@ function mergeMissing(target, source) {
   }
   return target
 }
-if (existsSync(LEGACY_DATABASE_PATH) && !existsSync(DATABASE_MIGRATION_MARKER)) {
+
+// Merge legacy records on every startup, not just the first one. This recovers
+// registrations if the old database.json was restored/uploaded after the marker
+// had already been created. Existing persistent values always take priority,
+// and the legacy file is never deleted or modified.
+if (existsSync(LEGACY_DATABASE_PATH)) {
   try {
     const legacyData = JSON.parse(readFileSync(LEGACY_DATABASE_PATH, 'utf8'))
     let persistentData = {}
+    let persistentRaw = ''
     if (existsSync(DATABASE_PATH)) {
+      persistentRaw = readFileSync(DATABASE_PATH, 'utf8')
       try {
-        persistentData = JSON.parse(readFileSync(DATABASE_PATH, 'utf8'))
+        persistentData = JSON.parse(persistentRaw)
       } catch (error) {
-        // Keep the unreadable file for inspection; do not overwrite it automatically.
         throw new Error(`database persisten tidak valid; file asli dipertahankan (${error.message})`)
       }
     }
+
     const merged = mergeMissing(persistentData, legacyData)
-    if (existsSync(DATABASE_PATH)) {
-      mkdirSync(DATABASE_BACKUP_DIR, { recursive: true })
-      copyFileSync(DATABASE_PATH, join(DATABASE_BACKUP_DIR, `database-before-legacy-merge-${Date.now()}.json`))
+    const mergedRaw = JSON.stringify(merged, null, 2)
+    if (mergedRaw !== (persistentRaw ? JSON.stringify(JSON.parse(persistentRaw), null, 2) : '')) {
+      if (existsSync(DATABASE_PATH)) {
+        mkdirSync(DATABASE_BACKUP_DIR, { recursive: true })
+        copyFileSync(DATABASE_PATH, join(DATABASE_BACKUP_DIR, `database-before-legacy-merge-${Date.now()}.json`))
+      }
+      writeFileSync(DATABASE_PATH, mergedRaw)
+      console.log('[DATA MIGRATION] Data lama digabung; data persisten yang sudah ada diprioritaskan.')
+    } else {
+      console.log('[DATA MIGRATION] Tidak ada data lama tambahan untuk digabung.')
     }
-    writeFileSync(DATABASE_PATH, JSON.stringify(merged, null, 2))
-    writeFileSync(DATABASE_MIGRATION_MARKER, new Date().toISOString())
-    console.log('Database lama digabung dengan data persisten; data yang sudah ada tidak ditimpa.')
+    if (!existsSync(DATABASE_MIGRATION_MARKER)) {
+      writeFileSync(DATABASE_MIGRATION_MARKER, new Date().toISOString())
+    }
   } catch (error) {
     console.error('[DATA MIGRATION] Gagal menggabungkan database lama; kedua file dipertahankan:', error.message)
   }
-} else if (!existsSync(DATABASE_PATH) && !existsSync(LEGACY_DATABASE_PATH)) {
-  console.log('[DATA] Database baru akan dibuat. Pastikan direktori data lama yang berisi pendaftaran tersedia sebelum menjalankan bot.')
+} else if (!existsSync(DATABASE_PATH)) {
+  console.log('[DATA] Database belum ditemukan. Registrasi baru akan disimpan ke direktori data persisten.')
 }
 
 // Migrate existing WhatsApp session files without deleting the originals.
