@@ -35,31 +35,42 @@ function start(file) {
   
   setupMaster({ exec: args[0], args: args.slice(1) });
   let p = fork();
+  let restartRequested = false;
 
   p.on('message', data => {
     console.log('[✅RECEIVED]', data);
     switch (data) {
       case 'reset':
-        p.kill(); // Change here
-        isRunning = false;
-        start(file);
+        // Stop the old worker first. Starting a new worker before the old one
+        // exits can create two WhatsApp sockets and trigger "session in use".
+        if (!restartRequested) {
+          restartRequested = true;
+          p.kill();
+        }
         break;
       case 'uptime':
         p.send(process.uptime());
         break;
       default:
-          console.warn('[⚠️ UNRECOGNIZED MESSAGE]', data);
+        console.warn('[⚠️ UNRECOGNIZED MESSAGE]', data);
     }
   });
 
   p.on('exit', (_, code) => {
     isRunning = false;
     console.error('[❗] Exited with code:', code);
+
+    // Intentional update restart: spawn exactly one replacement only after
+    // the previous worker has fully exited.
+    if (restartRequested) {
+      return start(file);
+    }
+
     if (code !== 0) {
       console.log('[🔄 Restarting worker due to non-zero exit code...');
       return start(file);
     }
-    
+
     watchFile(args[0], () => {
       unwatchFile(args[0]);
       start(file);
