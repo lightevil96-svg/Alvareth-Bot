@@ -9,7 +9,7 @@ const MAX_ARCHIVE_BYTES = 100 * 1024 * 1024
 
 // These are runtime/local files: never replace them from the repository.
 const protectedPath = (rel) => {
-  const p = rel.replaceAll('\\\\', '/').replace(/^\\/+/, '')
+  const p = rel.replace(/^\/+/, '')
   const parts = p.split('/')
   return (
     !p || p.startsWith('.git/') || p === '.git' ||
