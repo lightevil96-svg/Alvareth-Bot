@@ -502,6 +502,69 @@ function isDiskFullError(error) {
   return /no space left on device|enospc|disk quota exceeded|not enough space|ruang disk sementara tersisa|penyimpanan server penuh|disk server penuh/i.test(String(error?.message || error))
 }
 
+function getTikTokVideoId(input) {
+  try {
+    const url = new URL(input)
+    const match = url.pathname.match(/\/video\/(\d{15,25})/i) ||
+      url.pathname.match(/\/(\d{15,25})(?:\/|$)/)
+    return match?.[1] || ''
+  } catch {
+    const match = String(input || '').match(/(?:video\/|\/)(\d{15,25})(?:[/?#]|$)/i)
+    return match?.[1] || ''
+  }
+}
+
+function decodeTikTokEmbeddedUrl(value) {
+  return String(value || '')
+    .replace(/\\u002[fF]/g, '/')
+    .replace(/\\u003[aA]/g, ':')
+    .replace(/\\u0026/g, '&')
+    .replace(/\\u003[dD]/g, '=')
+    .replace(/\\u0025/g, '%')
+    .replace(/\\\//g, '/')
+    .replace(/&amp;/gi, '&')
+    .replace(/\\u002[bB]/g, '+')
+}
+
+async function getTikTokEmbedMediaUrl(sourceUrl) {
+  const id = getTikTokVideoId(sourceUrl)
+  if (!id) throw new Error('ID video TikTok tidak bisa diambil dari tautan yang sudah di-resolve.')
+  const response = await axios.get('https://www.tiktok.com/embed/v2/' + encodeURIComponent(id), {
+    timeout: 20000,
+    maxRedirects: 5,
+    maxContentLength: 5 * 1024 * 1024,
+    headers: {
+      'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36',
+      accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      referer: 'https://www.tiktok.com/'
+    }
+  })
+  const html = decodeTikTokEmbeddedUrl(typeof response.data === 'string' ? response.data : JSON.stringify(response.data))
+  const candidates = html.match(/https?:\/\/[^\s"'<>\\]+/g) || []
+  for (const raw of candidates) {
+    const cleaned = raw.replace(/[),\]}]+$/g, '')
+    try {
+      const url = new URL(cleaned)
+      const host = url.hostname.toLowerCase()
+      const isMediaHost = host.includes('tiktokcdn') || host.includes('byteoversea') ||
+        host.includes('ibytedtos') || host.includes('muscdn') || host.includes('tiktokv')
+      if (isMediaHost && /^https?:$/.test(url.protocol)) return url.toString()
+    } catch {}
+  }
+  throw new Error('Halaman embed TikTok tidak mengandung URL CDN video yang dapat dipakai.')
+}
+
+async function prepareFromTikTokEmbed(sourceUrl, tempDir) {
+  const mediaUrl = await getTikTokEmbedMediaUrl(sourceUrl)
+  const sourcePath = path.join(tempDir, 'embed-source.bin')
+  const outputPath = path.join(tempDir, 'embed-fallback.mp4')
+  await downloadVideoFile(mediaUrl, sourcePath)
+  const sourceInfo = await inspectVideoFile(sourcePath)
+  await verifyFirstVideoFrame(sourcePath)
+  console.log('[TikTok] Sumber embed terverifikasi:', sourceInfo.codec, sourceInfo.width + 'x' + sourceInfo.height, formatDuration(sourceInfo.duration))
+  return normalizeVideoToMp4(sourcePath, outputPath)
+}
+
 async function prepareBestTikTokVideo(res, sourceUrl = '') {
   const candidates = Array.isArray(res.videoCandidates) && res.videoCandidates.length
     ? res.videoCandidates
@@ -551,13 +614,24 @@ async function prepareBestTikTokVideo(res, sourceUrl = '') {
       }
     }
 
-    // TikWM URLs can occasionally return truncated/corrupt H.264 data. Fall back
-    // to yt-dlp directly from the original TikTok URL rather than trying every
-    // corrupted variant again or falsely returning an incomplete MP4.
+    // TikWM URLs can occasionally return truncated/corrupt H.264 data.
+    // First try the official TikTok embed page to obtain a fresh signed CDN URL.
     if (sourceUrl && /^https?:\/\//i.test(sourceUrl)) {
+      try {
+        console.log('[TikTok] Varian TikWM gagal; mencoba URL CDN dari embed TikTok resmi...')
+        const normalized = await prepareFromTikTokEmbed(sourceUrl, tempDir)
+        console.log('[TikTok] Berhasil mendapatkan video melalui embed TikTok.')
+        return { ...normalized, quality: 'TikTok embed fallback' }
+      } catch (error) {
+        errors.push('embed TikTok: ' + summarizeTikTokError(error))
+        console.warn('[TikTok] Embed fallback gagal:', error?.stack || error)
+        if (isDiskFullError(error)) {
+          throw new Error('Disk server penuh saat fallback embed TikTok. Bersihkan penyimpanan atau atur ALVARETH_TIKTOK_TMPDIR ke lokasi lain.')
+        }
+      }
       let fallback = null
       try {
-        console.log('[TikTok] Varian TikWM gagal; mencoba fallback yt-dlp resmi...')
+        console.log('[TikTok] Embed fallback gagal; mencoba fallback yt-dlp resmi...')
         fallback = await downloadYoutubeVideoYtDlp(sourceUrl, 1080, (percent, detail) => {
           if (Number.isFinite(Number(percent))) {
             const value = Math.max(0, Math.min(100, Number(percent)))
