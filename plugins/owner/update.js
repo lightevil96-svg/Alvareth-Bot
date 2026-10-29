@@ -31,6 +31,47 @@ function log(message) {
   console.log('[Alvareth updater]', message)
 }
 
+function describeFetchCause(error) {
+  const parts = []
+  let current = error
+  for (let depth = 0; current && depth < 4; depth++, current = current.cause) {
+    const code = current.code || current.errno
+    const hostname = current.hostname ? ' host=' + current.hostname : ''
+    const message = String(current.message || current).replace(/[\\r\\n]+/g, ' ').slice(0, 180)
+    parts.push((code ? code + ': ' : '') + message + hostname)
+  }
+  return [...new Set(parts)].join(' <- ')
+}
+
+async function fetchWithRetry(url, options = {}, label = 'GitHub') {
+  const maxAttempts = 3
+  let lastError
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const response = await fetch(url, options)
+      if (![429, 500, 502, 503, 504].includes(response.status) || attempt === maxAttempts) {
+        return response
+      }
+      lastError = new Error('HTTP ' + response.status)
+      log(label + ': percobaan ' + attempt + '/' + maxAttempts + ' mendapat HTTP ' + response.status + '; mencoba ulang.')
+    } catch (error) {
+      lastError = error
+      log(label + ': percobaan ' + attempt + '/' + maxAttempts + ' gagal: ' + describeFetchCause(error))
+    }
+
+    if (attempt < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, attempt * 1200))
+    }
+  }
+
+  throw new Error(
+    label + ' gagal setelah ' + maxAttempts + ' percobaan: ' +
+    describeFetchCause(lastError || new Error('penyebab tidak diketahui')),
+    { cause: lastError }
+  )
+}
+
 function isDependencyFile(rel) {
   return ['package.json', 'package-lock.json', 'npm-shrinkwrap.json'].includes(rel)
 }
@@ -76,7 +117,7 @@ function normalizeRepoPath(input) {
 }
 
 async function fetchJson(url, label) {
-  const response = await fetch(url, { headers: requestHeaders })
+  const response = await fetchWithRetry(url, { headers: requestHeaders }, label || 'GitHub API')
   if (!response.ok) {
     throw new Error((label || 'GitHub API') + ' gagal: HTTP ' + response.status)
   }
@@ -145,7 +186,7 @@ async function inferInstalledBaseSha(root) {
     if (!isSha(commit?.sha)) continue
     const url = RAW_ROOT + '/' + commit.sha + '/' +
       UPDATE_PLUGIN_PATH.split('/').map(encodeURIComponent).join('/')
-    const response = await fetch(url, { headers: { 'User-Agent': 'Alvareth-Bot-Updater' } })
+    const response = await fetchWithRetry(url, { headers: { 'User-Agent': 'Alvareth-Bot-Updater' } }, 'Mencari versi dasar updater')
     if (!response.ok) continue
     const remoteBuffer = Buffer.from(await response.arrayBuffer())
     if (sha256(remoteBuffer) === localHash) {
@@ -179,7 +220,7 @@ async function compareCommits(baseSha, headSha) {
 
 async function downloadArchiveAtCommit(commitSha) {
   const url = 'https://codeload.github.com/' + REPOSITORY + '/zip/' + commitSha
-  const response = await fetch(url, { headers: { 'User-Agent': 'Alvareth-Bot-Updater' } })
+  const response = await fetchWithRetry(url, { headers: { 'User-Agent': 'Alvareth-Bot-Updater' } }, 'Mengunduh arsip GitHub')
   if (!response.ok) throw new Error('Arsip GitHub gagal diunduh: HTTP ' + response.status)
 
   const declaredSize = Number(response.headers.get('content-length') || 0)
@@ -215,7 +256,7 @@ async function downloadArchiveAtCommit(commitSha) {
 async function fetchBaseFile(baseSha, rel) {
   const url = RAW_ROOT + '/' + baseSha + '/' +
     rel.split('/').map(encodeURIComponent).join('/')
-  const response = await fetch(url, { headers: { 'User-Agent': 'Alvareth-Bot-Updater' } })
+  const response = await fetchWithRetry(url, { headers: { 'User-Agent': 'Alvareth-Bot-Updater' } }, 'Membaca file baseline')
   if (response.status === 404) return null
   if (!response.ok) throw new Error('Gagal membaca file baseline ' + rel + ': HTTP ' + response.status)
   const declaredSize = Number(response.headers.get('content-length') || 0)
