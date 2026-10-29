@@ -757,7 +757,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
     }
 
     if (res.video || (Array.isArray(res.videoCandidates) && res.videoCandidates.length)) {
-      const prepared = await prepareBestTikTokVideo(res, url)
+      const prepared = await prepareBestTikTokVideo(res, res.sourceUrl || url)
       const fileName = safeFilename(title)
 
       if (prepared.size > MAX_INLINE_VIDEO_BYTES) {
