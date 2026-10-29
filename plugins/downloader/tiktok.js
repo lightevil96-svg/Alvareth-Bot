@@ -193,10 +193,9 @@ async function waitForActiveConnection(fallbackConn, timeoutMs = 90000) {
 function isGroupMetadataRateLimitError(error) {
   const message = String(error?.message || error || '')
   const stack = String(error?.stack || '')
-  return /rate-overlimit|rate[ -]over[ -]limit|too many requests|\\b429\\b/i.test(message) &&
-    /groupMetadata|groups\\.js|messages-send\\.js/i.test(stack)
+  return /rate-overlimit|rate[ -]over[ -]limit|too many requests|429/i.test(message) &&
+    /groupMetadata|groups[.]js|messages-send[.]js/i.test(stack)
 }
-
 async function sendMessageWithReconnect(fallbackConn, ...args) {
   let active = await waitForActiveConnection(fallbackConn)
   const reconnectDeadline = Date.now() + 300000
