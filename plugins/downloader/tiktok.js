@@ -1,4 +1,5 @@
 import { tiktokSearch, tiktokScrape } from '../../lib/scrape/tikwm.js'
+import { downloadYoutubeVideoYtDlp, cleanupDownload as cleanupYtDlpDownload } from '../../lib/scrape/youtube.js'
 import axios from 'axios'
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'
@@ -396,39 +397,118 @@ async function renderSinglePhotoWithMusic(imageUrl, audioUrl, outputPath) {
   }
 }
 
-async function prepareBestTikTokVideo(res) {
+async function cleanupStaleTikTokTemps(root = os.tmpdir()) {
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000
+  let entries = []
+  try { entries = await fsp.readdir(root, { withFileTypes: true }) } catch { return }
+  for (const entry of entries) {
+    if (!entry.isDirectory() || !/^alvareth-tiktok(?:-single|-photo)?-/.test(entry.name)) continue
+    const candidate = path.join(root, entry.name)
+    try {
+      const info = await fsp.stat(candidate)
+      if (info.mtimeMs < cutoff) {
+        await fsp.rm(candidate, { recursive: true, force: true })
+        console.log('[TikTok] Membersihkan direktori sementara tertinggal:', candidate)
+      }
+    } catch {}
+  }
+}
+
+async function availableDiskBytes(dir) {
+  try {
+    const info = await fsp.statfs(dir)
+    return Number(info.bavail) * Number(info.bsize)
+  } catch {
+    return Infinity
+  }
+}
+
+function isDiskFullError(error) {
+  return /no space left on device|enospc|disk quota exceeded|not enough space/i.test(String(error?.message || error))
+}
+
+async function prepareBestTikTokVideo(res, sourceUrl = '') {
   const candidates = Array.isArray(res.videoCandidates) && res.videoCandidates.length
     ? res.videoCandidates
     : (res.video ? [{ label: 'video tersedia', url: res.video }] : [])
-
   if (!candidates.length) throw new Error('Provider tidak menyediakan URL video yang dapat diunduh.')
 
-  const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'alvareth-tiktok-'))
+  const configuredRoot = String(process.env.ALVARETH_TIKTOK_TMPDIR || '').trim()
+  const tempRoot = path.resolve(configuredRoot || os.tmpdir())
+  await fsp.mkdir(tempRoot, { recursive: true })
+  await cleanupStaleTikTokTemps(tempRoot)
+  const tempDir = await fsp.mkdtemp(path.join(tempRoot, 'alvareth-tiktok-'))
   const errors = []
 
   try {
-    // tiktokScrape orders HD first. Use a lower variant only if the preferred
-    // source cannot be downloaded or converted into a valid MP4.
     for (let i = 0; i < candidates.length; i++) {
       const candidate = candidates[i]
       if (!candidate?.url || !/^https?:\/\//i.test(candidate.url)) continue
-
       const sourcePath = path.join(tempDir, 'source-' + i + '.bin')
       const outputPath = path.join(tempDir, 'alvareth-tiktok-' + i + '.mp4')
 
       try {
+        const freeBytes = await availableDiskBytes(tempDir)
+        if (freeBytes < 32 * 1024 * 1024) {
+          throw new Error('Ruang disk sementara tersisa kurang dari 32 MB. Kosongkan disk TokoPanel atau atur ALVARETH_TIKTOK_TMPDIR ke lokasi yang memiliki ruang lebih besar.')
+        }
         console.log('\n[TikTok] Memproses varian ' + (candidate.label || ('#' + (i + 1))) + '...')
         await downloadVideoFile(candidate.url, sourcePath)
+        const sourceDuration = await getMediaDuration(sourcePath)
+        if (!(sourceDuration > 0)) throw new Error('Sumber dari provider tidak terbaca sebagai video utuh (durasi/metadata tidak valid).')
         const normalized = await normalizeVideoToMp4(sourcePath, outputPath)
         console.log('[TikTok] Berhasil menyiapkan video dari varian:', candidate.label || ('#' + (i + 1)))
         return { ...normalized, quality: candidate.label || 'tertinggi yang tersedia' }
       } catch (error) {
-        errors.push((candidate.label || ('varian #' + (i + 1))) + ': ' + (error?.message || String(error)))
-        console.warn('[TikTok] Varian video gagal, mencoba fallback:', errors[errors.length - 1])
+        const detail = (error?.message || String(error)).slice(0, 500)
+        errors.push((candidate.label || ('varian #' + (i + 1))) + ': ' + detail)
+        // Do not retain partial/corrupt files between quality attempts; they can
+        // fill the container disk and make the final watermark fallback fail.
+        await Promise.all([
+          fsp.rm(sourcePath, { force: true }).catch(() => {}),
+          fsp.rm(outputPath, { force: true }).catch(() => {})
+        ])
+        console.warn('[TikTok] Varian gagal; file parsial dibuang:', errors[errors.length - 1])
+        if (isDiskFullError(error)) {
+          throw new Error('Penyimpanan server penuh saat mengunduh/merender TikTok (ENOSPC). Percobaan lain dihentikan agar disk tidak makin penuh. Bersihkan file sementara lama atau atur ALVARETH_TIKTOK_TMPDIR ke direktori dengan ruang kosong.')
+        }
       }
     }
 
-    throw new Error('Semua varian video TikTok gagal diunduh atau diverifikasi. ' + errors.slice(0, 3).join(' | '))
+    // TikWM URLs can occasionally return truncated/corrupt H.264 data. Fall back
+    // to yt-dlp directly from the original TikTok URL rather than trying every
+    // corrupted variant again or falsely returning an incomplete MP4.
+    if (sourceUrl && /^https?:\/\//i.test(sourceUrl)) {
+      let fallback = null
+      try {
+        console.log('[TikTok] Varian TikWM gagal; mencoba fallback yt-dlp resmi...')
+        fallback = await downloadYoutubeVideoYtDlp(sourceUrl, 1080, (percent, detail) => {
+          if (Number.isFinite(Number(percent))) {
+            const value = Math.max(0, Math.min(100, Number(percent)))
+            terminalProgress('Fallback yt-dlp', value, 0, NaN, String(detail || '').slice(0, 140))
+          } else if (detail) console.log('[TikTok] yt-dlp:', String(detail).slice(0, 200))
+        })
+        const fileInfo = await fsp.stat(fallback.path)
+        if (!fileInfo.size || fileInfo.size > MAX_VIDEO_BYTES) {
+          throw new Error('Fallback yt-dlp menghasilkan file kosong atau lebih dari 150 MB.')
+        }
+        const duration = await getMediaDuration(fallback.path)
+        if (!(duration > 0)) throw new Error('Fallback yt-dlp menghasilkan video yang metadata/durasinya tidak valid.')
+        const normalizedPath = path.join(tempDir, 'yt-dlp-fallback.mp4')
+        const normalized = await normalizeVideoToMp4(fallback.path, normalizedPath)
+        console.log('[TikTok] Berhasil mengunduh TikTok memakai fallback yt-dlp.')
+        return { ...normalized, quality: 'yt-dlp fallback' }
+      } catch (error) {
+        errors.push('yt-dlp fallback: ' + String(error?.message || error).slice(0, 600))
+        if (isDiskFullError(error)) {
+          throw new Error('Disk server penuh saat fallback yt-dlp. Bersihkan penyimpanan TokoPanel atau atur ALVARETH_TIKTOK_TMPDIR ke lokasi lain yang memiliki ruang cukup.')
+        }
+      } finally {
+        if (fallback?.outputDir) await cleanupYtDlpDownload(fallback.outputDir).catch(() => {})
+      }
+    }
+
+    throw new Error('Semua varian TikTok gagal diverifikasi/dikonversi. ' + errors.slice(0, 4).join(' | '))
   } finally {
     await fsp.rm(tempDir, { recursive: true, force: true }).catch(() => {})
   }
@@ -618,7 +698,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
     }
 
     if (res.video || (Array.isArray(res.videoCandidates) && res.videoCandidates.length)) {
-      const prepared = await prepareBestTikTokVideo(res)
+      const prepared = await prepareBestTikTokVideo(res, url)
       const fileName = safeFilename(title)
 
       if (prepared.size > MAX_INLINE_VIDEO_BYTES) {
