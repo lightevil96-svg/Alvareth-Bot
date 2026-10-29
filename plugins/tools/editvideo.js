@@ -413,6 +413,8 @@ const handler = async (m, { conn, text, usedPrefix, command, isOwner }) => {
   if (!key) return m.reply('⚠️ API key Groq belum tersedia. Atur dengan .ragebait apikey gsk_xxx terlebih dahulu.')
   active.add(m.chat)
   let dir
+  let progressHeartbeat = null
+  const startedAt = Date.now()
   try {
     await m.react('🎬')
     let progressMessage = null
@@ -421,14 +423,12 @@ const handler = async (m, { conn, text, usedPrefix, command, isOwner }) => {
     let fallbackProgressAt = 0
     let lastProgress = -1
     let lastProgressAt = 0
-    const startedAt = Date.now()
     let latestTerminalStage = 'Menyiapkan pekerjaan'
     let latestTerminalPercent = 0
     let lastTerminalStage = ''
     let lastTerminalBucket = -1
     let lastTerminalAt = 0
     let renderStartedAt = 0
-    let progressHeartbeat = null
     const formatElapsed = milliseconds => {
       const seconds = Math.max(0, Math.floor(milliseconds / 1000))
       return String(Math.floor(seconds / 3600)).padStart(2, '0') + ':' + String(Math.floor(seconds % 3600 / 60)).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0')
