@@ -978,6 +978,47 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
       '',
       '✨ _Downloaded by Alvareth Bot_ ✨'
     ].join('\n')
+
+    if (isPhotoToVideoCommand) {
+      const indexMatch = input.match(/(?:^|\s)(\d{1,3})\s*$/)
+      const photoIndex = Number(indexMatch?.[1] || 0)
+      if (!Number.isInteger(photoIndex) || photoIndex < 1 || photoIndex > (res.images?.length || 0)) {
+        throw new Error('Nomor foto tidak valid. Pilih salah satu nomor dari menu foto TikTok.')
+      }
+      if (res.type !== 'image' || !Array.isArray(res.images) || !res.images.length) {
+        throw new Error('Tautan ini bukan postingan foto/slideshow yang masih tersedia.')
+      }
+
+      const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'alvareth-tiktok-selected-photo-'))
+      const outputPath = path.join(tempDir, 'tiktok-photo-' + photoIndex + '.mp4')
+      try {
+        const rendered = await renderSinglePhotoWithMusic(res.images[photoIndex - 1], res.audio, outputPath)
+        const videoCaption = [
+          '🎬 *ALVARETH TIKTOK PHOTO-TO-VIDEO*',
+          '',
+          '✅ *Foto berhasil dijadikan video*',
+          '',
+          '🖼️ *Foto:* ' + photoIndex + ' dari ' + res.images.length,
+          '📝 *Judul:* ' + title,
+          '👤 *Kreator:* ' + uploader,
+          '⏱️ *Durasi:* ' + Math.round(rendered.duration) + ' detik',
+          rendered.hasAudio ? '🎵 Musik asli postingan digunakan.' : '🔇 Video dibuat tanpa audio karena musik tidak tersedia.',
+          '',
+          '✨ _Downloaded by Alvareth Bot_ ✨'
+        ].join('\n')
+        await sendMessageWithReconnect(conn, m.chat, {
+          video: rendered.buffer,
+          mimetype: 'video/mp4',
+          fileName: safeFilename(title + '-foto-' + photoIndex),
+          caption: videoCaption
+        }, { quoted: m, noAlvarethPreview: true })
+      } finally {
+        await fsp.rm(tempDir, { recursive: true, force: true }).catch(() => {})
+      }
+      await reactSafe(conn, m, '✅')
+      return
+    }
+
     // .ttfoto must never fall through into the video sender. If no cached
     // photo exists, fetch just the original photo and stop with a clear error if
     // the provider has no images, rather than re-sending the rendered video.
