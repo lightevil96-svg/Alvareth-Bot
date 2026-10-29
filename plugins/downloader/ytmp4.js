@@ -56,15 +56,23 @@ Kualitas: |best = resolusi tertinggi yang tersedia, |360 = hemat data.`
     const buffer = fs.readFileSync(result.path)
     if (!buffer.length) throw new Error('File video hasil unduhan kosong.')
     const size = fs.statSync(result.path).size
-    const actualQuality = result.quality || targetQuality
+    const actualQuality = result.quality || (useBest ? 'Auto' : targetQuality)
+    const qualityLabel = typeof actualQuality === 'number' && actualQuality > 0
+      ? actualQuality + 'p'
+      : String(actualQuality)
     const caption = [
       '🎬 *' + cleanFilename(result.title || 'Video YouTube') + '*',
-      '📺 Kualitas: ' + actualQuality + (typeof actualQuality === 'number' ? 'p' : ''),
+      '📺 Kualitas: ' + qualityLabel,
+      result.fps ? '🎞️ Frame rate: ' + result.fps + ' FPS' : '',
       useBest ? '✨ Mode: kualitas tertinggi yang tersedia' : '📦 Mode: hemat data',
+      result.downloader === 'api-fallback' ? '📡 Sumber: API cadangan' : '',
       '📁 Format: MP4'
-    ].join('\n')
+    ].filter(Boolean).join('\n')
 
-    const fileName = cleanFilename(result.title) + '-' + actualQuality + 'p.mp4'
+    const qualitySuffix = typeof actualQuality === 'number' && actualQuality > 0
+      ? '-' + actualQuality + 'p'
+      : ''
+    const fileName = cleanFilename(result.title) + qualitySuffix + '.mp4'
     const sent = size > MAX_INLINE_VIDEO_BYTES
       ? await conn.sendMessage(m.chat, {
           document: buffer,
