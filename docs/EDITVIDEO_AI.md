@@ -5,6 +5,7 @@ Plugin: `plugins/tools/editvideo.js` (perintah `.editvideo` atau `.vedit`).
 ## Kebutuhan dasar
 
 - FFmpeg dan ffprobe tersedia di `PATH`.
+- Fallback YouTube mencoba skrip resmi yt-dlp dengan `python3`/`python` lebih dahulu untuk menghindari kegagalan ekstraksi binary PyInstaller. Jika Python tidak tersedia, bot memakai fallback binary yang memerlukan ruang sementara (`/tmp`) yang cukup.
 - Perintah `.editvideo` dan `.vedit` hanya dapat digunakan owner bot.
 - API key Groq disimpan melalui `.ragebait apikey gsk_...`.
 - Plugin tidak menerapkan batas tetap untuk ukuran video, durasi, atau ukuran hasil. Kapasitas disk/RAM/CPU TokoPanel, koneksi, timeout pengaman, dan batas kirim WhatsApp tetap berlaku.
