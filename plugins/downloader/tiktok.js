@@ -112,6 +112,54 @@ function cacheSinglePhoto(url, photo) {
   pruneSinglePhotoCache()
 }
 
+const PHOTO_POST_CACHE_TTL_MS = 15 * 60 * 1000
+const PHOTO_POST_CACHE_MAX_ENTRIES = 10
+const photoPostCache = new Map()
+
+function prunePhotoPostCache() {
+  const now = Date.now()
+  for (const [key, value] of photoPostCache) {
+    if (!value || value.expiresAt <= now) photoPostCache.delete(key)
+  }
+  while (photoPostCache.size > PHOTO_POST_CACHE_MAX_ENTRIES) {
+    const oldestKey = photoPostCache.keys().next().value
+    if (oldestKey === undefined) break
+    photoPostCache.delete(oldestKey)
+  }
+}
+
+function cachePhotoPost(url, post) {
+  if (!url || !Array.isArray(post?.images) || !post.images.length) return
+  prunePhotoPostCache()
+  const key = normalizeTikTokCacheKey(url)
+  photoPostCache.delete(key)
+  photoPostCache.set(key, {
+    title: String(post.title || 'TikTok Photo Post'),
+    author: String(post.author || 'Unknown'),
+    audio: post.audio || null,
+    images: post.images.filter(image => typeof image === 'string' && (image.startsWith('https://') || image.startsWith('http://'))),
+    expiresAt: Date.now() + PHOTO_POST_CACHE_TTL_MS
+  })
+  prunePhotoPostCache()
+}
+
+function getCachedPhotoPost(url) {
+  prunePhotoPostCache()
+  const key = normalizeTikTokCacheKey(url)
+  const cached = photoPostCache.get(key)
+  if (!cached || cached.expiresAt <= Date.now()) return null
+  photoPostCache.delete(key)
+  photoPostCache.set(key, cached)
+  return {
+    type: 'image',
+    isPhotoPost: true,
+    title: cached.title,
+    author: cached.author,
+    audio: cached.audio,
+    images: [...cached.images]
+  }
+}
+
 // Some messages in this Baileys fork are protobuf-converted objects without the
 // serializer prototype methods. Send reactions through the socket directly.
 function isSocketReady(conn) {
@@ -469,35 +517,93 @@ async function downloadToBuffer(url, maxBytes = MAX_VIDEO_BYTES) {
 }
 
 async function renderSinglePhotoWithMusic(imageUrl, audioUrl, outputPath) {
-  if (!audioUrl) throw new Error('Musik postingan tidak tersedia dari provider TikTok.')
   const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'alvareth-tiktok-photo-'))
   const imagePath = path.join(tempDir, 'photo.jpg')
   const audioPath = path.join(tempDir, 'music.bin')
   try {
-    const [imageBuffer, audioBuffer] = await Promise.all([
-      downloadToBuffer(imageUrl, 20 * 1024 * 1024),
-      downloadToBuffer(audioUrl, 30 * 1024 * 1024)
-    ])
-    await Promise.all([fsp.writeFile(imagePath, imageBuffer), fsp.writeFile(audioPath, audioBuffer)])
-    const audioDuration = await getMediaDuration(audioPath)
-    if (!(audioDuration > 0)) throw new Error('Durasi musik TikTok tidak dapat dibaca.')
-    const duration = Math.min(audioDuration, 60)
-    await runFfmpeg([
+    const imageBuffer = await downloadToBuffer(imageUrl, 20 * 1024 * 1024)
+    await fsp.writeFile(imagePath, imageBuffer)
+
+    let hasAudio = false
+    let duration = 5
+    if (audioUrl) {
+      try {
+        const audioBuffer = await downloadToBuffer(audioUrl, 30 * 1024 * 1024)
+        await fsp.writeFile(audioPath, audioBuffer)
+        const audioDuration = await getMediaDuration(audioPath)
+        if (audioDuration > 0) {
+          hasAudio = true
+          duration = Math.min(audioDuration, 60)
+        } else {
+          console.warn('[TikTok] Audio postingan tidak dapat dibaca; membuat video foto tanpa suara.')
+        }
+      } catch (error) {
+        console.warn('[TikTok] Gagal mengambil audio postingan; membuat video foto tanpa suara:', error?.message || error)
+      }
+    } else {
+      console.warn('[TikTok] Audio postingan tidak tersedia; membuat video foto tanpa suara.')
+    }
+
+    const args = [
       '-hide_banner', '-loglevel', 'error', '-y',
-      '-loop', '1', '-framerate', '30', '-i', imagePath, '-i', audioPath,
-      '-t', String(duration), '-map', '0:v:0', '-map', '1:a:0',
+      '-loop', '1', '-framerate', '30', '-i', imagePath
+    ]
+    if (hasAudio) args.push('-i', audioPath)
+    args.push(
+      '-t', String(duration), '-map', '0:v:0',
+      ...(hasAudio ? ['-map', '1:a:0'] : []),
       '-vf', 'scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2,format=yuv420p',
-      '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23',
-      '-c:a', 'aac', '-b:a', '128k', '-shortest', '-movflags', '+faststart', outputPath
-    ], { durationSeconds: duration, label: 'Render foto + musik' })
+      '-c:v', 'libx264', '-preset', 'veryfast', '-threads:v', '2', '-crf', '23',
+      ...(hasAudio ? ['-c:a', 'aac', '-b:a', '128k', '-shortest'] : ['-an']),
+      '-movflags', '+faststart', outputPath
+    )
+    await runFfmpeg(args, { durationSeconds: duration, label: 'Render foto + musik' })
     const info = await fsp.stat(outputPath)
     if (info.size < 4096 || info.size > MAX_VIDEO_BYTES) throw new Error('Hasil video foto tidak valid atau terlalu besar.')
-    return { buffer: await fsp.readFile(outputPath), imageBuffer, size: info.size, duration }
+    return { buffer: await fsp.readFile(outputPath), imageBuffer, size: info.size, duration, hasAudio }
   } finally {
     await fsp.rm(tempDir, { recursive: true, force: true }).catch(() => {})
   }
 }
 
+async function sendPhotoToVideoActionMenus(conn, m, { url, images, usedPrefix }) {
+  const rowsPerMenu = 10
+  for (let offset = 0; offset < images.length; offset += rowsPerMenu) {
+    const end = Math.min(images.length, offset + rowsPerMenu)
+    const rows = images.slice(offset, end).map((_image, relativeIndex) => {
+      const index = offset + relativeIndex + 1
+      return {
+        header: '',
+        title: '🎬 Foto ' + index + ' → Video',
+        description: 'Ubah foto ke-' + index + ' menjadi video',
+        id: usedPrefix + 'ttfoto2video ' + url + ' ' + index
+      }
+    })
+    try {
+      await sendMessageWithReconnect(conn, m.chat, {
+        text: images.length + ' foto berhasil diambil. Pilih nomor foto yang ingin diubah menjadi video.',
+        footer: global.namebot || 'Alvareth Bot',
+        optionText: 'Pilih Foto',
+        optionTitle: '🎬 Ubah Foto Jadi Video',
+        offerText: global.namebot || 'Alvareth Bot',
+        offerCode: global.namebot || 'Alvareth Bot',
+        offerUrl: global.botLink || 'https://spoo.me/Alvareth-Bot',
+        offerExpiration: Date.now() + 86400000,
+        nativeFlow: [{
+          text: 'Pilih foto',
+          sections: [{
+            title: 'Foto ' + (offset + 1) + '–' + end,
+            rows
+          }],
+          icon: 'image'
+        }],
+        interactiveAsTemplate: false
+      }, { quoted: m, noAlvarethPreview: true })
+    } catch (error) {
+      console.warn('[TikTok] Gagal mengirim menu ubah foto jadi video:', error?.message || error)
+    }
+  }
+}
 async function cleanupStaleTikTokTemps(root = os.tmpdir()) {
   const cutoff = Date.now() - 24 * 60 * 60 * 1000
   let entries = []
@@ -767,9 +873,10 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
   await reactSafe(conn, m, '✨')
 
   const isPhotoOnlyCommand = /^ttfoto$/i.test(command)
-  // For .ttfoto, the command's URL must win over the quoted button/message text.
-  // Otherwise a quoted caption can replace the URL and trigger a failed scrape.
-  const input = String(isPhotoOnlyCommand
+  const isPhotoToVideoCommand = /^ttfoto2video$/i.test(command)
+  // Action commands include their own URL and photo index; prioritize their
+  // payload over quoted text so interactive selections parse correctly.
+  const input = String((isPhotoOnlyCommand || isPhotoToVideoCommand)
     ? (text || m.quoted?.text || m.quoted?.caption || '')
     : (m.quoted ? (m.quoted.text || m.quoted.caption || text || '') : (text || ''))
   ).trim()
@@ -791,6 +898,9 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
 
     if (!url && isPhotoOnlyCommand) {
       throw new Error('Perintah .ttfoto memerlukan tautan TikTok yang sama dengan perintah .tt sebelumnya. Kirim ulang .tt dengan tautan tersebut untuk membuat tombol foto baru.')
+    }
+    if (!url && isPhotoToVideoCommand) {
+      throw new Error('Tombol ubah foto jadi video memerlukan tautan TikTok dan nomor foto. Jalankan ulang .tt lalu pilih nomor fotonya.')
     }
 
     if (!url) {
@@ -833,8 +943,10 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
 
     // No initial chat reply: only send the downloaded media or a real error.
 
-    const res = await tiktokScrape(url)
+    let res = isPhotoToVideoCommand ? getCachedPhotoPost(url) : null
+    if (!res) res = await tiktokScrape(url)
     if (!res) throw new Error('Gagal mengambil data TikTok. Pastikan tautan masih aktif dan dapat diakses.')
+    if (res?.type === 'image' && Array.isArray(res.images) && res.images.length > 0) cachePhotoPost(url, res)
     if (res.isAmbiguousShortLink) {
       throw new Error('Tautan pendek TikTok belum berhasil diarahkan ke postingan aslinya. Bot menghentikan proses agar postingan foto tidak salah diproses sebagai video. Coba kirim tautan lengkap dari TikTok melalui Bagikan > Salin tautan.')
     }
@@ -860,6 +972,47 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
       '',
       '✨ _Downloaded by Alvareth Bot_ ✨'
     ].join('\n')
+
+    if (isPhotoToVideoCommand) {
+      const indexMatch = input.match(/(?:^|\s)(\d{1,3})\s*$/)
+      const photoIndex = Number(indexMatch?.[1] || 0)
+      if (res.type !== 'image' || !Array.isArray(res.images) || !res.images.length) {
+        throw new Error('Tautan ini bukan postingan foto/slideshow yang masih tersedia.')
+      }
+      if (!Number.isInteger(photoIndex) || photoIndex < 1 || photoIndex > res.images.length) {
+        throw new Error('Nomor foto tidak valid. Pilih salah satu nomor dari menu foto TikTok.')
+      }
+
+      const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'alvareth-tiktok-selected-photo-'))
+      const outputPath = path.join(tempDir, 'tiktok-photo-' + photoIndex + '.mp4')
+      try {
+        const rendered = await renderSinglePhotoWithMusic(res.images[photoIndex - 1], res.audio, outputPath)
+        const videoCaption = [
+          '🎬 *ALVARETH TIKTOK PHOTO-TO-VIDEO*',
+          '',
+          '✅ *Foto berhasil dijadikan video*',
+          '',
+          '🖼️ *Foto:* ' + photoIndex + ' dari ' + res.images.length,
+          '📝 *Judul:* ' + title,
+          '👤 *Kreator:* ' + uploader,
+          '⏱️ *Durasi:* ' + Math.round(rendered.duration) + ' detik',
+          rendered.hasAudio ? '🎵 Musik asli postingan digunakan.' : '🔇 Video dibuat tanpa audio karena musik tidak tersedia.',
+          '',
+          '✨ _Downloaded by Alvareth Bot_ ✨'
+        ].join('\n')
+        await sendMessageWithReconnect(conn, m.chat, {
+          video: rendered.buffer,
+          mimetype: 'video/mp4',
+          fileName: safeFilename(title + '-foto-' + photoIndex),
+          caption: videoCaption
+        }, { quoted: m, noAlvarethPreview: true })
+      } finally {
+        await fsp.rm(tempDir, { recursive: true, force: true }).catch(() => {})
+      }
+      await reactSafe(conn, m, '✅')
+      return
+    }
+
     // .ttfoto must never fall through into the video sender. If no cached
     // photo exists, fetch just the original photo and stop with a clear error if
     // the provider has no images, rather than re-sending the rendered video.
@@ -880,38 +1033,76 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
     }
 
     if (res.type === 'image' && Array.isArray(res.images) && res.images.length > 0) {
-      const photoCaption = [
-        '📷 *ALVARETH TIKTOK PHOTO DOWNLOADER*',
-        '',
-        '✅ *Foto berhasil diambil*',
-        '',
-        '📝 *Judul:* ' + title,
-        '👤 *Kreator:* ' + uploader,
-        '🖼️ *Jumlah foto:* ' + res.images.length,
-        '',
-        '✨ _Downloaded by Alvareth Bot_ ✨'
-      ].join('\n')
-
-      // Send photo posts as their original images. Do not fabricate an MP4 for
-      // a single slide, and do not pass slideshow media to the video pipeline.
       if (res.images.length === 1) {
-        await sendMessageWithReconnect(conn, m.chat, {
-          image: { url: res.images[0] },
-          caption: photoCaption
-        }, { quoted: m, noAlvarethPreview: true })
+        // Single-photo posts preserve the original behavior: send the rendered
+        // MP4 first, then offer the original image in a separate action message.
+        const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'alvareth-tiktok-single-'))
+        const outputPath = path.join(tempDir, 'tiktok-photo.mp4')
+        try {
+          const rendered = await renderSinglePhotoWithMusic(res.images[0], res.audio, outputPath)
+          await sendMessageWithReconnect(conn, m.chat, {
+            video: rendered.buffer,
+            mimetype: 'video/mp4',
+            fileName: safeFilename(title),
+            caption: caption + '\n\n🎵 Foto tunggal dijadikan video' +
+              (rendered.hasAudio ? ' dengan musik postingan.' : ' tanpa audio karena musik tidak tersedia.') +
+              ' Durasi maksimal 60 detik.'
+          }, { quoted: m, noAlvarethPreview: true })
+
+          cacheSinglePhoto(url, {
+            imageBuffer: rendered.imageBuffer,
+            title,
+            author: String(uploader || '-')
+          })
+
+          try {
+            const buttonResult = await sendMessageWithReconnect(conn, m.chat, {
+              text: 'Video foto sudah dikirim. Mau mengunduh foto aslinya?',
+              footer: global.namebot || 'Alvareth Bot',
+              optionText: 'Pilih Aksi',
+              optionTitle: '📷 Foto TikTok',
+              offerText: global.namebot || 'Alvareth Bot',
+              offerCode: global.namebot || 'Alvareth Bot',
+              offerUrl: global.botLink || 'https://spoo.me/Alvareth-Bot',
+              offerExpiration: Date.now() + 86400000,
+              nativeFlow: [{
+                text: '📷 Ambil Foto Asli',
+                id: usedPrefix + 'ttfoto ' + url,
+                icon: 'image'
+              }],
+              interactiveAsTemplate: false
+            }, { quoted: m, noAlvarethPreview: true })
+            if (!buttonResult?.key?.id) console.warn('[TikTok] Pesan menu foto asli tidak mengembalikan ID pesan.')
+          } catch (error) {
+            console.warn('[TikTok] Gagal mengirim tombol foto asli:', error?.message || error)
+          }
+        } finally {
+          await fsp.rm(tempDir, { recursive: true, force: true }).catch(() => {})
+        }
       } else {
+        const photoCaption = [
+          '📷 *ALVARETH TIKTOK PHOTO DOWNLOADER*',
+          '',
+          '✅ *Foto berhasil diambil*',
+          '',
+          '📝 *Judul:* ' + title,
+          '👤 *Kreator:* ' + uploader,
+          '🖼️ *Jumlah foto:* ' + res.images.length,
+          '',
+          '✨ _Downloaded by Alvareth Bot_ ✨'
+        ].join('\n')
+
         const imageMessages = res.images.map((img, i) => ({
           image: { url: img },
           caption: i === 0 ? photoCaption : ''
         }))
         await sendMessageWithReconnect(conn, m.chat, { album: imageMessages }, { quoted: m, noAlvarethPreview: true })
+        await sendPhotoToVideoActionMenus(conn, m, { url, images: res.images, usedPrefix })
       }
 
-      if (photoActionKey) markPhotoActionSent(photoActionKey)
       await reactSafe(conn, m, '✅')
       return
     }
-
     // If TikTok says this is a photo post but the provider failed to return
     // original images, do not try FFmpeg or yt-dlp on its non-video response.
     if (res.isPhotoPost) {
@@ -1011,9 +1202,9 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
   }
 }
 
-handler.help = ['tt', 'tiktok']
+handler.help = ['tt', 'tiktok', 'ttfoto', 'ttfoto2video']
 handler.tags = ['downloader']
-handler.command = /^(tt|tiktok|ttfoto)$/i
+handler.command = /^(tt|tiktok|ttfoto|ttfoto2video)$/i
 handler.limit = true
 handler.register = false
 
