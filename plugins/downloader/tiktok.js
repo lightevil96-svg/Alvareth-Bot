@@ -1,4 +1,4 @@
-import { tiktokSearch, tiktokScrape } from '../../lib/scrape/tikwm.js'
+import { tiktokSearch, tiktokScrape, getTikTokPhotoPost } from '../../lib/scrape/tikwm.js'
 import { downloadYoutubeVideoYtDlp, cleanupDownload as cleanupYtDlpDownload } from '../../lib/scrape/youtube.js'
 import axios from 'axios'
 import fs from 'node:fs'
@@ -614,6 +614,21 @@ async function prepareBestTikTokVideo(res, sourceUrl = '') {
       }
     }
 
+    // Before treating provider URLs as a video, check TikTok's page state for
+    // a photo post. A slideshow must use its individual image URLs, not FFmpeg
+    // or yt-dlp. This runs only after all provider video candidates failed.
+    const photoPage = await getTikTokPhotoPost(sourceUrl).catch(error => {
+      console.warn('[TikTok] Pengecekan metadata foto langsung gagal:', error?.response?.status || error?.message || error)
+      return null
+    })
+    if (photoPage?.isPhotoPost) {
+      const photoError = new Error(photoPage.images?.length
+        ? 'Postingan foto TikTok terdeteksi; gunakan jalur pengiriman foto.'
+        : 'Postingan foto TikTok terdeteksi, tetapi halaman tidak memberikan URL gambar yang dapat diunduh.')
+      photoError.photoPost = photoPage
+      throw photoError
+    }
+
     // TikWM URLs can occasionally return truncated/corrupt H.264 data.
     // First try the official TikTok embed page to obtain a fresh signed CDN URL.
     if (sourceUrl && /^https?:\/\//i.test(sourceUrl)) {
@@ -670,13 +685,30 @@ async function prepareBestTikTokVideo(res, sourceUrl = '') {
 }
 
 function getTikTokFallbackSourceUrl(res, originalUrl) {
+  const source = String(res?.sourceUrl || originalUrl || '').trim()
+  const original = String(originalUrl || '').trim()
+
+  // Never rewrite a photo permalink to /video/{id}: TikTok photo posts are
+  // collections of images and must not be sent through the video extractor.
+  if (/\/photo\/\d+/i.test(source)) return source
+  if (/\/photo\/\d+/i.test(original)) return original
+  if (/^(https?:\/\/)?(vt|vm)\.tiktok\.com\//i.test(source)) return source
+  if (/^(https?:\/\/)?(vt|vm)\.tiktok\.com\//i.test(original)) return original
+
   const videoId = String(res?.videoId || '').match(/\d{15,25}/)?.[0] || ''
   const authorId = String(res?.authorId || '').replace(/^@/, '').replace(/[^\w.-]/g, '')
+  if (res?.isPhotoPost || res?.type === 'image') {
+    if (videoId) {
+      const authorPath = authorId ? '@' + authorId + '/' : ''
+      return 'https://www.tiktok.com/' + authorPath + 'photo/' + videoId
+    }
+    return source || original
+  }
   if (videoId) {
     const authorPath = authorId ? '@' + authorId + '/' : ''
     return 'https://www.tiktok.com/' + authorPath + 'video/' + videoId
   }
-  return String(res?.sourceUrl || originalUrl || '').trim()
+  return source || original
 }
 
 function safeFilename(value) {
@@ -806,71 +838,85 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
     }
 
     if (res.type === 'image' && Array.isArray(res.images) && res.images.length > 0) {
-      if (res.images.length === 1 && !/^ttfoto$/i.test(command)) {
-        const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'alvareth-tiktok-single-'))
-        const outputPath = path.join(tempDir, 'tiktok-photo.mp4')
-        try {
-          const rendered = await renderSinglePhotoWithMusic(res.images[0], res.audio, outputPath)
-          await sendMessageWithReconnect(conn, m.chat, {
-            video: rendered.buffer,
-            mimetype: 'video/mp4',
-            fileName: safeFilename(title),
-            caption: caption + '\n\n🎵 Foto tunggal dirender menjadi video dengan musik asli, maksimal 60 detik.'
-          }, { quoted: m, noAlvarethPreview: true })
-          // Keep the original downloaded image for the button, so the selected
-          // action doesn't re-scrape TikTok or accidentally re-send the video.
-          cacheSinglePhoto(url, {
-            imageBuffer: rendered.imageBuffer,
-            title,
-            author: String(uploader || '-')
-          })
-          // Reuse the same nativeFlow button format as plugins/main/menu.js.
-          // This SC's Baileys fork handles menu actions through nativeFlow; a raw
-          // templateButtons payload can be silently ignored by this sendMessage path.
-          const buttonResult = await sendMessageWithReconnect(conn, m.chat, {
-            text: 'Foto tunggal sudah dijadikan video. Mau foto aslinya?',
-            footer: global.namebot || 'Alvareth Bot',
-            optionText: 'Pilih Aksi',
-            optionTitle: '📷 Foto TikTok',
-            offerText: global.namebot || 'Alvareth Bot',
-            offerCode: global.namebot || 'Alvareth Bot',
-            offerUrl: global.botLink || 'https://spoo.me/Alvareth-Bot',
-            offerExpiration: Date.now() + 86400000,
-            nativeFlow: [{
-              text: '📷 Ambil Foto Asli',
-              id: `${usedPrefix}ttfoto ${url}`,
-              icon: 'image'
-            }],
-            interactiveAsTemplate: false
-          }, { quoted: m, noAlvarethPreview: true })
-          if (!buttonResult?.key?.id) {
-            throw new Error('Pesan tombol Ambil Foto tidak mengembalikan ID pesan.')
-          }
-        } finally {
-          await fsp.rm(tempDir, { recursive: true, force: true }).catch(() => {})
-        }
+      const photoCaption = [
+        '📷 *ALVARETH TIKTOK PHOTO DOWNLOADER*',
+        '',
+        '✅ *Foto berhasil diambil*',
+        '',
+        '📝 *Judul:* ' + title,
+        '👤 *Kreator:* ' + uploader,
+        '🖼️ *Jumlah foto:* ' + res.images.length,
+        '',
+        '✨ _Downloaded by Alvareth Bot_ ✨'
+      ].join('\n')
+
+      // Send photo posts as their original images. Do not fabricate an MP4 for
+      // a single slide, and do not pass slideshow media to the video pipeline.
+      if (res.images.length === 1) {
+        await sendMessageWithReconnect(conn, m.chat, {
+          image: { url: res.images[0] },
+          caption: photoCaption
+        }, { quoted: m, noAlvarethPreview: true })
       } else {
-        if (res.images.length === 1) {
-          // .ttfoto returns the original image directly; an album wrapper is unnecessary for one photo.
-          await sendMessageWithReconnect(conn, m.chat, {
-            image: { url: res.images[0] },
-            caption
-          }, { quoted: m, noAlvarethPreview: true })
-        } else {
-          const imageMessages = res.images.map((img, i) => ({
-            image: { url: img },
-            caption: i === 0 ? caption : ''
-          }))
-          await sendMessageWithReconnect(conn, m.chat, { album: imageMessages }, { quoted: m, noAlvarethPreview: true })
-        }
+        const imageMessages = res.images.map((img, i) => ({
+          image: { url: img },
+          caption: i === 0 ? photoCaption : ''
+        }))
+        await sendMessageWithReconnect(conn, m.chat, { album: imageMessages }, { quoted: m, noAlvarethPreview: true })
       }
+
+      if (photoActionKey) markPhotoActionSent(photoActionKey)
       await reactSafe(conn, m, '✅')
       return
     }
 
+    // If TikTok says this is a photo post but the provider failed to return
+    // original images, do not try FFmpeg or yt-dlp on its non-video response.
+    if (res.isPhotoPost) {
+      throw new Error('Postingan ini terdeteksi sebagai foto/slideshow TikTok, tetapi URL foto belum berhasil diperoleh. Coba lagi nanti saat TikTok atau provider media tersedia.')
+    }
+
     if (res.video || (Array.isArray(res.videoCandidates) && res.videoCandidates.length)) {
       const fallbackSourceUrl = getTikTokFallbackSourceUrl(res, url)
-      const prepared = await prepareBestTikTokVideo(res, fallbackSourceUrl)
+      let prepared
+      try {
+        prepared = await prepareBestTikTokVideo(res, fallbackSourceUrl)
+      } catch (error) {
+        const photoPost = error?.photoPost
+        if (photoPost?.isPhotoPost && Array.isArray(photoPost.images) && photoPost.images.length) {
+          const photoTitle = String(photoPost.title || title).replace(/\s+/g, ' ').trim()
+          const photoAuthor = photoPost.author || uploader
+          const photoCaption = [
+            '📷 *ALVARETH TIKTOK PHOTO DOWNLOADER*',
+            '',
+            '✅ *Foto berhasil diambil*',
+            '',
+            '📝 *Judul:* ' + photoTitle,
+            '👤 *Kreator:* ' + photoAuthor,
+            '🖼️ *Jumlah foto:* ' + photoPost.images.length,
+            '',
+            '✨ _Downloaded by Alvareth Bot_ ✨'
+          ].join('\n')
+          if (photoPost.images.length === 1) {
+            await sendMessageWithReconnect(conn, m.chat, {
+              image: { url: photoPost.images[0] },
+              caption: photoCaption
+            }, { quoted: m, noAlvarethPreview: true })
+          } else {
+            const imageMessages = photoPost.images.map((img, i) => ({
+              image: { url: img },
+              caption: i === 0 ? photoCaption : ''
+            }))
+            await sendMessageWithReconnect(conn, m.chat, { album: imageMessages }, { quoted: m, noAlvarethPreview: true })
+          }
+          await reactSafe(conn, m, '✅')
+          return
+        }
+        if (photoPost?.isPhotoPost) {
+          throw new Error('Postingan ini terdeteksi sebagai foto/slideshow TikTok, tetapi halaman tidak memberikan URL foto yang dapat diunduh. Video fallback dibatalkan agar media foto tidak diproses sebagai video.')
+        }
+        throw error
+      }
       const fileName = safeFilename(title)
 
       if (prepared.size > MAX_INLINE_VIDEO_BYTES) {
