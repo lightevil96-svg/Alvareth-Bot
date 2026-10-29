@@ -755,8 +755,13 @@ if (user && user.name && !user.registered) {
 
 // Number-based ban gate. It runs before every plugin/before-handler so a banned
 // number cannot trigger commands, AutoDL, AI auto-replies, or other bot features.
-const normalizeBanNumber = value =>
-  String(value || '').split('@')[0].split(':')[0].replace(/\D/g, '');
+const normalizeBanNumber = value => {
+  const raw = String(value || '').trim();
+  // A LID is not a phone number. Only phone JIDs and bare resolved numbers
+  // may be matched against the number-ban list.
+  if (raw.includes('@') && !/@(?:s\.whatsapp\.net|c\.us)$/i.test(raw)) return '';
+  return raw.split('@')[0].split(':')[0].replace(/\D/g, '');
+};
 
 const phoneBans = global.db.data.settings?.phoneBans || {};
 const senderNumbers = [...new Set([
@@ -782,25 +787,27 @@ if (!isOwner && (isNumberBanned || isLegacyBanned)) {
     if (typeof value === 'string') return value.length > 0 && messageText.startsWith(value);
     return false;
   };
-  const startsWithPrefix = Array.isArray(configuredPrefix)
+  const isNoPrefixMode = configuredPrefix instanceof RegExp &&
+    ['^', '(?:)', ''].includes(configuredPrefix.source);
+  const startsWithPrefix = isNoPrefixMode ? false : (Array.isArray(configuredPrefix)
     ? configuredPrefix.some(hasPrefix)
-    : hasPrefix(configuredPrefix);
+    : hasPrefix(configuredPrefix));
 
   // In no-prefix mode, only known bot commands should trigger the teasing reply.
   let isCommandAttempt = startsWithPrefix;
-  if (!isCommandAttempt && configuredPrefix instanceof RegExp &&
-      ['^', '(?:)', ''].includes(configuredPrefix.source)) {
+  if (!isCommandAttempt && isNoPrefixMode) {
     const command = messageText.split(/\s+/)[0]?.toLowerCase();
     if (command) {
       isCommandAttempt = Object.values(global.plugins || {}).some(plugin => {
         if (!plugin || !plugin.command) return false;
-        if (plugin.command instanceof RegExp) {
-          return new RegExp(plugin.command.source, plugin.command.flags.replace(/[gy]/g, 'i')).test(command);
-        }
+        const matchesCommandRegex = regex => {
+          let flags = regex.flags.replace(/[gy]/g, '');
+          if (!flags.includes('i')) flags += 'i';
+          return new RegExp(regex.source, flags).test(command);
+        };
+        if (plugin.command instanceof RegExp) return matchesCommandRegex(plugin.command);
         if (Array.isArray(plugin.command)) return plugin.command.some(value =>
-          value instanceof RegExp
-            ? new RegExp(value.source, value.flags.replace(/[gy]/g, 'i')).test(command)
-            : String(value).toLowerCase() === command
+          value instanceof RegExp ? matchesCommandRegex(value) : String(value).toLowerCase() === command
         );
         return String(plugin.command).toLowerCase() === command;
       });
@@ -813,6 +820,9 @@ if (!isOwner && (isNumberBanned || isLegacyBanned)) {
 
   if (isBotAttempt) {
     global._alvarethBanReplyCooldown ||= new Map();
+    for (const [key, timestamp] of global._alvarethBanReplyCooldown) {
+      if (Date.now() - timestamp > 120_000) global._alvarethBanReplyCooldown.delete(key);
+    }
     const cooldownKey = m.chat + ':' + (senderNumbers[0] || m.sender);
     const now = Date.now();
     const lastSent = global._alvarethBanReplyCooldown.get(cooldownKey) || 0;
@@ -820,11 +830,11 @@ if (!isOwner && (isNumberBanned || isLegacyBanned)) {
     // Avoid flooding the group if a blocked spammer repeats the command.
     if (now - lastSent >= 60_000) {
       global._alvarethBanReplyCooldown.set(cooldownKey, now);
-      const banText = '🚫 *YAH, AKSES DITOLAK, NGAB!*\\n\\n' +
+      const banText = '🚫 *YAH, AKSES DITOLAK, NGAB!*\n\n' +
         'Nomormu sudah masuk daftar BAN Alvareth Bot. Mau spam terus? Percuma, ' +
         'perintahmu cuma jadi pajangan. Bot ini sudah nggak melayani kamu. 🤡' +
         (phoneBanEntry?.entry?.reason || user?.banReason
-          ? '\\n\\nAlasan: ' + String(phoneBanEntry?.entry?.reason || user?.banReason).slice(0, 180)
+          ? '\n\nAlasan: ' + String(phoneBanEntry?.entry?.reason || user?.banReason).slice(0, 180)
           : '');
       await conn.sendMessage(m.chat, { text: banText }, m.key ? { quoted: m } : {})
         .catch(error => console.warn('[USER BAN] Gagal mengirim notifikasi:', error?.message || error));
