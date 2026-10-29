@@ -38,7 +38,7 @@ let handler = async (m, { conn, text }) => {
 
   await global.db.write?.();
   return conn.sendMessage(m.chat, {
-    text: '✅ *BAN DICABUT*\\n\\nNomor: ' + number + '\\nAkses bot sudah dibuka kembali.'
+    text: '✅ *BAN DICABUT*\n\nNomor: ' + number + '\nAkses bot sudah dibuka kembali.'
   }, { quoted: m });
 };
 
