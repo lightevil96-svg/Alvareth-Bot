@@ -1,24 +1,59 @@
+const normalizePhone = value => String(value || '').replace(/\D/g, '');
+
 let handler = async (m, { conn, text }) => {
-    if (!text) throw 'Who wants to be banned? Provide the user\'s phone number and reason.'
-    let parts = text.split(' ')
-    let phoneNumber = parts[0].replace(/[^0-9]/g, '') // Remove non-numeric characters
-    let reason = parts.slice(1).join(' ') || '' // Join the remaining parts as the reason, or set to empty string if not provided
+  const input = String(text || '').trim();
+  if (!input) {
+    throw 'Format: .banuser 628xxxxxxxxxx alasan\nContoh: .banuser 628123456789 spam bot';
+  }
 
-    let who = phoneNumber + '@s.whatsapp.net'
-    let users = global.db.data.users
+  const tokens = input.split(/\s+/);
+  const mention = Array.isArray(m.mentionedJidPN) && m.mentionedJidPN.length
+    ? m.mentionedJidPN[0]
+    : Array.isArray(m.mentionedJid) && m.mentionedJid.length
+      ? m.mentionedJid[0]
+      : '';
+  const number = normalizePhone(mention || tokens[0]);
+  const reason = (mention ? tokens : tokens.slice(1)).join(' ').trim().slice(0, 300);
 
-    if (users[who]) {
-        users[who].banned = true
-        users[who].banReason = reason // Set the ban reason for the user
-        conn.reply(m.chat, `Banned user\n\n${reason ? 'Reason: ' + reason : 'No reason'}`, m)
-    } else {
-        throw 'User not found.'
+  if (number.length < 8 || number.length > 15) {
+    throw 'Nomor tidak valid. Gunakan kode negara, contoh: .banuser 628123456789 spam bot';
+  }
+
+  const settings = global.db.data.settings || (global.db.data.settings = {});
+  const phoneBans = settings.phoneBans || (settings.phoneBans = {});
+  const users = global.db.data.users || {};
+  const now = Date.now();
+
+  phoneBans[number] = {
+    number,
+    reason,
+    bannedAt: now,
+    bannedBy: normalizePhone(m.senderPN || m.sender),
+    source: 'owner-command'
+  };
+
+  // Preserve the old per-user flag when a matching phone-number JID exists.
+  for (const [jid, data] of Object.entries(users)) {
+    const savedNumber = normalizePhone(String(jid).split('@')[0].split(':')[0]);
+    if (savedNumber === number && data && typeof data === 'object') {
+      data.banned = true;
+      data.banReason = reason;
     }
-}
+  }
 
-handler.help = ['ban']
-handler.tags = ['owner']
-handler.command = /^ban(user)?$/i
-handler.rowner = true
+  await global.db.write?.();
+  await conn.sendMessage(m.chat, {
+    text: '⛔ *NOMOR BERHASIL DI-BAN*\\n\\n' +
+      '📵 Nomor: ' + number + '\\n' +
+      '🔒 Akses bot: DITOLAK\\n' +
+      '📝 Alasan: ' + (reason || 'Tidak dicantumkan') + '\\n\\n' +
+      'Jika nomor ini mencoba menggunakan perintah atau AutoDL, bot akan menolak aksesnya.'
+  }, { quoted: m });
+};
 
-export default handler
+handler.help = ['banuser <nomor> <alasan>'];
+handler.tags = ['owner'];
+handler.command = /^(ban|banuser)$/i;
+handler.rowner = true;
+
+export default handler;
