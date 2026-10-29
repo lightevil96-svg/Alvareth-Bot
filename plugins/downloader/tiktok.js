@@ -8,6 +8,7 @@ import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { pipeline } from 'node:stream/promises'
 import { Transform } from 'node:stream'
+import { fileTypeFromFile } from 'file-type'
 
 const MAX_VIDEO_BYTES = 150 * 1024 * 1024
 const MAX_INLINE_VIDEO_BYTES = 50 * 1024 * 1024
@@ -254,6 +255,59 @@ function runFfmpeg(args, { durationSeconds = 0, label = 'Konversi MP4' } = {}) {
   })
 }
 
+async function inspectVideoFile(filePath) {
+  let output = ''
+  let errorOutput = ''
+  await new Promise((resolve, reject) => {
+    const child = spawn('ffprobe', [
+      '-v', 'error',
+      '-show_entries', 'format=duration:stream=codec_type,codec_name,width,height',
+      '-of', 'json', filePath
+    ], { stdio: ['ignore', 'pipe', 'pipe'] })
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL')
+      reject(new Error('ffprobe timeout saat memeriksa file TikTok.'))
+    }, 20000)
+    child.stdout.on('data', chunk => { output = (output + chunk.toString()).slice(-20000) })
+    child.stderr.on('data', chunk => { errorOutput = (errorOutput + chunk.toString()).slice(-3000) })
+    child.once('error', error => { clearTimeout(timer); reject(error) })
+    child.once('close', code => {
+      clearTimeout(timer)
+      if (code !== 0) reject(new Error('Metadata video TikTok tidak valid: ' + (errorOutput.trim() || 'ffprobe gagal').slice(-400)))
+      else resolve()
+    })
+  })
+  let data
+  try { data = JSON.parse(output) } catch { throw new Error('Metadata video TikTok bukan JSON yang valid.') }
+  const video = (data.streams || []).find(stream => stream.codec_type === 'video')
+  const duration = Number(data.format?.duration)
+  if (!video || !video.codec_name || !(Number(video.width) > 0) || !(Number(video.height) > 0) || !(duration > 0)) {
+    throw new Error('File provider bukan video utuh yang bisa diputar (stream video/durasi tidak ditemukan).')
+  }
+  return { duration, width: Number(video.width), height: Number(video.height), codec: video.codec_name }
+}
+
+async function verifyFirstVideoFrame(filePath) {
+  return new Promise((resolve, reject) => {
+    const child = spawn('ffmpeg', [
+      '-hide_banner', '-loglevel', 'error', '-xerror', '-i', filePath,
+      '-map', '0:v:0', '-frames:v', '1', '-f', 'null', '-'
+    ], { stdio: ['ignore', 'ignore', 'pipe'] })
+    let stderr = ''
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL')
+      reject(new Error('Validasi frame awal TikTok melewati 20 detik.'))
+    }, 20000)
+    child.stderr.on('data', chunk => { stderr = (stderr + chunk.toString()).slice(-4000) })
+    child.once('error', error => { clearTimeout(timer); reject(error) })
+    child.once('close', code => {
+      clearTimeout(timer)
+      if (code === 0) resolve()
+      else reject(new Error('Sumber TikTok memiliki paket video rusak/tidak memiliki frame yang dapat didekode: ' + (stderr.trim() || 'FFmpeg gagal membaca frame awal').slice(-500)))
+    })
+  })
+}
+
 async function getMediaDuration(filePath) {
   return new Promise(resolve => {
     const child = spawn('ffprobe', [
@@ -285,9 +339,9 @@ async function downloadVideoFile(url, destination) {
   })
 
   const contentType = String(response.headers['content-type'] || '').toLowerCase()
-  if (contentType.includes('text/html') || contentType.includes('application/json')) {
+  if (contentType.includes('text/html') || contentType.includes('text/plain') || contentType.includes('application/json') || contentType.includes('application/xml')) {
     response.data.destroy()
-    throw new Error('Provider mengembalikan halaman web, bukan file video.')
+    throw new Error('Provider mengembalikan teks/halaman error (' + contentType + '), bukan file video.')
   }
 
   let bytes = 0
@@ -322,6 +376,10 @@ async function downloadVideoFile(url, destination) {
   const info = await fsp.stat(destination)
   if (info.size < 4096) throw new Error('File video terlalu kecil atau tidak lengkap.')
   if (info.size > MAX_VIDEO_BYTES) throw new Error('File video melebihi batas aman 150 MB.')
+  const detected = await fileTypeFromFile(destination)
+  if (!detected?.mime?.startsWith('video/')) {
+    throw new Error('Data CDN TikTok bukan kontainer video yang dikenali (signature ' + String(detected?.mime || 'tidak terdeteksi') + '). URL media bisa kedaluwarsa atau provider mengirim data rusak.')
+  }
   return info.size
 }
 
@@ -454,8 +512,9 @@ async function prepareBestTikTokVideo(res, sourceUrl = '') {
         }
         console.log('\n[TikTok] Memproses varian ' + (candidate.label || ('#' + (i + 1))) + '...')
         await downloadVideoFile(candidate.url, sourcePath)
-        const sourceDuration = await getMediaDuration(sourcePath)
-        if (!(sourceDuration > 0)) throw new Error('Sumber dari provider tidak terbaca sebagai video utuh (durasi/metadata tidak valid).')
+        const sourceInfo = await inspectVideoFile(sourcePath)
+        console.log('[TikTok] Sumber terverifikasi:', sourceInfo.codec, sourceInfo.width + 'x' + sourceInfo.height, formatDuration(sourceInfo.duration))
+        await verifyFirstVideoFrame(sourcePath)
         const normalized = await normalizeVideoToMp4(sourcePath, outputPath)
         console.log('[TikTok] Berhasil menyiapkan video dari varian:', candidate.label || ('#' + (i + 1)))
         return { ...normalized, quality: candidate.label || 'tertinggi yang tersedia' }
