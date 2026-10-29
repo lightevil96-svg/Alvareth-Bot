@@ -98,6 +98,18 @@ function getPrefixFromRegex(regex) {
     const first = grouped[1].split('|')[0];
     return first.replace(/\\(.)/g, '$1');
   }
+
+  // The startup CLI uses a character class such as ^[.!#]. Prefer a familiar
+  // dot prefix when allowed; otherwise use the first actual configured char.
+  const characterClass = source.match(/^\^\[([\s\S]*)\]$/);
+  if (characterClass) {
+    const chars = characterClass[1];
+    if (chars.includes('\\.')) return '.';
+    const escapedFirst = chars.match(/^\\(.)/);
+    if (escapedFirst) return escapedFirst[1];
+    return Array.from(chars)[0] || '.';
+  }
+
   const literal = source.match(/^\^((?:\\.|[A-Za-z0-9_-])+)/);
   return literal ? literal[1].replace(/\\(.)/g, '$1') : '.';
 }
