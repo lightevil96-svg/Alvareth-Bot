@@ -517,35 +517,54 @@ async function downloadToBuffer(url, maxBytes = MAX_VIDEO_BYTES) {
 }
 
 async function renderSinglePhotoWithMusic(imageUrl, audioUrl, outputPath) {
-  if (!audioUrl) throw new Error('Musik postingan tidak tersedia dari provider TikTok.')
   const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'alvareth-tiktok-photo-'))
   const imagePath = path.join(tempDir, 'photo.jpg')
   const audioPath = path.join(tempDir, 'music.bin')
   try {
-    const [imageBuffer, audioBuffer] = await Promise.all([
-      downloadToBuffer(imageUrl, 20 * 1024 * 1024),
-      downloadToBuffer(audioUrl, 30 * 1024 * 1024)
-    ])
-    await Promise.all([fsp.writeFile(imagePath, imageBuffer), fsp.writeFile(audioPath, audioBuffer)])
-    const audioDuration = await getMediaDuration(audioPath)
-    if (!(audioDuration > 0)) throw new Error('Durasi musik TikTok tidak dapat dibaca.')
-    const duration = Math.min(audioDuration, 60)
-    await runFfmpeg([
+    const imageBuffer = await downloadToBuffer(imageUrl, 20 * 1024 * 1024)
+    await fsp.writeFile(imagePath, imageBuffer)
+
+    let hasAudio = false
+    let duration = 5
+    if (audioUrl) {
+      try {
+        const audioBuffer = await downloadToBuffer(audioUrl, 30 * 1024 * 1024)
+        await fsp.writeFile(audioPath, audioBuffer)
+        const audioDuration = await getMediaDuration(audioPath)
+        if (audioDuration > 0) {
+          hasAudio = true
+          duration = Math.min(audioDuration, 60)
+        } else {
+          console.warn('[TikTok] Audio postingan tidak dapat dibaca; membuat video foto tanpa suara.')
+        }
+      } catch (error) {
+        console.warn('[TikTok] Gagal mengambil audio postingan; membuat video foto tanpa suara:', error?.message || error)
+      }
+    } else {
+      console.warn('[TikTok] Audio postingan tidak tersedia; membuat video foto tanpa suara.')
+    }
+
+    const args = [
       '-hide_banner', '-loglevel', 'error', '-y',
-      '-loop', '1', '-framerate', '30', '-i', imagePath, '-i', audioPath,
-      '-t', String(duration), '-map', '0:v:0', '-map', '1:a:0',
+      '-loop', '1', '-framerate', '30', '-i', imagePath
+    ]
+    if (hasAudio) args.push('-i', audioPath)
+    args.push(
+      '-t', String(duration), '-map', '0:v:0',
+      ...(hasAudio ? ['-map', '1:a:0'] : []),
       '-vf', 'scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2,format=yuv420p',
-      '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23',
-      '-c:a', 'aac', '-b:a', '128k', '-shortest', '-movflags', '+faststart', outputPath
-    ], { durationSeconds: duration, label: 'Render foto + musik' })
+      '-c:v', 'libx264', '-preset', 'veryfast', '-threads:v', '2', '-crf', '23',
+      ...(hasAudio ? ['-c:a', 'aac', '-b:a', '128k', '-shortest'] : ['-an']),
+      '-movflags', '+faststart', outputPath
+    )
+    await runFfmpeg(args, { durationSeconds: duration, label: 'Render foto + musik' })
     const info = await fsp.stat(outputPath)
     if (info.size < 4096 || info.size > MAX_VIDEO_BYTES) throw new Error('Hasil video foto tidak valid atau terlalu besar.')
-    return { buffer: await fsp.readFile(outputPath), imageBuffer, size: info.size, duration }
+    return { buffer: await fsp.readFile(outputPath), imageBuffer, size: info.size, duration, hasAudio }
   } finally {
     await fsp.rm(tempDir, { recursive: true, force: true }).catch(() => {})
   }
 }
-
 async function cleanupStaleTikTokTemps(root = os.tmpdir()) {
   const cutoff = Date.now() - 24 * 60 * 60 * 1000
   let entries = []
