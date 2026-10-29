@@ -481,6 +481,23 @@ async function availableDiskBytes(dir) {
   }
 }
 
+function summarizeTikTokError(error) {
+  const message = String(error?.message || error || '').replace(/\s+/g, ' ').trim()
+  if (/no space left on device|enospc|disk quota exceeded|not enough space/i.test(message)) {
+    return 'ruang penyimpanan server penuh (ENOSPC)'
+  }
+  if (/missing picture in access unit|no frame!|invalid data found when processing input|ffmpeg gagal \(kode 69\)/i.test(message)) {
+    return 'data video dari provider rusak/tidak lengkap; tidak ada frame H.264 valid'
+  }
+  if (/unexpected response from webpage request|\[tiktok\].*extracting url/i.test(message)) {
+    return 'TikTok menolak ekstraksi web yt-dlp (kemungkinan respons anti-bot/provider)'
+  }
+  if (/bukan kontainer video|signature .*tidak terdeteksi|metadata video tikTok tidak valid|durasi tidak ditemukan/i.test(message)) {
+    return 'respons provider bukan file video utuh yang valid'
+  }
+  return message.slice(0, 220) || 'error tidak diketahui'
+}
+
 function isDiskFullError(error) {
   return /no space left on device|enospc|disk quota exceeded|not enough space|ruang disk sementara tersisa|penyimpanan server penuh|disk server penuh/i.test(String(error?.message || error))
 }
@@ -520,14 +537,14 @@ async function prepareBestTikTokVideo(res, sourceUrl = '') {
         return { ...normalized, quality: candidate.label || 'tertinggi yang tersedia' }
       } catch (error) {
         const detail = (error?.message || String(error)).slice(0, 500)
-        errors.push((candidate.label || ('varian #' + (i + 1))) + ': ' + detail)
+        errors.push((candidate.label || ('varian #' + (i + 1))) + ': ' + summarizeTikTokError(error))
         // Do not retain partial/corrupt files between quality attempts; they can
         // fill the container disk and make the final watermark fallback fail.
         await Promise.all([
           fsp.rm(sourcePath, { force: true }).catch(() => {}),
           fsp.rm(outputPath, { force: true }).catch(() => {})
         ])
-        console.warn('[TikTok] Varian gagal; file parsial dibuang:', errors[errors.length - 1])
+        console.warn('[TikTok] Varian gagal; file parsial dibuang:', errors[errors.length - 1], '| detail:', detail)
         if (isDiskFullError(error)) {
           throw new Error('Penyimpanan server penuh saat mengunduh/merender TikTok (ENOSPC). Percobaan lain dihentikan agar disk tidak makin penuh. Bersihkan file sementara lama atau atur ALVARETH_TIKTOK_TMPDIR ke direktori dengan ruang kosong.')
         }
@@ -558,7 +575,8 @@ async function prepareBestTikTokVideo(res, sourceUrl = '') {
         console.log('[TikTok] Berhasil mengunduh TikTok memakai fallback yt-dlp.')
         return { ...normalized, quality: 'yt-dlp fallback' }
       } catch (error) {
-        errors.push('yt-dlp fallback: ' + String(error?.message || error).slice(0, 600))
+        errors.push('yt-dlp fallback: ' + summarizeTikTokError(error))
+        console.warn('[TikTok] Fallback yt-dlp gagal:', error?.stack || error)
         if (isDiskFullError(error)) {
           throw new Error('Disk server penuh saat fallback yt-dlp. Bersihkan penyimpanan TokoPanel atau atur ALVARETH_TIKTOK_TMPDIR ke lokasi lain yang memiliki ruang cukup.')
         }
