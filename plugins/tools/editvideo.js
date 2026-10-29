@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -146,11 +146,11 @@ async function processVideo(input, instruction, key, dir) {
     const music = await download(plan.musicUrl, 'audio')
     musicPath = join(dir, 'music.' + String(music.ext || 'mp3').replace(/[^a-z0-9]/gi, '').slice(0, 8))
     await writeFile(musicPath, music.buffer)
-    args.push('-i', musicPath)
+    args.push('-stream_loop', '-1', '-i', musicPath)
   }
   if (filters.length) args.push('-vf', filters.join(','))
   args.push('-t', String(end - start), '-map', '0:v:0')
-  if (musicPath) args.push('-filter_complex', '[1:a]volume=' + plan.musicVolume + '[music];[0:a]volume=0.25[original];[original][music]amix=inputs=2:duration=first:dropout_transition=2[aout]', '-map', '[aout]')
+  if (musicPath) args.push('-filter_complex', '[1:a]volume=' + plan.musicVolume + '[music]', '-map', '[music]')
   else args.push('-map', '0:a?')
   args.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '28', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '96k', '-movflags', '+faststart', outputPath)
   await run('ffmpeg', args)
