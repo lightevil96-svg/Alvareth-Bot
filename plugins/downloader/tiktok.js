@@ -261,7 +261,7 @@ async function inspectVideoFile(filePath) {
   await new Promise((resolve, reject) => {
     const child = spawn('ffprobe', [
       '-v', 'error',
-      '-show_entries', 'format=duration:stream=codec_type,codec_name,width,height',
+      '-show_entries', 'format=duration,format_name:stream=codec_type,codec_name,width,height',
       '-of', 'json', filePath
     ], { stdio: ['ignore', 'pipe', 'pipe'] })
     const timer = setTimeout(() => {
@@ -284,7 +284,15 @@ async function inspectVideoFile(filePath) {
   if (!video || !video.codec_name || !(Number(video.width) > 0) || !(Number(video.height) > 0) || !(duration > 0)) {
     throw new Error('File provider bukan video utuh yang bisa diputar (stream video/durasi tidak ditemukan).')
   }
-  return { duration, width: Number(video.width), height: Number(video.height), codec: video.codec_name }
+  const audio = (data.streams || []).find(stream => stream.codec_type === 'audio')
+  return {
+    duration,
+    width: Number(video.width),
+    height: Number(video.height),
+    codec: video.codec_name,
+    audioCodec: audio?.codec_name || null,
+    formatName: String(data.format?.format_name || '')
+  }
 }
 
 async function verifyFirstVideoFrame(filePath) {
@@ -383,10 +391,45 @@ async function downloadVideoFile(url, destination) {
   return info.size
 }
 
-// Re-encode to broadly compatible H.264/AAC MP4 and move the MP4 index to the
-// front. This avoids sending an unverified remote URL or a badly packaged file.
-async function normalizeVideoToMp4(input, output) {
-  const durationSeconds = await getMediaDuration(input)
+// Prefer a stream-copy remux when TikTok already supplied a compatible H.264/AAC MP4.
+// Re-encoding a valid source wastes CPU and can make a small download look stuck on
+// constrained panels. Full encoding remains the fallback for incompatible/corrupt containers.
+async function normalizeVideoToMp4(input, output, knownInfo = null) {
+  const sourceInfo = knownInfo || await inspectVideoFile(input)
+  const isMp4Container = /(^|,)(mov|mp4|m4a|3gp|3g2|mj2)(,|$)/i.test(sourceInfo.formatName || '')
+  const audioCanCopy = !sourceInfo.audioCodec || sourceInfo.audioCodec === 'aac'
+  const canRemux = sourceInfo.codec === 'h264' && audioCanCopy && isMp4Container
+
+  if (canRemux) {
+    try {
+      await runFfmpeg([
+        '-hide_banner', '-loglevel', 'error', '-y',
+        '-i', input,
+        '-map', '0:v:0',
+        '-map', '0:a?',
+        '-c', 'copy',
+        '-movflags', '+faststart',
+        '-sn', '-dn',
+        output
+      ], { durationSeconds: sourceInfo.duration, label: 'Remux MP4' })
+
+      const info = await fsp.stat(output)
+      if (info.size < 4096 || info.size > MAX_VIDEO_BYTES) {
+        throw new Error('Hasil remux MP4 tidak valid atau melebihi batas 150 MB.')
+      }
+      const buffer = await fsp.readFile(output)
+      if (!buffer.subarray(0, 32).includes(Buffer.from('ftyp'))) {
+        throw new Error('Struktur kontainer hasil remux bukan MP4.')
+      }
+      console.log('[TikTok] Sumber H.264/AAC kompatibel; melewati encoding ulang.')
+      return { buffer, size: info.size, mode: 'remux' }
+    } catch (error) {
+      console.warn('[TikTok] Remux cepat tidak bisa dipakai; mencoba encode kompatibel:', error?.message || error)
+      await fsp.rm(output, { force: true }).catch(() => {})
+    }
+  }
+
+  const durationSeconds = sourceInfo.duration || await getMediaDuration(input)
   await runFfmpeg([
     '-hide_banner', '-loglevel', 'error', '-y',
     '-i', input,
@@ -395,6 +438,7 @@ async function normalizeVideoToMp4(input, output) {
     '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
     '-c:v', 'libx264',
     '-preset', 'veryfast',
+    '-threads:v', '2',
     '-crf', '20',
     '-pix_fmt', 'yuv420p',
     '-c:a', 'aac',
@@ -412,9 +456,8 @@ async function normalizeVideoToMp4(input, output) {
   if (!buffer.subarray(0, 32).includes(Buffer.from('ftyp'))) {
     throw new Error('Struktur kontainer MP4 tidak valid.')
   }
-  return { buffer, size: info.size }
+  return { buffer, size: info.size, mode: 'transcode' }
 }
-
 async function downloadToBuffer(url, maxBytes = MAX_VIDEO_BYTES) {
   const response = await axios.get(url, {
     responseType: 'arraybuffer', timeout: 120000, maxRedirects: 5, maxContentLength: maxBytes,
@@ -562,7 +605,7 @@ async function prepareFromTikTokEmbed(sourceUrl, tempDir) {
   const sourceInfo = await inspectVideoFile(sourcePath)
   await verifyFirstVideoFrame(sourcePath)
   console.log('[TikTok] Sumber embed terverifikasi:', sourceInfo.codec, sourceInfo.width + 'x' + sourceInfo.height, formatDuration(sourceInfo.duration))
-  return normalizeVideoToMp4(sourcePath, outputPath)
+  return normalizeVideoToMp4(sourcePath, outputPath, sourceInfo)
 }
 
 async function prepareBestTikTokVideo(res, sourceUrl = '') {
@@ -595,7 +638,7 @@ async function prepareBestTikTokVideo(res, sourceUrl = '') {
         const sourceInfo = await inspectVideoFile(sourcePath)
         console.log('[TikTok] Sumber terverifikasi:', sourceInfo.codec, sourceInfo.width + 'x' + sourceInfo.height, formatDuration(sourceInfo.duration))
         await verifyFirstVideoFrame(sourcePath)
-        const normalized = await normalizeVideoToMp4(sourcePath, outputPath)
+        const normalized = await normalizeVideoToMp4(sourcePath, outputPath, sourceInfo)
         console.log('[TikTok] Berhasil menyiapkan video dari varian:', candidate.label || ('#' + (i + 1)))
         return { ...normalized, quality: candidate.label || 'tertinggi yang tersedia' }
       } catch (error) {
@@ -796,6 +839,9 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
 
     const res = await tiktokScrape(url)
     if (!res) throw new Error('Gagal mengambil data TikTok. Pastikan tautan masih aktif dan dapat diakses.')
+    if (res.isAmbiguousShortLink) {
+      throw new Error('Tautan pendek TikTok belum berhasil diarahkan ke postingan aslinya. Bot menghentikan proses agar postingan foto tidak salah diproses sebagai video. Coba kirim tautan lengkap dari TikTok melalui Bagikan > Salin tautan.')
+    }
 
     const title = (res.title || 'TikTok Video').replace(/\s+/g, ' ').trim()
     const uploader = res.author || '-'
