@@ -13,7 +13,7 @@ let handler = async (m, { conn, text }) => {
       ? m.mentionedJid[0]
       : '';
   const number = normalizePhone(mention || tokens[0]);
-  const reason = (mention ? tokens : tokens.slice(1)).join(' ').trim().slice(0, 300);
+  const reason = tokens.slice(1).join(' ').trim().slice(0, 300);
 
   if (number.length < 8 || number.length > 15) {
     throw 'Nomor tidak valid. Gunakan kode negara, contoh: .banuser 628123456789 spam bot';
@@ -43,10 +43,10 @@ let handler = async (m, { conn, text }) => {
 
   await global.db.write?.();
   await conn.sendMessage(m.chat, {
-    text: '⛔ *NOMOR BERHASIL DI-BAN*\\n\\n' +
-      '📵 Nomor: ' + number + '\\n' +
-      '🔒 Akses bot: DITOLAK\\n' +
-      '📝 Alasan: ' + (reason || 'Tidak dicantumkan') + '\\n\\n' +
+    text: '⛔ *NOMOR BERHASIL DI-BAN*\n\n' +
+      '📵 Nomor: ' + number + '\n' +
+      '🔒 Akses bot: DITOLAK\n' +
+      '📝 Alasan: ' + (reason || 'Tidak dicantumkan') + '\n\n' +
       'Jika nomor ini mencoba menggunakan perintah atau AutoDL, bot akan menolak aksesnya.'
   }, { quoted: m });
 };
