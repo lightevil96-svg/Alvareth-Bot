@@ -110,11 +110,16 @@ function applyBaileys405CompatibilityPatch() {
       return false;
     }
 
-    const platformPattern = /(platform:\\s*config\\.browser\\[1\\]\\.toLocaleLowerCase\\(\\)\\.includes\\(['"]android['"]\\)\\s*\\?\\s*proto\\.ClientPayload\\.UserAgent\\.Platform\\.ANDROID\\s*:\\s*)proto\\.ClientPayload\\.UserAgent\\.Platform\\.WEB/;
-    if (platformPattern.test(source)) {
+    const webPlatformExpression = `platform: config.browser[1].toLocaleLowerCase().includes('android')
+            ? proto.ClientPayload.UserAgent.Platform.ANDROID
+            : proto.ClientPayload.UserAgent.Platform.WEB`;
+    if (source.includes(webPlatformExpression)) {
       const patched = source.replace(
-        platformPattern,
-        '$1proto.ClientPayload.UserAgent.Platform.MACOS'
+        webPlatformExpression,
+        webPlatformExpression.replace(
+          'proto.ClientPayload.UserAgent.Platform.WEB',
+          'proto.ClientPayload.UserAgent.Platform.MACOS'
+        )
       );
       try {
         writeFileSync(file, patched, 'utf8');
@@ -126,7 +131,10 @@ function applyBaileys405CompatibilityPatch() {
       }
     }
 
-    if (/platform:\\s*config\\.browser\\[1\\][\\s\\S]{0,250}Platform\\.MACOS/.test(source)) {
+    if (
+      source.includes('platform: config.browser[1].toLocaleLowerCase().includes') &&
+      source.includes('proto.ClientPayload.UserAgent.Platform.MACOS')
+    ) {
       log('Baileys 405 compatibility patch sudah aktif.');
       return true;
     }
