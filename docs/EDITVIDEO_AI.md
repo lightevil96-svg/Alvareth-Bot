@@ -12,6 +12,7 @@ Plugin: `plugins/tools/editvideo.js` (perintah `.editvideo` atau `.vedit`).
 ## Fitur
 
 - Instruksi bahasa biasa untuk trim, crop 9:16/1:1/16:9, teks, subtitle manual, perbaikan warna, musik, serta fade awal/akhir.
+- Pesan status progres diperbarui berkala; saat render, persentase mengikuti waktu output yang dilaporkan FFmpeg. Tahap unduhan/analisis menunjukkan progres tahap, bukan persentase byte yang akurat, karena downloader sumber tidak semuanya menyediakan callback progres.
 - Smart clip memilih jendela berdasarkan aktivitas audio dan kepadatan pergantian adegan yang dideteksi FFmpeg. Ini heuristik sinyal, bukan pengenalan semantik atas isi video.
 - Zoom dinamis dengan gerakan halus di area tengah. Ini bukan pelacakan wajah/objek.
 - Efek whoosh sintetis opsional di beberapa pergantian adegan yang terdeteksi.
