@@ -129,7 +129,7 @@ const handler = async (m, { text = '', isROwner, conn }) => {
 
   if (subcommand.toLowerCase() === 'join') {
     if (m.isGroup) return m.reply('Persetujuan hanya bisa dilakukan lewat chat pribadi dengan bot.')
-    const number = jidNumber(m.sender)
+    const number = jidNumber(m.senderPN || m.sender)
     if (!number) return m.reply('Nomor tidak dapat dibaca.')
     if (config.targets.length && !config.targets.includes(number)) {
       return m.reply('Nomor ini belum dipilih owner untuk sesi AI Banter.')
@@ -140,7 +140,7 @@ const handler = async (m, { text = '', isROwner, conn }) => {
   }
 
   if (subcommand.toLowerCase() === 'leave') {
-    const number = jidNumber(m.sender)
+    const number = jidNumber(m.senderPN || m.sender)
     config.optedIn = config.optedIn.filter(item => item !== number)
     writeConfig(config)
     return m.reply('Sesi AI Banter dinonaktifkan untuk nomor ini. Riwayat yang sudah tersimpan tidak otomatis dihapus; gunakan .ragebait forget untuk menghapus memori chat ini.')
@@ -148,7 +148,7 @@ const handler = async (m, { text = '', isROwner, conn }) => {
 
   if (subcommand.toLowerCase() === 'forget') {
     if (m.isGroup) return m.reply('Perintah ini hanya bisa dipakai lewat chat pribadi.')
-    const path = memoryPath(m.sender)
+    const path = memoryPath(m.senderPN || m.sender)
     try {
       if (existsSync(path)) writeFileSync(path, '', { mode: 0o600 })
       return m.reply('🧹 Memori percakapan untuk chat ini sudah dikosongkan.')
@@ -238,7 +238,8 @@ handler.before = async function (m, { conn }) {
     if (m.chat !== m.sender && jidNumber(m.chat) !== jidNumber(m.sender)) return false
 
     const config = readConfig()
-    const number = jidNumber(m.sender)
+    const senderId = m.senderPN || m.sender
+    const number = jidNumber(senderId)
     if (!config.enabled || !config.apiKey || !config.targets.includes(number) || !config.optedIn.includes(number)) return false
     if (inFlight.has(number)) return true
 
@@ -255,8 +256,8 @@ handler.before = async function (m, { conn }) {
     hourlyCounts.set(number, { hour, count: count + 1 })
 
     try {
-      const recent = readRecentMemory(m.sender)
-      saveMemory(m.sender, 'user', text)
+      const recent = readRecentMemory(senderId)
+      saveMemory(senderId, 'user', text)
       const messages = [
         {
           role: 'system',
@@ -266,7 +267,7 @@ handler.before = async function (m, { conn }) {
         { role: 'user', content: text.slice(0, MAX_MESSAGE_CHARS) }
       ]
       const reply = await groqChat(config.apiKey, messages)
-      saveMemory(m.sender, 'assistant', reply)
+      saveMemory(senderId, 'assistant', reply)
       await conn.sendMessage(m.chat, { text: reply }, { quoted: m })
     } catch (error) {
       console.error('[ragebait] Auto-reply gagal:', error?.message || error)
