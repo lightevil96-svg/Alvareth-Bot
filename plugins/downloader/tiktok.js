@@ -565,6 +565,49 @@ async function renderSinglePhotoWithMusic(imageUrl, audioUrl, outputPath) {
     await fsp.rm(tempDir, { recursive: true, force: true }).catch(() => {})
   }
 }
+
+async function sendPhotoToVideoActionMenus(conn, m, { url, images, usedPrefix }) {
+  // Split large slideshows into groups of ten options per WhatsApp list.
+  const rowsPerMenu = 10
+  for (let offset = 0; offset < images.length; offset += rowsPerMenu) {
+    const end = Math.min(images.length, offset + rowsPerMenu)
+    const rows = images.slice(offset, end).map((_image, relativeIndex) => {
+      const index = offset + relativeIndex + 1
+      return {
+        header: '',
+        title: '🎬 Foto ' + index + ' → Video',
+        description: 'Ubah foto ke-' + index + ' menjadi video',
+        id: usedPrefix + 'ttfoto2video ' + url + ' ' + index
+      }
+    })
+    try {
+      await sendMessageWithReconnect(conn, m.chat, {
+        text: images.length + ' foto berhasil diambil. Pilih nomor foto yang ingin diubah menjadi video.',
+        footer: global.namebot || 'Alvareth Bot',
+        optionText: 'Pilih Foto',
+        optionTitle: '🎬 Ubah Foto Jadi Video',
+        offerText: global.namebot || 'Alvareth Bot',
+        offerCode: global.namebot || 'Alvareth Bot',
+        offerUrl: global.botLink || 'https://spoo.me/Alvareth-Bot',
+        offerExpiration: Date.now() + 86400000,
+        nativeFlow: [{
+          text: 'Pilih foto',
+          sections: [{
+            title: 'Foto ' + (offset + 1) + '–' + end,
+            rows
+          }],
+          icon: 'image'
+        }],
+        interactiveAsTemplate: false
+      }, { quoted: m, noAlvarethPreview: true })
+    } catch (error) {
+      // Album is already delivered; an unavailable optional menu must not make
+      // the successful photo download appear to have failed.
+      console.warn('[TikTok] Gagal mengirim menu ubah foto jadi video:', error?.message || error)
+    }
+  }
+}
+
 async function cleanupStaleTikTokTemps(root = os.tmpdir()) {
   const cutoff = Date.now() - 24 * 60 * 60 * 1000
   let entries = []
