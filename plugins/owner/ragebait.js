@@ -59,11 +59,17 @@ async function sendMenu(conn, chat, quoted, config) {
       'Pilih tindakan di bawah. Target wajib menyetujui sesi lewat chat pribadi dengan bot.'
     ].join('\\n'),
     footer: 'Alvareth Bot • AI Banter',
-    title: 'Pengaturan Ragebait',
-    buttonText: 'Buka Pengaturan',
-    sections: [{ title: 'PENGATURAN', rows }]
+    optionText: 'Pilih Pengaturan',
+    optionTitle: 'AI Banter',
+    nativeFlow: [
+      {
+        text: 'Pengaturan Ragebait',
+        sections: [{ title: 'PANEL KONTROL', rows }]
+      }
+    ],
+    interactiveAsTemplate: false
   }
-  return conn.sendMessage(chat, message, { quoted })
+  return conn.sendMessage(chat, message, { quoted, noAlvarethPreview: true })
 }
 
 function normalizeNumber(value) {
