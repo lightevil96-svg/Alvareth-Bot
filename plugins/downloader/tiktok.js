@@ -665,6 +665,16 @@ async function prepareBestTikTokVideo(res, sourceUrl = '') {
   }
 }
 
+function getTikTokFallbackSourceUrl(res, originalUrl) {
+  const videoId = String(res?.videoId || '').match(/\d{15,25}/)?.[0] || ''
+  const authorId = String(res?.authorId || '').replace(/^@/, '').replace(/[^\w.-]/g, '')
+  if (videoId) {
+    const authorPath = authorId ? '@' + authorId + '/' : ''
+    return 'https://www.tiktok.com/' + authorPath + 'video/' + videoId
+  }
+  return String(res?.sourceUrl || originalUrl || '').trim()
+}
+
 function safeFilename(value) {
   const name = String(value || 'tiktok-video')
     .replace(/[\\/:*?"<>|]/g, '')
@@ -855,7 +865,8 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
     }
 
     if (res.video || (Array.isArray(res.videoCandidates) && res.videoCandidates.length)) {
-      const prepared = await prepareBestTikTokVideo(res, res.sourceUrl || url)
+      const fallbackSourceUrl = getTikTokFallbackSourceUrl(res, url)
+      const prepared = await prepareBestTikTokVideo(res, fallbackSourceUrl)
       const fileName = safeFilename(title)
 
       if (prepared.size > MAX_INLINE_VIDEO_BYTES) {
