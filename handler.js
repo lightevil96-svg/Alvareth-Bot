@@ -816,7 +816,9 @@ if (!isOwner && (isNumberBanned || isLegacyBanned)) {
 
   const isAutoDownloadAttempt = Boolean(global.db.data.chats[m.chat]?.autodl) &&
     /https?:\/\/[^\s]+/i.test(messageText);
-  const isBotAttempt = isCommandAttempt || isAutoDownloadAttempt;
+  // In private chat every message is treated as an attempt to use the bot;
+  // in groups, only commands and enabled AutoDL links trigger the public notice.
+  const isBotAttempt = !m.isGroup || isCommandAttempt || isAutoDownloadAttempt;
 
   if (isBotAttempt) {
     global._alvarethBanReplyCooldown ||= new Map();
