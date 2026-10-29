@@ -146,9 +146,6 @@ handler.before = async (m, { conn }) => {
     const chats = global.db?.data?.chats;
     if (!chats) return false;
     const chat = chats[m.chat];
-    // Keep the existing per-chat opt-in. Use ".enable autodl" to turn it on.
-    if (!chat?.autodl) return false;
-
     const links = extractUrls(originalText);
     if (!links.length) return false;
 
@@ -161,6 +158,9 @@ handler.before = async (m, { conn }) => {
       }
     }
     if (!selected) return false;
+    // TikTok links are routed automatically even when AutoDL is off, because .tt
+    // is the user's primary downloader workflow. Other platforms keep the opt-in.
+    if (!chat?.autodl && selected.route.command !== 'tt') return false;
     if (!claimMessage(m)) return true;
 
     const prefix = getCommandPrefix(conn);
