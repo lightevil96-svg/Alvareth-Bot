@@ -20,10 +20,10 @@ function apiKey() {
   } catch { return '' }
 }
 
-function run(command, args, timeout = 180000) {
+function run(command, args, timeout = 180000, onProgress = null) {
   return new Promise((resolvePromise, reject) => {
     const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true })
-    let stdout = '', stderr = '', settled = false
+    let stdout = '', stderr = '', settled = false, progressFields = {}
     const finish = error => {
       if (settled) return
       settled = true
@@ -31,7 +31,23 @@ function run(command, args, timeout = 180000) {
       error ? reject(error) : resolvePromise({ stdout, stderr })
     }
     const timer = setTimeout(() => { child.kill('SIGKILL'); finish(new Error(command + ' melewati batas waktu.')) }, timeout)
-    child.stdout.on('data', chunk => { stdout = (stdout + chunk.toString()).slice(-250000) })
+    child.stdout.on('data', chunk => {
+      const data = chunk.toString()
+      stdout = (stdout + data).slice(-250000)
+      if (typeof onProgress === 'function') {
+        for (const line of data.split(/\r?\n/)) {
+          const sep = line.indexOf('=')
+          if (sep < 1) continue
+          progressFields[line.slice(0, sep)] = line.slice(sep + 1).trim()
+          if (line.startsWith('progress=')) {
+            const raw = Number(progressFields.out_time_ms || 0)
+            if (Number.isFinite(raw) && raw >= 0) {
+              try { onProgress(raw / 1000000, progressFields) } catch {}
+            }
+          }
+        }
+      }
+    })
     child.stderr.on('data', chunk => { stderr = (stderr + chunk.toString()).slice(-12000) })
     child.once('error', error => finish(new Error(command + ' tidak tersedia: ' + error.message)))
     child.once('close', code => code === 0 ? finish() : finish(new Error(command + ' gagal (' + code + '): ' + stderr.slice(-900))))
@@ -238,10 +254,12 @@ function esc(text) {
   return String(text).replace(/\\/g, '\\\\').replace(/:/g, '\\:').replace(/'/g, "\\'").replace(/%/g, '\\%').replace(/,/g, '\\,').replace(/\[/g, '\\[').replace(/\]/g, '\\]').replace(/\n/g, '\\n')
 }
 
-async function processVideo(input, instruction, key, dir) {
+async function processVideo(input, instruction, key, dir, reportProgress = () => {}) {
+  reportProgress(18, 'AI memahami instruksi edit')
   const plan = await planEdit(key, instruction)
   const inputPath = input.path
   const outputPath = join(dir, 'edited.mp4')
+  reportProgress(25, 'Memeriksa metadata video')
   const probe = await run('ffprobe', [
     '-v', 'error', '-show_entries', 'format=duration:stream=codec_type,width,height',
     '-of', 'json', inputPath
@@ -253,7 +271,9 @@ async function processVideo(input, instruction, key, dir) {
   const hasAudio = (probeData.streams || []).some(stream => stream.codec_type === 'audio')
   let analysis = null
   if (plan.smartClip || plan.soundEffects) {
+    reportProgress(32, 'Menganalisis pergantian adegan dan audio')
     analysis = await analyzeMedia(inputPath)
+    reportProgress(43, 'Analisis selesai; menyiapkan efek')
   }
   let start = plan.start == null ? 0 : Math.min(plan.start, duration - 0.1)
   let end = plan.end == null ? duration : Math.min(plan.end, duration)
@@ -286,6 +306,7 @@ async function processVideo(input, instruction, key, dir) {
   if (plan.subtitle) filters.push("drawtext=text='" + esc(plan.subtitle) + "':fontcolor=white:fontsize=30:borderw=2:bordercolor=black:box=1:boxcolor=black@0.45:x=(w-text_w)/2:y=h-text_h-35")
   let generatedSubtitle = ''
   if (plan.autoCaptions) {
+    reportProgress(45, 'Membuat subtitle otomatis')
     if (!hasAudio) throw new Error('Video tidak memiliki audio untuk ditranskripsikan.')
     generatedSubtitle = await generateAutoSubtitles(inputPath, dir, start, clipDuration)
     filters.push("subtitles=filename='" + escapeFilterPath(generatedSubtitle) + "':force_style='FontName=Arial,FontSize=23,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=1,Alignment=2,MarginV=35'")
@@ -299,6 +320,7 @@ async function processVideo(input, instruction, key, dir) {
   const args = ['-hide_banner', '-loglevel', 'error', '-y', '-ss', String(start), '-i', inputPath]
   let musicPath = ''
   if (plan.musicUrl) {
+    reportProgress(48, 'Mengunduh musik tambahan')
     const music = await downloadToFile(plan.musicUrl, 'audio', dir, 'music.mp3')
     musicPath = music.path
     args.push('-stream_loop', '-1', '-i', musicPath)
@@ -348,8 +370,13 @@ async function processVideo(input, instruction, key, dir) {
       args.push('-filter_complex', graph.join(';'), '-map', '[aout]')
     } else if (hasAudio) args.push('-map', '0:a:0')
   } else if (hasAudio) args.push('-map', '0:a:0')
-  args.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '28', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', outputPath)
-  await run('ffmpeg', args, FFMPEG_TIMEOUT)
+  args.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '28', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', '-progress', 'pipe:1', '-nostats', outputPath)
+  reportProgress(50, 'FFmpeg mulai merender video')
+  await run('ffmpeg', args, FFMPEG_TIMEOUT, seconds => {
+    const percent = Math.max(50, Math.min(94, 50 + (seconds / Math.max(clipDuration, 0.1)) * 44))
+    reportProgress(percent, 'Merender video dengan FFmpeg')
+  })
+  reportProgress(96, 'Memvalidasi hasil render')
   const outputStat = await stat(outputPath)
   if (!outputStat.size) throw new Error('FFmpeg menghasilkan file video kosong.')
   return { path: outputPath, plan, seconds: clipDuration, start, end, sceneCount: analysis?.scenes?.length || 0, whooshCount: whooshTimes.length }
@@ -369,7 +396,7 @@ const handler = async (m, { conn, text, usedPrefix, command, isOwner }) => {
     '.editvideo https://domain.com/video.mp4 | crop vertikal dan tambah teks "Halo"',
     '',
     'Fitur: crop, trim, teks, subtitle manual/otomatis, highlight warna, zoom dinamis, fade masuk/keluar, dan whoosh saat pergantian adegan.',
-    'Tidak ada batas ukuran/durasi yang ditetapkan oleh plugin khusus owner; kapasitas disk, RAM/CPU TokoPanel, jaringan, dan batas WhatsApp tetap berlaku.',
+    'Progres ditampilkan di pesan status secara berkala; render FFmpeg memakai persentase aktual. Kapasitas disk, RAM/CPU TokoPanel, jaringan, dan batas WhatsApp tetap berlaku.',
     'AI memakai API key Groq dari .ragebait apikey. FFmpeg dan ffprobe wajib tersedia. Subtitle otomatis butuh whisper.cpp + WHISPER_MODEL_PATH.',
     'Tautan YouTube watch, live, shorts, dan youtu.be dicoba melalui downloader API lalu otomatis fallback ke yt-dlp resmi. Tautan halaman TikTok/Instagram tetap tidak didukung langsung.'
   ].join('\n'))
@@ -380,13 +407,42 @@ const handler = async (m, { conn, text, usedPrefix, command, isOwner }) => {
   let dir
   try {
     await m.react('🎬')
-    await m.reply('⏳ AI sedang memahami instruksi dan memproses video. Mohon tunggu.')
+    let progressMessage = null
+    let lastProgress = -1
+    let lastProgressAt = 0
+    const progressBar = percent => {
+      const filled = Math.round(Math.max(0, Math.min(100, percent)) / 5)
+      return '█'.repeat(filled) + '░'.repeat(20 - filled)
+    }
+    const reportProgress = async (percent, stage) => {
+      const value = Math.max(0, Math.min(99, Math.floor(percent)))
+      const now = Date.now()
+      if (value === lastProgress && now - lastProgressAt < 5000) return
+      if (value < lastProgress || (now - lastProgressAt < 2500 && value < 100)) return
+      lastProgress = value
+      lastProgressAt = now
+      const message = '🎬 *AI EDIT VIDEO — PROGRES REAL-TIME*\n\n' +
+        progressBar(value) + ' *' + value + '%*\n' +
+        '🔄 ' + stage + '\n\n' +
+        'Persentase render diperbarui dari progres FFmpeg. Tahap unduhan/analisis menggunakan progres tahap karena tidak semua downloader menyediakan persentase byte.'
+      try {
+        if (!progressMessage) progressMessage = await conn.sendMessage(m.chat, { text: message }, { quoted: m })
+        else await conn.sendMessage(m.chat, { text: message, edit: progressMessage.key })
+      } catch {
+        if (!progressMessage) {
+          try { progressMessage = await conn.sendMessage(m.chat, { text: message }, { quoted: m }) } catch {}
+        }
+      }
+    }
+    await reportProgress(3, 'Menyiapkan pekerjaan')
     const url = urlFrom(instruction)
     let editInstruction = instruction
     if (url) editInstruction = instruction.replace(url, '').replace(/^\s*[|,;:-]\s*/, '').replace(/\s*[|]\s*/, ' ').trim()
     dir = await mkdtemp(join(tmpdir(), 'alvareth-editvideo-'))
+    await reportProgress(7, 'Mengunduh atau membaca video sumber')
     const input = await sourceVideo(m, instruction, dir)
-    const result = await processVideo(input, editInstruction, key, dir)
+    await reportProgress(16, 'Video sumber siap')
+    const result = await processVideo(input, editInstruction, key, dir, reportProgress)
     const p = result.plan
     const edits = [
       p.crop !== 'none' ? 'Crop: ' + p.crop : '',
@@ -394,10 +450,13 @@ const handler = async (m, { conn, text, usedPrefix, command, isOwner }) => {
       p.text ? 'Teks overlay' : '', p.subtitle ? 'Subtitle manual' : '',
       p.highlight ? 'Highlight warna' : '', p.musicUrl ? 'Musik tambahan (dicampur dengan audio asli)' : '', p.autoCaptions ? 'Subtitle otomatis' : '', p.autoZoom ? 'Zoom dinamis' : '', p.transitions ? 'Fade awal/akhir' : '', p.soundEffects ? 'Efek whoosh per pergantian adegan' : '', p.smartClip ? 'Smart clip' : ''
     ].filter(Boolean)
+    await reportProgress(98, 'Mengirim video hasil edit ke WhatsApp')
     await conn.sendMessage(m.chat, {
       video: { url: result.path }, mimetype: 'video/mp4', fileName: 'alvareth-edited.mp4',
       caption: '✅ *Edit video selesai*\n' + (edits.length ? edits.join('\n') : 'Video diproses ulang tanpa efek tambahan') + (p.smartClip ? '\nKlip dipilih otomatis dari aktivitas audio dan pergantian adegan (heuristik).' : '') + (p.autoZoom ? '\nZoom dinamis diterapkan ke area tengah; tidak melacak wajah.' : '') + (p.transitions ? '\nFade halus pada awal/akhir video.' : '') + (p.soundEffects ? '\nEfek whoosh dibuat pada ' + result.whooshCount + ' pergantian adegan.' : '') + '\n\nDiedit dengan AI + FFmpeg.'
     }, { quoted: m, noAlvarethPreview: true })
+    await reportProgress(100, 'Selesai')
+    if (progressMessage?.key) await conn.sendMessage(m.chat, { text: '✅ *Edit video selesai — 100%*', edit: progressMessage.key }).catch(() => {})
     await m.react('✅')
   } catch (error) {
     console.error('[EditVideo]', error?.stack || error)
