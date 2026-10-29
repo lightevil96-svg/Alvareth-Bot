@@ -418,7 +418,7 @@ const handler = async (m, { conn, text, usedPrefix, command, isOwner }) => {
       return '█'.repeat(filled) + '░'.repeat(20 - filled)
     }
     const reportProgress = async (percent, stage) => {
-      const value = Math.max(0, Math.min(99, Math.floor(percent)))
+      const value = Math.max(0, Math.min(100, Math.floor(percent)))
       const now = Date.now()
       if (value === lastProgress && now - lastProgressAt < 5000) return
       if (value < lastProgress || (now - lastProgressAt < 2500 && value < 100)) return
