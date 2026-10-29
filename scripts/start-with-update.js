@@ -1,8 +1,11 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
 
 const execFileAsync = promisify(execFile);
+const require = createRequire(import.meta.url);
 const cwd = process.cwd();
 const branch = process.env.AUTO_UPDATE_BRANCH || 'main';
 
@@ -80,7 +83,61 @@ async function main() {
   await launchBot();
 }
 
+function applyBaileys405CompatibilityPatch() {
+  let entry;
+  try {
+    entry = require.resolve('baileys');
+  } catch (error) {
+    log(`Baileys 405 patch dilewati: modul tidak dapat ditemukan (${error.message}).`);
+    return false;
+  }
+
+  // The project uses the npm alias "baileys" -> @itsliaaa/baileys.
+  // Patch the library before index.js imports it, so WhatsApp receives the
+  // MACOS UserAgent platform required by current companion-device handshakes.
+  const candidates = [
+    join(dirname(entry), 'Utils', 'validate-connection.js'),
+    join(dirname(entry), 'utils', 'validate-connection.js')
+  ];
+
+  for (const file of candidates) {
+    if (!existsSync(file)) continue;
+    let source;
+    try {
+      source = readFileSync(file, 'utf8');
+    } catch (error) {
+      log(`Baileys 405 patch gagal membaca ${file}: ${error.message}`);
+      return false;
+    }
+
+    const platformPattern = /(platform:\\s*config\\.browser\\[1\\]\\.toLocaleLowerCase\\(\\)\\.includes\\(['"]android['"]\\)\\s*\\?\\s*proto\\.ClientPayload\\.UserAgent\\.Platform\\.ANDROID\\s*:\\s*)proto\\.ClientPayload\\.UserAgent\\.Platform\\.WEB/;
+    if (platformPattern.test(source)) {
+      const patched = source.replace(
+        platformPattern,
+        '$1proto.ClientPayload.UserAgent.Platform.MACOS'
+      );
+      try {
+        writeFileSync(file, patched, 'utf8');
+        log('Baileys 405 compatibility patch diterapkan: UserAgent platform WEB → MACOS.');
+        return true;
+      } catch (error) {
+        log(`Baileys 405 patch gagal menulis ${file}: ${error.message}`);
+        return false;
+      }
+    }
+
+    if (/platform:\\s*config\\.browser\\[1\\][\\s\\S]{0,250}Platform\\.MACOS/.test(source)) {
+      log('Baileys 405 compatibility patch sudah aktif.');
+      return true;
+    }
+  }
+
+  log('PERINGATAN: kode UserAgent Baileys tidak cocok dengan pola patch 405; file dependensi tidak diubah.');
+  return false;
+}
+
 async function launchBot() {
+  applyBaileys405CompatibilityPatch();
   const { spawn } = await import('node:child_process');
   const child = spawn(process.execPath, ['index.js', ...process.argv.slice(2)], {
     cwd,
