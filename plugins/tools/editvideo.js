@@ -294,6 +294,7 @@ async function processVideo(input, instruction, key, dir) {
   if (plan.subtitle) filters.push("drawtext=text='" + esc(plan.subtitle) + "':fontcolor=white:fontsize=30:borderw=2:bordercolor=black:box=1:boxcolor=black@0.45:x=(w-text_w)/2:y=h-text_h-35")
   let generatedSubtitle = ''
   if (plan.autoCaptions) {
+    if (!hasAudio) throw new Error('Video tidak memiliki audio untuk ditranskripsikan.')
     generatedSubtitle = await generateAutoSubtitles(inputPath, dir, start, clipDuration)
     filters.push("subtitles=filename='" + escapeFilterPath(generatedSubtitle) + "':force_style='FontName=Arial,FontSize=23,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=1,Alignment=2,MarginV=35'")
   }
@@ -325,7 +326,7 @@ async function processVideo(input, instruction, key, dir) {
   if (whooshTimes.length) whooshPath = await createWhoosh(dir)
   const effectInputIndexes = []
   for (const _time of whooshTimes) {
-    effectInputIndexes.push(args.filter((v, i) => v === '-i').length + 1)
+    effectInputIndexes.push(args.filter((v, i) => v === '-i').length)
     args.push('-i', whooshPath)
   }
 
