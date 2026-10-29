@@ -38,7 +38,7 @@ function run(command, args, timeout = 180000) {
 }
 
 function urlFrom(text) {
-  const candidates = String(text || '').match(/https?:\/\/[^\s<>"']+/gi) || []
+  const candidates = String(text || '').match(/https?:\/\/[^\s<>"'|]+/gi) || []
   for (const raw of candidates) {
     try {
       const url = new URL(raw.replace(/[),\].!?;:]+$/g, ''))
@@ -54,7 +54,7 @@ function urlFrom(text) {
 
 async function download(url, kind) {
   const response = await axios.get(url, {
-    responseType: 'arraybuffer', timeout: 45000, maxContentLength: MAX_INPUT, maxBodyLength: MAX_INPUT, maxRedirects: 3,
+    responseType: 'arraybuffer', timeout: 45000, maxContentLength: MAX_INPUT, maxBodyLength: MAX_INPUT, maxRedirects: 0,
     headers: { 'User-Agent': 'AlvarethBot/1.0', Accept: kind === 'video' ? 'video/*,application/octet-stream' : 'audio/*,application/octet-stream' },
     validateStatus: status => status >= 200 && status < 300
   })
