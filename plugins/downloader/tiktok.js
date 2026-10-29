@@ -190,25 +190,54 @@ async function waitForActiveConnection(fallbackConn, timeoutMs = 90000) {
   throw new Error('Koneksi WhatsApp belum pulih setelah 90 detik. Jalankan ulang perintah .tt.')
 }
 
+function isGroupMetadataRateLimitError(error) {
+  const message = String(error?.message || error || '')
+  const stack = String(error?.stack || '')
+  return /rate-overlimit|rate[ -]over[ -]limit|too many requests|\\b429\\b/i.test(message) &&
+    /groupMetadata|groups\\.js|messages-send\\.js/i.test(stack)
+}
+
 async function sendMessageWithReconnect(fallbackConn, ...args) {
   let active = await waitForActiveConnection(fallbackConn)
-  try {
-    return await active.sendMessage(...args)
-  } catch (error) {
-    if (!/connection closed|connection is closed/i.test(String(error?.message || error))) throw error
+  const reconnectDeadline = Date.now() + 300000
+  let metadataRetry = 0
+  let loggedSocketWait = false
 
-    console.warn('[TikTok] Socket tertutup saat mengirim; menunggu socket pengganti...')
-    const deadline = Date.now() + 300000
-    while (Date.now() < deadline) {
+  while (Date.now() < reconnectDeadline) {
+    try {
+      return await active.sendMessage(...args)
+    } catch (error) {
+      if (isGroupMetadataRateLimitError(error) && metadataRetry < 2) {
+        const delayMs = metadataRetry === 0 ? 5000 : 10000
+        metadataRetry += 1
+        console.warn(
+          '[TikTok] WhatsApp membatasi permintaan metadata grup; mencoba ulang pengiriman dalam ' +
+          Math.ceil(delayMs / 1000) + ' detik (percobaan ' + metadataRetry + '/2).'
+        )
+        await new Promise(resolve => setTimeout(resolve, delayMs))
+        active = await waitForActiveConnection(globalThis.conn || fallbackConn)
+        continue
+      }
+
+      if (!/connection closed|connection is closed/i.test(String(error?.message || error))) {
+        throw error
+      }
+
+      if (!loggedSocketWait) {
+        console.warn('[TikTok] Socket tertutup saat mengirim; menunggu socket pengganti...')
+        loggedSocketWait = true
+      }
       const next = globalThis.conn
       if (next && next !== active && typeof next.sendMessage === 'function' && isSocketReady(next)) {
         console.log('[TikTok] Socket pengganti aktif; mengirim hasil yang sudah diproses.')
-        return next.sendMessage(...args)
+        active = next
+        continue
       }
       await new Promise(resolve => setTimeout(resolve, 1000))
     }
-    throw new Error('Socket WhatsApp baru tidak tersedia setelah 5 menit. Video sudah diproses; coba ulang .tt setelah bot tersambung.')
   }
+
+  throw new Error('Socket WhatsApp baru tidak tersedia setelah 5 menit. Media sudah diproses; coba ulang .tt setelah bot tersambung.')
 }
 
 async function reactSafe(conn, m, text) {
