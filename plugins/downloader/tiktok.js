@@ -137,7 +137,7 @@ function cachePhotoPost(url, post) {
     title: String(post.title || 'TikTok Photo Post'),
     author: String(post.author || 'Unknown'),
     audio: post.audio || null,
-    images: post.images.filter(image => typeof image === 'string' && /^https?:\\/\\//i.test(image)),
+    images: post.images.filter(image => typeof image === 'string' && (image.startsWith('https://') || image.startsWith('http://'))),
     expiresAt: Date.now() + PHOTO_POST_CACHE_TTL_MS
   })
   prunePhotoPostCache()
