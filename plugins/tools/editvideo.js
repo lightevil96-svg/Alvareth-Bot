@@ -7,10 +7,11 @@ import { spawn } from 'node:child_process'
 import { fileTypeFromBuffer, fileTypeFromFile } from 'file-type'
 import { downloadYoutubeVideo, cleanupDownload } from '../../lib/scrape/youtube.js'
 
-const MAX_INPUT = 500 * 1024 * 1024
-const MAX_OUTPUT = 100 * 1024 * 1024
-const MAX_DURATION = 1800
-const FFMPEG_TIMEOUT = 15 * 60 * 1000
+const MAX_INPUT = Number.MAX_SAFE_INTEGER
+const MAX_OUTPUT = Number.MAX_SAFE_INTEGER
+const MAX_DURATION = Number.POSITIVE_INFINITY
+// Long jobs are allowed; this watchdog only terminates a process that appears stuck.
+const FFMPEG_TIMEOUT = 6 * 60 * 60 * 1000
 const active = new Set()
 
 function apiKey() {
@@ -56,18 +57,12 @@ function urlFrom(text) {
 
 async function downloadToFile(url, kind, dir, filename) {
   const response = await axios.get(url, {
-    responseType: 'stream', timeout: 120000, maxContentLength: MAX_INPUT, maxBodyLength: MAX_INPUT, maxRedirects: 0,
+    responseType: 'stream', timeout: 120000, maxContentLength: -1, maxBodyLength: -1, maxRedirects: 0,
     headers: { 'User-Agent': 'AlvarethBot/1.0', Accept: kind === 'video' ? 'video/*,application/octet-stream' : 'audio/*,application/octet-stream' },
     validateStatus: status => status >= 200 && status < 300
   })
   const contentLength = Number(response.headers?.['content-length'] || 0)
-  if (contentLength > MAX_INPUT) { response.data.destroy(); throw new Error('File melebihi batas 500 MB.') }
   const output = join(dir, filename)
-  let total = 0
-  response.data.on('data', chunk => {
-    total += chunk.length
-    if (total > MAX_INPUT) response.data.destroy(new Error('File melebihi batas 500 MB.'))
-  })
   const { createWriteStream } = await import('node:fs')
   const { pipeline } = await import('node:stream/promises')
   try { await pipeline(response.data, createWriteStream(output)) }
@@ -109,7 +104,7 @@ async function analyzeMedia(inputPath) {
 }
 
 function chooseHighlightWindow(duration, analysis, requestedDuration) {
-  const length = Math.min(duration, Math.max(8, Math.min(180, requestedDuration || 45)))
+  const length = Math.min(duration, Math.max(8, requestedDuration || 45))
   if (duration <= length + 0.5) return { start: 0, end: duration }
   const step = Math.max(1, Math.min(4, length / 12))
   let best = { start: 0, end: length, score: -Infinity }
@@ -167,7 +162,7 @@ async function sourceVideo(m, instruction, dir) {
   const inputPath = join(dir, 'source.mp4')
   if (type.includes('video') || media?.message?.videoMessage || media?.msg?.videoMessage) {
     const buffer = await media.download()
-    if (!Buffer.isBuffer(buffer) || !buffer.length || buffer.length > MAX_INPUT) throw new Error('Video WhatsApp kosong atau melebihi batas 500 MB.')
+    if (!Buffer.isBuffer(buffer) || !buffer.length) throw new Error('Video WhatsApp kosong atau tidak dapat diunduh.')
     const detected = await fileTypeFromBuffer(buffer)
     if (detected?.mime && !detected.mime.startsWith('video/')) throw new Error('Pesan yang dibalas bukan video.')
     await writeFile(inputPath, buffer)
@@ -180,7 +175,7 @@ async function sourceVideo(m, instruction, dir) {
     try {
       result = await downloadYoutubeVideo(url, 360)
       const info = await stat(result.path)
-      if (!info.size || info.size > MAX_INPUT) throw new Error('Video YouTube hasil unduhan melebihi batas 500 MB.')
+      if (!info.size) throw new Error('Video YouTube hasil unduhan kosong.')
       const detected = await fileTypeFromFile(result.path)
       if (!detected?.mime?.startsWith('video/')) throw new Error('Unduhan YouTube bukan file video yang valid.')
       await copyFile(result.path, inputPath)
@@ -234,7 +229,7 @@ async function planEdit(key, instruction) {
       text: typeof p.text === 'string' ? p.text.slice(0, 120) : null,
       subtitle: typeof p.subtitle === 'string' ? p.subtitle.slice(0, 400) : null,
       autoCaptions, smartClip,
-      targetDuration: targetDuration == null ? null : Math.max(8, Math.min(180, targetDuration)),
+      targetDuration: targetDuration == null ? null : Math.max(8, targetDuration),
       highlight: p.highlight === true,
       musicUrl: typeof p.musicUrl === 'string' ? urlFrom(p.musicUrl) : '',
       musicVolume: Math.max(0.05, Math.min(1, Number(p.musicVolume) || 0.2)),
@@ -256,7 +251,7 @@ async function processVideo(input, instruction, key, dir) {
   ], 20000)
   const probeData = JSON.parse(probe.stdout || '{}')
   const duration = Number(probeData?.format?.duration)
-  if (!Number.isFinite(duration) || duration <= 0 || duration > MAX_DURATION) throw new Error('Durasi video harus terbaca dan maksimal 30 menit.')
+  if (!Number.isFinite(duration) || duration <= 0) throw new Error('Durasi video tidak terbaca atau file video tidak valid.')
   const videoStream = (probeData.streams || []).find(stream => stream.codec_type === 'video') || {}
   const hasAudio = (probeData.streams || []).some(stream => stream.codec_type === 'audio')
   let analysis = null
@@ -359,10 +354,11 @@ async function processVideo(input, instruction, key, dir) {
   args.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '28', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', outputPath)
   await run('ffmpeg', args, FFMPEG_TIMEOUT)
   const outputStat = await stat(outputPath)
-  if (!outputStat.size || outputStat.size > MAX_OUTPUT) throw new Error('Hasil kosong atau melebihi batas kirim WhatsApp 100 MB. Coba clip lebih pendek atau resolusi lebih rendah.')
+  if (!outputStat.size) throw new Error('FFmpeg menghasilkan file video kosong.')
   return { path: outputPath, plan, seconds: clipDuration, start, end, sceneCount: analysis?.scenes?.length || 0, whooshCount: whooshTimes.length }
 }
-const handler = async (m, { conn, text, usedPrefix, command }) => {
+const handler = async (m, { conn, text, usedPrefix, command, isOwner }) => {
+  if (!isOwner) return m.reply('🔒 Fitur AI Edit Video ini khusus owner bot.')
   const instruction = String(text || '').trim()
   if (!instruction || /^(help|menu)$/i.test(instruction)) return m.reply([
     '*🎬 AI EDIT VIDEO — Alvareth Bot*',
@@ -376,9 +372,9 @@ const handler = async (m, { conn, text, usedPrefix, command }) => {
     '.editvideo https://domain.com/video.mp4 | crop vertikal dan tambah teks "Halo"',
     '',
     'Fitur: crop, trim, teks, subtitle manual/otomatis, highlight warna, zoom dinamis, fade masuk/keluar, dan whoosh saat pergantian adegan.',
-    'Batas: video maks. 500 MB dan 30 menit; hasil maks. 100 MB.',
+    'Tidak ada batas ukuran/durasi yang ditetapkan oleh plugin khusus owner; kapasitas disk, RAM/CPU TokoPanel, jaringan, dan batas WhatsApp tetap berlaku.',
     'AI memakai API key Groq dari .ragebait apikey. FFmpeg dan ffprobe wajib tersedia. Subtitle otomatis butuh whisper.cpp + WHISPER_MODEL_PATH.',
-    'Tautan YouTube panjang didukung melalui pengunduh yang sudah ada. Batas 500 MB/30 menit; hasil maksimal 100 MB. Tautan halaman TikTok/Instagram tetap tidak didukung langsung.'
+    'Tautan YouTube watch, live, shorts, dan youtu.be dicoba melalui downloader API lalu otomatis fallback ke yt-dlp resmi. Tautan halaman TikTok/Instagram tetap tidak didukung langsung.'
   ].join('\n'))
   if (active.has(m.chat)) return m.reply('⏳ Masih ada pekerjaan edit video di chat ini. Tunggu hingga selesai.')
   const key = apiKey()
@@ -408,7 +404,7 @@ const handler = async (m, { conn, text, usedPrefix, command }) => {
     await m.react('✅')
   } catch (error) {
     console.error('[EditVideo]', error?.stack || error)
-    await m.reply('❌ Gagal mengedit video: ' + String(error?.message || error).slice(0, 450) + '\n\nPastikan FFmpeg/ffprobe terpasang. Batas video 500 MB / 30 menit.')
+    await m.reply('❌ Gagal mengedit video: ' + String(error?.message || error).slice(0, 450) + '\n\nPastikan FFmpeg/ffprobe terpasang, ruang disk cukup, dan server tidak kehabisan RAM/CPU.')
     await m.react('⚠️').catch(() => {})
   } finally {
     active.delete(m.chat)
@@ -419,4 +415,5 @@ const handler = async (m, { conn, text, usedPrefix, command }) => {
 handler.help = ['editvideo']
 handler.tags = ['tools']
 handler.command = /^(editvideo|vedit)$/i
+handler.owner = true
 export default handler
