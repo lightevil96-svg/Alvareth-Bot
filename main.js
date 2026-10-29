@@ -298,6 +298,44 @@ conn.findUserId = async (lid) => {
 
 // Handler utama dan event koneksi.
 let { handler, participantsUpdate, groupsUpdate, deleteUpdate } = await import('./handler.js')
+
+// Baileys may surface the same message more than once through messages.upsert
+// (e.g. duplicate notify events during reconnect/sync). Claim each stable message
+// ID before invoking plugins so one incoming message can only trigger one reply.
+const RECENT_MESSAGE_TTL_MS = 2 * 60 * 1000
+const MAX_RECENT_MESSAGE_IDS = 10000
+const recentMessageIds = new Map()
+
+function claimMessageOnce(message) {
+  const key = message?.key
+  const messageId = typeof key?.id === 'string' ? key.id : ''
+  const chatId = typeof key?.remoteJid === 'string'
+    ? key.remoteJid
+    : (typeof key?.remoteJidAlt === 'string' ? key.remoteJidAlt : '')
+  if (!messageId || !chatId) return true
+
+  const now = Date.now()
+  // Entries are inserted in chronological order, so only oldest entries need
+  // to be checked until the first still-live ID is reached.
+  while (recentMessageIds.size) {
+    const oldestKey = recentMessageIds.keys().next().value
+    const expiry = recentMessageIds.get(oldestKey)
+    if (expiry > now) break
+    recentMessageIds.delete(oldestKey)
+  }
+
+  const fingerprint = chatId + '\\0' + messageId
+  if (recentMessageIds.has(fingerprint)) return false
+
+  recentMessageIds.set(fingerprint, now + RECENT_MESSAGE_TTL_MS)
+  while (recentMessageIds.size > MAX_RECENT_MESSAGE_IDS) {
+    const oldestKey = recentMessageIds.keys().next().value
+    if (oldestKey === undefined) break
+    recentMessageIds.delete(oldestKey)
+  }
+  return true
+}
+
 let isInit = false
 let reconnectTimer = null
 let reconnectAttempts = 0
@@ -404,6 +442,14 @@ global.reloadHandler = async function reloadHandler(restartSocket = false) {
     const messages = Array.isArray(update?.messages) ? update.messages : []
     for (const message of messages) {
       if (!message) continue
+      if (!claimMessageOnce(message)) {
+        console.warn('[MESSAGE-DEDUP] Pesan duplikat diabaikan:', {
+          chat: message.key?.remoteJid || message.key?.remoteJidAlt || null,
+          id: message.key?.id || null,
+          type: update?.type || null
+        })
+        continue
+      }
       // Temporary, narrow diagnostics for live text messages to determine whether
       // .menu reaches Baileys before command parsing.
       if (update?.type === 'notify' && message.message) {
