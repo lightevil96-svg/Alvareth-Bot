@@ -17,13 +17,14 @@ const ROUTES = [
   { command: 'bili', label: 'Bilibili', domains: ['bilibili.com', 'bilibili.tv'] },
   { command: 'scdl', label: 'SoundCloud', domains: ['soundcloud.com'] },
   { command: 'spotify', label: 'Spotify', domains: ['spotify.com', 'spotify.link'] },
+  { command: 'applemp3', label: 'Apple Music', domains: ['music.apple.com'] },
   // Use the existing all-in-one provider for popular services without a
   // dedicated downloader plugin in this repository.
   {
     command: 'aio',
     label: 'All-in-One',
     domains: [
-      'threads.net', 'reddit.com', 'redd.it', 'vimeo.com', 'dailymotion.com',
+      'threads.net', 'threads.com', 'reddit.com', 'redd.it', 'vimeo.com', 'dailymotion.com',
       'twitch.tv', 'snapchat.com', 'likee.video', 'kwai.com', 'snackvideo.com',
       'streamable.com', 'loom.com'
     ]
