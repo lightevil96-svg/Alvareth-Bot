@@ -742,6 +742,12 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
       }
     }
 
+    if (!isPhotoOnlyCommand) {
+      await sendMessageWithReconnect(conn, m.chat, {
+        text: '⏳ Tautan TikTok terdeteksi. Sedang mengambil metadata dan memeriksa video; bot akan mengirim hasil atau alasan kegagalan setelah proses selesai.'
+      }, { quoted: m }).catch(error => console.warn('[TikTok] Tidak bisa mengirim status awal:', error?.message || error))
+    }
+
     const res = await tiktokScrape(url)
     if (!res) throw new Error('Gagal mengambil data TikTok. Pastikan tautan masih aktif dan dapat diakses.')
 
