@@ -138,7 +138,7 @@ function claimMessage(m) {
 const handler = {};
 handler.before = async (m, { conn }) => {
   try {
-    if (!m || m.fromMe || !m.chat || m.chat === 'status@broadcast') return false;
+    if (!m || !m.chat || m.chat === 'status@broadcast') return false;
 
     const originalText = getMessageText(m);
     if (!originalText || /^[.#!\/]/.test(originalText)) return false;
@@ -158,8 +158,12 @@ handler.before = async (m, { conn }) => {
       }
     }
     if (!selected) return false;
-    // TikTok links are routed automatically even when AutoDL is off, because .tt
-    // is the user's primary downloader workflow. Other platforms keep the opt-in.
+    // The bot owner often pastes a link from the linked WhatsApp account itself,
+    // so that message is marked fromMe. Only auto-route an exact TikTok URL in
+    // that case; never route arbitrary bot-generated text/captions.
+    const isPlainTikTokLink = /^https?:\\/\\/(?:[a-z0-9-]+\\.)*tiktok\\.com\\/[^\\s]+$/i.test(originalText.replace(/[),\\].!?;:]+$/g, ''));
+    if (m.fromMe && !(selected.route.command === 'tt' && isPlainTikTokLink)) return false;
+    // TikTok links are routed automatically even when AutoDL is off; other platforms keep their opt-in.
     if (!chat?.autodl && selected.route.command !== 'tt') return false;
     if (!claimMessage(m)) return true;
 
