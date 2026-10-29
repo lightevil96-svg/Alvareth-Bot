@@ -314,7 +314,7 @@ const handler = async (m, { text = '', isROwner, conn }) => {
     if (!config.apiKey) return m.reply('API key belum diatur. Kirim .ragebait apikey gsk_xxx di chat pribadi.')
     config.enabled = true
     writeConfig(config)
-    return m.reply('✅ AI Banter aktif. Hanya kontak yang sudah ditargetkan dan menyetujui sesi yang akan menerima balasan otomatis.')
+    return m.reply('✅ AI Banter aktif. Bot hanya membalas pesan yang terdeteksi sebagai hinaan dari nomor target; pesan biasa diabaikan.')
   }
 
   if (subcommand.toLowerCase() === 'off') {
@@ -337,7 +337,6 @@ const handler = async (m, { text = '', isROwner, conn }) => {
       '.ragebait target 628xxxxxxxxxx',
       '.ragebait untarget 628xxxxxxxxxx',
       '.ragebait on / off',
-            '.ragebait leave',
       '.ragebait forget (hapus memori chat sendiri)'
     ].join('\n'))
   }
@@ -355,7 +354,7 @@ const handler = async (m, { text = '', isROwner, conn }) => {
     '.ragebait on — aktifkan',
     '.ragebait off — matikan',
     '.ragebait status — status fitur',
-            '.ragebait forget — hapus memori chat sendiri'
+    '.ragebait forget — hapus memori chat sendiri'
   ].join('\n'))
 }
 
