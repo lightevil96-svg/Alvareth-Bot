@@ -10,7 +10,7 @@ const BRANCH = process.env.AUTO_UPDATE_BRANCH || 'main'
 const UPDATE_PLUGIN_PATH = 'plugins/owner/update.js'
 const MAX_ARCHIVE_BYTES = 100 * 1024 * 1024
 const MAX_FILE_BYTES = 50 * 1024 * 1024
-const MAX_COMPARE_FILES = 299
+const MAX_COMPARE_FILES = 300
 const API_ROOT = 'https://api.github.com/repos/' + REPOSITORY
 const RAW_ROOT = 'https://raw.githubusercontent.com/' + REPOSITORY
 const STATE_DIRECTORY = process.env.ALVARETH_DATA_DIR
@@ -162,8 +162,8 @@ async function compareCommits(baseSha, headSha) {
     API_ROOT + '/compare/' + baseSha + '...' + headSha,
     'Membandingkan file antarversi'
   )
-  if (data?.status === 'behind') {
-    throw new Error('Versi dasar updater lebih baru daripada branch GitHub. Tidak ada file yang diubah demi keamanan.')
+  if (data?.status === 'behind' || data?.status === 'diverged') {
+    throw new Error('Riwayat lokal dan branch GitHub tidak lagi berada pada satu jalur commit. Tidak ada file yang diubah demi keamanan; baseline perlu diperiksa manual.')
   }
   if (!Array.isArray(data?.files)) {
     throw new Error('GitHub tidak mengembalikan daftar file yang berubah; update dibatalkan.')
