@@ -195,11 +195,10 @@ const groupMetadataInFlight = new Map()
 const groupMetadataRetryAfter = new Map()
 
 function isWhatsAppRateLimit(error) {
-  return /rate-overlimit|rate[ -]over[ -]limit|too many requests|\\b429\\b/i.test(
+  return /rate-overlimit|rate[ -]over[ -]limit|too many requests|429/i.test(
     String(error?.message || error || '')
   )
 }
-
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
