@@ -1,15 +1,16 @@
 import axios from 'axios'
 import { readFileSync } from 'node:fs'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile, copyFile, stat } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawn } from 'node:child_process'
-import { fileTypeFromBuffer } from 'file-type'
+import { fileTypeFromBuffer, fileTypeFromFile } from 'file-type'
 import { downloadYoutubeVideo, cleanupDownload } from '../../lib/scrape/youtube.js'
 
-const MAX_INPUT = 80 * 1024 * 1024
-const MAX_OUTPUT = 48 * 1024 * 1024
-const MAX_DURATION = 180
+const MAX_INPUT = 500 * 1024 * 1024
+const MAX_OUTPUT = 100 * 1024 * 1024
+const MAX_DURATION = 1800
+const FFMPEG_TIMEOUT = 15 * 60 * 1000
 const active = new Set()
 
 function apiKey() {
@@ -53,22 +54,33 @@ function urlFrom(text) {
   return ''
 }
 
-async function download(url, kind) {
+async function downloadToFile(url, kind, dir, filename) {
   const response = await axios.get(url, {
-    responseType: 'arraybuffer', timeout: 45000, maxContentLength: MAX_INPUT, maxBodyLength: MAX_INPUT, maxRedirects: 0,
+    responseType: 'stream', timeout: 120000, maxContentLength: MAX_INPUT, maxBodyLength: MAX_INPUT, maxRedirects: 0,
     headers: { 'User-Agent': 'AlvarethBot/1.0', Accept: kind === 'video' ? 'video/*,application/octet-stream' : 'audio/*,application/octet-stream' },
     validateStatus: status => status >= 200 && status < 300
   })
-  const buffer = Buffer.from(response.data)
-  if (!buffer.length || buffer.length > MAX_INPUT) throw new Error('File kosong atau melebihi batas 80 MB.')
-  const detected = await fileTypeFromBuffer(buffer)
+  const contentLength = Number(response.headers?.['content-length'] || 0)
+  if (contentLength > MAX_INPUT) { response.data.destroy(); throw new Error('File melebihi batas 500 MB.') }
+  const output = join(dir, filename)
+  let total = 0
+  response.data.on('data', chunk => {
+    total += chunk.length
+    if (total > MAX_INPUT) response.data.destroy(new Error('File melebihi batas 500 MB.'))
+  })
+  const { createWriteStream } = await import('node:fs')
+  const { pipeline } = await import('node:stream/promises')
+  try { await pipeline(response.data, createWriteStream(output)) }
+  catch (error) { await rm(output, { force: true }).catch(() => {}); throw error }
+  const info = await stat(output)
+  const detected = await fileTypeFromFile(output)
   const mime = detected?.mime || String(response.headers?.['content-type'] || '').split(';')[0].toLowerCase()
-  if (kind === 'video' ? !mime.startsWith('video/') : !(mime.startsWith('audio/') || mime === 'application/octet-stream')) {
+  if (!info.size || (kind === 'video' ? !mime.startsWith('video/') : !(mime.startsWith('audio/') || mime === 'application/octet-stream'))) {
+    await rm(output, { force: true }).catch(() => {})
     throw new Error('Tautan bukan file ' + kind + ' langsung. Tautan halaman media sosial tidak didukung.')
   }
-  return { buffer, ext: detected?.ext || (kind === 'video' ? 'mp4' : 'mp3') }
+  return { path: output, ext: detected?.ext || (kind === 'video' ? 'mp4' : 'mp3') }
 }
-
 function isYoutubeUrl(value) {
   try {
     const url = new URL(value)
@@ -80,12 +92,14 @@ function isYoutubeUrl(value) {
 async function sourceVideo(m, instruction, dir) {
   const media = m.quoted && typeof m.quoted.download === 'function' ? m.quoted : m
   const type = String(media?.mediaType || media?.mtype || '').toLowerCase()
+  const inputPath = join(dir, 'source.mp4')
   if (type.includes('video') || media?.message?.videoMessage || media?.msg?.videoMessage) {
     const buffer = await media.download()
-    if (!Buffer.isBuffer(buffer) || !buffer.length || buffer.length > MAX_INPUT) throw new Error('Video WhatsApp kosong atau melebihi batas 80 MB.')
+    if (!Buffer.isBuffer(buffer) || !buffer.length || buffer.length > MAX_INPUT) throw new Error('Video WhatsApp kosong atau melebihi batas 500 MB.')
     const detected = await fileTypeFromBuffer(buffer)
     if (detected?.mime && !detected.mime.startsWith('video/')) throw new Error('Pesan yang dibalas bukan video.')
-    return { buffer, ext: detected?.ext || 'mp4' }
+    await writeFile(inputPath, buffer)
+    return { path: inputPath, ext: detected?.ext || 'mp4' }
   }
   const url = urlFrom(instruction)
   if (!url) throw new Error('Balas video WhatsApp dengan perintah .editvideo instruksi, atau sertakan tautan langsung ke file video / tautan YouTube.')
@@ -93,19 +107,18 @@ async function sourceVideo(m, instruction, dir) {
     let result
     try {
       result = await downloadYoutubeVideo(url, 360)
-      const stat = await (await import('node:fs/promises')).stat(result.path)
-      if (!stat.size || stat.size > MAX_INPUT) throw new Error('Video YouTube hasil unduhan melebihi batas 80 MB. Coba video yang lebih pendek.')
-      const buffer = await readFile(result.path)
-      const detected = await fileTypeFromBuffer(buffer)
+      const info = await stat(result.path)
+      if (!info.size || info.size > MAX_INPUT) throw new Error('Video YouTube hasil unduhan melebihi batas 500 MB.')
+      const detected = await fileTypeFromFile(result.path)
       if (!detected?.mime?.startsWith('video/')) throw new Error('Unduhan YouTube bukan file video yang valid.')
-      return { buffer, ext: detected.ext || 'mp4', sourceTitle: result.title }
+      await copyFile(result.path, inputPath)
+      return { path: inputPath, ext: detected.ext || 'mp4', sourceTitle: result.title }
     } finally {
       if (result?.outputDir) await cleanupDownload(result.outputDir).catch(() => {})
     }
   }
-  return download(url, 'video')
+  return downloadToFile(url, 'video', dir, 'source.mp4')
 }
-
 async function planEdit(key, instruction) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 25000)
@@ -147,12 +160,11 @@ function esc(text) {
 
 async function processVideo(input, instruction, key, dir) {
   const plan = await planEdit(key, instruction)
-  const inputPath = join(dir, 'input.' + String(input.ext || 'mp4').replace(/[^a-z0-9]/gi, '').slice(0, 8))
+  const inputPath = input.path
   const outputPath = join(dir, 'edited.mp4')
-  await writeFile(inputPath, input.buffer)
   const probe = await run('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'json', inputPath], 20000)
   const duration = Number(JSON.parse(probe.stdout || '{}')?.format?.duration)
-  if (!Number.isFinite(duration) || duration <= 0 || duration > MAX_DURATION) throw new Error('Durasi video harus terbaca dan maksimal 180 detik (3 menit).')
+  if (!Number.isFinite(duration) || duration <= 0 || duration > MAX_DURATION) throw new Error('Durasi video harus terbaca dan maksimal 30 menit.')
   const start = plan.start == null ? 0 : Math.min(plan.start, duration - 0.1)
   const end = plan.end == null ? duration : Math.min(plan.end, duration)
   if (end <= start || end - start < 0.2) throw new Error('Rentang trim tidak valid; waktu akhir harus lebih besar dari waktu awal.')
@@ -166,9 +178,8 @@ async function processVideo(input, instruction, key, dir) {
   const args = ['-hide_banner', '-loglevel', 'error', '-y', '-ss', String(start), '-i', inputPath]
   let musicPath = ''
   if (plan.musicUrl) {
-    const music = await download(plan.musicUrl, 'audio')
-    musicPath = join(dir, 'music.' + String(music.ext || 'mp3').replace(/[^a-z0-9]/gi, '').slice(0, 8))
-    await writeFile(musicPath, music.buffer)
+    const music = await downloadToFile(plan.musicUrl, 'audio', dir, 'music.mp3')
+    musicPath = music.path
     args.push('-stream_loop', '-1', '-i', musicPath)
   }
   if (filters.length) args.push('-vf', filters.join(','))
@@ -176,10 +187,10 @@ async function processVideo(input, instruction, key, dir) {
   if (musicPath) args.push('-filter_complex', '[1:a]volume=' + plan.musicVolume + '[music]', '-map', '[music]')
   else args.push('-map', '0:a?')
   args.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '28', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '96k', '-movflags', '+faststart', outputPath)
-  await run('ffmpeg', args)
-  const buffer = await readFile(outputPath)
-  if (!buffer.length || buffer.length > MAX_OUTPUT) throw new Error('Hasil kosong atau melebihi batas kirim WhatsApp 48 MB. Coba video lebih pendek atau resolusi lebih rendah.')
-  return { buffer, plan, seconds: end - start }
+  await run('ffmpeg', args, FFMPEG_TIMEOUT)
+  const outputStat = await stat(outputPath)
+  if (!outputStat.size || outputStat.size > MAX_OUTPUT) throw new Error('Hasil kosong atau melebihi batas kirim WhatsApp 100 MB. Coba clip lebih pendek atau resolusi lebih rendah.')
+  return { path: outputPath, plan, seconds: end - start }
 }
 
 const handler = async (m, { conn, text, usedPrefix, command }) => {
@@ -196,9 +207,9 @@ const handler = async (m, { conn, text, usedPrefix, command }) => {
     '.editvideo https://domain.com/video.mp4 | crop vertikal dan tambah teks "Halo"',
     '',
     'Fitur: crop, trim, teks overlay, subtitle manual, highlight warna, tambah musik dari URL audio langsung.',
-    'Batas: video maks. 80 MB dan 180 detik; hasil maks. 48 MB.',
+    'Batas: video maks. 500 MB dan 30 menit; hasil maks. 100 MB.',
     'AI memakai API key Groq yang disimpan lewat .ragebait apikey. FFmpeg dan ffprobe wajib tersedia di server.',
-    'Tautan YouTube (termasuk URL panjang youtube.com/watch?v=...) didukung melalui pengunduh yang sudah ada; proses memakai kualitas 360p agar lebih ramah server. Tautan halaman TikTok/Instagram tetap tidak didukung langsung; gunakan URL file video langsung atau kirim videonya ke WhatsApp.'
+    'Tautan YouTube panjang didukung melalui pengunduh yang sudah ada. Batas 500 MB/30 menit; hasil maksimal 100 MB. Tautan halaman TikTok/Instagram tetap tidak didukung langsung.'
   ].join('\n'))
   if (active.has(m.chat)) return m.reply('⏳ Masih ada pekerjaan edit video di chat ini. Tunggu hingga selesai.')
   const key = apiKey()
@@ -222,13 +233,13 @@ const handler = async (m, { conn, text, usedPrefix, command }) => {
       p.highlight ? 'Highlight warna' : '', p.musicUrl ? 'Musik tambahan' : ''
     ].filter(Boolean)
     await conn.sendMessage(m.chat, {
-      video: result.buffer, mimetype: 'video/mp4', fileName: 'alvareth-edited.mp4',
+      video: { url: result.path }, mimetype: 'video/mp4', fileName: 'alvareth-edited.mp4',
       caption: '✅ *Edit video selesai*\n' + (edits.length ? edits.join('\n') : 'Video diproses ulang tanpa efek tambahan') + '\n\nDiedit dengan AI + FFmpeg.'
     }, { quoted: m, noAlvarethPreview: true })
     await m.react('✅')
   } catch (error) {
     console.error('[EditVideo]', error?.stack || error)
-    await m.reply('❌ Gagal mengedit video: ' + String(error?.message || error).slice(0, 450) + '\n\nPastikan FFmpeg/ffprobe terpasang. Batas video 80 MB / 3 menit.')
+    await m.reply('❌ Gagal mengedit video: ' + String(error?.message || error).slice(0, 450) + '\n\nPastikan FFmpeg/ffprobe terpasang. Batas video 500 MB / 30 menit.')
     await m.react('⚠️').catch(() => {})
   } finally {
     active.delete(m.chat)
