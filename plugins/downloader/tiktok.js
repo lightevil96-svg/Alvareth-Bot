@@ -112,6 +112,54 @@ function cacheSinglePhoto(url, photo) {
   pruneSinglePhotoCache()
 }
 
+const PHOTO_POST_CACHE_TTL_MS = 15 * 60 * 1000
+const PHOTO_POST_CACHE_MAX_ENTRIES = 10
+const photoPostCache = new Map()
+
+function prunePhotoPostCache() {
+  const now = Date.now()
+  for (const [key, value] of photoPostCache) {
+    if (!value || value.expiresAt <= now) photoPostCache.delete(key)
+  }
+  while (photoPostCache.size > PHOTO_POST_CACHE_MAX_ENTRIES) {
+    const oldestKey = photoPostCache.keys().next().value
+    if (oldestKey === undefined) break
+    photoPostCache.delete(oldestKey)
+  }
+}
+
+function cachePhotoPost(url, post) {
+  if (!url || !Array.isArray(post?.images) || !post.images.length) return
+  prunePhotoPostCache()
+  const key = normalizeTikTokCacheKey(url)
+  photoPostCache.delete(key)
+  photoPostCache.set(key, {
+    title: String(post.title || 'TikTok Photo Post'),
+    author: String(post.author || 'Unknown'),
+    audio: post.audio || null,
+    images: post.images.filter(image => typeof image === 'string' && /^https?:\/\//i.test(image)),
+    expiresAt: Date.now() + PHOTO_POST_CACHE_TTL_MS
+  })
+  prunePhotoPostCache()
+}
+
+function getCachedPhotoPost(url) {
+  prunePhotoPostCache()
+  const key = normalizeTikTokCacheKey(url)
+  const cached = photoPostCache.get(key)
+  if (!cached || cached.expiresAt <= Date.now()) return null
+  photoPostCache.delete(key)
+  photoPostCache.set(key, cached)
+  return {
+    type: 'image',
+    isPhotoPost: true,
+    title: cached.title,
+    author: cached.author,
+    audio: cached.audio,
+    images: [...cached.images]
+  }
+}
+
 // Some messages in this Baileys fork are protobuf-converted objects without the
 // serializer prototype methods. Send reactions through the socket directly.
 function isSocketReady(conn) {
