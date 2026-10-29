@@ -161,7 +161,7 @@ handler.before = async (m, { conn }) => {
     // The bot owner often pastes a link from the linked WhatsApp account itself,
     // so that message is marked fromMe. Only auto-route an exact TikTok URL in
     // that case; never route arbitrary bot-generated text/captions.
-    const isPlainTikTokLink = /^https?:\\/\\/(?:[a-z0-9-]+\\.)*tiktok\\.com\\/[^\\s]+$/i.test(originalText.replace(/[),\\].!?;:]+$/g, ''));
+    const isPlainTikTokLink = /^https?:\/\/(?:[a-z0-9-]+\.)*tiktok\.com\/[^\s]+$/i.test(originalText.replace(/[),\].!?;:]+$/g, ''));
     if (m.fromMe && !(selected.route.command === 'tt' && isPlainTikTokLink)) return false;
     // TikTok links are routed automatically even when AutoDL is off; other platforms keep their opt-in.
     if (!chat?.autodl && selected.route.command !== 'tt') return false;
