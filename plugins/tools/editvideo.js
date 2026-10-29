@@ -214,7 +214,7 @@ async function planEdit(key, instruction) {
     if (!match) throw new Error('AI tidak menghasilkan rencana edit yang valid.')
     const p = JSON.parse(match[0])
     const words = String(instruction || '').toLowerCase()
-    const smartClip = p.smartClip === true || /bagian paling menarik|momen paling menarik|highlight otomatis|smart clip|auto.?clip|klip otomatis|reels otomatis|shorts otomatis|ambil bagian terbaik|potong bagian menarik/.test(words)
+    const smartClip = p.smartClip === true || /bagian paling menarik|momen paling menarik|highlight otomatis|smart clip|auto.?clip|klip otomatis|reels otomatis|shorts otomatis|ambil bagian terbaik|potong bagian menarik|momen paling viral|bagian paling viral|cut best moments|ambil momen terbaik/.test(words)
     const autoCaptions = p.autoCaptions === true || /subtitle otomatis|caption otomatis|auto.?caption|transkrip otomatis|transkripsikan|buat subtitle|kasih subtitle otomatis/.test(words)
     const autoZoom = p.autoZoom === true || /zoom dinamis|auto.?zoom|zoom otomatis|efek zoom|punch.?in/.test(words)
     const transitions = p.transitions === true || /transisi|transition|fade in|fade out|fade halus/.test(words)
@@ -317,9 +317,10 @@ async function processVideo(input, instruction, key, dir) {
     const candidates = analysis.scenes.filter(t => t > start + 0.5 && t < end - 0.5)
       .map(t => t - start).filter(t => t > 0 && t < clipDuration)
     // Cap processing cost and avoid noisy repeated effects on closely spaced cuts.
-    for (const t of candidates) {
+    const stride = Math.max(1, Math.ceil(candidates.length / 8))
+    for (let i = 0; i < candidates.length && whooshTimes.length < 8; i += stride) {
+      const t = candidates[i]
       if (!whooshTimes.length || t - whooshTimes[whooshTimes.length - 1] >= 2.5) whooshTimes.push(t)
-      if (whooshTimes.length >= 8) break
     }
   }
   let whooshPath = ''
@@ -340,7 +341,6 @@ async function processVideo(input, instruction, key, dir) {
       graph.push('[0:a:0]volume=' + (musicPath ? '0.82' : '1') + '[abase]')
       labels.push('[abase]')
     }
-    let musicIndex = musicPath ? 1 : -1
     if (musicPath) {
       graph.push('[1:a:0]volume=' + plan.musicVolume + '[amusic]')
       labels.push('[amusic]')
