@@ -5,6 +5,7 @@ import { homedir, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawn } from 'node:child_process'
 import { fileTypeFromBuffer } from 'file-type'
+import { downloadYoutubeVideo, cleanupDownload } from '../../lib/scrape/youtube.js'
 
 const MAX_INPUT = 80 * 1024 * 1024
 const MAX_OUTPUT = 48 * 1024 * 1024
@@ -68,7 +69,15 @@ async function download(url, kind) {
   return { buffer, ext: detected?.ext || (kind === 'video' ? 'mp4' : 'mp3') }
 }
 
-async function sourceVideo(m, instruction) {
+function isYoutubeUrl(value) {
+  try {
+    const url = new URL(value)
+    const host = url.hostname.toLowerCase().replace(/^www\./, '')
+    return ['youtube.com', 'm.youtube.com', 'music.youtube.com', 'youtu.be', 'youtube-nocookie.com'].includes(host) || host.endsWith('.youtube.com') || host.endsWith('.youtube-nocookie.com')
+  } catch { return false }
+}
+
+async function sourceVideo(m, instruction, dir) {
   const media = m.quoted && typeof m.quoted.download === 'function' ? m.quoted : m
   const type = String(media?.mediaType || media?.mtype || '').toLowerCase()
   if (type.includes('video') || media?.message?.videoMessage || media?.msg?.videoMessage) {
@@ -79,7 +88,21 @@ async function sourceVideo(m, instruction) {
     return { buffer, ext: detected?.ext || 'mp4' }
   }
   const url = urlFrom(instruction)
-  if (!url) throw new Error('Balas video WhatsApp dengan perintah .editvideo instruksi, atau sertakan tautan langsung ke file video.')
+  if (!url) throw new Error('Balas video WhatsApp dengan perintah .editvideo instruksi, atau sertakan tautan langsung ke file video / tautan YouTube.')
+  if (isYoutubeUrl(url)) {
+    let result
+    try {
+      result = await downloadYoutubeVideo(url, 360)
+      const stat = await (await import('node:fs/promises')).stat(result.path)
+      if (!stat.size || stat.size > MAX_INPUT) throw new Error('Video YouTube hasil unduhan melebihi batas 80 MB. Coba video yang lebih pendek.')
+      const buffer = await readFile(result.path)
+      const detected = await fileTypeFromBuffer(buffer)
+      if (!detected?.mime?.startsWith('video/')) throw new Error('Unduhan YouTube bukan file video yang valid.')
+      return { buffer, ext: detected.ext || 'mp4', sourceTitle: result.title }
+    } finally {
+      if (result?.outputDir) await cleanupDownload(result.outputDir).catch(() => {})
+    }
+  }
   return download(url, 'video')
 }
 
@@ -166,13 +189,16 @@ const handler = async (m, { conn, text, usedPrefix, command }) => {
     'Balas video WhatsApp dengan:',
     '.editvideo buat vertikal 9:16, potong dari 3 sampai 15 detik, tambah teks "Tips Hari Ini", buat lebih tajam',
     '',
+    'Bisa juga pakai tautan YouTube panjang:',
+    '.editvideo https://www.youtube.com/watch?v=VIDEO_ID | ambil bagian paling menarik, crop vertikal 9:16, tambah subtitle manual "Jangan menyerah" dan buat lebih tajam',
+    '',
     'Atau gunakan tautan langsung:',
     '.editvideo https://domain.com/video.mp4 | crop vertikal dan tambah teks "Halo"',
     '',
     'Fitur: crop, trim, teks overlay, subtitle manual, highlight warna, tambah musik dari URL audio langsung.',
     'Batas: video maks. 80 MB dan 180 detik; hasil maks. 48 MB.',
     'AI memakai API key Groq yang disimpan lewat .ragebait apikey. FFmpeg dan ffprobe wajib tersedia di server.',
-    'Tautan halaman TikTok/Instagram/YouTube tidak didukung langsung; unduh lalu kirim videonya ke WhatsApp atau gunakan URL file video langsung.'
+    'Tautan YouTube (termasuk URL panjang youtube.com/watch?v=...) didukung melalui pengunduh yang sudah ada; proses memakai kualitas 360p agar lebih ramah server. Tautan halaman TikTok/Instagram tetap tidak didukung langsung; gunakan URL file video langsung atau kirim videonya ke WhatsApp.'
   ].join('\n'))
   if (active.has(m.chat)) return m.reply('⏳ Masih ada pekerjaan edit video di chat ini. Tunggu hingga selesai.')
   const key = apiKey()
@@ -182,10 +208,11 @@ const handler = async (m, { conn, text, usedPrefix, command }) => {
   try {
     await m.react('🎬')
     await m.reply('⏳ AI sedang memahami instruksi dan memproses video. Mohon tunggu.')
+    const url = urlFrom(instruction)
     let editInstruction = instruction
-    if (urlFrom(instruction) && instruction.includes('|')) editInstruction = instruction.slice(instruction.indexOf('|') + 1).trim()
-    const input = await sourceVideo(m, instruction)
+    if (url) editInstruction = instruction.replace(url, '').replace(/^\s*[|,;:-]\s*/, '').replace(/\s*[|]\s*/, ' ').trim()
     dir = await mkdtemp(join(tmpdir(), 'alvareth-editvideo-'))
+    const input = await sourceVideo(m, instruction, dir)
     const result = await processVideo(input, editInstruction, key, dir)
     const p = result.plan
     const edits = [
