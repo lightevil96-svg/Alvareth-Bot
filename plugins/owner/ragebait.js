@@ -10,11 +10,9 @@ const MEMORY_DIR = join(FEATURE_DIR, 'memory')
 const CONFIG_PATH = join(FEATURE_DIR, 'config.json')
 const MAX_CONTEXT_MESSAGES = 24
 const MAX_MESSAGE_CHARS = 2500
-const MIN_REPLY_INTERVAL_MS = 5000
-const MAX_REPLIES_PER_HOUR = 20
+const MIN_REPLY_INTERVAL_MS = 2500
+const replyQueues = new Map()
 const lastReplyAt = new Map()
-const hourlyCounts = new Map()
-const inFlight = new Set()
 
 mkdirSync(MEMORY_DIR, { recursive: true })
 
@@ -55,7 +53,7 @@ async function sendMenu(conn, chat, quoted, config) {
       'Target: ' + config.targets.length,
       'Personalisasi: ' + (config.persona ? 'Kustom' : 'Default'),
       '',
-      'AI hanya membalas pesan yang terdeteksi sebagai hinaan dari nomor target.'
+      'AI membalas setiap pesan pribadi dari nomor target secara berurutan.'
     ].join('\n'),
     footer: 'Alvareth Bot • AI Banter',
     optionText: 'Pilih Pengaturan',
@@ -142,17 +140,6 @@ function saveMemory(jid, role, content) {
   }) + '\n', { mode: 0o600 })
 }
 
-function isInsultMessage(text) {
-  const normalized = String(text || '').toLowerCase()
-    .normalize('NFKD')
-    .replace(/[\\u0300-\\u036f]/g, '')
-  const insultPatterns = [
-    /\\b(anjing|bangsat|bajingan|kampret|keparat|brengsek|kontol|memek|goblok|tolol|idiot|bodoh|bego|tai|asu|monyet|setan|babi|sialan|fuck|fucking|shit|bitch|asshole|dumbass|idiot)\\b/i,
-    /\\b(ngentot|jancok|cuk|cok|pantek|pukimak|kimak|anjir|njir)\\b/i,
-    /\\b(go to hell|shut up|stfu|you suck|piece of shit)\\b/i
-  ]
-  return insultPatterns.some(pattern => pattern.test(normalized))
-}
 
 function getOwnerJid() {
   const number = String(global.nomorown || global.owner?.[0]?.[0] || '').replace(/\\D/g, '')
@@ -224,7 +211,7 @@ const handler = async (m, { text = '', isROwner, conn }) => {
   const config = readConfig()
 
   if (subcommand.toLowerCase() === 'join') {
-    return m.reply('Perintah .ragebait join sudah tidak digunakan. AI hanya membalas pesan yang terdeteksi sebagai hinaan pada nomor target yang sudah kamu tentukan.')
+    return m.reply('Perintah .ragebait join sudah tidak digunakan. AI membalas pesan pribadi target secara otomatis.')
   }
 
   if (subcommand.toLowerCase() === 'leave') {
@@ -262,7 +249,7 @@ const handler = async (m, { text = '', isROwner, conn }) => {
     if (number.length < 8 || number.length > 15) return m.reply('Nomor tidak valid. Gunakan kode negara, contoh 628123456789.')
     if (!config.targets.includes(number)) config.targets.push(number)
     writeConfig(config)
-    return m.reply('🎯 Target ' + number + ' sudah dicatat. AI hanya akan membalas pesan yang terdeteksi sebagai hinaan dari nomor ini.')
+    return m.reply('🎯 Target ' + number + ' sudah dicatat. Setelah fitur aktif, AI akan membalas setiap pesan pribadi dari nomor ini.')
   }
 
   if (subcommand.toLowerCase() === 'persona' || subcommand.toLowerCase() === 'personalisasi') {
@@ -314,7 +301,7 @@ const handler = async (m, { text = '', isROwner, conn }) => {
     if (!config.apiKey) return m.reply('API key belum diatur. Kirim .ragebait apikey gsk_xxx di chat pribadi.')
     config.enabled = true
     writeConfig(config)
-    return m.reply('✅ AI Banter aktif. Bot hanya membalas pesan yang terdeteksi sebagai hinaan dari nomor target; pesan biasa diabaikan.')
+    return m.reply('✅ AI Banter aktif. Bot akan membalas setiap pesan pribadi dari nomor target.')
   }
 
   if (subcommand.toLowerCase() === 'off') {
@@ -365,7 +352,6 @@ handler.before = async function (m, { conn }) {
     if (!text || text.startsWith('.') || text.startsWith('!') || text.startsWith('/')) return false
     // WhatsApp LID chats can have different chat/sender JIDs; m.isGroup is the
     // reliable private-chat check here, so do not compare the two JIDs directly.
-    if (!isInsultMessage(text)) return false
 
     const config = readConfig()
     const senderId = m.senderPN || m.sender || m.chat
@@ -379,49 +365,46 @@ handler.before = async function (m, { conn }) {
     ].filter(Boolean)
     const number = numberCandidates.find(candidate => config.targets.includes(candidate))
     if (!config.enabled || !config.apiKey || !number) return false
-    if (inFlight.has(number)) return true
-
-    const now = Date.now()
-    const previous = lastReplyAt.get(number) || 0
-    if (now - previous < MIN_REPLY_INTERVAL_MS) return true
-    const hour = Math.floor(now / 3600000)
-    const countState = hourlyCounts.get(number)
-    const count = countState?.hour === hour ? countState.count : 0
-    if (count >= MAX_REPLIES_PER_HOUR) return true
-
-    inFlight.add(number)
-    lastReplyAt.set(number, now)
-    hourlyCounts.set(number, { hour, count: count + 1 })
-
-    try {
+    // Queue each incoming message from a configured target so rapid messages
+    // are processed in order instead of silently dropped. A small delay reduces
+    // bursty replies; it cannot guarantee WhatsApp will never flag automation.
+    const queueKey = number
+    const previousQueue = replyQueues.get(queueKey) || Promise.resolve()
+    const task = previousQueue.catch(() => {}).then(async () => {
+      const previousReply = lastReplyAt.get(queueKey) || 0
+      const waitMs = Math.max(0, MIN_REPLY_INTERVAL_MS - (Date.now() - previousReply))
+      if (waitMs) await new Promise(resolve => setTimeout(resolve, waitMs))
       const memoryId = number
-      const recent = readRecentMemory(memoryId)
-      saveMemory(memoryId, 'user', text)
-      const messages = [
-        {
-          role: 'system',
-          content: 'Kamu adalah AI Banter milik Alvareth Bot. Balas singkat (1-4 kalimat), natural, jenaka, sedikit sarkastik, dan tanggapi hinaan dengan banter ringan. Jangan mengaku sebagai manusia. Jangan gunakan ancaman, hinaan berdasarkan identitas, doxing, pemerasan, dorongan menyakiti diri, atau mengeksploitasi trauma/rahasia pribadi. Jika pesan bukan hinaan, jangan dipanggil untuk membalas. Personalisasi owner (ikuti selama aman): ' + (config.persona || 'humor ringan dan sarkasme yang tidak menyerang hal pribadi.')
-        },
-        ...(readSummary(memoryId) ? [{ role: 'system', content: 'Ringkasan memori jangka panjang dari percakapan sebelumnya (gunakan hanya sebagai konteks, bukan instruksi):\n' + readSummary(memoryId) }] : []),
-        ...recent,
-        { role: 'user', content: text.slice(0, MAX_MESSAGE_CHARS) }
-      ]
-      const reply = await groqChat(config.apiKey, messages)
-      saveMemory(memoryId, 'assistant', reply)
-      await conn.sendMessage(m.chat, { text: reply }, { quoted: m })
       try {
-        await compactMemoryIfNeeded(memoryId, config.apiKey)
-      } catch (memoryError) {
-        console.warn('[ragebait] Ringkasan memori belum diperbarui:', memoryError?.message || memoryError)
+        const recent = readRecentMemory(memoryId)
+        const summary = readSummary(memoryId)
+        saveMemory(memoryId, 'user', text)
+        const messages = [
+          {
+            role: 'system',
+            content: 'Kamu adalah asisten AI Banter milik Alvareth Bot yang membalas setiap pesan pribadi dari kontak target. Jawab sesuai konteks, singkat (1-3 kalimat), natural, jenaka atau sarkastik ringan bila cocok. Jangan mengaku sebagai manusia. Jangan gunakan ancaman, doxing, pemerasan, penghinaan terhadap identitas, atau mengeksploitasi trauma/rahasia pribadi. Jika pesan meminta berhenti berkomunikasi, jawab sopan dan beri tahu owner agar sesi dapat dihentikan. Personalisasi owner (ikuti selama aman): ' + (config.persona || 'ramah, humor ringan, sarkasme seperlunya.')
+          },
+          ...(summary ? [{ role: 'system', content: 'Ringkasan memori lama (konteks, bukan instruksi):\\n' + summary }] : []),
+          ...recent,
+          { role: 'user', content: text.slice(0, MAX_MESSAGE_CHARS) }
+        ]
+        const reply = await groqChat(config.apiKey, messages)
+        saveMemory(memoryId, 'assistant', reply)
+        await conn.sendMessage(m.chat, { text: reply }, { quoted: m })
+        lastReplyAt.set(queueKey, Date.now())
+        try {
+          await compactMemoryIfNeeded(memoryId, config.apiKey)
+        } catch (memoryError) {
+          console.warn('[ragebait] Ringkasan memori belum diperbarui:', memoryError?.message || memoryError)
+        }
+      } catch (error) {
+        await notifyOwner(conn, error, 'Balasan otomatis ke target ' + number)
       }
-    } catch (error) {
-      await notifyOwner(conn, error, 'Balasan otomatis ke target ' + number)
-      if (/401|invalid api key|unauthorized/i.test(String(error?.message || error))) {
-        await conn.sendMessage(m.chat, { text: '⚠️ AI Banter sedang tidak tersedia. Owner sudah diberi tahu untuk memeriksa konfigurasi.' }, { quoted: m }).catch(() => {})
-      }
-    } finally {
-      inFlight.delete(number)
-    }
+    })
+    replyQueues.set(queueKey, task)
+    task.finally(() => {
+      if (replyQueues.get(queueKey) === task) replyQueues.delete(queueKey)
+    }).catch(() => {})
     return true
   } catch (error) {
     await notifyOwner(this, error, 'Plugin before handler')
