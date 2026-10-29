@@ -191,6 +191,62 @@ console.log(chalk.cyan('📷 Mode login QR aktif. Pindai QR dari WhatsApp > Pera
 // conn sengaja memakai let karena socket diganti ketika reconnect.
 let conn
 const silentLogger = pino({ level: 'silent' })
+const groupMetadataInFlight = new Map()
+const groupMetadataRetryAfter = new Map()
+
+function isWhatsAppRateLimit(error) {
+  return /rate-overlimit|rate[ -]over[ -]limit|too many requests|429/i.test(
+    String(error?.message || error || '')
+  )
+}
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+async function getCachedGroupMetadata(jid) {
+  const cached = conn?.chats?.[jid]?.metadata
+  if (cached && Array.isArray(cached.participants)) return cached
+
+  const pending = groupMetadataInFlight.get(jid)
+  if (pending) return pending
+
+  const request = (async () => {
+    const retryAfter = groupMetadataRetryAfter.get(jid) || 0
+    if (retryAfter > Date.now()) await sleep(retryAfter - Date.now())
+
+    const activeConn = conn
+    try {
+      const metadata = await activeConn.groupMetadata(jid)
+      if (metadata && Array.isArray(metadata.participants)) {
+        const chats = activeConn.chats || (activeConn.chats = {})
+        chats[jid] = {
+          ...(chats[jid] || {}),
+          id: jid,
+          subject: metadata.subject || chats[jid]?.subject || '',
+          metadata,
+          isChats: true
+        }
+      }
+      groupMetadataRetryAfter.delete(jid)
+      return metadata
+    } catch (error) {
+      // Do not immediately issue a second groupMetadata IQ for every outgoing
+      // message after WhatsApp returns rate-overlimit.
+      if (isWhatsAppRateLimit(error)) {
+        groupMetadataRetryAfter.set(jid, Date.now() + 5000)
+      }
+      throw error
+    }
+  })()
+
+  groupMetadataInFlight.set(jid, request)
+  try {
+    return await request
+  } finally {
+    if (groupMetadataInFlight.get(jid) === request) groupMetadataInFlight.delete(jid)
+  }
+}
+
 const connectionOptions = {
   version,
   logger: silentLogger,
@@ -210,13 +266,7 @@ const connectionOptions = {
       return undefined
     }
   },
-  cachedGroupMetadata: async (jid) => {
-    try {
-      return await conn.groupMetadata(jid)
-    } catch {
-      return null
-    }
-  }
+  cachedGroupMetadata: getCachedGroupMetadata
 }
 
 conn = global.conn = makeWASocket(connectionOptions)
