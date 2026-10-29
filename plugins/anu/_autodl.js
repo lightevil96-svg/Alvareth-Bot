@@ -1,127 +1,169 @@
-import fetch from 'node-fetch'
-import { tiktokScrape } from '../../lib/scrape/tikwm.js'
+// Auto-download router: detect the platform from a shared URL, then route the
+// message through that platform's existing downloader command so each service
+// keeps its own resolver, validation, captions, and media handling.
 
-const SUPPORTED = /tiktok\.com|instagram\.com|facebook\.com|fb\.watch|twitter\.com|x\.com|threads\.net/i
-
-let handler = {}
-
-function makeCaption({ author, duration, title }) {
-  return `
-❏ Auto Download
-
-❏ Author      : ${author || '-'}
-❏ Duration    : ${duration || '-'}
-❏ Title       : ${title || '-'}
-
-❏ Alvareth Bot
-`.trim()
-}
-
-handler.before = async (m, { conn }) => {
-  const text =
-    m.text ||
-    m.caption ||
-    m.message?.conversation ||
-    m.message?.extendedTextMessage?.text ||
-    ""
-
-  if (!text) return
-  if (m.fromMe) return
-  if (/^[.#!\/]/.test(text)) return
-
-  if (!global.db.data.chats[m.chat])
-    global.db.data.chats[m.chat] = {}
-
-  let chat = global.db.data.chats[m.chat]
-  if (!chat.autodl) return
-
-  const url = text.match(/https?:\/\/[^\s]+/)?.[0]
-  if (!url) return
-
-  if (/youtu\.?be|youtube\.com/i.test(url)) return
-  if (!SUPPORTED.test(url)) return
-
-  try {
-    await m.react('🕒')
-
-    if (/tiktok\.com/i.test(url)) {
-      const tt = await tiktokScrape(url)
-
-      const caption = makeCaption({
-        author: tt.author,
-        title: tt.title
-      })
-
-      if (tt.type === 'video') {
-        await conn.sendMessage(m.chat, {
-          video: { url: tt.video },
-          caption
-        }, { quoted: m })
-      } else {
-        for (const img of tt.images) {
-          await conn.sendMessage(m.chat, {
-            image: { url: img },
-            caption
-          }, { quoted: m })
-        }
-      }
-
-      return await m.react('✅')
-    }
-
-    const res = await fetch(
-      `${global.APIs.nexray}/downloader/aio?url=${encodeURIComponent(url)}`
-    )
-    const json = await res.json()
-
-    if (!json.status) throw new Error(json.message || 'Gagal mengambil media.')
-
-    const data = json.result
-
-    const media =
-      data.medias.find(v => v.type === 'video' && v.quality === 'hd_no_watermark') ||
-      data.medias.find(v => v.type === 'video') ||
-      data.medias.find(v => v.type === 'audio')
-
-    if (!media) throw 'Media tidak ditemukan.'
-
-    const caption = makeCaption({
-      author: data.author,
-      duration: Math.floor((data.duration || 0) / 1000) + ' Detik',
-      title: data.title
-    })
-
-    if (media.type === 'audio') {
-      await conn.sendMessage(m.chat, {
-        audio: { url: media.url },
-        mimetype: 'audio/mpeg',
-        fileName: `${data.title || 'audio'}.mp3`,
-        ptt: false
-      }, { quoted: m })
-    } else {
-      const size = media.data_size || 0
-      const isLarge = size > 50 * 1024 * 1024
-
-      if (isLarge) {
-        await conn.sendMessage(m.chat, {
-          document: { url: media.url },
-          fileName: `${data.title || 'video'}.mp4`,
-          mimetype: 'video/mp4',
-          caption
-        }, { quoted: m })
-      } else {
-        await conn.sendMessage(m.chat, {
-          video: { url: media.url },
-          caption
-        }, { quoted: m })
-      }
-    }
-
-    await m.react('✅')
-  } catch (e) {
-    console.log('AutoDL Error:', e)
-    await m.react('❌')
+const ROUTES = [
+  { command: 'tt', label: 'TikTok', domains: ['tiktok.com'] },
+  { command: 'fb', label: 'Facebook', domains: ['facebook.com', 'fb.watch', 'fb.com', 'fb.me'] },
+  { command: 'igdl', label: 'Instagram', domains: ['instagram.com', 'instagr.am'] },
+  { command: 'ytmp4', label: 'YouTube', domains: ['youtube.com', 'youtu.be', 'youtube-nocookie.com', 'youtubeeducation.com'] },
+  { command: 'tw', label: 'X/Twitter', domains: ['x.com', 'twitter.com'] },
+  { command: 'capcut', label: 'CapCut', domains: ['capcut.com'] },
+  { command: 'pindl', label: 'Pinterest', domains: ['pinterest.com', 'pin.it'] },
+  { command: 'videy', label: 'Videy', domains: ['videy.co'] },
+  { command: 'mf', label: 'MediaFire', domains: ['mediafire.com'] },
+  { command: 'gdrive', label: 'Google Drive', domains: ['drive.google.com', 'docs.google.com'] },
+  { command: 'douyin', label: 'Douyin', domains: ['douyin.com'] },
+  { command: 'bili', label: 'Bilibili', domains: ['bilibili.com', 'bilibili.tv'] },
+  { command: 'scdl', label: 'SoundCloud', domains: ['soundcloud.com'] },
+  { command: 'spotify', label: 'Spotify', domains: ['spotify.com', 'spotify.link'] },
+  // Use the existing all-in-one provider for popular services without a
+  // dedicated downloader plugin in this repository.
+  {
+    command: 'aio',
+    label: 'All-in-One',
+    domains: [
+      'threads.net', 'reddit.com', 'redd.it', 'vimeo.com', 'dailymotion.com',
+      'twitch.tv', 'snapchat.com', 'likee.video', 'kwai.com', 'snackvideo.com',
+      'streamable.com', 'loom.com'
+    ]
   }
+];
+
+const RECENT_TTL_MS = 2 * 60 * 1000;
+const MAX_RECENT_MESSAGES = 500;
+const recentMessages = new Map();
+
+function getMessageText(m) {
+  const message = m?.message || {};
+  return String(
+    m?.text ||
+    m?.caption ||
+    message.conversation ||
+    message.extendedTextMessage?.text ||
+    message.imageMessage?.caption ||
+    message.videoMessage?.caption ||
+    message.documentMessage?.caption ||
+    ''
+  ).trim();
 }
 
-export default handler
+function extractUrls(input) {
+  const candidates = String(input || '').match(/https?:\/\/[^\s<>"']+/gi) || [];
+  const urls = [];
+  for (const raw of candidates) {
+    const clean = raw.replace(/[),\].!?;:]+$/g, '');
+    try {
+      const url = new URL(clean);
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') continue;
+      urls.push(url);
+    } catch {
+      // Ignore malformed link and inspect the next URL.
+    }
+  }
+  return urls;
+}
+
+function resolveRoute(url) {
+  const host = url.hostname.toLowerCase().replace(/^www\./, '');
+  return ROUTES.find(route =>
+    route.domains.some(domain => host === domain || host.endsWith('.' + domain))
+  ) || null;
+}
+
+// The normal handler dispatcher requires the configured prefix. Extract the
+// first literal prefix from the common setprefix-generated RegExp; /^/ means
+// the owner intentionally enabled no-prefix mode.
+function getCommandPrefix(conn) {
+  const configured = conn?.prefix ?? global.prefix;
+  if (typeof configured === 'string') return configured;
+  if (Array.isArray(configured)) {
+    const literal = configured.find(value => typeof value === 'string' && value.length);
+    if (literal) return literal;
+    const regex = configured.find(value => value instanceof RegExp);
+    if (regex) return getPrefixFromRegex(regex);
+  }
+  if (configured instanceof RegExp) return getPrefixFromRegex(configured);
+  return '.';
+}
+
+function getPrefixFromRegex(regex) {
+  const source = regex.source;
+  if (source === '^' || source === '(?:)' || source === '') return '';
+  const grouped = source.match(/^\^\((.*)\)$/);
+  if (grouped) {
+    // setprefix creates an escaped list such as ^(\\.|!|#). The first option
+    // is enough because any configured prefix is accepted by the dispatcher.
+    const first = grouped[1].split('|')[0];
+    return first.replace(/\\(.)/g, '$1');
+  }
+  const literal = source.match(/^\^((?:\\.|[A-Za-z0-9_-])+)/);
+  return literal ? literal[1].replace(/\\(.)/g, '$1') : '.';
+}
+
+function claimMessage(m) {
+  const id = String(m?.key?.id || m?.id || '').trim();
+  const chat = String(m?.chat || m?.key?.remoteJid || '').trim();
+  if (!id || !chat) return true;
+
+  const now = Date.now();
+  for (const [key, expiresAt] of recentMessages) {
+    if (expiresAt <= now) recentMessages.delete(key);
+  }
+
+  const key = chat + ':' + id;
+  if (recentMessages.has(key)) return false;
+  recentMessages.set(key, now + RECENT_TTL_MS);
+  while (recentMessages.size > MAX_RECENT_MESSAGES) {
+    const oldestKey = recentMessages.keys().next().value;
+    if (oldestKey === undefined) break;
+    recentMessages.delete(oldestKey);
+  }
+  return true;
+}
+
+const handler = {};
+handler.before = async (m, { conn }) => {
+  try {
+    if (!m || m.fromMe || !m.chat || m.chat === 'status@broadcast') return false;
+
+    const originalText = getMessageText(m);
+    if (!originalText || /^[.#!\/]/.test(originalText)) return false;
+
+    const chats = global.db?.data?.chats;
+    if (!chats) return false;
+    const chat = chats[m.chat];
+    // Keep the existing per-chat opt-in. Use ".enable autodl" to turn it on.
+    if (!chat?.autodl) return false;
+
+    const links = extractUrls(originalText);
+    if (!links.length) return false;
+
+    let selected = null;
+    for (const url of links) {
+      const route = resolveRoute(url);
+      if (route) {
+        selected = { route, url: url.toString() };
+        break;
+      }
+    }
+    if (!selected) return false;
+    if (!claimMessage(m)) return true;
+
+    const prefix = getCommandPrefix(conn);
+    const safeUrl = selected.url;
+    // The existing command pipeline performs its normal permission checks,
+    // per-user limits, and execution. Only the text is rewritten; URL parameters
+    // are preserved and unrelated message text is intentionally omitted.
+    m.autoDownloadRoute = selected.route.label;
+    m.autoDownloadOriginalText = originalText;
+    m.text = prefix + selected.route.command + ' ' + safeUrl;
+    console.log('[AutoDL Router] ' + selected.route.label + ' -> ' + selected.route.command + ' | ' + m.chat);
+    return true;
+  } catch (error) {
+    console.error('[AutoDL Router] Error:', error?.stack || error);
+    return false;
+  }
+};
+
+export default handler;
