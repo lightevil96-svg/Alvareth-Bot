@@ -753,6 +753,88 @@ if (user && user.name && !user.registered) {
 }
 */
 
+// Number-based ban gate. It runs before every plugin/before-handler so a banned
+// number cannot trigger commands, AutoDL, AI auto-replies, or other bot features.
+const normalizeBanNumber = value =>
+  String(value || '').split('@')[0].split(':')[0].replace(/\D/g, '');
+
+const phoneBans = global.db.data.settings?.phoneBans || {};
+const senderNumbers = [...new Set([
+  normalizeBanNumber(m.senderPN),
+  normalizeBanNumber(resolvedSender),
+  normalizeBanNumber(m.sender)
+].filter(number => number.length >= 8 && number.length <= 15))];
+
+const phoneBanEntry = senderNumbers
+  .map(number => ({ number, entry: phoneBans[number] }))
+  .find(item => item.entry);
+
+const isLegacyBanned = user?.banned === true;
+const isNumberBanned = Boolean(phoneBanEntry);
+if (!isOwner && (isNumberBanned || isLegacyBanned)) {
+  const messageText = String(m.text || '').trim();
+  const configuredPrefix = conn.prefix ?? global.prefix;
+  const hasPrefix = value => {
+    if (value instanceof RegExp) {
+      const safeRegex = new RegExp(value.source, value.flags.replace(/[gy]/g, ''));
+      return safeRegex.test(messageText);
+    }
+    if (typeof value === 'string') return value.length > 0 && messageText.startsWith(value);
+    return false;
+  };
+  const startsWithPrefix = Array.isArray(configuredPrefix)
+    ? configuredPrefix.some(hasPrefix)
+    : hasPrefix(configuredPrefix);
+
+  // In no-prefix mode, only known bot commands should trigger the teasing reply.
+  let isCommandAttempt = startsWithPrefix;
+  if (!isCommandAttempt && configuredPrefix instanceof RegExp &&
+      ['^', '(?:)', ''].includes(configuredPrefix.source)) {
+    const command = messageText.split(/\s+/)[0]?.toLowerCase();
+    if (command) {
+      isCommandAttempt = Object.values(global.plugins || {}).some(plugin => {
+        if (!plugin || !plugin.command) return false;
+        if (plugin.command instanceof RegExp) {
+          return new RegExp(plugin.command.source, plugin.command.flags.replace(/[gy]/g, 'i')).test(command);
+        }
+        if (Array.isArray(plugin.command)) return plugin.command.some(value =>
+          value instanceof RegExp
+            ? new RegExp(value.source, value.flags.replace(/[gy]/g, 'i')).test(command)
+            : String(value).toLowerCase() === command
+        );
+        return String(plugin.command).toLowerCase() === command;
+      });
+    }
+  }
+
+  const isAutoDownloadAttempt = Boolean(global.db.data.chats[m.chat]?.autodl) &&
+    /https?:\/\/[^\s]+/i.test(messageText);
+  const isBotAttempt = isCommandAttempt || isAutoDownloadAttempt;
+
+  if (isBotAttempt) {
+    global._alvarethBanReplyCooldown ||= new Map();
+    const cooldownKey = m.chat + ':' + (senderNumbers[0] || m.sender);
+    const now = Date.now();
+    const lastSent = global._alvarethBanReplyCooldown.get(cooldownKey) || 0;
+
+    // Avoid flooding the group if a blocked spammer repeats the command.
+    if (now - lastSent >= 60_000) {
+      global._alvarethBanReplyCooldown.set(cooldownKey, now);
+      const banText = '🚫 *YAH, AKSES DITOLAK, NGAB!*\\n\\n' +
+        'Nomormu sudah masuk daftar BAN Alvareth Bot. Mau spam terus? Percuma, ' +
+        'perintahmu cuma jadi pajangan. Bot ini sudah nggak melayani kamu. 🤡' +
+        (phoneBanEntry?.entry?.reason || user?.banReason
+          ? '\\n\\nAlasan: ' + String(phoneBanEntry?.entry?.reason || user?.banReason).slice(0, 180)
+          : '');
+      await conn.sendMessage(m.chat, { text: banText }, m.key ? { quoted: m } : {})
+        .catch(error => console.warn('[USER BAN] Gagal mengirim notifikasi:', error?.message || error));
+    }
+  }
+
+  console.log('[USER BAN] Pesan diblokir:', senderNumbers[0] || m.sender, '| chat:', m.chat);
+  return;
+}
+
 for (let name in global.plugins) {
     let plugin = global.plugins[name]
     if (!plugin || plugin.disabled) continue
