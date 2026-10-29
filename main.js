@@ -196,7 +196,7 @@ const connectionOptions = {
   logger: silentLogger,
   printQRInTerminal: true,
   auth: { ...state, keys: makeCacheableSignalKeyStore(state.keys, silentLogger) },
-  browser: ['Ubuntu', 'Chrome', '22.04.4'],
+  browser: ['Mac OS', 'Chrome', '14.4.1'],
   markOnlineOnConnect: true,
   generateHighQualityLinkPreview: true,
   msgRetryCounterCache: new Map(),
@@ -249,6 +249,38 @@ conn.findUserId = async (lid) => {
 // Handler utama dan event koneksi.
 let { handler, participantsUpdate, groupsUpdate, deleteUpdate } = await import('./handler.js')
 let isInit = false
+let reconnectTimer = null
+let reconnectAttempts = 0
+let reconnectInProgress = false
+
+function scheduleSocketReconnect(statusCode, reason = '') {
+  if (reconnectTimer || reconnectInProgress) return
+
+  // A 405 is usually a rejected WhatsApp companion handshake, not a damaged
+  // auth folder. Back off between attempts so we never hammer WhatsApp in a loop.
+  const baseDelay = statusCode === 405 ? 8000 : 3000
+  const exponent = Math.min(reconnectAttempts, 4)
+  const delay = Math.min(60000, baseDelay * (2 ** exponent))
+  reconnectAttempts += 1
+
+  const delaySeconds = Math.ceil(delay / 1000)
+  console.log(chalk.yellow(
+    `⏳ Reconnect dijadwalkan ${delaySeconds} detik lagi (percobaan ${reconnectAttempts}).` +
+    (reason ? ' Detail: ' + String(reason).slice(0, 160) : '')
+  ))
+
+  reconnectTimer = setTimeout(async () => {
+    reconnectTimer = null
+    reconnectInProgress = true
+    try {
+      await global.reloadHandler(true)
+    } catch (error) {
+      console.error(chalk.red('Gagal membuat ulang socket WhatsApp:'), error?.stack || error)
+    } finally {
+      reconnectInProgress = false
+    }
+  }, delay)
+}
 
 global.reloadHandler = async function reloadHandler(restartSocket = false) {
   try {
@@ -381,21 +413,36 @@ async function connectionUpdate(update) {
     const statusCode = lastDisconnect?.error?.output?.statusCode
       || lastDisconnect?.error?.statusCode
       || 0
+    const disconnectReason = lastDisconnect?.error?.data?.reason
+      || lastDisconnect?.error?.output?.payload?.message
+      || lastDisconnect?.error?.message
+      || ''
 
     if (statusCode === DisconnectReason?.badSession) {
-      console.error(chalk.red('❌ Sesi rusak. Hapus folder sessions/ lalu lakukan pairing ulang.'))
+      console.error(chalk.red('❌ Sesi ditolak sebagai badSession (500). Hentikan bot dan pairing ulang hanya jika log memang menunjukkan sesi rusak.'))
       process.exit(1)
     } else if (statusCode === DisconnectReason?.connectionReplaced) {
-      console.error(chalk.red('❌ Sesi sedang dipakai koneksi lain. Tutup sesi ganda terlebih dahulu.'))
+      console.error(chalk.red('❌ Sesi WhatsApp dipakai koneksi lain (440). Pastikan hanya satu instance bot aktif.'))
       process.exit(1)
     } else if (statusCode === DisconnectReason?.loggedOut) {
-      console.error(chalk.red('❌ WhatsApp logout. Hapus folder sessions/ lalu lakukan pairing ulang.'))
+      console.error(chalk.red('❌ WhatsApp mengeluarkan sesi (401). Hentikan bot, lalu lakukan pairing ulang.'))
       process.exit(1)
     } else {
-      console.log(chalk.yellow(`⚠️ Koneksi terputus (${statusCode}). Menyambung ulang...`))
-      await global.reloadHandler(true).catch(console.error)
+      if (statusCode === 405) {
+        console.error(chalk.red(
+          '❌ WhatsApp menolak handshake (405). Ini bukan bukti sesi rusak; kode startup sekarang mem-patch UserAgent platform ke MACOS sebelum socket dibuat.'
+        ))
+      } else {
+        console.log(chalk.yellow(`⚠️ Koneksi terputus (${statusCode}).`))
+      }
+      scheduleSocketReconnect(statusCode, disconnectReason)
     }
   } else if (connection === 'open') {
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer)
+      reconnectTimer = null
+    }
+    reconnectAttempts = 0
     const { jid, name } = conn.user || {}
     console.log(chalk.greenBright('✅ Bot terhubung:'), chalk.white(name || '-'), chalk.gray(`(${jid || '-'})`))
   }
