@@ -424,7 +424,7 @@ async function availableDiskBytes(dir) {
 }
 
 function isDiskFullError(error) {
-  return /no space left on device|enospc|disk quota exceeded|not enough space/i.test(String(error?.message || error))
+  return /no space left on device|enospc|disk quota exceeded|not enough space|ruang disk sementara tersisa|penyimpanan server penuh|disk server penuh/i.test(String(error?.message || error))
 }
 
 async function prepareBestTikTokVideo(res, sourceUrl = '') {
