@@ -50,7 +50,7 @@ Format entri baru:
 
 ## 2026-10-22 — Fallback helper pesan lintas plugin
 - **Gejala:** sebagian plugin gagal dengan `m.reply is not a function` atau `m.react is not a function`.
-- **Perubahan:** fallback metode reply/react ditempatkan pada layer normalisasi pesan bersama di `handler.js), bukan hanya ditambahkan ke satu plugin.
+- **Perubahan:** fallback metode reply/react ditempatkan pada layer normalisasi pesan bersama di `handler.js`, bukan hanya ditambahkan ke satu plugin.
 - **Tes:** kode pernah dicatat sebagai belum diverifikasi di sesi WhatsApp live; uji `.play`, `.tt` dan plugin lain yang memakai helper bila menyentuh layer ini.
 - **Referensi:** commit `7d66ebf` (lihat riwayat Git untuk SHA lengkap).
 - **Pelajaran regresi:** saat helper serializer hilang, cek `handler.js` dan `lib/simple.js` sebelum membuat perbaikan berulang di banyak plugin.
