@@ -215,7 +215,7 @@ async function planEdit(key, instruction) {
     const p = JSON.parse(match[0])
     const words = String(instruction || '').toLowerCase()
     const smartClip = p.smartClip === true || /bagian paling menarik|momen paling menarik|highlight otomatis|smart clip|auto.?clip|klip otomatis|reels otomatis|shorts otomatis|ambil bagian terbaik|potong bagian menarik|momen paling viral|bagian paling viral|cut best moments|ambil momen terbaik/.test(words)
-    const autoCaptions = p.autoCaptions === true || /subtitle otomatis|caption otomatis|auto.?caption|transkrip otomatis|transkripsikan|buat subtitle|kasih subtitle otomatis/.test(words)
+    const autoCaptions = p.autoCaptions === true || /subtitle otomatis|caption otomatis|auto.?caption|transkrip otomatis|transkripsikan|buat subtitle otomatis|kasih subtitle otomatis/.test(words)
     const autoZoom = p.autoZoom === true || /zoom dinamis|auto.?zoom|zoom otomatis|efek zoom|punch.?in/.test(words)
     const transitions = p.transitions === true || /transisi|transition|fade in|fade out|fade halus/.test(words)
     const soundEffects = p.soundEffects === true || /sound effect|sound effects|efek suara|sfx|whoosh/.test(words)
