@@ -7,8 +7,6 @@ import { spawn } from 'node:child_process'
 import { fileTypeFromBuffer, fileTypeFromFile } from 'file-type'
 import { downloadYoutubeVideo, cleanupDownload } from '../../lib/scrape/youtube.js'
 
-const MAX_INPUT = Number.MAX_SAFE_INTEGER
-const MAX_OUTPUT = Number.MAX_SAFE_INTEGER
 const MAX_DURATION = Number.POSITIVE_INFINITY
 // Long jobs are allowed; this watchdog only terminates a process that appears stuck.
 const FFMPEG_TIMEOUT = 6 * 60 * 60 * 1000
@@ -61,7 +59,6 @@ async function downloadToFile(url, kind, dir, filename) {
     headers: { 'User-Agent': 'AlvarethBot/1.0', Accept: kind === 'video' ? 'video/*,application/octet-stream' : 'audio/*,application/octet-stream' },
     validateStatus: status => status >= 200 && status < 300
   })
-  const contentLength = Number(response.headers?.['content-length'] || 0)
   const output = join(dir, filename)
   const { createWriteStream } = await import('node:fs')
   const { pipeline } = await import('node:stream/promises')
@@ -173,7 +170,7 @@ async function sourceVideo(m, instruction, dir) {
   if (isYoutubeUrl(url)) {
     let result
     try {
-      result = await downloadYoutubeVideo(url, 360)
+      result = await downloadYoutubeVideo(url, 2160)
       const info = await stat(result.path)
       if (!info.size) throw new Error('Video YouTube hasil unduhan kosong.')
       const detected = await fileTypeFromFile(result.path)
