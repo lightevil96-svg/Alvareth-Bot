@@ -877,9 +877,10 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
   await reactSafe(conn, m, '✨')
 
   const isPhotoOnlyCommand = /^ttfoto$/i.test(command)
-  // For .ttfoto, the command's URL must win over the quoted button/message text.
-  // Otherwise a quoted caption can replace the URL and trigger a failed scrape.
-  const input = String(isPhotoOnlyCommand
+  const isPhotoToVideoCommand = /^ttfoto2video$/i.test(command)
+  // Action commands include their own URL and photo index; prioritize their
+  // payload over the quoted prompt so interactive selections parse correctly.
+  const input = String((isPhotoOnlyCommand || isPhotoToVideoCommand)
     ? (text || m.quoted?.text || m.quoted?.caption || '')
     : (m.quoted ? (m.quoted.text || m.quoted.caption || text || '') : (text || ''))
   ).trim()
@@ -901,6 +902,9 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
 
     if (!url && isPhotoOnlyCommand) {
       throw new Error('Perintah .ttfoto memerlukan tautan TikTok yang sama dengan perintah .tt sebelumnya. Kirim ulang .tt dengan tautan tersebut untuk membuat tombol foto baru.')
+    }
+    if (!url && isPhotoToVideoCommand) {
+      throw new Error('Tombol ubah foto jadi video memerlukan tautan TikTok dan nomor foto. Jalankan ulang .tt lalu pilih nomor fotonya.')
     }
 
     if (!url) {
@@ -943,8 +947,12 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
 
     // No initial chat reply: only send the downloaded media or a real error.
 
-    const res = await tiktokScrape(url)
+    let res = isPhotoToVideoCommand ? getCachedPhotoPost(url) : null
+    if (!res) res = await tiktokScrape(url)
     if (!res) throw new Error('Gagal mengambil data TikTok. Pastikan tautan masih aktif dan dapat diakses.')
+    if (res.type === 'image' && Array.isArray(res.images) && res.images.length > 0) {
+      cachePhotoPost(url, res)
+    }
     if (res.isAmbiguousShortLink) {
       throw new Error('Tautan pendek TikTok belum berhasil diarahkan ke postingan aslinya. Bot menghentikan proses agar postingan foto tidak salah diproses sebagai video. Coba kirim tautan lengkap dari TikTok melalui Bagikan > Salin tautan.')
     }
