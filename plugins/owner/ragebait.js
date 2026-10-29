@@ -171,7 +171,7 @@ async function groqChat(apiKey, messages) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'openai/gpt-oss-20b',
+        model: 'openai/gpt-oss-120b',
         messages,
         temperature: 0.85,
         max_tokens: 350
