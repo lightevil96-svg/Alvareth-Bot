@@ -69,7 +69,7 @@ function urlFrom(text) {
   return ''
 }
 
-async function downloadToFile(url, kind, dir, filename) {
+async function downloadToFile(url, kind, dir, filename, onProgress = null) {
   const response = await axios.get(url, {
     responseType: 'stream', timeout: 120000, maxContentLength: -1, maxBodyLength: -1, maxRedirects: 0,
     headers: { 'User-Agent': 'AlvarethBot/1.0', Accept: kind === 'video' ? 'video/*,application/octet-stream' : 'audio/*,application/octet-stream' },
@@ -169,11 +169,12 @@ function escapeFilterPath(value) {
   return String(value).replace(/\\/g, '\\\\').replace(/:/g, '\\:').replace(/'/g, "\\'").replace(/,/g, '\\,').replace(/\[/g, '\\[').replace(/\]/g, '\\]')
 }
 
-async function sourceVideo(m, instruction, dir) {
+async function sourceVideo(m, instruction, dir, reportProgress = () => {}, logDownloadProgress = () => {}) {
   const media = m.quoted && typeof m.quoted.download === 'function' ? m.quoted : m
   const type = String(media?.mediaType || media?.mtype || '').toLowerCase()
   const inputPath = join(dir, 'source.mp4')
   if (type.includes('video') || media?.message?.videoMessage || media?.msg?.videoMessage) {
+    reportProgress(8, 'Mengunduh video WhatsApp')
     const buffer = await media.download()
     if (!Buffer.isBuffer(buffer) || !buffer.length) throw new Error('Video WhatsApp kosong atau tidak dapat diunduh.')
     const detected = await fileTypeFromBuffer(buffer)
@@ -186,7 +187,13 @@ async function sourceVideo(m, instruction, dir) {
   if (isYoutubeUrl(url)) {
     let result
     try {
-      result = await downloadYoutubeVideo(url, 2160)
+      result = await downloadYoutubeVideo(url, 2160, (percent, detail) => {
+        const amount = Number(percent)
+        if (Number.isFinite(amount) && amount >= 0 && amount <= 100) {
+          reportProgress(7 + amount * 0.07, 'Mengunduh video YouTube')
+          logDownloadProgress(amount, detail || 'Download YouTube')
+        } else if (detail) logDownloadProgress(null, String(detail))
+      })
       const info = await stat(result.path)
       if (!info.size) throw new Error('Video YouTube hasil unduhan kosong.')
       const detected = await fileTypeFromFile(result.path)
@@ -197,7 +204,8 @@ async function sourceVideo(m, instruction, dir) {
       if (result?.outputDir) await cleanupDownload(result.outputDir).catch(() => {})
     }
   }
-  return downloadToFile(url, 'video', dir, 'source.mp4')
+  reportProgress(8, 'Mengunduh file video dari tautan')
+  return downloadToFile(url, 'video', dir, 'source.mp4', percent => reportProgress(7 + percent * 0.08, 'Mengunduh file video dari tautan'))
 }
 async function planEdit(key, instruction) {
   const controller = new AbortController()
@@ -413,6 +421,58 @@ const handler = async (m, { conn, text, usedPrefix, command, isOwner }) => {
     let fallbackProgressAt = 0
     let lastProgress = -1
     let lastProgressAt = 0
+    const startedAt = Date.now()
+    let latestTerminalStage = 'Menyiapkan pekerjaan'
+    let latestTerminalPercent = 0
+    let lastTerminalStage = ''
+    let lastTerminalBucket = -1
+    let lastTerminalAt = 0
+    let renderStartedAt = 0
+    let progressHeartbeat = null
+    const formatElapsed = milliseconds => {
+      const seconds = Math.max(0, Math.floor(milliseconds / 1000))
+      return String(Math.floor(seconds / 3600)).padStart(2, '0') + ':' + String(Math.floor(seconds % 3600 / 60)).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0')
+    }
+    const terminalProgress = (percent, stage, force = false, heartbeat = false) => {
+      const now = Date.now()
+      const value = Math.max(0, Math.min(100, Number(percent) || 0))
+      latestTerminalStage = stage
+      latestTerminalPercent = value
+      if (stage === 'FFmpeg mulai merender video' && !renderStartedAt) renderStartedAt = now
+      const bucket = Math.floor(value / 2)
+      const stageChanged = stage !== lastTerminalStage
+      if (!force && !stageChanged && bucket === lastTerminalBucket && now - lastTerminalAt < 7000) return
+      const filled = Math.round(value / 5)
+      const bar = '█'.repeat(filled) + '░'.repeat(20 - filled)
+      const elapsed = now - startedAt
+      let etaText = ''
+      if (renderStartedAt && value > 50 && value < 95) {
+        const renderRatio = Math.max(0.01, Math.min(0.99, (value - 50) / 44))
+        const renderElapsed = now - renderStartedAt
+        const etaMs = renderElapsed * (1 - renderRatio) / renderRatio
+        if (Number.isFinite(etaMs) && etaMs >= 0) etaText = ' | estimasi render tersisa ' + formatElapsed(etaMs)
+      }
+      console.log('[AI-EDIT] [' + new Date(now).toLocaleTimeString('id-ID', { hour12: false, timeZone: 'Asia/Jakarta' }) + '] ' + bar + ' ' + Math.floor(value) + '% | ' + stage + ' | berjalan ' + formatElapsed(elapsed) + etaText + (heartbeat ? ' | MASIH BERJALAN' : ''))
+      lastTerminalStage = stage
+      lastTerminalBucket = bucket
+      lastTerminalAt = now
+    }
+    const logDownloadProgress = (percent, detail = '') => {
+      const now = Date.now()
+      if (typeof percent === 'number' && Number.isFinite(percent)) {
+        const bucket = Math.floor(Math.min(100, Math.max(0, percent)) / 5)
+        if (bucket === logDownloadProgress.lastBucket && now - logDownloadProgress.lastAt < 5000) return
+        logDownloadProgress.lastBucket = bucket
+        logDownloadProgress.lastAt = now
+        console.log('[AI-EDIT] [' + new Date(now).toLocaleTimeString('id-ID', { hour12: false, timeZone: 'Asia/Jakarta' }) + '] DOWNLOAD ' + percent.toFixed(1) + '% | ' + String(detail || 'YouTube').slice(0, 180) + ' | berjalan ' + formatElapsed(now - startedAt))
+      } else if (detail && detail !== logDownloadProgress.lastDetail) {
+        logDownloadProgress.lastDetail = detail
+        console.log('[AI-EDIT] [' + new Date(now).toLocaleTimeString('id-ID', { hour12: false, timeZone: 'Asia/Jakarta' }) + '] ' + String(detail).slice(0, 220) + ' | berjalan ' + formatElapsed(now - startedAt))
+      }
+    }
+    logDownloadProgress.lastBucket = -1
+    logDownloadProgress.lastAt = 0
+    logDownloadProgress.lastDetail = ''
     const progressBar = percent => {
       const filled = Math.round(Math.max(0, Math.min(100, percent)) / 5)
       return '█'.repeat(filled) + '░'.repeat(20 - filled)
@@ -420,6 +480,7 @@ const handler = async (m, { conn, text, usedPrefix, command, isOwner }) => {
     const reportProgress = async (percent, stage) => {
       const value = Math.max(0, Math.min(100, Math.floor(percent)))
       const now = Date.now()
+      terminalProgress(value, stage)
       if (value === lastProgress && now - lastProgressAt < 5000) return
       if (value < lastProgress || (now - lastProgressAt < 2500 && value < 100)) return
       lastProgress = value
@@ -452,12 +513,13 @@ const handler = async (m, { conn, text, usedPrefix, command, isOwner }) => {
       }
     }
     await reportProgress(3, 'Menyiapkan pekerjaan')
+    progressHeartbeat = setInterval(() => terminalProgress(latestTerminalPercent, latestTerminalStage, true, true), 15000)
     const url = urlFrom(instruction)
     let editInstruction = instruction
     if (url) editInstruction = instruction.replace(url, '').replace(/^\s*[|,;:-]\s*/, '').replace(/\s*[|]\s*/, ' ').trim()
     dir = await mkdtemp(join(tmpdir(), 'alvareth-editvideo-'))
     await reportProgress(7, 'Mengunduh atau membaca video sumber')
-    const input = await sourceVideo(m, instruction, dir)
+    const input = await sourceVideo(m, instruction, dir, reportProgress, logDownloadProgress)
     await reportProgress(16, 'Video sumber siap')
     const result = await processVideo(input, editInstruction, key, dir, reportProgress)
     const p = result.plan
@@ -473,13 +535,15 @@ const handler = async (m, { conn, text, usedPrefix, command, isOwner }) => {
       caption: '✅ *Edit video selesai*\n' + (edits.length ? edits.join('\n') : 'Video diproses ulang tanpa efek tambahan') + (p.smartClip ? '\nKlip dipilih otomatis dari aktivitas audio dan pergantian adegan (heuristik).' : '') + (p.autoZoom ? '\nZoom dinamis diterapkan ke area tengah; tidak melacak wajah.' : '') + (p.transitions ? '\nFade halus pada awal/akhir video.' : '') + (p.soundEffects ? '\nEfek whoosh dibuat pada ' + result.whooshCount + ' pergantian adegan.' : '') + '\n\nDiedit dengan AI + FFmpeg.'
     }, { quoted: m, noAlvarethPreview: true })
     await reportProgress(100, 'Selesai')
+    console.log('[AI-EDIT] Selesai 100% | total waktu ' + formatElapsed(Date.now() - startedAt))
     if (progressMessage?.key) await conn.sendMessage(m.chat, { text: '✅ *Edit video selesai — 100%*', edit: progressMessage.key }).catch(() => {})
     await m.react('✅')
   } catch (error) {
-    console.error('[EditVideo]', error?.stack || error)
+    console.error('[AI-EDIT] GAGAL setelah ' + (typeof startedAt === 'number' ? Math.floor((Date.now() - startedAt) / 1000) + ' detik' : 'waktu tidak diketahui') + ':', error?.stack || error)
     await m.reply('❌ Gagal mengedit video: ' + String(error?.message || error).slice(0, 450) + '\n\nPastikan FFmpeg/ffprobe terpasang, ruang disk cukup, dan server tidak kehabisan RAM/CPU.')
     await m.react('⚠️').catch(() => {})
   } finally {
+    if (progressHeartbeat) clearInterval(progressHeartbeat)
     active.delete(m.chat)
     if (dir) await rm(dir, { recursive: true, force: true }).catch(() => {})
   }
