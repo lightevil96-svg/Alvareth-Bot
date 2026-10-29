@@ -461,6 +461,9 @@ async function handleUpdate(m, { isOwner }) {
           ? resolve()
           : reject(new Error('npm install keluar dengan kode ' + code)))
       })
+      // A previous attempt may already have written the manifest before npm
+      // failed; a successful retry still requires a worker restart.
+      restartNeeded = true
     }
 
     // If local edits conflicted with changed upstream files, keep the old base
