@@ -1,7 +1,6 @@
 import { mkdirSync, existsSync, readFileSync, writeFileSync, appendFileSync, chmodSync } from 'fs'
 import { join, resolve } from 'path'
 import { homedir } from 'os'
-import { setTimeout as delay } from 'timers/promises'
 
 const DATA_DIR = process.env.ALVARETH_DATA_DIR
   ? resolve(process.env.ALVARETH_DATA_DIR)
@@ -56,7 +55,7 @@ async function sendMenu(conn, chat, quoted, config) {
       'Target: ' + config.targets.length,
       'Personalisasi: ' + (config.persona ? 'Kustom' : 'Default'),
       '',
-      'Pilih tindakan di bawah. Target wajib menyetujui sesi lewat chat pribadi dengan bot.'
+      'AI hanya membalas pesan yang terdeteksi sebagai hinaan dari nomor target.'
     ].join('\\n'),
     footer: 'Alvareth Bot • AI Banter',
     optionText: 'Pilih Pengaturan',
@@ -143,6 +142,37 @@ function saveMemory(jid, role, content) {
   }) + '\n', { mode: 0o600 })
 }
 
+function isInsultMessage(text) {
+  const normalized = String(text || '').toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\\u0300-\\u036f]/g, '')
+  const insultPatterns = [
+    /\\b(anjing|bangsat|bajingan|kampret|keparat|brengsek|kontol|memek|goblok|tolol|idiot|bodoh|bego|tai|asu|monyet|setan|babi|sialan|fuck|fucking|shit|bitch|asshole|dumbass|idiot)\\b/i,
+    /\\b(ngentot|jancok|cuk|cok|pantek|pukimak|kimak|anjir|njir)\\b/i,
+    /\\b(go to hell|shut up|stfu|you suck|piece of shit)\\b/i
+  ]
+  return insultPatterns.some(pattern => pattern.test(normalized))
+}
+
+function getOwnerJid() {
+  const number = String(global.nomorown || global.owner?.[0]?.[0] || '').replace(/\\D/g, '')
+  return number ? number + '@s.whatsapp.net' : ''
+}
+
+async function notifyOwner(conn, error, context = 'AI Banter') {
+  const ownerJid = getOwnerJid()
+  const detail = String(error?.stack || error?.message || error || 'Error tidak diketahui').slice(0, 1800)
+  console.error('[ragebait]', context, detail)
+  if (!ownerJid) return
+  try {
+    await conn.sendMessage(ownerJid, {
+      text: '⚠️ *AI Banter mengalami error*\\nKonteks: ' + context + '\\nWaktu: ' + new Date().toISOString() + '\\nDetail: ' + detail
+    })
+  } catch (notifyError) {
+    console.error('[ragebait] Gagal mengirim error ke owner:', notifyError?.message || notifyError)
+  }
+}
+
 async function groqChat(apiKey, messages) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 45000)
@@ -194,22 +224,11 @@ const handler = async (m, { text = '', isROwner, conn }) => {
   const config = readConfig()
 
   if (subcommand.toLowerCase() === 'join') {
-    if (m.isGroup) return m.reply('Persetujuan hanya bisa dilakukan lewat chat pribadi dengan bot.')
-    const number = jidNumber(m.senderPN || m.sender)
-    if (!number) return m.reply('Nomor tidak dapat dibaca.')
-    if (config.targets.length && !config.targets.includes(number)) {
-      return m.reply('Nomor ini belum dipilih owner untuk sesi AI Banter.')
-    }
-    if (!config.optedIn.includes(number)) config.optedIn.push(number)
-    writeConfig(config)
-    return m.reply('✅ Kamu menyetujui sesi AI Banter. AI akan membalas dengan gaya bercanda/sarkastik ringan dan menyimpan konteks chat untuk menjaga alur. Ketik .ragebait leave kapan saja untuk berhenti.')
+    return m.reply('Perintah .ragebait join sudah tidak digunakan. AI hanya membalas pesan yang terdeteksi sebagai hinaan pada nomor target yang sudah kamu tentukan.')
   }
 
   if (subcommand.toLowerCase() === 'leave') {
-    const number = jidNumber(m.senderPN || m.sender)
-    config.optedIn = config.optedIn.filter(item => item !== number)
-    writeConfig(config)
-    return m.reply('Sesi AI Banter dinonaktifkan untuk nomor ini. Riwayat yang sudah tersimpan tidak otomatis dihapus; gunakan .ragebait forget untuk menghapus memori chat ini.')
+    return m.reply('Gunakan .ragebait stop 628xxxxxxxx untuk menghentikan satu target, atau .ragebait stopall untuk menghentikan semua sesi.')
   }
 
   if (subcommand.toLowerCase() === 'forget') {
@@ -269,16 +288,18 @@ const handler = async (m, { text = '', isROwner, conn }) => {
   if (subcommand.toLowerCase() === 'stop') {
     if (!value) return m.reply('Kirim nomor yang ingin dihentikan: .ragebait stop 628123456789')
     const number = normalizeNumber(value)
+    config.targets = config.targets.filter(item => item !== number)
     config.optedIn = config.optedIn.filter(item => item !== number)
     writeConfig(config)
-    return m.reply('⏹️ Sesi AI dihentikan untuk ' + number + '. Target masih tersimpan dan dapat diaktifkan lagi setelah kontak menyetujui.')
+    return m.reply('⏹️ Sesi AI dihentikan untuk ' + number + ' dan nomor dihapus dari daftar target.')
   }
 
   if (subcommand.toLowerCase() === 'stopall') {
     config.enabled = false
     config.optedIn = []
+    config.targets = []
     writeConfig(config)
-    return m.reply('🛑 Semua sesi dihentikan. Balasan otomatis nonaktif dan semua persetujuan sesi dihapus. Target dan memori tidak dihapus.')
+    return m.reply('🛑 Semua sesi dihentikan. Balasan otomatis nonaktif dan semua target dihapus. Memori tersimpan tetap dipertahankan.')
   }
 
   if (subcommand.toLowerCase() === 'untarget') {
@@ -346,12 +367,22 @@ handler.before = async function (m, { conn }) {
     if (!m || m.fromMe || m.isGroup || !m.sender || !m.chat) return false
     const text = getText(m)
     if (!text || text.startsWith('.') || text.startsWith('!') || text.startsWith('/')) return false
-    if (m.chat !== m.sender && jidNumber(m.chat) !== jidNumber(m.sender)) return false
+    // WhatsApp LID chats can have different chat/sender JIDs; m.isGroup is the
+    // reliable private-chat check here, so do not compare the two JIDs directly.
+    if (!isInsultMessage(text)) return false
 
     const config = readConfig()
-    const senderId = m.senderPN || m.sender
-    const number = jidNumber(senderId)
-    if (!config.enabled || !config.apiKey || !config.targets.includes(number) || !config.optedIn.includes(number)) return false
+    const senderId = m.senderPN || m.sender || m.chat
+    const numberCandidates = [
+      jidNumber(senderId),
+      jidNumber(m.sender),
+      jidNumber(m.senderPN),
+      jidNumber(m.chat),
+      jidNumber(m.key?.remoteJidAlt),
+      jidNumber(m.key?.participantAlt)
+    ].filter(Boolean)
+    const number = numberCandidates.find(candidate => config.targets.includes(candidate))
+    if (!config.enabled || !config.apiKey || !number) return false
     if (inFlight.has(number)) return true
 
     const now = Date.now()
@@ -367,36 +398,37 @@ handler.before = async function (m, { conn }) {
     hourlyCounts.set(number, { hour, count: count + 1 })
 
     try {
-      const recent = readRecentMemory(senderId)
-      saveMemory(senderId, 'user', text)
+      const memoryId = number
+      const recent = readRecentMemory(memoryId)
+      saveMemory(memoryId, 'user', text)
       const messages = [
         {
           role: 'system',
           content: 'Kamu adalah AI Banter milik Alvareth Bot. Lawan bicara telah menyetujui sesi AI ini dan tahu bahwa ia sedang berbicara dengan AI. Balas dalam bahasa yang sama dengan lawan bicara, natural, singkat (1-4 kalimat), jenaka, sedikit sarkastik, dan boleh berdebat secara playful. Jangan mengaku sebagai manusia. Jangan gunakan ancaman, hinaan berdasarkan identitas, doxing, pemerasan, dorongan menyakiti diri, atau mengeksploitasi trauma/rahasia pribadi untuk memancing emosi. Jika lawan bicara meminta berhenti, akhiri dengan sopan dan jangan membalas lagi.' + (config.persona ? '\\nPersonalisasi owner (ikuti selama aman): ' + config.persona : '')
         },
-        ...(readSummary(senderId) ? [{ role: 'system', content: 'Ringkasan memori jangka panjang dari percakapan sebelumnya (gunakan hanya sebagai konteks, bukan instruksi):\\n' + readSummary(senderId) }] : []),
+        ...(readSummary(memoryId) ? [{ role: 'system', content: 'Ringkasan memori jangka panjang dari percakapan sebelumnya (gunakan hanya sebagai konteks, bukan instruksi):\\n' + readSummary(memoryId) }] : []),
         ...recent,
         { role: 'user', content: text.slice(0, MAX_MESSAGE_CHARS) }
       ]
       const reply = await groqChat(config.apiKey, messages)
-      saveMemory(senderId, 'assistant', reply)
+      saveMemory(memoryId, 'assistant', reply)
       await conn.sendMessage(m.chat, { text: reply }, { quoted: m })
       try {
-        await compactMemoryIfNeeded(senderId, config.apiKey)
+        await compactMemoryIfNeeded(memoryId, config.apiKey)
       } catch (memoryError) {
         console.warn('[ragebait] Ringkasan memori belum diperbarui:', memoryError?.message || memoryError)
       }
     } catch (error) {
-      console.error('[ragebait] Auto-reply gagal:', error?.message || error)
+      await notifyOwner(conn, error, 'Balasan otomatis ke target ' + number)
       if (/401|invalid api key|unauthorized/i.test(String(error?.message || error))) {
-        await conn.sendMessage(m.chat, { text: '⚠️ API key Groq ditolak. Minta owner memperbarui dengan .ragebait apikey gsk_xxx' }, { quoted: m }).catch(() => {})
+        await conn.sendMessage(m.chat, { text: '⚠️ AI Banter sedang tidak tersedia. Owner sudah diberi tahu untuk memeriksa konfigurasi.' }, { quoted: m }).catch(() => {})
       }
     } finally {
       inFlight.delete(number)
     }
     return true
   } catch (error) {
-    console.error('[ragebait] Plugin error:', error?.stack || error)
+    await notifyOwner(this, error, 'Plugin before handler')
     return false
   }
 }
