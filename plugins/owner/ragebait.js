@@ -181,9 +181,11 @@ const handler = async (m, { text = '', isROwner, conn }) => {
   if (subcommand.toLowerCase() === 'forget') {
     if (m.isGroup) return m.reply('Perintah ini hanya bisa dipakai lewat chat pribadi.')
     const path = memoryPath(m.senderPN || m.sender)
+    const summaryFile = summaryPath(m.senderPN || m.sender)
     try {
       if (existsSync(path)) writeFileSync(path, '', { mode: 0o600 })
-      return m.reply('🧹 Memori percakapan untuk chat ini sudah dikosongkan.')
+      if (existsSync(summaryFile)) writeFileSync(summaryFile, JSON.stringify({ updatedAt: new Date().toISOString(), summary: '' }, null, 2), { mode: 0o600 })
+      return m.reply('🧹 Memori percakapan dan ringkasan jangka panjang untuk chat ini sudah dikosongkan.')
     } catch (error) {
       return m.reply('Gagal menghapus memori: ' + (error?.message || error))
     }
@@ -192,6 +194,7 @@ const handler = async (m, { text = '', isROwner, conn }) => {
   if (!isROwner) return m.reply('Perintah konfigurasi ini khusus owner.')
 
   if (subcommand.toLowerCase() === 'apikey') {
+    if (m.isGroup) return m.reply('Demi keamanan, API key hanya boleh disimpan lewat chat pribadi dengan bot.')
     if (!value) return m.reply('Format: .ragebait apikey gsk_xxx\nKirim key hanya di chat pribadi dengan bot. Setelah tersimpan, hapus pesan yang berisi key dari riwayat chat.')
     if (!/^gsk_[A-Za-z0-9_-]{20,}$/.test(value)) return m.reply('Format API key tidak dikenali. Periksa key Groq kamu.')
     config.apiKey = value
