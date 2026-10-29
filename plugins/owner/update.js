@@ -524,5 +524,7 @@ handler.help = ['update']
 handler.tags = ['owner']
 handler.command = /^update$/i
 handler.owner = true
+// Maintenance/update must be callable by the owner even before .daftar.
+handler.register = false
 
 export default handler

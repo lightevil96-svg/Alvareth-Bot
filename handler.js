@@ -951,7 +951,13 @@ for (let name in global.plugins) {
                 if (plugin.botAdmin && !isBotAdmin) { fail('botAdmin', m, this); continue }
                 if (plugin.admin && !isAdmin) { fail('admin', m, this); continue }
                 if (plugin.private && m.isGroup) { fail('private', m, this); continue }
-                if (plugin.register && !user.registered) { fail('unreg', m, this); continue }
+                // Owner-only maintenance commands must remain available even when
+                // the owner account is not registered in the bot database.
+                // The normal owner check below still denies non-owners.
+                if (plugin.register && !user.registered && !(plugin.owner && isOwner)) {
+                    fail('unreg', m, this)
+                    continue
+                }
 
                 m.isCommand = true
                 let xp = 'exp' in plugin ? parseInt(plugin.exp) : 17
