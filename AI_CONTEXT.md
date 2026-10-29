@@ -74,6 +74,7 @@ Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes n
 
 ## 6. Pembaruan terbaru
 
+- 2026-10-29 — Panduan AI diseragamkan: root `AGENTS.md`, konteks ringkas di file ini, dan `docs/AI_CHANGELOG.md` untuk catatan perubahan/regresi; perubahan ini dokumentasi saja.
 - 2026-10-29 — PR #13: fallback pencarian TikTok lewat Bing/Google jika API utama gagal; pemeriksaan sintaks GitHub lolos, akses live dari TokoPanel belum diverifikasi.
 - 2026-10-29 — PR #11: updater menambah retry jaringan terbatas dan detail penyebab `fetch failed`; koneksi live dari TokoPanel tetap harus diuji.
 - 2026-10-29 — PR #10: unduhan YouTube kualitas terbaik mencoba yt-dlp dan melaporkan resolusi/FPS hasil aktual; verifikasi runtime tetap diperlukan.
