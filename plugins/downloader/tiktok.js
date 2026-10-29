@@ -625,6 +625,10 @@ async function prepareBestTikTokVideo(res, sourceUrl = '') {
       } catch (error) {
         errors.push('embed TikTok: ' + summarizeTikTokError(error))
         console.warn('[TikTok] Embed fallback gagal:', error?.stack || error)
+        await Promise.all([
+          fsp.rm(path.join(tempDir, 'embed-source.bin'), { force: true }).catch(() => {}),
+          fsp.rm(path.join(tempDir, 'embed-fallback.mp4'), { force: true }).catch(() => {})
+        ])
         if (isDiskFullError(error)) {
           throw new Error('Disk server penuh saat fallback embed TikTok. Bersihkan penyimpanan atau atur ALVARETH_TIKTOK_TMPDIR ke lokasi lain.')
         }
