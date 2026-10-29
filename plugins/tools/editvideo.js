@@ -408,6 +408,9 @@ const handler = async (m, { conn, text, usedPrefix, command, isOwner }) => {
   try {
     await m.react('🎬')
     let progressMessage = null
+    let progressEditSupported = true
+    let fallbackProgressValue = -10
+    let fallbackProgressAt = 0
     let lastProgress = -1
     let lastProgressAt = 0
     const progressBar = percent => {
@@ -425,13 +428,27 @@ const handler = async (m, { conn, text, usedPrefix, command, isOwner }) => {
         progressBar(value) + ' *' + value + '%*\n' +
         '🔄 ' + stage + '\n\n' +
         'Persentase render diperbarui dari progres FFmpeg. Tahap unduhan/analisis menggunakan progres tahap karena tidak semua downloader menyediakan persentase byte.'
-      try {
-        if (!progressMessage) progressMessage = await conn.sendMessage(m.chat, { text: message }, { quoted: m })
-        else await conn.sendMessage(m.chat, { text: message, edit: progressMessage.key })
-      } catch {
-        if (!progressMessage) {
-          try { progressMessage = await conn.sendMessage(m.chat, { text: message }, { quoted: m }) } catch {}
+      if (!progressMessage) {
+        try { progressMessage = await conn.sendMessage(m.chat, { text: message }, { quoted: m }) } catch {}
+        return
+      }
+      if (progressEditSupported) {
+        try {
+          await conn.sendMessage(m.chat, { text: message, edit: progressMessage.key })
+          return
+        } catch {
+          // This Baileys fork might not implement edit-message payloads.
+          progressEditSupported = false
         }
+      }
+      // Fallback for older Baileys forks: post a new status only every 10% or
+      // 10 seconds, rather than spamming a message for each FFmpeg progress tick.
+      if (value - fallbackProgressValue >= 10 || now - fallbackProgressAt >= 10000 || value >= 98) {
+        try {
+          progressMessage = await conn.sendMessage(m.chat, { text: message }, { quoted: m })
+          fallbackProgressValue = value
+          fallbackProgressAt = now
+        } catch {}
       }
     }
     await reportProgress(3, 'Menyiapkan pekerjaan')
