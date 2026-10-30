@@ -14,7 +14,7 @@
 - Never commit or reveal secrets, `.env`, WhatsApp session data, runtime databases, backups, or logs containing credentials.
 - Avoid infinite retries. Validate API status and payload shape; distinguish “no results” from provider/network errors and use an independent fallback when appropriate.
 - Run `npm test` and relevant targeted tests. Check GitHub Actions and report exactly what was and was not tested. Syntax checks alone do not prove a live WhatsApp/API flow works.
-- **Every meaningful change must update `docs/AI_CHANGELOG.md` in the same PR.** Include date, symptom/request, root cause, files changed, fix, tests/results and any unverified behavior. Also add a one-line summary under “Pembaruan terbaru” in `AI_CONTEXT.md`. Record failed approaches and regression lessons so future agents do not repeat them.
+- **Every meaningful change must update `docs/AI_CHANGELOG.md` in the same direct-to-`main` change sequence.** Include date, symptom/request, root cause, files changed, fix, tests/results and any unverified behavior. Also add a one-line summary under “Pembaruan terbaru” in `AI_CONTEXT.md`. Record failed approaches and regression lessons so future agents do not repeat them.
 - Update the architecture/gotcha section in `AI_CONTEXT.md` when a lasting behavior, safety constraint, or recurring pitfall changes. Keep that file concise; detailed history belongs in the changelog.
 - Before finishing, review the diff for unrelated changes, secrets, deletions, and data loss risk. Do not claim a fix is complete until the relevant checks have actually run.
 
