@@ -61,6 +61,23 @@ function findImageMessage(value, depth = 0, seen = new Set()) {
   return null
 }
 
+async function fetchWithTimeout(url, options = {}, timeout = API_TIMEOUT, label = "API") {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeout)
+  const startedAt = Date.now()
+  try {
+    return await fetch(url, { ...options, signal: controller.signal })
+  } catch (error) {
+    if (controller.signal.aborted || error?.name === "AbortError") {
+      throw new Error(`${label} tidak merespons dalam ${Math.round(timeout / 1000)} detik (timeout).`)
+    }
+    throw new Error(`Gagal menghubungi ${label}: ${error?.message || error}`)
+  } finally {
+    clearTimeout(timer)
+    console.log(`[IMAGE:NETWORK] ${label} selesai dalam ${((Date.now() - startedAt) / 1000).toFixed(1)}s`)
+  }
+}
+
 async function uploadImage(buffer) {
   const form = new FormData()
   form.append("files[]", buffer, { filename: "image.jpg", contentType: "image/jpeg" })
@@ -129,32 +146,43 @@ let handler = async (m, { conn, command }) => {
   const imageUrl = await uploadImage(buffer)
   log("API", "gambar terunggah; meminta konversi AI")
   const apiUrl = `https://api-faa.my.id/faa/${encodeURIComponent(command)}?url=${encodeURIComponent(imageUrl)}`
-  const response = await fetch(apiUrl, {
-    headers: { accept: "image/*, application/json" },
-    timeout: API_TIMEOUT
-  })
+  const response = await fetchWithTimeout(apiUrl, {
+    headers: { accept: "image/*, application/json" }
+  }, API_TIMEOUT, `API ${command}`)
+  const contentType = String(response.headers.get("content-type") || "").toLowerCase()
+  log("API_RESPONSE", `HTTP ${response.status}; content-type=${contentType || "unknown"}`)
   if (!response.ok) {
     const body = await response.text().catch(() => "")
     throw new Error(`API ${command} mengembalikan HTTP ${response.status}: ${body.slice(0, 500)}`)
   }
 
-  log("API_RESPONSE", `HTTP ${response.status}`)
-  const contentType = String(response.headers.get("content-type") || "").toLowerCase()
   let result
-  if (contentType.includes("application/json")) {
+  if (contentType.includes("application/json") || contentType.includes("+json")) {
     const json = await response.json()
-    if (json?.status === false || json?.success === false) {
+    if (json?.status === false || json?.success === false || json?.status === "error") {
       throw new Error(json?.message || json?.error || "API gagal memproses gambar.")
     }
-    const resultUrl = json?.result?.url || json?.result || json?.url || json?.data?.url
+    const resultUrl = json?.result?.url || json?.result?.image || json?.result || json?.url || json?.data?.url || json?.data?.image
     if (typeof resultUrl !== "string" || !isHttpUrl(resultUrl)) {
-      throw new Error("Respons API tidak berisi URL gambar hasil yang valid.")
+      const detail = json?.message || json?.error || JSON.stringify(Object.keys(json || {}))
+      throw new Error(`Respons API tidak berisi URL gambar hasil yang valid. Detail: ${String(detail).slice(0, 300)}`)
     }
-    const imageResponse = await fetch(resultUrl, { timeout: API_TIMEOUT })
+    log("DOWNLOAD_RESULT", "mengunduh hasil dari URL yang diberikan API")
+    const imageResponse = await fetchWithTimeout(resultUrl, {}, API_TIMEOUT, "URL hasil gambar")
     if (!imageResponse.ok) throw new Error(`Gagal mengunduh hasil gambar (HTTP ${imageResponse.status}).`)
     result = Buffer.from(await imageResponse.arrayBuffer())
-  } else {
+  } else if (contentType.startsWith("image/")) {
     result = Buffer.from(await response.arrayBuffer())
+  } else {
+    const body = await response.text().catch(() => "")
+    if (isHttpUrl(body.trim())) {
+      log("DOWNLOAD_RESULT", "API mengembalikan URL gambar sebagai teks")
+      const imageResponse = await fetchWithTimeout(body.trim(), {}, API_TIMEOUT, "URL hasil gambar")
+      if (!imageResponse.ok) throw new Error(`Gagal mengunduh hasil gambar (HTTP ${imageResponse.status}).`)
+      result = Buffer.from(await imageResponse.arrayBuffer())
+    } else {
+      throw new Error(`Format respons API tidak dikenali (content-type: ${contentType || "unknown"}): ${body.slice(0, 400)}`)
+    }
   }
 
   log("DOWNLOAD_RESULT", "mengunduh dan memeriksa file hasil AI")
