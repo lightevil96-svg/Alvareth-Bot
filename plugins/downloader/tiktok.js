@@ -905,7 +905,7 @@ async function prepareBestTikTokVideo(res, sourceUrl = '') {
       }
     }
 
-    throw new Error('Semua varian TikTok gagal diverifikasi/dikonversi. ' + errors.slice(0, 4).join(' | '))    throw new Error('Semua varian TikTok gagal diverifikasi/dikonversi. ' + errors.slice(0, 4).join(' | '))
+    throw new Error('Semua varian TikTok gagal diverifikasi/dikonversi. ' + errors.slice(0, 4).join(' | '))
   } finally {
     await fsp.rm(tempDir, { recursive: true, force: true }).catch(() => {})
   }
