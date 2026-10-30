@@ -102,3 +102,7 @@ Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes n
 - Prefix matcher pada `handler.js` harus mengkloning setiap RegExp prefix dan menghapus flag `g/y` sebelum `exec()`; regex prefix global/sticky yang dibagi antar-plugin dapat mengubah `lastIndex` dan membuat command terlewat.
 - Pilih kandidat prefix hanya jika hasil `exec()` benar-benar cocok, bukan hanya karena objek RegExp tersedia.
 - Saat command image tidak menampilkan log `[IMAGE]`, periksa tahap routing prefix terlebih dahulu sebelum menyimpulkan API gambar bermasalah.
+
+## Diagnostik command image
+- Untuk command `.toreal`/konversi image yang tidak merespons, periksa log `[COMMAND TRACE]` sebelum mengubah API gambar. Trace mencatat prefix aktif dan kandidat plugin yang cocok, tanpa isi media/kredensial.
+- Jika ada kandidat image tetapi tidak ada `[IMAGE] ▶ Mulai`, telusuri tahap plugin loop, status disabled, dan tipe export plugin. Jika `[IMAGE] ▶ Mulai` muncul, lanjutkan ke tahap download/upload/API.
