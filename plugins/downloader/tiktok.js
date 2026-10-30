@@ -674,23 +674,57 @@ async function availableDiskBytes(dir) {
   }
 }
 
-function summarizeTikTokError(error) {
-  const message = String(error?.message || error || '').replace(/\s+/g, ' ').trim()
-  if (/no space left on device|enospc|disk quota exceeded|not enough space/i.test(message)) {
-    return 'ruang penyimpanan server penuh (ENOSPC)'
+function formatTikTokError(error) {
+  const message = String(error?.message || error || 'Unknown error').replace(/\\s+/g, ' ').trim()
+  const parts = [message.slice(0, 700)]
+
+  // Axios errors often hide the useful provider response behind a generic
+  // "Request failed" message. Preserve status, endpoint and a safe body excerpt.
+  const response = error?.response
+  if (response) {
+    if (response.status) parts.push('HTTP ' + response.status + (response.statusText ? ' ' + response.statusText : ''))
+    const requestUrl = response.config?.url || error?.config?.url
+    if (requestUrl) {
+      try {
+        const parsed = new URL(requestUrl, response.config?.baseURL)
+        parts.push('endpoint=' + parsed.origin + parsed.pathname)
+      } catch {
+        parts.push('endpoint=' + String(requestUrl).split('?')[0].slice(0, 180))
+      }
+    }
+    if (response.data !== undefined) {
+      let body = typeof response.data === 'string'
+        ? response.data
+        : JSON.stringify(response.data)
+      body = String(body || '').replace(/\\s+/g, ' ').trim()
+      if (body) parts.push('body=' + body.slice(0, 350))
+    }
   }
-  if (/missing picture in access unit|no frame!|invalid data found when processing input|ffmpeg gagal \(kode 69\)/i.test(message)) {
-    return 'data video dari provider rusak/tidak lengkap; tidak ada frame H.264 valid'
+
+  if (error?.code) parts.push('code=' + error.code)
+  if (error?.errno !== undefined) parts.push('errno=' + error.errno)
+  if (error?.syscall) parts.push('syscall=' + error.syscall)
+  if (error?.path) parts.push('path=' + String(error.path).slice(0, 180))
+  if (error?.cause?.message && error.cause.message !== error.message) {
+    parts.push('cause=' + String(error.cause.message).slice(0, 250))
   }
-  if (/unexpected response from webpage request|\[tiktok\].*extracting url/i.test(message)) {
-    return 'TikTok menolak ekstraksi web yt-dlp (kemungkinan respons anti-bot/provider)'
+
+  const detail = [...new Set(parts.filter(Boolean))].join(' | ')
+  if (/no space left on device|enospc|disk quota exceeded|not enough space/i.test(detail)) {
+    return 'DISK PENUH (ENOSPC): ' + detail
   }
-  if (/bukan kontainer video|signature .*tidak terdeteksi|metadata video tikTok tidak valid|durasi tidak ditemukan/i.test(message)) {
-    return 'respons provider bukan file video utuh yang valid'
+  if (/missing picture in access unit|no frame!|invalid data found when processing input|ffmpeg gagal/i.test(detail)) {
+    return 'FILE VIDEO RUSAK/TIDAK LENGKAP: ' + detail
   }
-  return message.slice(0, 220) || 'error tidak diketahui'
+  if (/bukan kontainer video|signature .*tidak terdeteksi|metadata video tikTok tidak valid|durasi tidak ditemukan/i.test(detail)) {
+    return 'FILE VIDEO TIDAK VALID: ' + detail
+  }
+  return detail || 'Error tidak diketahui'
 }
 
+function summarizeTikTokError(error) {
+  return formatTikTokError(error)
+}
 function isDiskFullError(error) {
   return /no space left on device|enospc|disk quota exceeded|not enough space|ruang disk sementara tersisa|penyimpanan server penuh|disk server penuh/i.test(String(error?.message || error))
 }
@@ -806,7 +840,7 @@ async function prepareBestTikTokVideo(res, sourceUrl = '') {
         return { ...normalized, quality: candidate.label || 'tertinggi yang tersedia' }
       } catch (error) {
         const detail = (error?.message || String(error)).slice(0, 500)
-        errors.push((candidate.label || ('varian #' + (i + 1))) + ': ' + summarizeTikTokError(error))
+        errors.push((candidate.label || ('varian #' + (i + 1))) + ': ' + formatTikTokError(error))
         // Do not retain partial/corrupt files between quality attempts; they can
         // fill the container disk and make the final watermark fallback fail.
         await Promise.all([
@@ -844,7 +878,7 @@ async function prepareBestTikTokVideo(res, sourceUrl = '') {
         console.log('[TikTok] Berhasil mendapatkan video melalui embed TikTok.')
         return { ...normalized, quality: 'TikTok embed fallback' }
       } catch (error) {
-        errors.push('embed TikTok: ' + summarizeTikTokError(error))
+        errors.push('embed TikTok: ' + formatTikTokError(error))
         console.warn('[TikTok] Embed fallback gagal:', error?.stack || error)
         await Promise.all([
           fsp.rm(path.join(tempDir, 'embed-source.bin'), { force: true }).catch(() => {}),
@@ -874,7 +908,7 @@ async function prepareBestTikTokVideo(res, sourceUrl = '') {
         console.log('[TikTok] Berhasil mengunduh TikTok memakai fallback yt-dlp.')
         return { ...normalized, quality: 'yt-dlp fallback' }
       } catch (error) {
-        errors.push('yt-dlp fallback: ' + summarizeTikTokError(error))
+        errors.push('yt-dlp fallback: ' + formatTikTokError(error))
         console.warn('[TikTok] Fallback yt-dlp gagal:', error?.stack || error)
         if (isDiskFullError(error)) {
           throw new Error('Disk server penuh saat fallback yt-dlp. Bersihkan penyimpanan TokoPanel atau atur ALVARETH_TIKTOK_TMPDIR ke lokasi lain yang memiliki ruang cukup.')
@@ -900,7 +934,7 @@ async function prepareBestTikTokVideo(res, sourceUrl = '') {
         console.log('[TikTok] Fallback watermark HD berhasil diverifikasi:', sourceInfo.width + 'x' + sourceInfo.height)
         return { ...normalized, quality: 'HD watermark fallback' }
       } catch (error) {
-        errors.push('watermark fallback: ' + summarizeTikTokError(error))
+        errors.push('watermark fallback: ' + formatTikTokError(error))
         console.warn('[TikTok] Watermark fallback dilewati:', error?.message || error)
         if (isDiskFullError(error)) {
           throw new Error('Disk server penuh saat fallback watermark TikTok. Bersihkan penyimpanan atau atur ALVARETH_TIKTOK_TMPDIR ke lokasi lain.')
@@ -908,7 +942,7 @@ async function prepareBestTikTokVideo(res, sourceUrl = '') {
       }
     }
 
-    throw new Error('Semua varian TikTok gagal diverifikasi/dikonversi. ' + errors.slice(0, 4).join(' | '))
+    throw new Error('Semua sumber TikTok gagal. Detail per tahap:\\n- ' + errors.join('\\n- '))
   } finally {
     await fsp.rm(tempDir, { recursive: true, force: true }).catch(() => {})
   }
@@ -1284,7 +1318,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
     await reactSafe(conn, m, '❌')
     console.error('[TikTok Downloader]', e?.stack || e)
     await sendMessageWithReconnect(conn, m.chat, {
-      text: 'Gagal memproses TikTok: ' + String(e?.message || e)
+      text: 'Gagal memproses TikTok\\n\\n' + String(e?.message || e) + '\\n\\nDiagnostik lengkap tersimpan di log server dengan tag [TikTok Downloader]. Kirim pesan error ini beserta log terkait kepada AI untuk analisis.'
     }, { quoted: m }).catch(() => {})
   }
 }
