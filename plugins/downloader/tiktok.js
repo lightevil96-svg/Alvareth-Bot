@@ -696,15 +696,18 @@ function isDiskFullError(error) {
 }
 
 function getTikTokVideoId(input) {
+  const value = String(input || '').trim()
   try {
-    const url = new URL(input)
-    const match = url.pathname.match(/\/video\/(\d{15,25})/i) ||
+    const url = new URL(value)
+    const match = url.pathname.match(/\/(?:video|photo)\/(\d{15,25})(?:\/|$)/i) ||
       url.pathname.match(/\/(\d{15,25})(?:\/|$)/)
-    return match?.[1] || ''
-  } catch {
-    const match = String(input || '').match(/(?:video\/|\/)(\d{15,25})(?:[/?#]|$)/i)
-    return match?.[1] || ''
-  }
+    if (match?.[1]) return match[1]
+  } catch {}
+  // TikTok short links may remain unresolved on hosting networks. The scrape
+  // provider can still return the canonical aweme/video ID independently.
+  const match = value.match(/(?:video|photo)\/(\d{15,25})(?:[/?#]|$)/i) ||
+    value.match(/(?:^|[^0-9])(\d{15,25})(?:[^0-9]|$)/)
+  return match?.[1] || ''
 }
 
 function decodeTikTokEmbeddedUrl(value) {
@@ -719,8 +722,8 @@ function decodeTikTokEmbeddedUrl(value) {
     .replace(/\\u002[bB]/g, '+')
 }
 
-async function getTikTokEmbedMediaUrl(sourceUrl) {
-  const id = getTikTokVideoId(sourceUrl)
+async function getTikTokEmbedMediaUrl(sourceUrl, fallbackVideoId = '') {
+  const id = getTikTokVideoId(sourceUrl) || String(fallbackVideoId || '').match(/\d{15,25}/)?.[0] || ''
   if (!id) throw new Error('ID video TikTok tidak bisa diambil dari tautan yang sudah di-resolve.')
   const response = await axios.get('https://www.tiktok.com/embed/v2/' + encodeURIComponent(id), {
     timeout: 20000,
@@ -747,8 +750,8 @@ async function getTikTokEmbedMediaUrl(sourceUrl) {
   throw new Error('Halaman embed TikTok tidak mengandung URL CDN video yang dapat dipakai.')
 }
 
-async function prepareFromTikTokEmbed(sourceUrl, tempDir) {
-  const mediaUrl = await getTikTokEmbedMediaUrl(sourceUrl)
+async function prepareFromTikTokEmbed(sourceUrl, tempDir, videoId = '') {
+  const mediaUrl = await getTikTokEmbedMediaUrl(sourceUrl, videoId)
   const sourcePath = path.join(tempDir, 'embed-source.bin')
   const outputPath = path.join(tempDir, 'embed-fallback.mp4')
   await downloadVideoFile(mediaUrl, sourcePath)
@@ -837,7 +840,7 @@ async function prepareBestTikTokVideo(res, sourceUrl = '') {
     if (sourceUrl && /^https?:\/\//i.test(sourceUrl)) {
       try {
         console.log('[TikTok] Varian TikWM gagal; mencoba URL CDN dari embed TikTok resmi...')
-        const normalized = await prepareFromTikTokEmbed(sourceUrl, tempDir)
+        const normalized = await prepareFromTikTokEmbed(sourceUrl, tempDir, res?.videoId)
         console.log('[TikTok] Berhasil mendapatkan video melalui embed TikTok.')
         return { ...normalized, quality: 'TikTok embed fallback' }
       } catch (error) {
@@ -919,11 +922,17 @@ function getTikTokFallbackSourceUrl(res, originalUrl) {
   // collections of images and must not be sent through the video extractor.
   if (/\/photo\/\d+/i.test(source)) return source
   if (/\/photo\/\d+/i.test(original)) return original
-  if (/^(https?:\/\/)?(vt|vm)\.tiktok\.com\//i.test(source)) return source
-  if (/^(https?:\/\/)?(vt|vm)\.tiktok\.com\//i.test(original)) return original
-
   const videoId = String(res?.videoId || '').match(/\d{15,25}/)?.[0] || ''
   const authorId = String(res?.authorId || '').replace(/^@/, '').replace(/[^\w.-]/g, '')
+
+  // Prefer the canonical permalink built from the provider's aweme ID. Keeping
+  // vt/vm short URLs here caused embed and yt-dlp to fail when the panel could
+  // not follow TikTok's redirect.
+  if (/^(https?:\/\/)?(vt|vm)\.tiktok\.com\//i.test(source) ||
+      /^(https?:\/\/)?(vt|vm)\.tiktok\.com\//i.test(original)) {
+    if (videoId) return 'https://www.tiktok.com/@' + (authorId || 'tiktok') + '/video/' + videoId
+    return source || original
+  }
   if (res?.isPhotoPost || res?.type === 'image') {
     if (videoId) {
       const authorPath = authorId ? '@' + authorId + '/' : ''
