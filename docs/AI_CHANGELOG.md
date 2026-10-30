@@ -1,3 +1,11 @@
+## 2026-10-30 — Perbaikan deteksi foto yang direply pada AI Image Converter
+- **Gejala:** setelah plugin berhasil dimuat, command seperti .toreal tetap mengirim panduan penggunaan seolah-olah pengguna belum membalas foto.
+- **Akar masalah:** deteksi media hanya mengandalkan properti hasil serialisasi m.quoted; pada sebagian payload/fork Baileys, metadata media kutipan tidak terbaca melalui jalur tersebut.
+- **Perubahan:** ambil contextInfo.quotedMessage langsung dari m.rawMessage.message (dengan traversal wrapper WhatsApp), ekstrak imageMessage, validasi MIME, lalu unduh melalui conn.downloadM(imageMessage, 'image') sebagai fallback bila q.download() gagal/tidak menghasilkan buffer. Semua command dalam plugin image bersama memperoleh perbaikan yang sama.
+- **Tes:** perubahan sudah dikomit ke main; pengujian syntax/runtime dan konversi live belum dijalankan dari TokoPanel.
+- **Langkah verifikasi:** restart bot, reply foto dengan .toreal; log yang diharapkan berurutan [IMAGE:.toreal] START, DOWNLOAD, VALIDATE, UPLOAD, API, SEND, SUCCESS.
+- **Referensi:** commit 39c4cd3d3fb9931afbaa966166ddd670c97558ec.
+
 ## 2026-10-30 — Memperbaiki plugin image gagal dimuat karena regex URL
 - **Permintaan/gejala:** bot tersambung ke WhatsApp, tetapi command image seperti `.toreal` tidak merespons; log TokoPanel menunjukkan `Gagal memuat plugin 'image/tohitam.js': SyntaxError: Invalid regular expression flags`.
 - **Akar penyebab:** dua regex literal validasi URL pada `plugins/image/tohitam.js` memiliki escape slash berlebih sehingga parser JavaScript membaca bagian setelah regex sebagai flag yang tidak valid. Karena seluruh command image didaftarkan melalui plugin bersama ini, satu SyntaxError menonaktifkan semua command dalam daftar tersebut.
