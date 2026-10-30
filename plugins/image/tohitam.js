@@ -46,6 +46,11 @@ async function uploadImage(buffer) {
 }
 
 let handler = async (m, { conn, command }) => {
+  const startedAt = Date.now()
+  const log = (stage, detail = "") => console.log(
+    `[IMAGE:.${command}] ${new Date().toISOString()} | ${stage}${detail ? " | " + detail : ""} | elapsed=${((Date.now() - startedAt) / 1000).toFixed(1)}s`
+  )
+  log("START", `sender=${String(m.sender || "").split("@")[0]}`)
   await m.react("✨").catch(() => {})
   const q = m.quoted || m
   const nestedImage = findImageMessage(
@@ -64,6 +69,7 @@ let handler = async (m, { conn, command }) => {
   if (typeof q.download !== "function") {
     throw new Error("Fungsi download media pada pesan yang direply tidak tersedia.")
   }
+  log("DOWNLOAD", "mengunduh gambar dari pesan reply")
   const buffer = await q.download()
   if (!Buffer.isBuffer(buffer) || !buffer.length) {
     throw new Error("Gagal mengambil data gambar dari pesan yang direply.")
@@ -71,13 +77,16 @@ let handler = async (m, { conn, command }) => {
   if (buffer.length > MAX_IMAGE_BYTES) {
     throw new Error("Ukuran gambar melebihi batas 20 MB.")
   }
+  log("VALIDATE", `gambar diterima ${(buffer.length / 1024).toFixed(1)} KB; memeriksa format`)
   const detected = await fileTypeFromBuffer(buffer)
   if (!detected?.mime?.startsWith("image/")) {
     throw new Error("Media yang direply bukan file gambar yang valid.")
   }
 
   await m.reply(`⏳ Sedang memproses gambar dengan style *${command}*... `)
+  log("UPLOAD", "mengunggah gambar sumber ke penyedia upload")
   const imageUrl = await uploadImage(buffer)
+  log("API", "gambar terunggah; meminta konversi AI")
   const apiUrl = `https://api-faa.my.id/faa/${encodeURIComponent(command)}?url=${encodeURIComponent(imageUrl)}`
   const response = await fetch(apiUrl, {
     headers: { accept: "image/*, application/json" },
@@ -88,6 +97,7 @@ let handler = async (m, { conn, command }) => {
     throw new Error(`API ${command} mengembalikan HTTP ${response.status}: ${body.slice(0, 500)}`)
   }
 
+  log("API_RESPONSE", `HTTP ${response.status}`)
   const contentType = String(response.headers.get("content-type") || "").toLowerCase()
   let result
   if (contentType.includes("application/json")) {
@@ -106,6 +116,7 @@ let handler = async (m, { conn, command }) => {
     result = Buffer.from(await response.arrayBuffer())
   }
 
+  log("DOWNLOAD_RESULT", "mengunduh dan memeriksa file hasil AI")
   if (!result.length) throw new Error("API mengembalikan hasil gambar kosong.")
   if (result.length > MAX_IMAGE_BYTES) throw new Error("Hasil gambar melebihi batas 20 MB.")
   const outputType = await fileTypeFromBuffer(result)
@@ -113,6 +124,7 @@ let handler = async (m, { conn, command }) => {
     throw new Error(`Respons API bukan gambar valid (content-type: ${contentType || "tidak diketahui"}).`)
   }
 
+  log("SEND", "mengirim gambar hasil ke WhatsApp")
   await conn.sendMessage(m.chat, {
     image: result,
     mimetype: outputType.mime,
@@ -120,6 +132,7 @@ let handler = async (m, { conn, command }) => {
     caption: `✨ Berhasil mengubah gambar dengan style ${command}.`
   }, { quoted: m })
   await m.react("✅").catch(() => {})
+  log("SUCCESS", `hasil terkirim; total=${((Date.now() - startedAt) / 1000).toFixed(1)}s`)
 }
 
 handler.help = [
