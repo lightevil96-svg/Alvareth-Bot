@@ -37,7 +37,7 @@ async function sendErrorReport(conn, m, error, pluginName = 'handler', command =
         `Pesan: ${error?.message || String(error)}`,
         '',
         stack
-    ].filter(Boolean).join('\\n'))
+    ].filter(Boolean).join('\n'))
 
     // Use plain text only. Native-flow/button payloads are not supported by
     // some WhatsApp clients and Baileys forks, and may appear as an empty
@@ -53,7 +53,7 @@ async function sendErrorReport(conn, m, error, pluginName = 'handler', command =
         log.slice(0, 6500),
         '',
         'Catatan: URL dan parameter sensitif disamarkan otomatis.'
-    ].filter(Boolean).join('\\n')
+    ].filter(Boolean).join('\n')
 
     try {
         if (typeof conn.sendMessage !== 'function' || !m?.chat) return
