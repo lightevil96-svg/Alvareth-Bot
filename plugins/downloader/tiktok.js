@@ -798,6 +798,54 @@ async function prepareFromTikTokEmbed(sourceUrl, tempDir, videoId = '') {
   return normalizeVideoToMp4(sourcePath, outputPath, sourceInfo)
 }
 
+async function getSaveApiTikTokCandidates(sourceUrl) {
+  const apiKey = String(process.env.SAVEAPI_KEY || '').trim()
+  if (!apiKey || !sourceUrl) return []
+
+  const response = await axios.get('https://api.saveapi.org/v1/download', {
+    params: { url: sourceUrl },
+    timeout: 25000,
+    maxRedirects: 3,
+    maxContentLength: 1024 * 1024,
+    headers: {
+      authorization: 'Bearer ' + apiKey,
+      accept: 'application/json'
+    }
+  })
+  const payload = response.data
+  if (!payload?.success || String(payload.platform || '').toLowerCase() !== 'tiktok') {
+    throw new Error('SaveAPI tidak mengembalikan hasil TikTok yang valid: ' + String(payload?.error?.code || payload?.error?.message || 'respons tidak valid'))
+  }
+
+  // Prefer explicit HD renditions, then the service's recommended/source files.
+  const formats = Array.isArray(payload.formats) ? payload.formats : []
+  const medias = Array.isArray(payload.medias) ? payload.medias : []
+  const entries = [...formats, ...medias]
+    .filter(item => item && item.type === 'video' && /^https?:\/\//i.test(String(item.url || '')))
+    .filter(item => !/mp3|audio/i.test(String(item.format || item.ext || '')))
+  const preferred = String(payload.recommended_format || '').toLowerCase()
+  entries.sort((a, b) => {
+    const score = item => {
+      const format = String(item.format || '').toLowerCase()
+      const quality = String(item.quality || item.label || '').toLowerCase()
+      return (format === preferred ? 1000 : 0) +
+        (/1080|\bhd\b|2160|1440/.test(format + ' ' + quality) ? 100 : 0) +
+        (Number(item.height) || 0)
+    }
+    return score(b) - score(a)
+  })
+
+  const seen = new Set()
+  return entries.filter(item => {
+    if (seen.has(item.url)) return false
+    seen.add(item.url)
+    return true
+  }).map((item, index) => ({
+    label: 'SaveAPI ' + String(item.label || item.quality || item.format || ('varian ' + (index + 1))),
+    url: item.url
+  }))
+}
+
 async function prepareBestTikTokVideo(res, sourceUrl = '') {
   // Watermark fallback is intentionally deferred: it may be a lower-resolution
   // stream and must not prevent the direct TikTok/yt-dlp HD extractors from running.
@@ -854,6 +902,45 @@ async function prepareBestTikTokVideo(res, sourceUrl = '') {
       }
     }
 
+    // Optional independent resolver. It is only called after TikWM candidates fail,
+    // so normal downloads do not spend external API credits unnecessarily.
+    if (process.env.SAVEAPI_KEY && sourceUrl && /^https?:\/\//i.test(sourceUrl)) {
+      try {
+        console.log('[TikTok] Provider utama gagal; mencoba resolver SaveAPI...')
+        const saveCandidates = await getSaveApiTikTokCandidates(sourceUrl)
+        for (let i = 0; i < saveCandidates.length; i++) {
+          const candidate = saveCandidates[i]
+          const sourcePath = path.join(tempDir, 'saveapi-source-' + i + '.bin')
+          const outputPath = path.join(tempDir, 'saveapi-fallback-' + i + '.mp4')
+          try {
+            await downloadVideoFile(candidate.url, sourcePath)
+            const sourceInfo = await inspectVideoFile(sourcePath)
+            if (Math.max(sourceInfo.width, sourceInfo.height) < 720) {
+              throw new Error('Resolusi hanya ' + sourceInfo.width + 'x' + sourceInfo.height + ', bukan HD 720p.')
+            }
+            await verifyFirstVideoFrame(sourcePath)
+            const normalized = await normalizeVideoToMp4(sourcePath, outputPath, sourceInfo)
+            console.log('[TikTok] SaveAPI berhasil; resolusi terverifikasi:', sourceInfo.width + 'x' + sourceInfo.height)
+            return { ...normalized, quality: 'SaveAPI ' + sourceInfo.width + 'x' + sourceInfo.height }
+          } catch (error) {
+            errors.push(candidate.label + ': ' + formatTikTokError(error))
+            await Promise.all([
+              fsp.rm(sourcePath, { force: true }).catch(() => {}),
+              fsp.rm(outputPath, { force: true }).catch(() => {})
+            ])
+            if (isDiskFullError(error)) throw error
+          }
+        }
+        if (!saveCandidates.length) errors.push('SaveAPI: tidak ada varian video langsung pada respons.')
+      } catch (error) {
+        errors.push('SaveAPI: ' + formatTikTokError(error))
+        console.warn('[TikTok] SaveAPI fallback gagal:', error?.stack || error)
+        if (isDiskFullError(error)) {
+          throw new Error('Disk server penuh saat fallback SaveAPI TikTok. Bersihkan penyimpanan atau atur ALVARETH_TIKTOK_TMPDIR ke lokasi lain.')
+        }
+      }
+    }
+
     // Before treating provider URLs as a video, check TikTok's page state for
     // a photo post. A slideshow must use its individual image URLs, not FFmpeg
     // or yt-dlp. This runs only after all provider video candidates failed.
@@ -901,12 +988,15 @@ async function prepareBestTikTokVideo(res, sourceUrl = '') {
         if (!fileInfo.size || fileInfo.size > MAX_VIDEO_BYTES) {
           throw new Error('Fallback yt-dlp menghasilkan file kosong atau lebih dari 150 MB.')
         }
-        const duration = await getMediaDuration(fallback.path)
-        if (!(duration > 0)) throw new Error('Fallback yt-dlp menghasilkan video yang metadata/durasinya tidak valid.')
+        const sourceInfo = await inspectVideoFile(fallback.path)
+        if (Math.max(sourceInfo.width, sourceInfo.height) < 720) {
+          throw new Error('Fallback yt-dlp hanya menghasilkan ' + sourceInfo.width + 'x' + sourceInfo.height + ', bukan HD 720p.')
+        }
+        await verifyFirstVideoFrame(fallback.path)
         const normalizedPath = path.join(tempDir, 'yt-dlp-fallback.mp4')
-        const normalized = await normalizeVideoToMp4(fallback.path, normalizedPath)
-        console.log('[TikTok] Berhasil mengunduh TikTok memakai fallback yt-dlp.')
-        return { ...normalized, quality: 'yt-dlp fallback' }
+        const normalized = await normalizeVideoToMp4(fallback.path, normalizedPath, sourceInfo)
+        console.log('[TikTok] Berhasil mengunduh TikTok memakai yt-dlp; resolusi terverifikasi:', sourceInfo.width + 'x' + sourceInfo.height)
+        return { ...normalized, quality: 'yt-dlp ' + sourceInfo.width + 'x' + sourceInfo.height }
       } catch (error) {
         errors.push('yt-dlp fallback: ' + formatTikTokError(error))
         console.warn('[TikTok] Fallback yt-dlp gagal:', error?.stack || error)
