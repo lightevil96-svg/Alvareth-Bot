@@ -1,5 +1,13 @@
 # AI Change Log — Alvareth Bot
 
+## 2026-10-30 — Perbaikan router prefix command (termasuk kategori image)
+- **Gejala:** setelah pengguna mengirim `.toreal` sebagai balasan foto di chat pribadi, bot tidak merespons dan log lifecycle `[IMAGE]` tidak muncul.
+- **Akar penyebab yang ditemukan:** router command memanggil `RegExp.exec()` pada objek prefix yang dipakai bersama semua plugin, lalu memilih kandidat pertama hanya karena objek regex-nya ada—bukan karena prefix benar-benar cocok. Regex dengan flag global/sticky dapat mempertahankan `lastIndex` dan menyebabkan pencocokan command tidak konsisten; kondisi pemilihan kandidat juga tidak memverifikasi hasil match.
+- **Perubahan:** `handler.js` sekarang mengkloning regex prefix untuk setiap pemeriksaan, menghapus flag stateful `g/y`, dan memilih hanya hasil yang benar-benar cocok. Ini memperbaiki routing command lintas kategori, bukan hanya `.toreal`.
+- **Tes:** perubahan dikomit ke `main`; syntax check dan pengujian live WhatsApp/TokoPanel belum dijalankan dari lingkungan ini.
+- **Belum diverifikasi:** apakah setelah command berhasil masuk ke plugin, unduhan gambar reply dan API konversi berhasil pada runtime TokoPanel; apakah kartu tautan GitHub yang pernah terlihat berasal dari payload menu atau konteks pesan lain.
+- **Pelajaran regresi:** pengujian router harus mencakup banyak plugin yang berbagi regex prefix, regex berflag `g/y`, command dari chat pribadi/self-chat, dan command yang membalas media.
+
 ## 2026-10-30 — Indikator terminal kategori image
 - **Perubahan:** `handler.js` sekarang mendeteksi plugin bertag `image` dan mencatat awal proses, handler yang sedang berjalan, status selesai/gagal, command/plugin, identitas pengirim yang disamarkan ke nomor lokal, dan durasi.
 - **Tahap detail:** `plugins/image/tohitam.js` mencatat download gambar, validasi, upload, pemanggilan API AI, status HTTP, download hasil, pengiriman WhatsApp, dan total waktu proses.
