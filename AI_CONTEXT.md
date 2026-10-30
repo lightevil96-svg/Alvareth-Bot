@@ -97,3 +97,8 @@ Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes n
 - 2026-10-29 — PR #10: unduhan YouTube kualitas terbaik mencoba yt-dlp dan melaporkan resolusi/FPS hasil aktual; verifikasi runtime tetap diperlukan.
 - 2026-10-22 — Normalisasi pesan dan fallback `m.reply()`/`m.react()` ditangani di layer bersama; pertahankan dan regression-test, jangan menghapus hanya karena satu plugin bisa berjalan.
 - Perubahan historis lain dan format pencatatannya ada di `docs/AI_CHANGELOG.md`.
+
+## Perbaikan router command
+- Prefix matcher pada `handler.js` harus mengkloning setiap RegExp prefix dan menghapus flag `g/y` sebelum `exec()`; regex prefix global/sticky yang dibagi antar-plugin dapat mengubah `lastIndex` dan membuat command terlewat.
+- Pilih kandidat prefix hanya jika hasil `exec()` benar-benar cocok, bukan hanya karena objek RegExp tersedia.
+- Saat command image tidak menampilkan log `[IMAGE]`, periksa tahap routing prefix terlebih dahulu sebelum menyimpulkan API gambar bermasalah.
