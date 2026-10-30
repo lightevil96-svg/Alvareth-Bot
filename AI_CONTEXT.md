@@ -74,6 +74,7 @@ Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes n
 
 ## 6. Pembaruan terbaru
 
+- 2026-10-30 — Ditambahkan .clean khusus owner untuk menghapus direktori sementara TikTok alvareth-tiktok-* yang berusia lebih dari 2 jam; data persisten dan file unduhan lain tidak disentuh.
 - 2026-10-30 — Perbaikan ENOSPC TikTok: semua proses sementara video/foto/fallback diarahkan ke root konfigurasi yang sama, dengan pembersihan direktori usang dan pemeriksaan ruang awal; cek kondisi disk/kuota hosting tetap diperlukan.
 - 2026-10-29 — Panduan AI diseragamkan: root `AGENTS.md`, konteks ringkas di file ini, dan `docs/AI_CHANGELOG.md` untuk catatan perubahan/regresi; perubahan ini dokumentasi saja.
 - 2026-10-29 — PR #13: fallback pencarian TikTok lewat Bing/Google jika API utama gagal; pemeriksaan sintaks GitHub lolos, akses live dari TokoPanel belum diverifikasi.
