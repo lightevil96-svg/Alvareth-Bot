@@ -10,6 +10,16 @@ import { fileTypeFromBuffer } from "file-type"
 const API_TIMEOUT = 90000
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024
 
+function isHttpUrl(value) {
+  if (typeof value !== "string") return false
+  try {
+    const parsed = new URL(value)
+    return parsed.protocol === "http:" || parsed.protocol === "https:"
+  } catch {
+    return false
+  }
+}
+
 function findImageMessage(value, depth = 0, seen = new Set()) {
   if (!value || typeof value !== "object" || depth > 10 || seen.has(value)) return null
   seen.add(value)
@@ -39,7 +49,7 @@ async function uploadImage(buffer) {
     maxBodyLength: MAX_IMAGE_BYTES + 1024 * 1024
   })
   const url = data?.files?.[0]?.url
-  if (!url || !/^https?:\\/\\//i.test(url)) {
+  if (!url || !isHttpUrl(url)) {
     throw new Error("Layanan upload tidak memberikan URL gambar yang valid.")
   }
   return url
@@ -62,8 +72,8 @@ let handler = async (m, { conn, command }) => {
   ).toLowerCase()
 
   if (!mime.startsWith("image/") && !nestedImage) {
-    const list = handler.help.map(v => `.${v}`).join("\\n")
-    return m.reply(`✨ *AI IMAGE CONVERTER*\\n\\nReply gambar dengan caption salah satu command berikut:\\n\\n${list}`)
+    const list = handler.help.map(v => `.${v}`).join("\n")
+    return m.reply(`✨ *AI IMAGE CONVERTER*\n\nReply gambar dengan caption salah satu command berikut:\n\n${list}`)
   }
 
   if (typeof q.download !== "function") {
@@ -106,7 +116,7 @@ let handler = async (m, { conn, command }) => {
       throw new Error(json?.message || json?.error || "API gagal memproses gambar.")
     }
     const resultUrl = json?.result?.url || json?.result || json?.url || json?.data?.url
-    if (typeof resultUrl !== "string" || !/^https?:\\/\\//i.test(resultUrl)) {
+    if (typeof resultUrl !== "string" || !isHttpUrl(resultUrl)) {
       throw new Error("Respons API tidak berisi URL gambar hasil yang valid.")
     }
     const imageResponse = await fetch(resultUrl, { timeout: API_TIMEOUT })
