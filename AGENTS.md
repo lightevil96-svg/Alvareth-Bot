@@ -8,7 +8,7 @@
 ## Rules for every task
 
 - Inspect current source and call sites before editing. Treat documentation as context, not proof that code still behaves that way.
-- Work on a dedicated branch and open a focused PR against `main`. Do not force-push, reset destructively, or silently overwrite user data.
+- **Default workflow for this repository: make requested fixes directly on `main`**. Do not create a feature branch or PR unless the user explicitly asks for one. Confirm the current `main` state before writing, preserve unrelated changes, and commit each coherent fix directly to `main`.
 - Fix root causes. When behavior is shared by plugins, inspect common layers such as `handler.js` and `lib/simple.js` before adding one-off workarounds.
 - Preserve existing features, command formats, permission checks, message quoting, branding and persistent data unless the request explicitly authorizes a change.
 - Never commit or reveal secrets, `.env`, WhatsApp session data, runtime databases, backups, or logs containing credentials.
