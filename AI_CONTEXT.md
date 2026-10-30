@@ -74,6 +74,8 @@ Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes n
 
 ## 6. Pembaruan terbaru
 
+- 2026-10-30 — Diagnostik error lintas plugin: `handler.js` mengirim laporan error dengan tombol WhatsApp `cta_copy` untuk menyalin stack/log; mencakup `plugin.all`, `plugin.before`, command handler, dan error lapisan handler. Jika tombol interaktif gagal dikirim, bot mengirim fallback teks. Log dibatasi 12 KB dan URL query disamarkan; tombol salin bergantung dukungan klien WhatsApp/Baileys.
+
 - 2026-10-30 — Perbaikan fondasi media reply: `handler.js` memulihkan payload pesan asli setelah serialisasi Baileys dan menyimpan referensi non-enumerable `rawMessage`, supaya pembacaan `m.quoted`/`q.download()` di semua plugin menerima struktur media dan contextInfo yang tidak terpotong. Pemeriksaan sintaks perlu dijalankan; pengujian media live di WhatsApp/TokoPanel masih diperlukan.
 
 - 2026-10-30 — TikTok: fallback opsional SaveAPI melalui `SAVEAPI_KEY`, hanya dipanggil setelah kandidat TikWM gagal agar pemakaian kredit tidak terjadi pada unduhan normal. Hasil langsung diverifikasi dengan ffprobe, frame awal, dan ambang resolusi HD 720p; yt-dlp juga kini melewati validasi resolusi/frame yang sama.
