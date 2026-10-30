@@ -20,6 +20,27 @@ function isHttpUrl(value) {
   }
 }
 
+function findQuotedMessage(value, depth = 0, seen = new Set()) {
+  if (!value || typeof value !== "object" || depth > 12 || seen.has(value)) return null
+  seen.add(value)
+  const directContext = value.contextInfo?.quotedMessage
+  if (directContext && typeof directContext === "object") return directContext
+  for (const key of ["ephemeralMessage", "viewOnceMessage", "viewOnceMessageV2", "viewOnceMessageV2Extension", "documentWithCaptionMessage", "editedMessage", "message"]) {
+    const child = value[key]
+    if (!child || typeof child !== "object") continue
+    const found = findQuotedMessage(child.message || child, depth + 1, seen)
+    if (found) return found
+  }
+  for (const [key, child] of Object.entries(value)) {
+    if (["contextInfo", "messageContextInfo", "senderKeyDistributionMessage"].includes(key)) continue
+    if (child && typeof child === "object") {
+      const found = findQuotedMessage(child, depth + 1, seen)
+      if (found) return found
+    }
+  }
+  return null
+}
+
 function findImageMessage(value, depth = 0, seen = new Set()) {
   if (!value || typeof value !== "object" || depth > 10 || seen.has(value)) return null
   seen.add(value)
@@ -63,24 +84,34 @@ let handler = async (m, { conn, command }) => {
   log("START", `sender=${String(m.sender || "").split("@")[0]}`)
   await m.react("✨").catch(() => {})
   const q = m.quoted || m
-  const nestedImage = findImageMessage(
-    q?.mediaMessage || q?.message || q?.msg || q?.rawMessage || m?.rawMessage?.message
-  )
+  // Read the quoted payload from the untouched Baileys event first. The
+  // serializer's quoted-media getters may lose nested image metadata on this fork.
+  const rawQuoted = findQuotedMessage(m?.rawMessage?.message || m?.message)
+  const quotedSource = rawQuoted || q?.messages || q?.message || q?.mediaMessage || q?.rawMessage || q
+  const imageMessage = findImageMessage(quotedSource) ||
+    findImageMessage(q?.mediaMessage || q?.message || q?.msg || q?.rawMessage)
   const mime = String(
-    q?.mimetype || q?.msg?.mimetype || q?.mediaMessage?.mimetype ||
-    nestedImage?.mimetype || ""
+    imageMessage?.mimetype || q?.mimetype || q?.msg?.mimetype ||
+    q?.mediaMessage?.mimetype || ""
   ).toLowerCase()
 
-  if (!mime.startsWith("image/") && !nestedImage) {
-    const list = handler.help.map(v => `.${v}`).join("\n")
-    return m.reply(`✨ *AI IMAGE CONVERTER*\n\nReply gambar dengan caption salah satu command berikut:\n\n${list}`)
+  if (!imageMessage || !mime.startsWith("image/")) {
+    const list = handler.help.map(v => `.${v}`).join("\\n")
+    return m.reply(`✨ *AI IMAGE CONVERTER*\\n\\nReply gambar dengan caption salah satu command berikut:\\n\\n${list}`)
   }
 
-  if (typeof q.download !== "function") {
-    throw new Error("Fungsi download media pada pesan yang direply tidak tersedia.")
+  log("DOWNLOAD", "mengunduh gambar dari payload reply WhatsApp")
+  let buffer = null
+  if (typeof q.download === "function") {
+    try {
+      buffer = await q.download()
+    } catch (error) {
+      log("DOWNLOAD_FALLBACK", error?.message || "quoted.download gagal")
+    }
   }
-  log("DOWNLOAD", "mengunduh gambar dari pesan reply")
-  const buffer = await q.download()
+  if ((!Buffer.isBuffer(buffer) || !buffer.length) && typeof conn.downloadM === "function") {
+    buffer = await conn.downloadM(imageMessage, "image")
+  }
   if (!Buffer.isBuffer(buffer) || !buffer.length) {
     throw new Error("Gagal mengambil data gambar dari pesan yang direply.")
   }
