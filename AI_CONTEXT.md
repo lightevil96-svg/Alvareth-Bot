@@ -74,6 +74,8 @@ Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes n
 
 ## 6. Pembaruan terbaru
 
+- 2026-10-30 — Diagnostik TikTok diperinci: setiap kegagalan provider menyertakan pesan asli, status HTTP, endpoint tanpa query sensitif, cuplikan body respons, serta kode sistem/penyebab; pesan akhir merangkum tiap tahap dan mengarahkan ke log server.
+
 - 2026-10-30 — Perbaikan fallback TikTok short-link: gunakan aweme/video ID dari metadata provider untuk membangun permalink kanonis sebelum mencoba embed resmi/yt-dlp; embed juga menerima ID provider secara langsung bila redirect vt/vm gagal.
 
 - 2026-10-30 — Memperbaiki SyntaxError `Unexpected token 'throw'` pada downloader TikTok: satu pernyataan `throw` terduplikasi pada jalur semua-varian-gagal.
