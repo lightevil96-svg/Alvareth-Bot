@@ -74,6 +74,7 @@ Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes n
 
 ## 6. Pembaruan terbaru
 
+- 2026-10-30 — AI Image Converter (`plugins/image/tohitam.js`): perbaikan deteksi gambar yang direply melalui wrapper pesan Baileys, validasi MIME berdasarkan signature file, validasi upload/API/hasil gambar, timeout, dan error dilempar kembali ke handler global agar tombol Salin Log Error ikut muncul. Pengujian live TokoPanel/API masih diperlukan.
 - 2026-10-30 — Diagnostik error lintas plugin: `handler.js` mengirim laporan error dengan tombol WhatsApp `cta_copy` untuk menyalin stack/log; mencakup `plugin.all`, `plugin.before`, command handler, dan error lapisan handler. Jika tombol interaktif gagal dikirim, bot mengirim fallback teks. Log dibatasi 12 KB dan URL query disamarkan; tombol salin bergantung dukungan klien WhatsApp/Baileys.
 
 - 2026-10-30 — Perbaikan fondasi media reply: `handler.js` memulihkan payload pesan asli setelah serialisasi Baileys dan menyimpan referensi non-enumerable `rawMessage`, supaya pembacaan `m.quoted`/`q.download()` di semua plugin menerima struktur media dan contextInfo yang tidak terpotong. Pemeriksaan sintaks perlu dijalankan; pengujian media live di WhatsApp/TokoPanel masih diperlukan.
