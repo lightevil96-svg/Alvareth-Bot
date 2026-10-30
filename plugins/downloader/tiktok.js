@@ -759,9 +759,17 @@ async function prepareFromTikTokEmbed(sourceUrl, tempDir) {
 }
 
 async function prepareBestTikTokVideo(res, sourceUrl = '') {
-  const candidates = Array.isArray(res.videoCandidates) && res.videoCandidates.length
+  // Watermark fallback is intentionally deferred: it may be a lower-resolution
+  // stream and must not prevent the direct TikTok/yt-dlp HD extractors from running.
+  const allCandidates = Array.isArray(res.videoCandidates) && res.videoCandidates.length
     ? res.videoCandidates
     : (res.video ? [{ label: 'video tersedia', url: res.video }] : [])
+  const candidates = allCandidates.filter(candidate =>
+    !/watermark/i.test(String(candidate?.label || ''))
+  )
+  const watermarkCandidate = allCandidates.find(candidate =>
+    /watermark/i.test(String(candidate?.label || ''))
+  )
   if (!candidates.length) throw new Error('Provider tidak menyediakan URL video yang dapat diunduh.')
 
   const tempDir = await createTikTokTempDir('video')
@@ -783,6 +791,9 @@ async function prepareBestTikTokVideo(res, sourceUrl = '') {
         await downloadVideoFile(candidate.url, sourcePath)
         const sourceInfo = await inspectVideoFile(sourcePath)
         console.log('[TikTok] Sumber terverifikasi:', sourceInfo.codec, sourceInfo.width + 'x' + sourceInfo.height, formatDuration(sourceInfo.duration))
+        if (Math.max(sourceInfo.width, sourceInfo.height) < 720) {
+          throw new Error('Resolusi sumber hanya ' + sourceInfo.width + 'x' + sourceInfo.height + ', di bawah ambang HD 720p; lanjut mencari sumber yang lebih tinggi.')
+        }
         await verifyFirstVideoFrame(sourcePath)
         const normalized = await normalizeVideoToMp4(sourcePath, outputPath, sourceInfo)
         console.log('[TikTok] Berhasil menyiapkan video dari varian:', candidate.label || ('#' + (i + 1)))
@@ -867,7 +878,31 @@ async function prepareBestTikTokVideo(res, sourceUrl = '') {
       }
     }
 
-    throw new Error('Semua varian TikTok gagal diverifikasi/dikonversi. ' + errors.slice(0, 4).join(' | '))
+    // Last resort only: accept the watermark stream only when it is genuinely HD.
+    if (watermarkCandidate?.url && /^https?:\/\//i.test(watermarkCandidate.url)) {
+      const sourcePath = path.join(tempDir, 'watermark-source.bin')
+      const outputPath = path.join(tempDir, 'watermark-fallback.mp4')
+      try {
+        console.log('[TikTok] Semua sumber HD gagal; memeriksa fallback watermark sebagai pilihan terakhir...')
+        await downloadVideoFile(watermarkCandidate.url, sourcePath)
+        const sourceInfo = await inspectVideoFile(sourcePath)
+        if (Math.max(sourceInfo.width, sourceInfo.height) < 720) {
+          throw new Error('Fallback watermark hanya ' + sourceInfo.width + 'x' + sourceInfo.height + ', bukan HD. Tidak dikirim agar kualitas tidak diturunkan diam-diam.')
+        }
+        await verifyFirstVideoFrame(sourcePath)
+        const normalized = await normalizeVideoToMp4(sourcePath, outputPath, sourceInfo)
+        console.log('[TikTok] Fallback watermark HD berhasil diverifikasi:', sourceInfo.width + 'x' + sourceInfo.height)
+        return { ...normalized, quality: 'HD watermark fallback' }
+      } catch (error) {
+        errors.push('watermark fallback: ' + summarizeTikTokError(error))
+        console.warn('[TikTok] Watermark fallback dilewati:', error?.message || error)
+        if (isDiskFullError(error)) {
+          throw new Error('Disk server penuh saat fallback watermark TikTok. Bersihkan penyimpanan atau atur ALVARETH_TIKTOK_TMPDIR ke lokasi lain.')
+        }
+      }
+    }
+
+    throw new Error('Semua varian TikTok gagal diverifikasi/dikonversi. ' + errors.slice(0, 4).join(' | '))    throw new Error('Semua varian TikTok gagal diverifikasi/dikonversi. ' + errors.slice(0, 4).join(' | '))
   } finally {
     await fsp.rm(tempDir, { recursive: true, force: true }).catch(() => {})
   }
