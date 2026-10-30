@@ -1,3 +1,11 @@
+## 2026-10-30 — Memperbaiki request API AI Image Converter yang menggantung
+- **Gejala:** log mencapai tahap API setelah upload, tetapi tidak ada API_RESPONSE, hasil gambar, atau error yang terlihat.
+- **Akar masalah yang diperbaiki:** plugin memakai opsi timeout pada node-fetch v3, padahal timeout harus dikendalikan melalui AbortSignal; request dapat menunggu tanpa batas dan tidak menghasilkan pesan kegagalan yang jelas.
+- **Perubahan:** menambahkan fetchWithTimeout berbasis AbortController dengan timer yang dibersihkan; menerapkannya pada request konversi dan download URL hasil; mencatat durasi request, HTTP status, dan content-type; mendukung respons gambar biner, JSON berisi URL, serta URL teks; menampilkan cuplikan error bila format respons tidak dikenal.
+- **Tes:** perubahan tersimpan di main. Pemeriksaan npm test dan uji API/WhatsApp langsung belum dijalankan dari TokoPanel.
+- **Verifikasi berikutnya:** restart, coba .toreal, lalu baca log API_RESPONSE atau pesan timeout/error baru untuk membedakan API lambat, API gagal, dan format respons yang berbeda.
+- **Referensi:** commit 125ce0067cd3332541b47637e1d64aee14a61fa1.
+
 ## 2026-10-30 — Perbaikan deteksi foto yang direply pada AI Image Converter
 - **Gejala:** setelah plugin berhasil dimuat, command seperti .toreal tetap mengirim panduan penggunaan seolah-olah pengguna belum membalas foto.
 - **Akar masalah:** deteksi media hanya mengandalkan properti hasil serialisasi m.quoted; pada sebagian payload/fork Baileys, metadata media kutipan tidak terbaca melalui jalur tersebut.
