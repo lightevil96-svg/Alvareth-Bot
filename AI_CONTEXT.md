@@ -31,10 +31,10 @@ Alvareth Bot adalah bot WhatsApp Multi-Device berbasis Node.js, ES Modules, Bail
 1. Baca `AGENTS.md`, README, bagian terkait dalam file ini, dan riwayat di `docs/AI_CHANGELOG.md`.
 2. Periksa branch, commit terbaru, file yang relevan, semua pemanggil/helper terkait, serta status workflow. Jangan menebak isi kode dari nama file saja.
 3. Temukan akar masalah dan perbaiki sumber masalah bersama bila bug dipakai banyak fitur. Pertahankan API, format pesan, izin, dan perilaku yang sudah berfungsi.
-4. Buat branch khusus dan commit dengan pesan yang jelas. Ajukan PR ke `main`; jangan mengubah atau memaksa reset branch produksi.
+4. **Default: langsung commit perubahan ke branch `main`** sesuai permintaan pemilik proyek. Jangan membuat branch fitur atau PR kecuali pengguna secara eksplisit memintanya. Pastikan SHA `main` terbaru sebelum menulis, jangan menimpa perubahan lain, dan jangan force-push/reset. Jika proteksi branch atau izin GitHub menolak perubahan langsung, berhenti dan jelaskan hambatannya; jangan diam-diam beralih ke PR.
 5. Jalankan `npm test` dan pemeriksaan yang relevan. Untuk perubahan plugin, uji jalur terkait; untuk fitur eksternal, bedakan tes sintaks dari tes API dan tes WhatsApp langsung.
 6. Periksa diff akhir agar perubahan tidak menyertakan rahasia, data runtime, atau file yang tidak terkait.
-7. **Catat setiap perubahan bermakna dalam `docs/AI_CHANGELOG.md` pada PR yang sama.** Perbarui bagian “Pembaruan terbaru” di file ini dengan ringkasan satu baris. Catat masalah, akar penyebab, perbaikan, file/commit, tes yang dijalankan, hasil, dan hal yang belum diverifikasi. Jangan mengklaim tes atau perilaku live yang tidak benar-benar diuji.
+7. **Catat setiap perubahan bermakna dalam `docs/AI_CHANGELOG.md` pada commit `main` yang sama/berurutan langsung dengan perubahan kode.** Perbarui bagian “Pembaruan terbaru” di file ini dengan ringkasan satu baris. Catat masalah, akar penyebab, perbaikan, file/commit, tes yang dijalankan, hasil, dan hal yang belum diverifikasi. Jangan mengklaim tes atau perilaku live yang tidak benar-benar diuji.
 
 ## 3. Aturan wajib: boleh dan tidak boleh
 
@@ -42,7 +42,7 @@ Alvareth Bot adalah bot WhatsApp Multi-Device berbasis Node.js, ES Modules, Bail
 - Membaca dan menelusuri kode, mencari pemanggil fungsi, menambah tes, memperbaiki dokumentasi, serta melakukan refactor terukur yang mempertahankan kompatibilitas.
 - Memperbaiki akar masalah pada helper bersama bila bukti menunjukkan banyak plugin terdampak.
 - Menambah fallback API yang berbeda sumber, timeout, validasi respons, deduplikasi, dan pesan error yang membantu; tandai fallback eksternal sebagai best-effort.
-- Memeriksa hasil GitHub Actions, membuat PR kecil yang terfokus, dan mendokumentasikan pelajaran untuk mencegah regresi.
+- Memeriksa hasil GitHub Actions, membuat commit kecil yang terfokus langsung di `main`, dan mendokumentasikan pelajaran untuk mencegah regresi.
 - Menggunakan `.env.example` untuk dokumentasi konfigurasi; gunakan variabel lingkungan untuk credential.
 
 ### Tidak boleh
