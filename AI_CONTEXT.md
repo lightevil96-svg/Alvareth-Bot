@@ -74,6 +74,8 @@ Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes n
 
 ## 6. Pembaruan terbaru
 
+- 2026-10-30 — AI Image Converter: mengganti opsi `timeout` yang tidak efektif pada `node-fetch` v3 dengan `AbortController`/timer yang benar-benar membatalkan request; menambahkan diagnostik durasi, HTTP status/content-type, parsing respons image/JSON/URL teks, dan timeout unduhan hasil. Uji live API/WhatsApp tetap diperlukan.
+
 - 2026-10-30 — Perbaikan fatal loader AI Image Converter: validasi URL pada `plugins/image/tohitam.js` memakai `URL` API sehingga regex literal yang sebelumnya menyebabkan `Invalid regular expression flags` tidak lagi menggagalkan pemuatan seluruh command image; `npm test` kini memeriksa sintaks plugin tersebut.
 - 2026-10-30 — Diagnostik kategori image: `handler.js` mencatat awal, handler berjalan, selesai/gagal, nama plugin/perintah, dan durasi semua plugin bertag `image`. `plugins/image/tohitam.js` juga mencatat tahap download, validasi, upload, permintaan API, respons API, download hasil, pengiriman WhatsApp, serta total durasi. Log tidak mencetak URL privat atau API key.
 - 2026-10-30 — AI Image Converter (`plugins/image/tohitam.js`): perbaikan deteksi gambar yang direply melalui wrapper pesan Baileys, validasi MIME berdasarkan signature file, validasi upload/API/hasil gambar, timeout, dan error dilempar kembali ke handler global agar tombol Salin Log Error ikut muncul. Pengujian live TokoPanel/API masih diperlukan.
