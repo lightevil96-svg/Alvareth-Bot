@@ -13,6 +13,69 @@ const { proto } = (await import('baileys')).default
 const isNumber = x => typeof x === 'number' && !isNaN(x)
 const delay = ms => isNumber(ms) && new Promise(resolve => setTimeout(resolve, ms))
 
+const ERROR_LOG_MAX_LENGTH = 12000
+const redactErrorLog = value => String(value ?? '')
+    .replace(/(api[_-]?key|access[_-]?token|authorization|bearer)\\s*[:=]\\s*[^\\s,;]+/gi, '$1=[REDACTED]')
+    .replace(/https?:\\/\\/[^\\s"'<>]+/gi, url => {
+        try {
+            const parsed = new URL(url)
+            return parsed.origin + parsed.pathname + (parsed.search ? '?[REDACTED]' : '')
+        } catch {
+            return '[URL REDACTED]'
+        }
+    })
+    .slice(0, ERROR_LOG_MAX_LENGTH)
+
+async function sendErrorReport(conn, m, error, pluginName = 'handler', command = '') {
+    const stack = error?.stack || format(error)
+    const log = redactErrorLog([
+        'ALVARETH BOT — ERROR LOG',
+        `Waktu: ${new Date().toISOString()}`,
+        `Plugin: ${pluginName}`,
+        command ? `Perintah: ${command}` : '',
+        `Jenis: ${error?.name || 'Error'}`,
+        `Pesan: ${error?.message || String(error)}`,
+        '',
+        stack
+    ].filter(Boolean).join('\\n'))
+    const text = [
+        '⚠️ *Fitur mengalami kesalahan.*',
+        `Plugin: ${pluginName}`,
+        command ? `Perintah: ${command}` : '',
+        'Tekan tombol *Salin Log Error* untuk menyalin detail diagnostik.',
+        'Log dapat berisi informasi teknis; periksa sebelum membagikannya.'
+    ].filter(Boolean).join('\\n')
+    const payload = {
+        text,
+        footer: 'Alvareth Bot • Error diagnostics',
+        buttons: [{
+            buttonId: 'copy_error_log',
+            buttonText: { displayText: '📋 Salin Log Error' },
+            type: 4,
+            nativeFlowInfo: {
+                name: 'cta_copy',
+                paramsJson: JSON.stringify({
+                    display_text: 'Salin Log Error',
+                    copy_code: log
+                })
+            }
+        }],
+        headerType: 1
+    }
+    try {
+        if (typeof conn.sendMessage !== 'function' || !m?.chat) return
+        await conn.sendMessage(m.chat, payload, m.key ? { quoted: m } : {})
+    } catch (sendError) {
+        console.error('[ERROR REPORT] Gagal mengirim tombol salin log:', sendError)
+        const fallback = `${text}\\n\\n\\`\\`\\`text\\n${log.slice(0, 3500)}\\n\\`\\`\\``
+        try {
+            await conn.sendMessage(m.chat, { text: fallback }, m.key ? { quoted: m } : {})
+        } catch (fallbackError) {
+            console.error('[ERROR REPORT] Gagal mengirim fallback log:', fallbackError)
+        }
+    }
+}
+
 export async function handler(chatUpdate) {
     this.msgqueque = this.msgqueque || []
     if (!chatUpdate) return
@@ -881,7 +944,8 @@ for (let name in global.plugins) {
                 try {
                     await plugin.all.call(this, m, { chatUpdate, __dirname: ___dirname, __filename })
                 } catch (e) {
-                    console.error(e)
+                    console.error('[PLUGIN ALL ERROR]', name, e)
+                    await sendErrorReport(this, m, e, name, 'plugin.all')
                 }
             }
 
@@ -909,10 +973,16 @@ for (let name in global.plugins) {
             }
 
             if (typeof plugin.before === 'function') {
-                if (await plugin.before.call(this, m, {
-                    match, conn: this, participants, groupMetadata, user, bot,
-                    isROwner, isOwner, isRAdmin, isAdmin, isBotAdmin, isPrems, chatUpdate, __dirname: ___dirname, __filename
-                })) continue
+                try {
+                    if (await plugin.before.call(this, m, {
+                        match, conn: this, participants, groupMetadata, user, bot,
+                        isROwner, isOwner, isRAdmin, isAdmin, isBotAdmin, isPrems, chatUpdate, __dirname: ___dirname, __filename
+                    })) continue
+                } catch (e) {
+                    console.error('[PLUGIN BEFORE ERROR]', name, e)
+                    await sendErrorReport(this, m, e, name, 'plugin.before')
+                    continue
+                }
             }
 
             if (typeof plugin !== 'function') continue
@@ -1006,15 +1076,8 @@ for (let name in global.plugins) {
                     if (!isPrems && !m.skipLimit) m.limit = m.limit || plugin.limit || false
                 } catch (e) {
                     m.error = e
-                    console.error(e)
-                    if (e) {
-                        const errorText = `*Error:* ${format(e)}`
-                        if (typeof m.reply === 'function') {
-                            await m.reply(errorText).catch?.(sendError => console.error('ERROR REPLY:', sendError))
-                        } else if (m.chat && typeof this.sendMessage === 'function') {
-                            await this.sendMessage(m.chat, { text: errorText }, m.key ? { quoted: m } : {}).catch(sendError => console.error('ERROR REPLY:', sendError))
-                        }
-                    }
+                    console.error('[PLUGIN COMMAND ERROR]', name, command, e)
+                    await sendErrorReport(this, m, e, name, command)
                 } finally {
                     if (typeof plugin.after === 'function') {
                         try {
@@ -1033,7 +1096,8 @@ for (let name in global.plugins) {
             }
         }
     } catch (e) {
-        console.error(e)
+        console.error('[HANDLER ERROR]', e)
+        await sendErrorReport(this, m, e, m?.plugin || 'handler', m?.text || '')
     } finally {
             if (m.text) {
             const quequeIndex = this.msgqueque.indexOf(m.id || m.key.id)
