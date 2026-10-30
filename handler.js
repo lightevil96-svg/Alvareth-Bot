@@ -15,8 +15,8 @@ const delay = ms => isNumber(ms) && new Promise(resolve => setTimeout(resolve, m
 
 const ERROR_LOG_MAX_LENGTH = 12000
 const redactErrorLog = value => String(value ?? '')
-    .replace(/(api[_-]?key|access[_-]?token|authorization|bearer)\\s*[:=]\\s*[^\\s,;]+/gi, '$1=[REDACTED]')
-    .replace(/https?:\\/\\/[^\\s"'<>]+/gi, url => {
+    .replace(/(api[_-]?key|access[_-]?token|authorization|bearer)\s*[:=]\s*[^\s,;]+/gi, '$1=[REDACTED]')
+    .replace(/https?:\/\/[^\s"'<>]+/gi, url => {
         try {
             const parsed = new URL(url)
             return parsed.origin + parsed.pathname + (parsed.search ? '?[REDACTED]' : '')
@@ -37,14 +37,14 @@ async function sendErrorReport(conn, m, error, pluginName = 'handler', command =
         `Pesan: ${error?.message || String(error)}`,
         '',
         stack
-    ].filter(Boolean).join('\\n'))
+    ].filter(Boolean).join('\n'))
     const text = [
         '⚠️ *Fitur mengalami kesalahan.*',
         `Plugin: ${pluginName}`,
         command ? `Perintah: ${command}` : '',
         'Tekan tombol *Salin Log Error* untuk menyalin detail diagnostik.',
         'Log dapat berisi informasi teknis; periksa sebelum membagikannya.'
-    ].filter(Boolean).join('\\n')
+    ].filter(Boolean).join('\n')
     const payload = {
         text,
         footer: 'Alvareth Bot • Error diagnostics',
@@ -67,7 +67,7 @@ async function sendErrorReport(conn, m, error, pluginName = 'handler', command =
         await conn.sendMessage(m.chat, payload, m.key ? { quoted: m } : {})
     } catch (sendError) {
         console.error('[ERROR REPORT] Gagal mengirim tombol salin log:', sendError)
-        const fallback = `${text}\\n\\n\\`\\`\\`text\\n${log.slice(0, 3500)}\\n\\`\\`\\``
+        const fallback = `${text}\n\n\\`\\`\\`text\n${log.slice(0, 3500)}\n\\`\\`\\``
         try {
             await conn.sendMessage(m.chat, { text: fallback }, m.key ? { quoted: m } : {})
         } catch (fallbackError) {
