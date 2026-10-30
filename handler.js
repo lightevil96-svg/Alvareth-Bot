@@ -929,6 +929,30 @@ if (!isOwner && (isNumberBanned || isLegacyBanned)) {
   return;
 }
 
+// Focused command-router trace for the image conversion regression.
+const isImageCommandTrace = /^\\s*[.!/](?:toreal|tohitam|tochibi|toghibli)\\b/i.test(String(m.text || ''))
+if (isImageCommandTrace) {
+    const prefix = conn.prefix ?? global.prefix
+    const prefixDescription = prefix instanceof RegExp
+        ? { type: 'RegExp', source: prefix.source, flags: prefix.flags }
+        : Array.isArray(prefix) ? { type: 'Array', values: prefix.map(value => String(value)) }
+        : { type: typeof prefix, value: String(prefix) }
+    const candidates = Object.entries(global.plugins || {}).filter(([name, plugin]) => {
+        const commands = plugin?.command
+        if (commands instanceof RegExp) return new RegExp(commands.source, commands.flags.replace(/[gy]/g, '')).test(String(m.text).trim().slice(1).split(/\\s+/)[0])
+        if (Array.isArray(commands)) return commands.some(value => value instanceof RegExp
+            ? new RegExp(value.source, value.flags.replace(/[gy]/g, '')).test(String(m.text).trim().slice(1).split(/\\s+/)[0])
+            : String(value).toLowerCase() === String(m.text).trim().slice(1).split(/\\s+/)[0].toLowerCase())
+        return typeof commands === 'string' && commands.toLowerCase() === String(m.text).trim().slice(1).split(/\\s+/)[0].toLowerCase()
+    }).map(([name, plugin]) => ({ name, tags: plugin?.tags || [], disabled: Boolean(plugin?.disabled), isFunction: typeof plugin === 'function' }))
+    console.log('[COMMAND TRACE] image-command received', JSON.stringify({
+        text: m.text, chat: m.chat, sender: m.sender, fromMe: m.fromMe,
+        isOwner, isROwner, prefix: prefixDescription,
+        pluginsLoaded: Object.keys(global.plugins || {}).length,
+        candidates
+    }))
+}
+
 for (let name in global.plugins) {
     let plugin = global.plugins[name]
     if (!plugin || plugin.disabled) continue
