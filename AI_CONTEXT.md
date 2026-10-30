@@ -104,6 +104,8 @@ Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes n
 - Pilih kandidat prefix hanya jika hasil `exec()` benar-benar cocok, bukan hanya karena objek RegExp tersedia.
 - Saat command image tidak menampilkan log `[IMAGE]`, periksa tahap routing prefix terlebih dahulu sebelum menyimpulkan API gambar bermasalah.
 
+- 2026-10-30 — Perbaikan pembacaan foto reply AI Image Converter: plugin kini mengambil contextInfo.quotedMessage dari payload Baileys asli sebelum fallback serializer, mengekstrak imageMessage, dan memakai conn.downloadM(imageMessage, 'image') bila q.download() tidak menghasilkan buffer. Uji live WhatsApp tetap diperlukan.
+
 ## Diagnostik command image
 - Untuk command `.toreal`/konversi image yang tidak merespons, periksa log `[COMMAND TRACE]` sebelum mengubah API gambar. Trace mencatat prefix aktif dan kandidat plugin yang cocok, tanpa isi media/kredensial.
 - Jika ada kandidat image tetapi tidak ada `[IMAGE] ▶ Mulai`, telusuri tahap plugin loop, status disabled, dan tipe export plugin. Jika `[IMAGE] ▶ Mulai` muncul, lanjutkan ke tahap download/upload/API.
