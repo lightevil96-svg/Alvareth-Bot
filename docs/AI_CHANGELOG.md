@@ -1,3 +1,12 @@
+## 2026-10-30 — Memperbaiki plugin image gagal dimuat karena regex URL
+- **Permintaan/gejala:** bot tersambung ke WhatsApp, tetapi command image seperti `.toreal` tidak merespons; log TokoPanel menunjukkan `Gagal memuat plugin 'image/tohitam.js': SyntaxError: Invalid regular expression flags`.
+- **Akar penyebab:** dua regex literal validasi URL pada `plugins/image/tohitam.js` memiliki escape slash berlebih sehingga parser JavaScript membaca bagian setelah regex sebagai flag yang tidak valid. Karena seluruh command image didaftarkan melalui plugin bersama ini, satu SyntaxError menonaktifkan semua command dalam daftar tersebut.
+- **Perubahan:** mengganti kedua regex URL dengan helper `isHttpUrl()` berbasis `URL` API; memperbaiki escape newline pada pesan bantuan; menambahkan pemeriksaan sintaks `plugins/image/tohitam.js` ke `npm test`.
+- **Tes:** perubahan kode dan konfigurasi test tersimpan di `main`; pemeriksaan runtime WhatsApp/TokoPanel dan hasil `npm test` belum dijalankan dari lingkungan ini.
+- **Belum diverifikasi:** apakah plugin berhasil dimuat setelah restart, apakah media reply dapat diunduh, serta apakah layanan upload Uguu dan API konversi FAA dapat diakses dari hosting.
+- **Pelajaran regresi:** hindari escape slash berlapis pada regex literal yang ditulis melalui generator; gunakan `URL` API untuk validasi URL dan pastikan plugin bersama memiliki syntax check eksplisit.
+- **Referensi:** commit kode `bb186ed103af44fd491f442a0bb84b2f2aa3a5d8`.
+
 # AI Change Log — Alvareth Bot
 
 ## 2026-10-30 — Diagnostik command image yang tidak masuk ke plugin
