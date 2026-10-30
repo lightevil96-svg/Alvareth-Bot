@@ -753,6 +753,9 @@ async function prepareFromTikTokEmbed(sourceUrl, tempDir) {
   const outputPath = path.join(tempDir, 'embed-fallback.mp4')
   await downloadVideoFile(mediaUrl, sourcePath)
   const sourceInfo = await inspectVideoFile(sourcePath)
+  if (Math.max(sourceInfo.width, sourceInfo.height) < 720) {
+    throw new Error('Sumber embed hanya ' + sourceInfo.width + 'x' + sourceInfo.height + ', di bawah ambang HD 720p.')
+  }
   await verifyFirstVideoFrame(sourcePath)
   console.log('[TikTok] Sumber embed terverifikasi:', sourceInfo.codec, sourceInfo.width + 'x' + sourceInfo.height, formatDuration(sourceInfo.duration))
   return normalizeVideoToMp4(sourcePath, outputPath, sourceInfo)
@@ -770,7 +773,7 @@ async function prepareBestTikTokVideo(res, sourceUrl = '') {
   const watermarkCandidate = allCandidates.find(candidate =>
     /watermark/i.test(String(candidate?.label || ''))
   )
-  if (!candidates.length) throw new Error('Provider tidak menyediakan URL video yang dapat diunduh.')
+  if (!candidates.length && !watermarkCandidate?.url && !sourceUrl) throw new Error('Provider tidak menyediakan URL video yang dapat diunduh.')
 
   const tempDir = await createTikTokTempDir('video')
   const errors = []
