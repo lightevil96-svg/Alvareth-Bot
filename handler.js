@@ -37,41 +37,35 @@ async function sendErrorReport(conn, m, error, pluginName = 'handler', command =
         `Pesan: ${error?.message || String(error)}`,
         '',
         stack
-    ].filter(Boolean).join('\n'))
-    const text = [
-        '⚠️ *Fitur mengalami kesalahan.*',
+    ].filter(Boolean).join('\\n'))
+
+    // Use plain text only. Native-flow/button payloads are not supported by
+    // some WhatsApp clients and Baileys forks, and may appear as an empty
+    // unsupported "Buttons" message instead of a usable diagnostic report.
+    const report = [
+        '⚠️ *FITUR MENGALAMI KESALAHAN*',
         `Plugin: ${pluginName}`,
         command ? `Perintah: ${command}` : '',
-        'Tekan tombol *Salin Log Error* untuk menyalin detail diagnostik.',
-        'Log dapat berisi informasi teknis; periksa sebelum membagikannya.'
-    ].filter(Boolean).join('\n')
-    const payload = {
-        text,
-        footer: 'Alvareth Bot • Error diagnostics',
-        buttons: [{
-            buttonId: 'copy_error_log',
-            buttonText: { displayText: '📋 Salin Log Error' },
-            type: 4,
-            nativeFlowInfo: {
-                name: 'cta_copy',
-                paramsJson: JSON.stringify({
-                    display_text: 'Salin Log Error',
-                    copy_code: log
-                })
-            }
-        }],
-        headerType: 1
-    }
+        `Jenis: ${error?.name || 'Error'}`,
+        `Pesan: ${error?.message || String(error)}`,
+        '',
+        '*LOG DIAGNOSTIK (salin pesan ini untuk dikirim):*',
+        log.slice(0, 6500),
+        '',
+        'Catatan: URL dan parameter sensitif disamarkan otomatis.'
+    ].filter(Boolean).join('\\n')
+
     try {
         if (typeof conn.sendMessage !== 'function' || !m?.chat) return
-        await conn.sendMessage(m.chat, payload, m.key ? { quoted: m } : {})
+        await conn.sendMessage(m.chat, { text: report }, m.key ? { quoted: m } : {})
     } catch (sendError) {
-        console.error('[ERROR REPORT] Gagal mengirim tombol salin log:', sendError)
-        const fallback = `${text}\n\nLOG ERROR:\n${log.slice(0, 3500)}`
+        console.error('[ERROR REPORT] Gagal mengirim laporan teks:', sendError)
+        // Last-resort attempt without quote metadata for clients/forks that
+        // reject the quoted message object.
         try {
-            await conn.sendMessage(m.chat, { text: fallback }, m.key ? { quoted: m } : {})
+            await conn.sendMessage(m.chat, { text: report })
         } catch (fallbackError) {
-            console.error('[ERROR REPORT] Gagal mengirim fallback log:', fallbackError)
+            console.error('[ERROR REPORT] Gagal mengirim fallback laporan:', fallbackError)
         }
     }
 }
