@@ -1,5 +1,11 @@
 # AI Change Log — Alvareth Bot
 
+## 2026-10-30 — Diagnostik command image yang tidak masuk ke plugin
+- Screenshot runtime menunjukkan bot tersambung dan menerima teks `.toreal`, tetapi tidak ada log `[IMAGE]`; berarti proses belum terbukti mencapai handler plugin image.
+- Menambahkan trace terbatas untuk command image konversi (`.toreal`, `.tohitam`, `.tochibi`, `.toghibli`) yang mencatat teks masuk, chat/sender, status fromMe/owner, prefix aktif, jumlah plugin, serta plugin kandidat yang command-nya cocok beserta status disabled/tipe fungsi.
+- Tujuan trace: membedakan kegagalan parsing pesan, prefix matcher, plugin belum terdaftar/disabled, dan kegagalan setelah plugin dimulai. Tidak mencatat isi gambar atau kredensial.
+- **Belum diuji live:** perlu satu percobaan setelah restart untuk mendapatkan baris `[COMMAND TRACE]`; jangan menyimpulkan perbaikan berhasil sebelum log `[IMAGE] ▶ Mulai` muncul.
+
 ## 2026-10-30 — Perbaikan router prefix command (termasuk kategori image)
 - **Gejala:** setelah pengguna mengirim `.toreal` sebagai balasan foto di chat pribadi, bot tidak merespons dan log lifecycle `[IMAGE]` tidak muncul.
 - **Akar penyebab yang ditemukan:** router command memanggil `RegExp.exec()` pada objek prefix yang dipakai bersama semua plugin, lalu memilih kandidat pertama hanya karena objek regex-nya ada—bukan karena prefix benar-benar cocok. Regex dengan flag global/sticky dapat mempertahankan `lastIndex` dan menyebabkan pencocokan command tidak konsisten; kondisi pemilihan kandidat juga tidak memverifikasi hasil match.
