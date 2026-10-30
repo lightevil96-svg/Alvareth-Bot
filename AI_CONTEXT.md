@@ -74,6 +74,8 @@ Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes n
 
 ## 6. Pembaruan terbaru
 
+- 2026-10-30 — TikTok: fallback opsional SaveAPI melalui `SAVEAPI_KEY`, hanya dipanggil setelah kandidat TikWM gagal agar pemakaian kredit tidak terjadi pada unduhan normal. Hasil langsung diverifikasi dengan ffprobe, frame awal, dan ambang resolusi HD 720p; yt-dlp juga kini melewati validasi resolusi/frame yang sama.
+
 - 2026-10-30 — Diagnostik TikTok diperinci: setiap kegagalan provider menyertakan pesan asli, status HTTP, endpoint tanpa query sensitif, cuplikan body respons, serta kode sistem/penyebab; pesan akhir merangkum tiap tahap dan mengarahkan ke log server.
 
 - 2026-10-30 — Perbaikan fallback TikTok short-link: gunakan aweme/video ID dari metadata provider untuk membangun permalink kanonis sebelum mencoba embed resmi/yt-dlp; embed juga menerima ID provider secara langsung bila redirect vt/vm gagal.
