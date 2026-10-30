@@ -11,7 +11,7 @@
   },
   "scripts": {
     "start": "node scripts/start-with-update.js",
-    "test": "node --check index.js && node --check main.js && node --check handler.js && node --check lib/auto-update.js && node --check scripts/start-with-update.js && node --check lib/scrape/tikwm.js && node --check plugins/downloader/tiktok.js",
+    "test": "node --check index.js && node --check main.js && node --check handler.js && node --check lib/auto-update.js && node --check scripts/start-with-update.js && node --check lib/scrape/tikwm.js && node --check plugins/downloader/tiktok.js && node --check plugins/image/tohitam.js",
     "dev": "node --watch index.js"
   },
   "keywords": [
