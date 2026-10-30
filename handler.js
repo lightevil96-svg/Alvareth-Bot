@@ -31,6 +31,25 @@ export async function handler(chatUpdate) {
     const rawKeySnapshot = rawMessage?.key ? { ...rawMessage.key } : null
     const rawContentSnapshot = rawMessage?.message ? { ...rawMessage.message } : null
     m = smsg(this, m) || m
+
+    // Keep the original Baileys message payload intact after protobuf serialization.
+    // Some WhatsApp/Baileys fork schemas normalize or drop nested quoted media fields
+    // (image/video/audio/document, ephemeral and view-once wrappers). Plugins rely
+    // on m.quoted / q.download(), so restore the untouched inbound message object
+    // before any command/plugin reads it.
+    if (rawMessage?.message && typeof rawMessage.message === 'object') {
+        try {
+            m.message = rawMessage.message
+        } catch (error) {
+            console.warn('[MEDIA] Gagal memulihkan payload pesan asli:', error?.message || error)
+        }
+    }
+    Object.defineProperty(m, 'rawMessage', {
+        configurable: true,
+        enumerable: false,
+        writable: true,
+        value: rawMessage
+    })
     if (!m) return
 
     // Compatibility layer: protobuf conversion in this Baileys fork can leave
