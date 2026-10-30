@@ -1,3 +1,11 @@
+## 2026-10-30 — Laporan error kompatibel dengan WhatsApp lama
+- **Gejala:** setelah `.toreal` gagal, WhatsApp menampilkan pesan bertipe Buttons yang menyatakan versi klien tidak mendukungnya; detail penyebab API tidak sampai ke pengguna.
+- **Akar penyebab:** `sendErrorReport()` mengirim native-flow `cta_copy` tanpa fallback bila pengiriman diterima server tetapi klien WhatsApp tidak mampu merendernya.
+- **Perubahan:** `handler.js` kini selalu mengirim laporan teks biasa berisi plugin, command, jenis/pesan error, dan cuplikan stack yang sudah disamarkan. Jika pengiriman dengan quoted message gagal, dicoba sekali lagi tanpa quote.
+- **Tes:** perubahan ditulis ke branch `main`; belum menjalankan `npm test` atau uji WhatsApp/TokoPanel.
+- **Belum diverifikasi:** penyebab utama kegagalan API `.toreal` belum terlihat karena laporan error sebelumnya tidak kompatibel; perlu satu kali tes setelah restart dan kirim teks log yang diterima.
+- **Pelajaran regresi:** diagnostik kritis harus memakai teks biasa sebagai format dasar; tombol interaktif hanya boleh menjadi peningkatan opsional, bukan satu-satunya jalur laporan.
+
 ## 2026-10-30 — Memperbaiki request API AI Image Converter yang menggantung
 - **Gejala:** log mencapai tahap API setelah upload, tetapi tidak ada API_RESPONSE, hasil gambar, atau error yang terlihat.
 - **Akar masalah yang diperbaiki:** plugin memakai opsi timeout pada node-fetch v3, padahal timeout harus dikendalikan melalui AbortSignal; request dapat menunggu tanpa batas dan tidak menghasilkan pesan kegagalan yang jelas.
