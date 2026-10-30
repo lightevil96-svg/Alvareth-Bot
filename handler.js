@@ -1071,10 +1071,25 @@ for (let name in global.plugins) {
     chatUpdate, __dirname: ___dirname, __filename
                 }
 
+                const isImagePlugin = Array.isArray(plugin.tags)
+                    ? plugin.tags.some(tag => String(tag).toLowerCase() === 'image')
+                    : String(plugin.tags || '').toLowerCase().split(/[\\s,]+/).includes('image')
+                const imageStartedAt = isImagePlugin ? Date.now() : 0
+                if (isImagePlugin) {
+                    console.log(`[IMAGE] ▶ Mulai | command=.${command} | plugin=${name} | sender=${String(m.sender || '').split('@')[0]}`)
+                    console.log(`[IMAGE] … Menjalankan handler fitur gambar | command=.${command}`)
+                }
+
                 try {
                     await plugin.call(this, m, extra)
+                    if (isImagePlugin) {
+                        console.log(`[IMAGE] ✓ Handler selesai | command=.${command} | durasi=${((Date.now() - imageStartedAt) / 1000).toFixed(2)}s`)
+                    }
                     if (!isPrems && !m.skipLimit) m.limit = m.limit || plugin.limit || false
                 } catch (e) {
+                    if (isImagePlugin) {
+                        console.error(`[IMAGE] ✗ Gagal | command=.${command} | durasi=${((Date.now() - imageStartedAt) / 1000).toFixed(2)}s | error=${e?.message || String(e)}`)
+                    }
                     m.error = e
                     console.error('[PLUGIN COMMAND ERROR]', name, command, e)
                     await sendErrorReport(this, m, e, name, command)
