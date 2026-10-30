@@ -74,6 +74,8 @@ Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes n
 
 ## 6. Pembaruan terbaru
 
+- 2026-10-30 — Memperbaiki SyntaxError `Unexpected token 'throw'` pada downloader TikTok: satu pernyataan `throw` terduplikasi pada jalur semua-varian-gagal.
+
 - 2026-10-30 — TikTok downloader: watermark fallback ditunda sampai setelah embed/yt-dlp dan sumber di bawah 720 piksel pada sisi terpanjang ditolak agar tidak dikirim sebagai HD.
 - 2026-10-30 — Ditambahkan .clean khusus owner untuk menghapus direktori sementara TikTok alvareth-tiktok-* yang berusia lebih dari 2 jam; data persisten dan file unduhan lain tidak disentuh.
 - 2026-10-30 — Perbaikan ENOSPC TikTok: semua proses sementara video/foto/fallback diarahkan ke root konfigurasi yang sama, dengan pembersihan direktori usang dan pemeriksaan ruang awal; cek kondisi disk/kuota hosting tetap diperlukan.
