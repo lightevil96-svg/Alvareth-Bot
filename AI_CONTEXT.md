@@ -74,6 +74,8 @@ Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes n
 
 ## 6. Pembaruan terbaru
 
+- 2026-10-30 — Perbaikan fallback TikTok short-link: gunakan aweme/video ID dari metadata provider untuk membangun permalink kanonis sebelum mencoba embed resmi/yt-dlp; embed juga menerima ID provider secara langsung bila redirect vt/vm gagal.
+
 - 2026-10-30 — Memperbaiki SyntaxError `Unexpected token 'throw'` pada downloader TikTok: satu pernyataan `throw` terduplikasi pada jalur semua-varian-gagal.
 
 - 2026-10-30 — TikTok downloader: watermark fallback ditunda sampai setelah embed/yt-dlp dan sumber di bawah 720 piksel pada sisi terpanjang ditolak agar tidak dikirim sebagai HD.
