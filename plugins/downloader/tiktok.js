@@ -545,7 +545,7 @@ async function downloadToBuffer(url, maxBytes = MAX_VIDEO_BYTES) {
 }
 
 async function renderSinglePhotoWithMusic(imageUrl, audioUrl, outputPath) {
-  const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'alvareth-tiktok-photo-'))
+  const tempDir = await createTikTokTempDir('photo-render')
   const imagePath = path.join(tempDir, 'photo.jpg')
   const audioPath = path.join(tempDir, 'music.bin')
   try {
@@ -637,7 +637,7 @@ async function cleanupStaleTikTokTemps(root = os.tmpdir()) {
   let entries = []
   try { entries = await fsp.readdir(root, { withFileTypes: true }) } catch { return }
   for (const entry of entries) {
-    if (!entry.isDirectory() || !/^alvareth-tiktok(?:-single|-photo)?-/.test(entry.name)) continue
+    if (!entry.isDirectory() || !/^alvareth-tiktok(?:-[a-z0-9-]+)?-[a-z0-9]+$/i.test(entry.name)) continue
     const candidate = path.join(root, entry.name)
     try {
       const info = await fsp.stat(candidate)
@@ -647,6 +647,22 @@ async function cleanupStaleTikTokTemps(root = os.tmpdir()) {
       }
     } catch {}
   }
+}
+
+function getTikTokTempRoot() {
+  const configuredRoot = String(process.env.ALVARETH_TIKTOK_TMPDIR || '').trim()
+  return path.resolve(configuredRoot || os.tmpdir())
+}
+
+async function createTikTokTempDir(prefix = 'job') {
+  const root = getTikTokTempRoot()
+  await fsp.mkdir(root, { recursive: true })
+  await cleanupStaleTikTokTemps(root)
+  const freeBytes = await availableDiskBytes(root)
+  if (freeBytes < 64 * 1024 * 1024) {
+    throw new Error('Ruang penyimpanan sementara TikTok kurang dari 64 MB. Kosongkan disk hosting atau atur ALVARETH_TIKTOK_TMPDIR ke direktori pada volume lain yang masih memiliki ruang.')
+  }
+  return fsp.mkdtemp(path.join(root, 'alvareth-tiktok-' + prefix + '-'))
 }
 
 async function availableDiskBytes(dir) {
@@ -748,11 +764,7 @@ async function prepareBestTikTokVideo(res, sourceUrl = '') {
     : (res.video ? [{ label: 'video tersedia', url: res.video }] : [])
   if (!candidates.length) throw new Error('Provider tidak menyediakan URL video yang dapat diunduh.')
 
-  const configuredRoot = String(process.env.ALVARETH_TIKTOK_TMPDIR || '').trim()
-  const tempRoot = path.resolve(configuredRoot || os.tmpdir())
-  await fsp.mkdir(tempRoot, { recursive: true })
-  await cleanupStaleTikTokTemps(tempRoot)
-  const tempDir = await fsp.mkdtemp(path.join(tempRoot, 'alvareth-tiktok-'))
+  const tempDir = await createTikTokTempDir('video')
   const errors = []
 
   try {
@@ -833,7 +845,7 @@ async function prepareBestTikTokVideo(res, sourceUrl = '') {
             const value = Math.max(0, Math.min(100, Number(percent)))
             terminalProgress('Fallback yt-dlp', value, 0, NaN, String(detail || '').slice(0, 140))
           } else if (detail) console.log('[TikTok] yt-dlp:', String(detail).slice(0, 200))
-        })
+        }, { outputRoot: tempDir })
         const fileInfo = await fsp.stat(fallback.path)
         if (!fileInfo.size || fileInfo.size > MAX_VIDEO_BYTES) {
           throw new Error('Fallback yt-dlp menghasilkan file kosong atau lebih dari 150 MB.')
@@ -1011,7 +1023,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
         throw new Error('Nomor foto tidak valid. Pilih salah satu nomor dari menu foto TikTok.')
       }
 
-      const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'alvareth-tiktok-selected-photo-'))
+      const tempDir = await createTikTokTempDir('selected-photo')
       const outputPath = path.join(tempDir, 'tiktok-photo-' + photoIndex + '.mp4')
       try {
         const rendered = await renderSinglePhotoWithMusic(res.images[photoIndex - 1], res.audio, outputPath)
@@ -1064,7 +1076,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
       if (res.images.length === 1) {
         // Single-photo posts preserve the original behavior: send the rendered
         // MP4 first, then offer the original image in a separate action message.
-        const tempDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'alvareth-tiktok-single-'))
+        const tempDir = await createTikTokTempDir('single-photo')
         const outputPath = path.join(tempDir, 'tiktok-photo.mp4')
         try {
           const rendered = await renderSinglePhotoWithMusic(res.images[0], res.audio, outputPath)
