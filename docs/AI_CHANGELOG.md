@@ -1,5 +1,13 @@
 # AI Change Log — Alvareth Bot
 
+## 2026-10-30 — Indikator terminal kategori image
+- **Perubahan:** `handler.js` sekarang mendeteksi plugin bertag `image` dan mencatat awal proses, handler yang sedang berjalan, status selesai/gagal, command/plugin, identitas pengirim yang disamarkan ke nomor lokal, dan durasi.
+- **Tahap detail:** `plugins/image/tohitam.js` mencatat download gambar, validasi, upload, pemanggilan API AI, status HTTP, download hasil, pengiriman WhatsApp, dan total waktu proses.
+- **Tujuan:** membedakan bot yang sedang bekerja dari proses yang berhenti/gagal, serta menunjukkan tahap terakhir sebelum error.
+- **Batasan:** plugin image lain saat ini mendapat indikator lifecycle umum dari handler; rincian tahap internal tambahan baru dipasang di AI Image Converter. Log terminal tidak dapat membuktikan proses API eksternal masih aktif jika request sedang menunggu respons; timeout/error tetap menjadi indikator akhir.
+- **Tes:** kode sudah disimpan ke `main`; pemeriksaan sintaks dan pengujian live TokoPanel/WhatsApp belum terkonfirmasi.
+- **Tautan GitHub:** audit kode menemukan kebijakan preview terpusat di `lib/simple.js` saat ini membiarkan `conn.sendMessage` native dan tidak menyisipkan preview global. Karena itu jangan mengubahnya secara global; perlu uji ulang pada chat untuk memastikan sumber kartu GitHub di screenshot, lalu matikan hanya pada jalur pesan kategori image jika masih muncul.
+
 ## 2026-10-30 — AI Image Converter gagal mengenali gambar reply
 - **Gejala dari screenshot:** perintah `.toreal` menerima pesan reply dan mengirim status proses, tetapi tidak menghasilkan gambar; bot justru menampilkan daftar command AI Image Converter.
 - **Akar penyebab paling mungkin dari kode:** `plugins/image/tohitam.js` hanya memeriksa `q.mimetype` dan `q.msg.mimetype`. Pada beberapa struktur pesan/quoted wrapper Baileys, MIME gambar berada di nested `imageMessage`, sehingga foto yang sebenarnya valid salah dianggap bukan gambar dan handler mengirim menu bantuan. Catch lama juga membuang error asli sehingga penyebab API/upload tidak terlihat.
