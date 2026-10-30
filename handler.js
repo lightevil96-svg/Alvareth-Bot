@@ -953,14 +953,24 @@ for (let name in global.plugins) {
 
             const str2Regex = str => str.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&')
             let _prefix = plugin.customPrefix ? plugin.customPrefix : conn.prefix ? conn.prefix : global.prefix
-            let match = (_prefix instanceof RegExp ? [[_prefix.exec(m.text), _prefix]] :
-                Array.isArray(_prefix) ? _prefix.map(p => {
-                    let re = p instanceof RegExp ? p : new RegExp(str2Regex(p))
-                    return [re.exec(m.text), re]
-                }) :
-                typeof _prefix === 'string' ? [[new RegExp(str2Regex(_prefix)).exec(m.text), new RegExp(str2Regex(_prefix))]] :
-                [[[], new RegExp]]
-            ).find(p => p[1])
+            // Clone regexes and remove stateful g/y flags. Prefix regex objects are
+            // shared across every plugin; calling exec() on a /g or /y regex mutates
+            // lastIndex and can make commands randomly stop matching on later plugins.
+            const testPrefix = prefix => {
+                const regex = prefix instanceof RegExp
+                    ? new RegExp(prefix.source, prefix.flags.replace(/[gy]/g, ''))
+                    : new RegExp(str2Regex(String(prefix)))
+                const result = regex.exec(String(m.text || ''))
+                return [result, regex]
+            }
+            const prefixCandidates = _prefix instanceof RegExp
+                ? [testPrefix(_prefix)]
+                : Array.isArray(_prefix)
+                    ? _prefix.map(testPrefix)
+                    : typeof _prefix === 'string'
+                        ? [testPrefix(_prefix)]
+                        : [[null, new RegExp('(?!)')]]
+            const match = prefixCandidates.find(candidate => Boolean(candidate[0]?.[0])) || [null, prefixCandidates[0]?.[1] || new RegExp('(?!)')]
             if (isMenuDiagnostic && (name === 'main/menu.js' || name.endsWith('/menu.js') || name.endsWith('menu.js'))) {
                 console.log('[DIAG menu-prefix]', JSON.stringify({
                     plugin: name,
