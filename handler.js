@@ -67,7 +67,7 @@ async function sendErrorReport(conn, m, error, pluginName = 'handler', command =
         await conn.sendMessage(m.chat, payload, m.key ? { quoted: m } : {})
     } catch (sendError) {
         console.error('[ERROR REPORT] Gagal mengirim tombol salin log:', sendError)
-        const fallback = `${text}\n\n\\`\\`\\`text\n${log.slice(0, 3500)}\n\\`\\`\\``
+        const fallback = `${text}\n\nLOG ERROR:\n${log.slice(0, 3500)}`
         try {
             await conn.sendMessage(m.chat, { text: fallback }, m.key ? { quoted: m } : {})
         } catch (fallbackError) {
