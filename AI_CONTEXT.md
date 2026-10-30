@@ -56,7 +56,7 @@ Alvareth Bot adalah bot WhatsApp Multi-Device berbasis Node.js, ES Modules, Bail
 
 ## 4. Gotcha arsitektur yang penting
 
-- **Pesan WhatsApp dan serializer:** sebagian objek pesan bisa kehilangan helper/properti seperti `m.reply()`, `m.react()`, atau nilai routing. Periksa `handler.js` dan `lib/simple.js` terlebih dahulu. Bila helper umum rusak, evaluasi kompatibilitas di satu tempat sebelum menambal plugin satu per satu. Pertahankan fallback normalisasi pesan yang sudah ada.
+- **Pesan WhatsApp dan serializer/media reply:** periksa `handler.js` dan `lib/simple.js` terlebih dahulu. `handler.js` mempertahankan payload `rawMessage.message` sebelum plugin dijalankan agar `contextInfo.quotedMessage` dan wrapper media tidak hilang saat protobuf `fromObject()` menormalisasi pesan. `m.quoted`, `q.mediaMessage`, `q.mediaType`, dan `q.download()` bergantung pada struktur tersebut. Jangan menambal plugin satu per satu sebelum helper bersama diperiksa. Uji foto, video, audio, dokumen, stiker, ephemeral, view-once, pesan grup, dan chat pribadi.
 - **Plugin:** plugin dimuat secara rekursif dari `plugins/`. Ikuti konvensi handler yang dipakai file sejenis; periksa izin `handler.group`, `handler.admin`, `handler.botAdmin`, limit, dan format command sebelum mengubahnya.
 - **TikTok search/downloader:** `plugins/search/tiktok.js` memakai helper di `lib/scrape/tikwm.js`. API eksternal bisa membatasi IP/host. Jangan memperlakukan HTTP 403 sebagai kueri kosong; gunakan fallback berbeda dan tetap jelaskan jika semua penyedia gagal. Semua direktori kerja TikTok (video, render foto, dan fallback yt-dlp) harus memakai `ALVARETH_TIKTOK_TMPDIR` bila diatur; jangan membuat jalur sementara tambahan langsung di `os.tmpdir()`.
 - **Updater saat startup:** `npm start` menjalankan `scripts/start-with-update.js`, yang mengambil update Git secara fast-forward dan memulai versi lokal bila pembaruan gagal. Ini bukan update/deploy VPS jarak jauh. Perubahan updater harus mempertahankan data dan perubahan tracked lokal.
@@ -73,6 +73,8 @@ Perintah dasar:
 Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes nyata, commit/PR, serta batasan yang belum diuji. Tes sintaks bukan bukti API pihak ketiga atau pengiriman WhatsApp berhasil.
 
 ## 6. Pembaruan terbaru
+
+- 2026-10-30 — Perbaikan fondasi media reply: `handler.js` memulihkan payload pesan asli setelah serialisasi Baileys dan menyimpan referensi non-enumerable `rawMessage`, supaya pembacaan `m.quoted`/`q.download()` di semua plugin menerima struktur media dan contextInfo yang tidak terpotong. Pemeriksaan sintaks perlu dijalankan; pengujian media live di WhatsApp/TokoPanel masih diperlukan.
 
 - 2026-10-30 — TikTok: fallback opsional SaveAPI melalui `SAVEAPI_KEY`, hanya dipanggil setelah kandidat TikWM gagal agar pemakaian kredit tidak terjadi pada unduhan normal. Hasil langsung diverifikasi dengan ffprobe, frame awal, dan ambang resolusi HD 720p; yt-dlp juga kini melewati validasi resolusi/frame yang sama.
 
