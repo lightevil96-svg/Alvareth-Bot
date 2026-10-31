@@ -112,7 +112,11 @@ function findImageMessage(value, depth = 0, seen = new Set()) {
 async function getImageData(m, conn) {
   const quoted = m.quoted || null
   const raw = m?.rawMessage?.message || m?.message
-  const imageMessage = findImageMessage(raw) || findImageMessage(
+  const quotedPayload = raw?.extendedTextMessage?.contextInfo?.quotedMessage ||
+    raw?.imageMessage?.contextInfo?.quotedMessage ||
+    raw?.videoMessage?.contextInfo?.quotedMessage ||
+    quoted?.mediaMessage || quoted?.message || quoted?.msg || quoted?.rawMessage || quoted
+  const imageMessage = findImageMessage(quotedPayload) || findImageMessage(
     quoted?.mediaMessage || quoted?.message || quoted?.msg || quoted?.rawMessage || quoted
   )
   if (!imageMessage) return null
