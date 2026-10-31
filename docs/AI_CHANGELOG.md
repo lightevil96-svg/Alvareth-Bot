@@ -1,3 +1,11 @@
+## 2026-10-31 — YouTube Clip command
+- **Permintaan:** command `.clip` untuk mengambil rentang waktu tertentu dari video YouTube panjang.
+- **Akar pendekatan:** downloader sebelumnya hanya menyediakan unduhan video penuh; fitur potong langsung lebih efisien memakai `yt-dlp --download-sections` yang membutuhkan FFmpeg. Opsi `--force-keyframes-at-cuts` dipakai untuk hasil potong lebih presisi.
+- **Perubahan:** menambahkan `downloadYoutubeClip()` ke `lib/scrape/youtube.js`, memakai runner yt-dlp resmi yang sudah tersedia, memilih video maksimal 720p, menggabungkan/recode MP4, validasi file hasil, batas durasi 15 menit, dan folder output unik. Menambahkan `plugins/downloader/clip.js` untuk format `.clip URL MM:SS HH:MM:SS`, pengiriman video WhatsApp, batas 45 MB, dan cleanup file sementara. Menambahkan syntax check helper dan plugin ke `npm test`.
+- **Contoh:** `.clip https://youtu.be/VIDEO_ID 25:00 27:00`.
+- **Tes:** belum menjalankan `npm test`, unduhan YouTube live, FFmpeg, atau pengiriman WhatsApp pada server bot. Kode sudah dikomit langsung ke `main`.
+- **Batasan:** runtime harus memiliki FFmpeg/ffprobe yang bisa dijalankan. YouTube dapat membatasi atau mengubah akses; video privat/berbayar/terbatas usia atau region mungkin gagal. Maksimal durasi clip 15 menit dan file 45 MB. Pengguna bertanggung jawab memastikan hak untuk mengunduh dan membagikan video.
+
 ## 2026-10-31 — Fitur AI Video Generator gratis
 - **Permintaan:** menambahkan fitur generate video pada Alvareth Bot dengan sumber yang dapat digunakan gratis.
 - **Pilihan sumber:** FreeTheAI Gateway; dokumentasinya menyediakan endpoint video task POST /v1/videos, polling GET /v1/videos/{id}, dan download MP4. Dokumentasi menyebut model gratis memakai ID fta/<provider>/<model>.
