@@ -74,6 +74,8 @@ Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes n
 
 ## 6. Pembaruan terbaru
 
+- 2026-10-31 — Menambahkan `.clip URL mulai akhir` untuk memotong rentang YouTube langsung dengan yt-dlp `--download-sections` + FFmpeg/keyframe cuts; validasi domain/waktu/durasi, batas file 45 MB, folder sementara per job, dan cleanup setelah pengiriman.
+
 - 2026-10-31 — Menambahkan .aivideo/.text2video/.img2video untuk text-to-video dan image-to-video melalui model gratis FreeTheAI (fta/), dengan task polling, timeout, validasi output, batas ukuran, dan konfigurasi API key/model via .env. Layanan gratis tetap membutuhkan akun, verifikasi email, daily check-in, serta tunduk pada kuota/antrean.
 
 - 2026-10-30 — Laporan error WhatsApp dibuat kompatibel: `sendErrorReport()` mengirim teks biasa berisi ringkasan dan cuplikan log tersamarkan, bukan native-flow Buttons yang tidak didukung sebagian klien.
