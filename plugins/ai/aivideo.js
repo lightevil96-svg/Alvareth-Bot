@@ -17,12 +17,17 @@ const MAX_VIDEO_BYTES = 45 * 1024 * 1024
 const MAX_GENERATION_MS = 15 * 60 * 1000
 const POLL_INTERVAL_MS = 5000
 
-function getConfig() {
+function getApiKey() {
   const apiKey = String(process.env.FREETHEAI_API_KEY || '').trim()
-  const model = String(process.env.FREETHEAI_VIDEO_MODEL || '').trim()
   if (!apiKey) {
     throw new Error('API key belum dipasang. Tambahkan FREETHEAI_API_KEY di file .env.')
   }
+  return apiKey
+}
+
+function getConfig() {
+  const apiKey = getApiKey()
+  const model = String(process.env.FREETHEAI_VIDEO_MODEL || '').trim()
   if (!model) {
     throw new Error('Model video belum dipilih. Tambahkan FREETHEAI_VIDEO_MODEL di .env dengan ID model gratis berawalan fta/.')
   }
@@ -203,6 +208,23 @@ async function downloadVideo(taskId, apiKey, task) {
 }
 
 const handler = async (m, { conn, text, command }) => {
+  if (String(command || '').toLowerCase() === 'aivideomodels') {
+    const apiKey = getApiKey()
+    const result = await apiJson(API_BASE + '/v1/models', apiKey, {}, 'daftar model')
+    const freeModels = (Array.isArray(result?.data) ? result.data : [])
+      .map(item => item?.id)
+      .filter(id => typeof id === 'string' && id.startsWith('fta/'))
+    const videoModels = freeModels.filter(id => /video|wan|ltx|hunyuan|cogvideo|mochi/i.test(id))
+    const list = (videoModels.length ? videoModels : freeModels).slice(0, 40)
+    if (!list.length) return m.reply('Tidak ada model gratis yang terlihat oleh API key ini. Periksa akun dan izin key FreeTheAI.')
+    return m.reply(
+      '*🎬 MODEL GRATIS TERDETEKSI*\\n\\n' +
+      list.map((id, index) => (index + 1) + '. ' + id).join('\\n') +
+      '\\n\\nPilih model yang mendukung video, lalu isi FREETHEAI_VIDEO_MODEL di .env.\\n' +
+      'Catatan: daftar model tidak menjamin setiap model mendukung endpoint video; cek halaman model sebelum memilih.'
+    )
+  }
+
   const prompt = String(text || '').trim()
   if (!prompt) {
     return m.reply(
@@ -260,9 +282,8 @@ const handler = async (m, { conn, text, command }) => {
   console.log('[AIVIDEO] success task=' + taskId + ' bytes=' + output.buffer.length)
 }
 
-handler.help = ['aivideo <prompt>']
+handler.help = ['aivideo <prompt>', 'aivideomodels']
 handler.tags = ['ai']
-handler.command = /^(aivideo|text2video|img2video)$/i
-handler.limit = false
+handler.command = /^(aivideo|text2video|img2video|aivideomodels)$/i
 
 export default handler
