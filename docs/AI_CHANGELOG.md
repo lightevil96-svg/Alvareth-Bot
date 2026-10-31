@@ -1,3 +1,10 @@
+## 2026-10-31 — Fitur AI Video Generator gratis
+- **Permintaan:** menambahkan fitur generate video pada Alvareth Bot dengan sumber yang dapat digunakan gratis.
+- **Pilihan sumber:** FreeTheAI Gateway; dokumentasinya menyediakan endpoint video task POST /v1/videos, polling GET /v1/videos/{id}, dan download MP4. Dokumentasi menyebut model gratis memakai ID fta/<provider>/<model>.
+- **Perubahan:** menambahkan plugins/ai/aivideo.js dengan command .aivideo, .text2video, dan .img2video; mendukung prompt teks dan foto yang direply, polling task sampai selesai, timeout 15 menit, validasi MIME/ukuran output, pesan error untuk kuota/akses, serta hanya mengizinkan model berawalan fta/ agar konfigurasi tidak tanpa sengaja memilih rute berbayar. Menambahkan FREETHEAI_API_KEY dan FREETHEAI_VIDEO_MODEL ke .env.example, serta syntax check ke npm test.
+- **Tes:** belum menjalankan npm test atau uji API/WhatsApp langsung dari runtime bot. Perubahan kode sudah dikomit ke main.
+- **Batasan:** harus mengisi API key dan ID model gratis yang benar-benar mendukung video. FreeTheAI mensyaratkan email terverifikasi dan daily check-in untuk model gratis; kuota, antrean, dukungan durasi/ukuran, dan ketersediaan model mengikuti provider. Tidak ada klaim unlimited atau jaminan output berhasil sebelum uji live.
+
 ## 2026-10-30 — Laporan error kompatibel dengan WhatsApp lama
 - **Gejala:** setelah `.toreal` gagal, WhatsApp menampilkan pesan bertipe Buttons yang menyatakan versi klien tidak mendukungnya; detail penyebab API tidak sampai ke pengguna.
 - **Akar penyebab:** `sendErrorReport()` mengirim native-flow `cta_copy` tanpa fallback bila pengiriman diterima server tetapi klien WhatsApp tidak mampu merendernya.
