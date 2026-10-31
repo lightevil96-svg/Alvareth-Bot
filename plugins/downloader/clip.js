@@ -12,7 +12,7 @@ function parseTimestamp(value) {
   if (!/^\d+(?::\d{1,2}){0,2}(?:\.\d{1,3})?$/.test(raw)) return null
   const parts = raw.split(':')
   const last = Number(parts.pop())
-  if (!Number.isFinite(last)) return null
+  if (!Number.isFinite(last) || (parts.length > 0 && last >= 60)) return null
 
   let seconds = last
   if (parts.length >= 1) {
