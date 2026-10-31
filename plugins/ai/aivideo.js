@@ -215,8 +215,8 @@ const handler = async (m, { conn, text, command }) => {
       .map(item => item?.id)
       .filter(id => typeof id === 'string' && id.startsWith('fta/'))
     const videoModels = freeModels.filter(id => /video|wan|ltx|hunyuan|cogvideo|mochi/i.test(id))
-    const list = (videoModels.length ? videoModels : freeModels).slice(0, 40)
-    if (!list.length) return m.reply('Tidak ada model gratis yang terlihat oleh API key ini. Periksa akun dan izin key FreeTheAI.')
+    const list = videoModels.slice(0, 40)
+    if (!list.length) return m.reply('Tidak ditemukan ID model gratis dengan penanda video/wan/ltx/hunyuan/cogvideo/mochi pada API key ini. Periksa katalog model FreeTheAI secara manual sebelum mengatur FREETHEAI_VIDEO_MODEL.')
     return m.reply(
       '*🎬 MODEL GRATIS TERDETEKSI*\\n\\n' +
       list.map((id, index) => (index + 1) + '. ' + id).join('\\n') +
