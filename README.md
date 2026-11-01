@@ -29,29 +29,12 @@ Gunakan Node.js 22+ dan npm. Beberapa fitur multimedia memerlukan FFmpeg serta t
 
 ```bash
 cp .env.example .env
-# Edit .env dan isi BOT_NUMBER, OWNER_NUMBER, OWNER_NAME, serta ALVARETH_ACCESS_PASSWORD.
-# Simpan password akses di luar GitHub; jangan commit file .env.
+# Edit .env dan isi BOT_NUMBER, OWNER_NUMBER, serta OWNER_NAME.
 npm install
-# Set ALVARETH_ACCESS_KEY melalui environment hosting/terminal, lalu jalankan:
 npm start
 ```
 
 Nomor WhatsApp di `.env` menggunakan angka internasional saja tanpa tanda `+` atau spasi. Jangan commit `.env`, sesi WhatsApp, atau database runtime.
-
-### Password akses privat
-
-Alvareth-Bot sekarang menolak startup jika password privat belum dikonfigurasi atau kunci akses yang diberikan tidak cocok. Password pemilik disimpan pada `ALVARETH_ACCESS_PASSWORD` di `.env` server (file `.env` sudah diabaikan Git). Bagikan password kepada pengguna yang diizinkan melalui kanal privat. Pengguna harus memasukkan nilai yang sama sebagai `ALVARETH_ACCESS_KEY` melalui environment terminal/hosting; jangan menaruh `ALVARETH_ACCESS_KEY` di repository atau `.env.example`.
-
-Contoh terminal Linux:
-
-```bash
-export ALVARETH_ACCESS_KEY='password-yang-diberikan-pengelola'
-npm start
-```
-
-Di panel hosting/PM2, atur `ALVARETH_ACCESS_KEY` sebagai environment variable proses. Untuk membuat password acak, jalankan `openssl rand -hex 24`, lalu simpan hasilnya hanya di `.env` privat dan bagikan kepada pengguna resmi. `npm run dev` dan menjalankan `main.js` langsung juga tetap menjalani pemeriksaan yang sama.
-
-**Batas keamanan:** pemeriksaan ini mengunci instalasi yang menjalankan kode resmi. Karena source code repository bersifat publik, orang yang menyalin source dan mengubah kode sendiri tetap dapat menghapus pemeriksaan; perlindungan lisensi yang tahan modifikasi memerlukan server lisensi eksternal.
 
 - `npm start` menjalankan `scripts/start-with-update.js`, yang mencoba mengambil pembaruan dari `origin/main` secara fast-forward sebelum memulai bot.
 - `AUTO_UPDATE_ENABLED=false` menonaktifkan pembaruan startup.

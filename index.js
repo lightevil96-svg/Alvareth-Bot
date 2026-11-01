@@ -1,5 +1,4 @@
 import 'dotenv/config';
-import { enforceAccess } from './lib/access-guard.js';
 import yargs from 'yargs';
 import cfonts from 'cfonts';
 import { fileURLToPath } from 'url';
@@ -8,9 +7,6 @@ import { createRequire } from 'module';
 import { createInterface } from 'readline';
 import { setupMaster, fork } from 'cluster';
 import { watchFile, unwatchFile } from 'fs';
-
-// Check the private access key before starting the supervisor/worker.
-enforceAccess();
 
 // Setup console output
 const { say } = cfonts;

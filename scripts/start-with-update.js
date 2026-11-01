@@ -1,5 +1,3 @@
-import 'dotenv/config';
-import { enforceAccess } from '../lib/access-guard.js';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -163,8 +161,6 @@ async function launchBot() {
     process.exitCode = code ?? (signal ? 1 : 0);
   });
 }
-
-enforceAccess();
 
 main().catch(error => {
   console.error('[STARTUP-UPDATE] Error fatal:', error);

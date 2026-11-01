@@ -60,7 +60,6 @@ Alvareth Bot adalah bot WhatsApp Multi-Device berbasis Node.js, ES Modules, Bail
 - **Plugin:** plugin dimuat secara rekursif dari `plugins/`. Ikuti konvensi handler yang dipakai file sejenis; periksa izin `handler.group`, `handler.admin`, `handler.botAdmin`, limit, dan format command sebelum mengubahnya.
 - **TikTok search/downloader:** `plugins/search/tiktok.js` memakai helper di `lib/scrape/tikwm.js`. API eksternal bisa membatasi IP/host. Jangan memperlakukan HTTP 403 sebagai kueri kosong; gunakan fallback berbeda dan tetap jelaskan jika semua penyedia gagal. Semua direktori kerja TikTok (video, render foto, dan fallback yt-dlp) harus memakai `ALVARETH_TIKTOK_TMPDIR` bila diatur; jangan membuat jalur sementara tambahan langsung di `os.tmpdir()`.
 - **Updater saat startup:** `npm start` menjalankan `scripts/start-with-update.js`, yang mengambil update Git secara fast-forward dan memulai versi lokal bila pembaruan gagal. Ini bukan update/deploy VPS jarak jauh. Perubahan updater harus mempertahankan data dan perubahan tracked lokal.
-- **Password akses privat:** `lib/access-guard.js` memvalidasi `ALVARETH_ACCESS_KEY` terhadap `ALVARETH_ACCESS_PASSWORD` dengan perbandingan constant-time. Password server hanya boleh berada di `.env` privat (sudah di-ignore Git); key pengguna diberikan melalui environment hosting/terminal. Pemeriksaan harus tetap dipasang pada `scripts/start-with-update.js`, `index.js`, dan `main.js` agar jalur startup langsung tidak melewatinya. Source publik tetap dapat dimodifikasi oleh pihak yang meng-clone; ini bukan DRM/server licensing.
 - **Data persisten:** database default berada di `~/.alvareth-bot-data/database.json`; sesi di `~/.alvareth-bot-data/sessions/`. Lokasi dapat berbeda lewat `ALVARETH_DATA_DIR` dan `WA_SESSION_DIR`. Jangan menghapus salinan lama sebelum migrasi berhasil diverifikasi.
 - **Deploy:** saat ini jangan menganggap tersedia auto-deploy ke VPS hanya karena ada workflow GitHub. Periksa file workflow yang benar-benar ada.
 
@@ -74,8 +73,6 @@ Perintah dasar:
 Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes nyata, commit/PR, serta batasan yang belum diuji. Tes sintaks bukan bukti API pihak ketiga atau pengiriman WhatsApp berhasil.
 
 ## 6. Pembaruan terbaru
-
-- 2026-11-01 — Menambahkan password gate untuk startup resmi melalui `ALVARETH_ACCESS_PASSWORD` privat dan `ALVARETH_ACCESS_KEY` yang diberikan pengguna; pemeriksaan dipasang pada updater, supervisor, dan entrypoint langsung, serta diuji dengan unit test.
 
 - 2026-10-31 — Menambahkan `.clip URL mulai akhir` untuk memotong rentang YouTube langsung dengan yt-dlp `--download-sections` + FFmpeg/keyframe cuts; validasi domain/waktu/durasi, batas file 45 MB, folder sementara per job, dan cleanup setelah pengiriman.
 
