@@ -31,6 +31,8 @@ mkdirSync(RUNTIME_DATA_DIR, { recursive: true })
 
 const LEGACY_DATABASE_PATH = join(__dirname, 'database.json')
 const DATABASE_PATH = join(RUNTIME_DATA_DIR, 'database.json')
+// Expose the exact active path for the owner-only .cekdata diagnostic.
+global.__ALVARETH_DATABASE_PATH = DATABASE_PATH
 const LEGACY_SESSION_DIR = join(__dirname, 'sessions')
 const SESSION_DIR = process.env.WA_SESSION_DIR
   ? resolve(process.env.WA_SESSION_DIR)
@@ -180,6 +182,13 @@ global.loadDatabase = async function loadDatabase() {
   return global.db.data
 }
 await global.loadDatabase()
+console.log('[DATABASE DIAGNOSTIC] Startup selesai:', JSON.stringify({
+  path: DATABASE_PATH,
+  exists: existsSync(DATABASE_PATH),
+  usersLoaded: Object.keys(global.db?.data?.users || {}).length,
+  registeredLoaded: Object.values(global.db?.data?.users || {}).filter(user => user?.registered === true).length,
+  readError: global.db?.READ === true
+}))
 
 // Session & socket.
 const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR)
