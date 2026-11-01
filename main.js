@@ -4,6 +4,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 import './config.js'
+import { enforceAccess } from './lib/access-guard.js'
 
 import { join, dirname, relative, sep, resolve } from 'path'
 import { fileURLToPath, pathToFileURL } from 'url'
@@ -20,6 +21,8 @@ import { JSONFile } from 'lowdb/node'
 import syntaxerror from 'syntax-error'
 import { useMultiFileAuthState, fetchLatestWaWebVersion, makeCacheableSignalKeyStore, DisconnectReason } from 'baileys'
 import { makeWASocket } from './lib/simple.js'
+
+enforceAccess()
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
