@@ -49,7 +49,7 @@ export ALVARETH_ACCESS_KEY='password-yang-diberikan-pengelola'
 npm start
 ```
 
-Di panel hosting/PM2, atur `ALVARETH_ACCESS_KEY` sebagai environment variable proses. Untuk membuat password acak, jalankan `openssl rand -hex 24`, lalu simpan hasilnya hanya di `.env` privat dan bagikan kepada pengguna resmi. `npm run dev` dan menjalankan `main.js` langsung juga melewati pemeriksaan yang sama.
+Di panel hosting/PM2, atur `ALVARETH_ACCESS_KEY` sebagai environment variable proses. Untuk membuat password acak, jalankan `openssl rand -hex 24`, lalu simpan hasilnya hanya di `.env` privat dan bagikan kepada pengguna resmi. `npm run dev` dan menjalankan `main.js` langsung juga tetap menjalani pemeriksaan yang sama.
 
 **Batas keamanan:** pemeriksaan ini mengunci instalasi yang menjalankan kode resmi. Karena source code repository bersifat publik, orang yang menyalin source dan mengubah kode sendiri tetap dapat menghapus pemeriksaan; perlindungan lisensi yang tahan modifikasi memerlukan server lisensi eksternal.
 
