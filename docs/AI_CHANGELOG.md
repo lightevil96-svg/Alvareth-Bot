@@ -1,3 +1,12 @@
+## 2026-11-01 — Password akses privat untuk menjalankan Alvareth-Bot
+- **Permintaan:** pengguna ingin setiap orang yang menjalankan SC harus mengetahui password, sementara password tidak boleh disimpan di GitHub.
+- **Akar pendekatan:** menyimpan password server pada variabel `ALVARETH_ACCESS_PASSWORD` di file `.env` privat yang sudah diabaikan Git; pengguna resmi memasukkan nilai yang sama melalui `ALVARETH_ACCESS_KEY` pada environment terminal/hosting.
+- **Perubahan:** menambahkan `lib/access-guard.js` dengan perbandingan constant-time; memasang pemeriksaan pada `scripts/start-with-update.js`, `index.js`, dan `main.js` agar jalur npm start, dev, dan direct main tidak melewati gate; menambahkan contoh variabel kosong ke `.env.example`, petunjuk README, dan unit test.
+- **Tes:** unit test akses menguji password kosong, tidak cocok, dan cocok; pemeriksaan syntax semua JavaScript melalui GitHub Actions masih perlu dipantau setelah commit akhir. `npm test` belum dijalankan di runtime lokal.
+- **Belum diverifikasi:** konfigurasi environment aktual pada hosting pengguna dan startup WhatsApp live. Pengelola harus menyiapkan `ALVARETH_ACCESS_PASSWORD` di `.env` privat dan pengguna resmi harus memasok `ALVARETH_ACCESS_KEY` lewat panel/terminal.
+- **Batas keamanan:** gate ini membatasi instalasi yang menjalankan source resmi. Repository bersifat publik sehingga pihak yang meng-clone dan mengubah source dapat menghapus gate; perlindungan lisensi anti-modifikasi memerlukan validasi server eksternal.
+- **Pelajaran regresi:** jangan pernah menaruh password asli di `.env.example`, dokumentasi publik, commit, atau log; uji semua entrypoint agar tidak ada jalur startup yang melewati pemeriksaan.
+
 ## 2026-10-31 — YouTube Clip command
 - **Permintaan:** command `.clip` untuk mengambil rentang waktu tertentu dari video YouTube panjang.
 - **Akar pendekatan:** downloader sebelumnya hanya menyediakan unduhan video penuh; fitur potong langsung lebih efisien memakai `yt-dlp --download-sections` yang membutuhkan FFmpeg. Opsi `--force-keyframes-at-cuts` dipakai untuk hasil potong lebih presisi.
