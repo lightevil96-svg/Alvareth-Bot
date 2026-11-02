@@ -56,7 +56,7 @@ Alvareth Bot adalah bot WhatsApp Multi-Device berbasis Node.js, ES Modules, Bail
 
 ## 4. Gotcha arsitektur yang penting
 
-- **Pesan WhatsApp dan serializer/media reply:** periksa `handler.js` dan `lib/simple.js` terlebih dahulu. `handler.js` mempertahankan payload `rawMessage.message` sebelum plugin dijalankan agar `contextInfo.quotedMessage` dan wrapper media tidak hilang saat protobuf `fromObject()` menormalisasi pesan. `m.quoted`, `q.mediaMessage`, `q.mediaType`, dan `q.download()` bergantung pada struktur tersebut. Jangan menambal plugin satu per satu sebelum helper bersama diperiksa. Uji foto, video, audio, dokumen, stiker, ephemeral, view-once, pesan grup, dan chat pribadi.
+- **Pesan WhatsApp dan serializer/media reply:** periksa `handler.js` dan `lib/simple.js` terlebih dahulu. `handler.js` mempertahankan payload `rawMessage.message` sebelum plugin dijalankan agar `contextInfo.quotedMessage` dan wrapper media tidak hilang saat protobuf `fromObject()` menormalisasi pesan. Untuk plugin yang membaca media reply, gunakan `getQuotedMediaInfo(m)` dan `downloadQuotedMedia(m, conn)` dari `lib/simple.js`; jangan mengandalkan `m.quoted.mimetype` saja karena MIME bisa tidak terbawa, sedangkan tipe `imageMessage`/`videoMessage` masih tersedia. Helper bersama mencari `contextInfo.quotedMessage` di payload mentah dan menembus wrapper media. Jangan membuat deteksi media terpisah di setiap plugin. Uji foto, video, audio, dokumen, stiker, ephemeral, view-once, pesan grup, chat pribadi, dan pesan dengan caption.
 - **Plugin:** plugin dimuat secara rekursif dari `plugins/`. Ikuti konvensi handler yang dipakai file sejenis; periksa izin `handler.group`, `handler.admin`, `handler.botAdmin`, limit, dan format command sebelum mengubahnya.
 - **TikTok search/downloader:** `plugins/search/tiktok.js` memakai helper di `lib/scrape/tikwm.js`. API eksternal bisa membatasi IP/host. Jangan memperlakukan HTTP 403 sebagai kueri kosong; gunakan fallback berbeda dan tetap jelaskan jika semua penyedia gagal. Semua direktori kerja TikTok (video, render foto, dan fallback yt-dlp) harus memakai `ALVARETH_TIKTOK_TMPDIR` bila diatur; jangan membuat jalur sementara tambahan langsung di `os.tmpdir()`.
 - **Updater saat startup:** `npm start` menjalankan `scripts/start-with-update.js`, yang mengambil update Git secara fast-forward dan memulai versi lokal bila pembaruan gagal. Ini bukan update/deploy VPS jarak jauh. Perubahan updater harus mempertahankan data dan perubahan tracked lokal.
@@ -73,6 +73,8 @@ Perintah dasar:
 Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes nyata, commit/PR, serta batasan yang belum diuji. Tes sintaks bukan bukti API pihak ketiga atau pengiriman WhatsApp berhasil.
 
 ## 6. Pembaruan terbaru
+
+- 2026-11-02 — Perbaikan deteksi media reply lintas plugin: `getQuotedMediaInfo()` dan `downloadQuotedMedia()` membaca `contextInfo.quotedMessage` dari payload Baileys mentah, mengenali tipe media meski MIME tidak ada, dan menangani wrapper pesan; `.sw` kini memakai helper bersama serta dapat membaca URL/rentang dari caption media.
 
 - 2026-11-02 — `.sw` (owner-only): reply video untuk upload Status; reply foto disimpan sementara per chat/pengirim, lalu `.sw URL mulai akhir` mengunduh audio YouTube dan membuat MP4 foto+musik dengan FFmpeg. Audiens Status diambil dari kontak pribadi yang tersimpan di `conn.chats`; potongan musik dibatasi 90 detik dan file sementara dibersihkan.
 
