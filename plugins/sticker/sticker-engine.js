@@ -295,7 +295,6 @@ export async function createStickerFromBuffer(input, options = {}) {
   const detectedMime = String(detected?.mime || '').toLowerCase()
   const mimeHint = String(options.mimeHint || '').toLowerCase()
   const mediaType = String(options.mediaType || '').toLowerCase()
-  const typeHint = detectedMime || mimeHint
   const detectedIsImage = detectedMime.startsWith('image/')
   const detectedIsVideo = detectedMime.startsWith('video/') || detectedMime === 'application/mp4'
 
