@@ -42,21 +42,10 @@ global.autotyping = false
 global.autorecording = false
 global.repository = 'https://github.com/lightevil96-svg/Alvareth-Bot'
 
-// ===== LINK PREVIEW DEFAULT =====
-// Identitas preview bersama untuk balasan Alvareth Bot.
+// Balasan biasa tidak perlu membawa kartu tautan GitHub Alvareth Bot.
+// Pertahankan bentuk contextInfo untuk kompatibilitas plugin yang memakai adReply.
 global.botLink = 'https://github.com/lightevil96-svg/Alvareth-Bot'
-global.adReply = {
-    contextInfo: {
-        externalAdReply: {
-            title: 'Alvareth Bot',
-            body: 'WhatsApp Bot',
-            thumbnailUrl: 'https://raw.githubusercontent.com/lightevil96-svg/Alvareth-Bot/main/media/alvareth-character.png',
-            sourceUrl: global.botLink,
-            mediaType: 1,
-            renderLargerThumbnail: true
-        }
-    }
-}
+global.adReply = { contextInfo: {} }
 
 /*============= WATERMARK =============*/
 global.readMore = readMore
