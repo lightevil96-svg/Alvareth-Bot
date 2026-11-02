@@ -296,12 +296,23 @@ export async function createStickerFromBuffer(input, options = {}) {
   const mimeHint = String(options.mimeHint || '').toLowerCase()
   const mediaType = String(options.mediaType || '').toLowerCase()
   const typeHint = detectedMime || mimeHint
+  const detectedIsImage = detectedMime.startsWith('image/')
+  const detectedIsVideo = detectedMime.startsWith('video/') || detectedMime === 'application/mp4'
 
-  const isVideo = typeHint.startsWith('video/') ||
-    typeHint === 'application/mp4' ||
-    (!detectedMime && /video|ptv/i.test(mediaType))
-  const isImage = typeHint.startsWith('image/') ||
-    (!detectedMime && (/image/i.test(mediaType) || mimeHint === 'image'))
+  // Trust a recognized file signature first, but keep WhatsApp's media node
+  // type as a fallback when file-type cannot identify a less common codec.
+  const isVideo = detectedIsVideo ||
+    (!detectedIsImage && (
+      mimeHint.startsWith('video/') ||
+      mimeHint === 'video' ||
+      /video|ptv/i.test(mediaType)
+    ))
+  const isImage = detectedIsImage ||
+    (!detectedIsVideo && (
+      mimeHint.startsWith('image/') ||
+      mimeHint === 'image' ||
+      /image/i.test(mediaType)
+    ))
 
   if (!isImage && !isVideo) {
     throw new Error('Format media tidak didukung. Gunakan JPG, PNG, WEBP, GIF, atau video MP4.')
