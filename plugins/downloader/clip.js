@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
 import {
   downloadYoutubeClip,
   cleanupDownload
@@ -6,6 +7,45 @@ import {
 
 const MAX_CLIP_BYTES = 45 * 1024 * 1024
 const MAX_CLIP_SECONDS = 15 * 60
+
+
+function createTerminalProgressReporter(jobId, startedAt) {
+  let lastProgressPercent = -100
+  let lastProgressAt = 0
+  let lastStatus = ''
+
+  return (percent, detail) => {
+    const line = String(detail || '').trim()
+    if (!line) return
+    const now = Date.now()
+    const hasPercent = typeof percent === 'number' && Number.isFinite(percent)
+    const isTransferProgress = /\\[(?:download|ffmpeg)\\]/i.test(line)
+
+    if (isTransferProgress && hasPercent) {
+      const value = Math.max(0, Math.min(100, percent))
+      if (value < 100 && value - lastProgressPercent < 5 && now - lastProgressAt < 4000) return
+      const filled = Math.max(0, Math.min(20, Math.round(value / 5)))
+      const bar = '█'.repeat(filled) + '░'.repeat(20 - filled)
+      console.log('[CLIP:' + jobId + '] [' + bar + '] ' + value.toFixed(1) + '% | ' + line)
+      lastProgressPercent = value
+      lastProgressAt = now
+      return
+    }
+
+    // Providers without a reliable Content-Length still expose received bytes.
+    if (isTransferProgress && !hasPercent) {
+      if (now - lastProgressAt < 4000) return
+      console.log('[CLIP:' + jobId + '] ' + line)
+      lastProgressAt = now
+      return
+    }
+
+    if (line === lastStatus) return
+    const elapsed = Math.floor((now - startedAt) / 1000)
+    console.log('[CLIP:' + jobId + '] +' + elapsed + 's | ' + line)
+    lastStatus = line
+  }
+}
 
 function parseTimestamp(value) {
   const raw = String(value || '').trim()
@@ -74,6 +114,10 @@ const handler = async (m, { conn, text }) => {
 
   let outputDir = null
   const startedAt = Date.now()
+  const jobId = randomUUID().slice(0, 8)
+  const reportProgress = createTerminalProgressReporter(jobId, startedAt)
+  console.log('[CLIP:' + jobId + '] Mulai pekerjaan YouTube Clip.')
+  console.log('[CLIP:' + jobId + '] Rentang: ' + formatTimestamp(start) + ' - ' + formatTimestamp(end) + ' (' + Math.ceil(end - start) + ' detik).')
   await m.react('✂️').catch(() => {})
   await m.reply(
     '⏳ *Sedang membuat YouTube Clip*\n' +
@@ -88,16 +132,13 @@ const handler = async (m, { conn, text }) => {
     result = await downloadYoutubeClip(url, start, end, {
       outputRoot: './downloads/clip',
       maxOutputBytes: MAX_CLIP_BYTES,
-      onProgress: (percent, detail) => {
-        if (percent === 0 || percent === 100) {
-          console.log('[CLIP] ' + percent + '% ' + String(detail || '').slice(0, 180))
-        }
-      }
+      onProgress: reportProgress
     })
     outputDir = result.outputDir
+    console.log('[CLIP:' + jobId + '] File hasil tervalidasi: ' + (result.size / 1024 / 1024).toFixed(1) + ' MB' + (result.quality ? ', ' + result.quality + 'p' : '') + (result.fps ? ' @ ' + result.fps + ' FPS' : '') + '.')
   } catch (error) {
     const detail = String(error?.message || error || 'Kesalahan tidak diketahui').slice(0, 2600)
-    console.error('[CLIP] Semua metode gagal:', error?.stack || error)
+    console.error('[CLIP:' + jobId + '] Semua metode gagal:', error?.stack || error)
     const allMethodsFailed = error?.code === 'YOUTUBE_CLIP_ALL_METHODS_FAILED'
     await m.reply(
       '❌ *YouTube Clip gagal dibuat.*\n' +
@@ -111,9 +152,11 @@ const handler = async (m, { conn, text }) => {
   }
 
   try {
+    console.log('[CLIP:' + jobId + '] Membaca file final dari disk.')
     const video = await fs.readFile(result.path)
     if (!video.length) throw new Error('File clip kosong setelah diunduh.')
 
+    console.log('[CLIP:' + jobId + '] Mengirim video ke WhatsApp; progres unggah media tidak disediakan oleh sendMessage pada jalur ini.')
     await conn.sendMessage(m.chat, {
       video,
       mimetype: 'video/mp4',
@@ -128,9 +171,15 @@ const handler = async (m, { conn, text }) => {
     }, { quoted: m })
 
     await m.react('✅').catch(() => {})
-    console.log('[CLIP] success start=' + start + ' end=' + end + ' bytes=' + result.size + ' method=' + result.downloader)
+    console.log('[CLIP:' + jobId + '] Selesai. Metode=' + result.downloader + ', ukuran=' + (result.size / 1024 / 1024).toFixed(1) + ' MB, total=' + Math.ceil((Date.now() - startedAt) / 1000) + ' detik.')
+  } catch (error) {
+    console.error('[CLIP:' + jobId + '] Gagal membaca atau mengirim file final:', error?.stack || error)
+    throw error
   } finally {
-    if (outputDir) await cleanupDownload(outputDir)
+    if (outputDir) {
+      console.log('[CLIP:' + jobId + '] Membersihkan file sementara.')
+      await cleanupDownload(outputDir)
+    }
   }
 }
 
