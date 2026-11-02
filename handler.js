@@ -1,5 +1,5 @@
 import { smsg } from './lib/simple.js'
-import { resolveAutoDownload, findAutoDownloadPrefix, claimAutoDownloadMessage, runAutoDownloadJob } from './lib/auto-download.js'
+import { resolveAutoDownload, findAutoDownloadPrefix, claimAutoDownloadMessage, runAutoDownloadJob, isStandaloneOwnLinkMessage, wasBotSentMessage } from './lib/auto-download.js'
 import { format } from 'util'
 import { fileURLToPath } from 'url'
 import path, { join } from 'path'
@@ -925,12 +925,18 @@ if (!isOwner && (isNumberBanned || isLegacyBanned)) {
 }
 
 // AutoDL: enabled in private chats by default; groups require .enable autodl.
-// Ignore bot-sent messages and status to prevent automatic reply loops.
+// Messages typed by the owner through the linked WhatsApp account are fromMe
+// too. Allow only a standalone text URL fromMe, never media/quoted messages,
+// and skip IDs produced by this bot's sendMessage to avoid reply loops.
 const autoDownloadChat = global.db.data.chats[m.chat] || {}
 const autoDownloadEnabled = m.isGroup
     ? autoDownloadChat.autodl === true
     : autoDownloadChat.autodl !== false
-const detectedAutoRoute = !m.fromMe && m.chat !== 'status@broadcast' && autoDownloadEnabled
+const isOwnPastedLink = m.fromMe === true &&
+    isStandaloneOwnLinkMessage(m) && !wasBotSentMessage(m)
+const canRouteIncomingLink = m.fromMe !== true || isOwnPastedLink
+const detectedAutoRoute = canRouteIncomingLink &&
+    m.chat !== 'status@broadcast' && autoDownloadEnabled
     ? resolveAutoDownload(m.text)
     : null
 const autoDownloadRoute = detectedAutoRoute && global.plugins?.[detectedAutoRoute.plugin] &&
@@ -939,7 +945,8 @@ const autoDownloadRoute = detectedAutoRoute && global.plugins?.[detectedAutoRout
 if (autoDownloadRoute) {
     // Keep m.text unchanged so plugin all/before hooks see the user's original link.
     m.autoDownload = autoDownloadRoute
-    console.log('[AUTODL] Tautan dikenali:', autoDownloadRoute.platform, '| plugin:', autoDownloadRoute.plugin)
+    console.log('[AUTODL] Tautan dikenali:', autoDownloadRoute.platform,
+        '| plugin:', autoDownloadRoute.plugin, '| pesan akun sendiri:', Boolean(isOwnPastedLink))
 }
 
 // Focused command-router trace for the image conversion regression.
