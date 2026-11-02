@@ -69,6 +69,45 @@ test('Prefer full source message when quoted photo contains only a thumbnail', a
   assert.deepEqual(await downloadQuotedMedia(m, conn), imageBuffer)
 })
 
+test('Original cached media is downloaded before a quoted thumbnail fallback', async () => {
+  const preview = Buffer.from([0x01, 0x02])
+  const original = Buffer.from([0xff, 0xd8, 0xff, 0x11])
+  const m = refMessage({ imageMessage: { jpegThumbnail: preview } })
+  let previewDownloadCalls = 0
+  Object.defineProperty(m, 'quoted', {
+    get() {
+      return {
+        download: async () => {
+          previewDownloadCalls++
+          return preview
+        }
+      }
+    }
+  })
+  const conn = {
+    loadMessage: id => ({
+      key: { id },
+      message: { imageMessage: { mimetype: 'image/jpeg', mediaKey: Buffer.from('full-media-key') } }
+    }),
+    downloadM: async media => {
+      assert.ok(media.mediaKey, 'the original upload must be selected')
+      return original
+    }
+  }
+
+  assert.deepEqual(await downloadQuotedMedia(m, conn), original)
+  assert.equal(previewDownloadCalls, 0, 'the thumbnail download must not win over the original upload')
+})
+
+test('Quoted media inside an ephemeral wrapper is recognized', () => {
+  const m = refMessage({
+    ephemeralMessage: {
+      message: { imageMessage: { mimetype: 'image/jpeg', mediaKey: Buffer.from('wrapped-key') } }
+    }
+  })
+  assert.equal(getQuotedMediaInfo(m)?.type, 'imageMessage')
+})
+
 test('A full quoted video can be downloaded directly without the message cache', async () => {
   const m = refMessage({ videoMessage: { mimetype: 'video/mp4', seconds: 5 } })
   const conn = {
