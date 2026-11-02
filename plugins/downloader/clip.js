@@ -10,61 +10,6 @@ const MAX_CLIP_BYTES = 45 * 1024 * 1024
 const MAX_CLIP_SECONDS = 15 * 60
 
 
-function createTerminalProgressReporter(jobId, startedAt) {
-  let lastProgressPercent = -100
-  let lastProgressAt = 0
-  let lastProgressSource = ''
-  let lastStatus = ''
-
-  return (percent, detail) => {
-    const line = String(detail || '').trim()
-    if (!line) return
-    const now = Date.now()
-    const hasPercent = typeof percent === 'number' && Number.isFinite(percent)
-    const transferMatch = line.match(/\[(download|ffmpeg)\]/i)
-    const isTransferProgress = Boolean(transferMatch)
-
-    if (isTransferProgress) {
-      const source = transferMatch[1].toLowerCase()
-      const value = hasPercent ? Math.max(0, Math.min(100, percent)) : null
-      // A new transfer/encoder phase or a reset to 0% starts a fresh progress bar.
-      if (source !== lastProgressSource || (value !== null && value < lastProgressPercent)) {
-        lastProgressPercent = -100
-        lastProgressAt = 0
-        lastProgressSource = source
-      }
-
-      if (value !== null) {
-        if (value < 100 && value - lastProgressPercent < 5 && now - lastProgressAt < 4000) return
-        const filled = Math.max(0, Math.min(20, Math.round(value / 5)))
-        const bar = '█'.repeat(filled) + '░'.repeat(20 - filled)
-        console.log('[CLIP:' + jobId + '] [' + bar + '] ' + value.toFixed(1) + '% | ' + line)
-        lastProgressPercent = value
-        lastProgressAt = now
-        return
-      }
-
-      // Some providers do not expose Content-Length, but still report received bytes.
-      if (now - lastProgressAt < 4000) return
-      console.log('[CLIP:' + jobId + '] ' + line)
-      lastProgressAt = now
-      return
-    }
-
-    if (/\[stage\].*Metode\s+\d+\/\d+/i.test(line) ||
-        /\[quality\].*Kompresi percobaan/i.test(line)) {
-      lastProgressPercent = -100
-      lastProgressAt = 0
-      lastProgressSource = ''
-    }
-
-    if (line === lastStatus) return
-    const elapsed = Math.floor((now - startedAt) / 1000)
-    console.log('[CLIP:' + jobId + '] +' + elapsed + 's | ' + line)
-    lastStatus = line
-  }
-}
-
 function parseTimestamp(value) {
   const raw = String(value || '').trim()
   if (!/^\d+(?::\d{1,2}){0,2}(?:\.\d{1,3})?$/.test(raw)) return null
@@ -133,22 +78,11 @@ const handler = async (m, { conn, text }) => {
   const startedAt = Date.now()
   const jobId = randomUUID().slice(0, 8)
   const range = formatTimestamp(start) + ' – ' + formatTimestamp(end)
-  const terminalReport = createTerminalProgressReporter(jobId, startedAt)
-  const progress = createClipProgress({
-    conn,
-    chat: m.chat,
-    jobId,
-    range,
-    startedAt
-  })
-  const reportProgress = (percent, detail) => {
-    terminalReport(percent, detail)
-    progress.report(percent, detail)
-  }
+  const progress = createClipProgress({ jobId, range, startedAt })
+  const reportProgress = (percent, detail) => progress.report(percent, detail)
 
-  console.log('[CLIP:' + jobId + '] Mulai YouTube Clip: ' + range)
-  // Initial feedback is sent before yt-dlp runs, even if the provider is slow.
-  await progress.start()
+  // Progress is written to the process terminal only; no WhatsApp status message is sent.
+  progress.start()
   let outputDir = null
   try {
     const result = await downloadYoutubeClip(url, start, end, {
@@ -159,7 +93,7 @@ const handler = async (m, { conn, text }) => {
     outputDir = result.outputDir
     console.log('[CLIP:' + jobId + '] Hasil tervalidasi: ' + (result.size / 1024 / 1024).toFixed(1) + ' MB.')
 
-    await progress.stage('📂 Memeriksa file hasil')
+    progress.stage('📂 Memeriksa file hasil')
     const stats = await fs.stat(result.path)
     if (!stats.isFile() || stats.size < 1) throw new Error('File hasil clip kosong atau tidak ditemukan.')
     if (stats.size > MAX_CLIP_BYTES) {
@@ -190,7 +124,7 @@ const handler = async (m, { conn, text }) => {
       await conn.sendMessage(m.chat, { video, mimetype: 'video/mp4', fileName, caption })
     }
 
-    await progress.finish('success', 'Video berhasil dikirim. Silakan cek media di chat.')
+    progress.finish('success', 'Video berhasil dikirim. Silakan cek media di chat.')
     try { await m.react('✅') } catch {}
     console.log('[CLIP:' + jobId + '] Selesai; file telah dikirim ke WhatsApp.')
   } catch (error) {
@@ -198,7 +132,8 @@ const handler = async (m, { conn, text }) => {
       .replace(/https?:\/\/[^\s"'<>]+/gi, '[tautan]')
       .slice(0, 1100)
     console.error('[CLIP:' + jobId + '] Gagal:', error?.stack || error)
-    await progress.finish('error', detail)
+    progress.finish('error', detail)
+    await say('❌ YouTube Clip gagal dibuat. Detail proses tercatat di terminal.')
     try { await m.react('❌') } catch {}
   } finally {
     if (outputDir) {
