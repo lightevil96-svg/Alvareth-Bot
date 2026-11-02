@@ -5,7 +5,10 @@ import {
   resolveAutoDownload,
   findAutoDownloadPrefix,
   claimAutoDownloadMessage,
-  runAutoDownloadJob
+  runAutoDownloadJob,
+  isStandaloneOwnLinkMessage,
+  markBotSentMessage,
+  wasBotSentMessage
 } from '../lib/auto-download.js'
 
 const supported = [
@@ -121,4 +124,52 @@ test('Legacy AutoDL keeps its extra AIO services without duplicate routing', asy
     global.db = prevDb
     global.prefix = prevPrefix
   }
+})
+
+
+test('Facebook Reel share URLs are supported (TokoPanel screenshot case)', () => {
+  const route = resolveAutoDownload('https://www.facebook.com/share/r/18wxGC4Qm/')
+  assert.equal(route?.plugin, 'downloader/facebook.js')
+  assert.equal(route?.command, 'fb')
+})
+
+test('Owner standalone Conversation URL is accepted', () => {
+  const url = 'https://www.facebook.com/share/r/18wxGC4Qm/'
+  assert.equal(isStandaloneOwnLinkMessage({
+    text: url,
+    fromMe: true,
+    rawMessage: { message: { conversation: url } }
+  }), true)
+})
+
+test('Owner standalone ExtendedText URL is accepted without quoted context', () => {
+  const url = 'https://vt.tiktok.com/ZSexample/'
+  assert.equal(isStandaloneOwnLinkMessage({
+    text: url,
+    rawMessage: { message: { extendedTextMessage: { text: url } } }
+  }), true)
+})
+
+test('Bot captions, quoted messages and non-URL text are not owner-pasted links', () => {
+  const url = 'https://www.facebook.com/share/r/18wxGC4Qm/'
+  const cases = [
+    { text: url, rawMessage: { message: { imageMessage: { caption: url } } } },
+    { text: url, rawMessage: { message: { extendedTextMessage: {
+      text: url, contextInfo: { quotedMessage: { conversation: 'some message' } }
+    } } } },
+    { text: 'please download ' + url, rawMessage: { message: { conversation: 'please download ' + url } } },
+    { text: url, rawMessage: { message: { conversation: 'different url' } } },
+    { text: url, rawMessage: { message: { videoMessage: { caption: url } } } }
+  ]
+  for (const item of cases) assert.equal(isStandaloneOwnLinkMessage(item), false)
+})
+
+test('Track bot-sent IDs, even when WhatsApp uses LID aliases', () => {
+  const sent = { key: { id: 'bot-message-unique-9652', remoteJid: '123@s.whatsapp.net' } }
+  const echoed = { key: { id: 'bot-message-unique-9652', remoteJid: '567@lid' } }
+  const owner = { key: { id: 'owner-message-unique-9653', remoteJid: '567@lid' } }
+  assert.equal(wasBotSentMessage(sent), false)
+  markBotSentMessage(sent)
+  assert.equal(wasBotSentMessage(echoed), true)
+  assert.equal(wasBotSentMessage(owner), false)
 })
