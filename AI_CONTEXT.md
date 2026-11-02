@@ -75,6 +75,8 @@ Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes n
 
 ## 6. Pembaruan terbaru
 
+- 2026-11-02 — `.s` (stiker) kini memakai `resolveQuotedMediaInfo()` + `downloadQuotedMedia()` untuk menemukan gambar/video pada pesan reply asli atau media yang tersimpan berdasarkan stanzaId, termasuk media dikirim melalui self-chat. Balasan kesalahan tanpa externalAdReply. Cache `pushMessage` kini mempertahankan foto/video dari akun sendiri. Enam kasus logika helper media dan parsing V8 lolos, tetapi `npm test` dan uji live WhatsApp belum dijalankan.
+
 - 2026-11-02 — Perbaikan AutoDL pesan milik owner `fromMe`: URL tunggal berbentuk pesan teks `conversation` atau `extendedTextMessage` tanpa quote diproses melalui router terpusat, sementara ID pesan yang dikirim `conn.sendMessage` ditandai dan diabaikan agar tidak terjadi loop. Ada log build router dan alasan skip link. Link Facebook `/share/r/...` tercakup oleh tes regresi; restart TokoPanel dan uji unduhan live belum terverifikasi.
 
 - 2026-11-02 — AutoDL link langsung: router utama mengenali 13 layanan, mempertahankan router legacy untuk layanan tambahan seperti Apple Music, Videy, Douyin dan AIO, serta melewati legacy jika pesan sudah diklaim agar tidak double-download. Grup opt-in, pribadi default aktif, izin/registrasi/limit tetap berlaku. Tes unit dan regresi dibuat; live Node/WA/API belum diverifikasi.
