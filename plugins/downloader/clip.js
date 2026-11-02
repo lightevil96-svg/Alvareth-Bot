@@ -135,7 +135,6 @@ const handler = async (m, { conn, text }) => {
   const reportProgress = createTerminalProgressReporter(jobId, startedAt)
   console.log('[CLIP:' + jobId + '] Mulai pekerjaan YouTube Clip.')
   console.log('[CLIP:' + jobId + '] Rentang: ' + formatTimestamp(start) + ' - ' + formatTimestamp(end) + ' (' + Math.ceil(end - start) + ' detik).')
-  await m.react('✂️').catch(() => {})
 
   let result
   try {
