@@ -2,6 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { fileTypeFromBuffer } from 'file-type'
+import { getQuotedMediaInfo, downloadQuotedMedia } from '../../lib/simple.js'
 import {
   downloadYoutubeAudioYtDlp,
   downloadYoutubeAudio,
@@ -104,7 +105,8 @@ function parseTimestamp(value) {
 }
 
 function parseYoutubeRequest(input) {
-  const parts = String(input || '').trim().split(/\s+/).filter(Boolean)
+  const normalized = String(input || '').trim().replace(/^(?:\\.sw|sw)\\s+/i, '')
+  const parts = normalized.split(/\s+/).filter(Boolean)
   if (parts.length !== 3) return null
 
   let parsedUrl
@@ -185,8 +187,7 @@ async function probeDuration(filePath) {
   }
 }
 
-async function uploadRepliedVideo(m, conn, quoted) {
-  const video = await quoted.download()
+async function uploadRepliedVideo(m, conn, mediaInfo, video) {
   if (!Buffer.isBuffer(video) || !video.length) {
     throw new Error('Video reply tidak dapat diunduh dari pesan WhatsApp.')
   }
@@ -211,7 +212,7 @@ async function uploadRepliedVideo(m, conn, quoted) {
       throw new Error('Durasi video ' + Math.ceil(duration) + ' detik. Status video dibatasi maksimal 90 detik.')
     }
 
-    const mimetype = String(quoted.mimetype || detected?.mime || 'video/mp4')
+    const mimetype = String(mediaInfo?.mime || detected?.mime || 'video/mp4')
       .split(';')[0].trim()
 
     await sendStatus(conn, {
@@ -332,29 +333,41 @@ async function createPhotoMusicStatus(m, conn, imageBuffer, request) {
 const handler = async (m, { conn, text }) => {
   const input = String(text || '').trim()
   const quoted = m.quoted
-  const quotedMime = String(quoted?.mimetype || '').toLowerCase()
+  const mediaInfo = getQuotedMediaInfo(m)
+  const quotedMime = String(mediaInfo?.mime || quoted?.mimetype || '').toLowerCase()
+  const mediaType = String(mediaInfo?.type || quoted?.mediaType || quoted?.mtype || '')
+  const normalizedMediaType = mediaType.toLowerCase()
+  const isVideo = /^(?:video|ptv)message$/.test(normalizedMediaType) || quotedMime.startsWith('video/')
+  const isImage = /^imagemessage$/.test(normalizedMediaType) || quotedMime.startsWith('image/')
   const key = pendingKey(m)
 
   prunePendingPhotos()
 
   try {
-    if (quoted && quotedMime.startsWith('video/')) {
-      return await uploadRepliedVideo(m, conn, quoted)
-    }
+    if (isVideo || isImage) {
+      console.log('[SW] Reply media terdeteksi:', {
+        type: mediaType || 'unknown',
+        mime: quotedMime || 'not-provided',
+        source: m.rawMessage?.message ? 'raw-message' : 'serialized-message'
+      })
 
-    if (quoted && quotedMime.startsWith('image/')) {
-      const imageBuffer = await quoted.download()
-      if (!Buffer.isBuffer(imageBuffer) || !imageBuffer.length) {
-        throw new Error('Foto yang direply tidak dapat diunduh.')
+      const mediaBuffer = await downloadQuotedMedia(m, conn)
+      if (!Buffer.isBuffer(mediaBuffer) || !mediaBuffer.length) {
+        throw new Error('Media reply terdeteksi sebagai ' + (mediaType || quotedMime || 'media') + ', tetapi file tidak berhasil diunduh.')
       }
 
-      const request = parseYoutubeRequest(input)
+      if (isVideo) {
+        return await uploadRepliedVideo(m, conn, mediaInfo, mediaBuffer)
+      }
+
+      const request = parseYoutubeRequest(input) ||
+        parseYoutubeRequest(mediaInfo?.caption || quoted?.caption || quoted?.text || '')
       if (request) {
-        return await createPhotoMusicStatus(m, conn, imageBuffer, request)
+        return await createPhotoMusicStatus(m, conn, mediaBuffer, request)
       }
 
       pendingPhotos.set(key, {
-        buffer: imageBuffer,
+        buffer: mediaBuffer,
         createdAt: Date.now()
       })
 
@@ -385,6 +398,14 @@ const handler = async (m, { conn, text }) => {
       return
     }
 
+    console.warn('[SW] .sw tidak menemukan reply media:', {
+      hasQuoted: Boolean(quoted),
+      quotedType: quoted?.mtype || null,
+      quotedMediaType: quoted?.mediaType || null,
+      quotedMime: quotedMime || null,
+      hasRawMessage: Boolean(m.rawMessage?.message)
+    })
+
     return m.reply(
       '*📲 WHATSAPP STATUS*\n\n' +
       '1. Reply video dengan .sw untuk langsung mengunggahnya ke Status.\n' +
@@ -396,7 +417,6 @@ const handler = async (m, { conn, text }) => {
     return m.reply('❌ Fitur .sw gagal: ' + safeError(error))
   }
 }
-
 handler.help = ['sw']
 handler.tags = ['owner']
 handler.command = /^sw$/i
