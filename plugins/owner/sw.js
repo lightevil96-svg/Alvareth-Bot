@@ -199,6 +199,7 @@ async function uploadRepliedVideo(m, conn, quoted) {
     throw new Error('Media yang direply bukan file video.')
   }
 
+  await fs.mkdir(path.resolve('./downloads'), { recursive: true })
   const workDir = await fs.mkdtemp(path.resolve('./downloads/sw-video-'))
   try {
     const extension = detected?.ext || 'mp4'
