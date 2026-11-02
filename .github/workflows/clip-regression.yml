@@ -1,0 +1,31 @@
+name: YouTube Clip WhatsApp progress regression
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'plugins/downloader/clip.js'
+      - 'plugins/downloader/clip-progress.js'
+      - 'lib/scrape/youtube.js'
+      - 'tests/clip-progress.test.js'
+      - 'package.json'
+      - '.github/workflows/clip-regression.yml'
+  pull_request:
+    paths:
+      - 'plugins/downloader/clip.js'
+      - 'plugins/downloader/clip-progress.js'
+      - 'lib/scrape/youtube.js'
+      - 'tests/clip-progress.test.js'
+      - 'package.json'
+
+jobs:
+  clip-progress:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check syntax and WhatsApp progress behavior
+        run: npm run test:clip
