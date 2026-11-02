@@ -74,6 +74,8 @@ Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes n
 
 ## 6. Pembaruan terbaru
 
+- 2026-11-02 — Menghapus tautan GitHub Alvareth Bot dari kartu preview balasan dan menu: `global.adReply` dinetralkan, menu gaya 1 tidak lagi menawarkan URL GitHub, menu gaya 2 dan detail tetap bergambar tanpa mengunggah thumbnail link preview. Tautan lain dan fungsi bot tidak diubah. Uji live WhatsApp belum dilakukan.
+
 - 2026-11-02 — Perbaikan deteksi media reply lintas plugin: `getQuotedMediaInfo()` dan `downloadQuotedMedia()` membaca `contextInfo.quotedMessage` dari payload Baileys mentah, mengenali tipe media meski MIME tidak ada, dan menangani wrapper pesan; `.sw` kini memakai helper bersama serta dapat membaca URL/rentang dari caption media.
 
 - 2026-11-02 — `.sw` (owner-only): reply video untuk upload Status; reply foto disimpan sementara per chat/pengirim, lalu `.sw URL mulai akhir` mengunduh audio YouTube dan membuat MP4 foto+musik dengan FFmpeg. Audiens Status diambil dari kontak pribadi yang tersimpan di `conn.chats`; potongan musik dibatasi 90 detik dan file sementara dibersihkan.
