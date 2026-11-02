@@ -58,9 +58,14 @@ Ikuti instruksi yang dikeluarkan oleh `pm2 startup` jika diminta. Hindari menjal
 
 ## Perbaikan reply gambar/video pada `.s`
 
-Perintah `.s` sekarang membaca media yang di-reply dari payload asli WhatsApp, bukan hanya `m.quoted.mimetype`. Jika pesan reply hanya berisi preview/thumbnail, bot mencoba mencari media asli memakai ID pesan yang dibalas dan cache lokal (termasuk gambar/video yang dikirim dari akun WhatsApp sendiri). Balasan petunjuk/error stiker dikirim sebagai teks biasa tanpa kartu tautan GitHub. Alternatif: kirim foto dengan caption `.s`. Video stiker tetap maksimal 10 detik.
+Perintah `.s` membaca media reply dari payload asli WhatsApp dan mencari pesan sumber melalui stanza ID bila preview tidak lengkap. Cache media kini mempertahankan `Buffer`/`Uint8Array` (termasuk mediaKey dan hash terenkripsi) agar unduhan reply self-chat tidak rusak akibat serialisasi JSON. Media sumber dari cache diprioritaskan sebelum thumbnail reply. Konversi dilakukan lokal dengan Sharp/FFmpeg; tidak memakai upload file publik atau API stiker pihak ketiga.
 
-Untuk pengujian di TokoPanel: setelah update source dan restart, reply sebuah foto dengan `.s`. Cari log `[STICKER] Deteksi media` dengan `quotedType: "imageMessage"`, kemudian pastikan stiker benar-benar terkirim. Coba pula reply video pendek. Jika `hasReply: true` tetapi `quotedType: null`, kirim ulang medianya karena payload asli belum terambil di sesi bot tersebut. Perubahan ini tidak menjamin konten yang tidak tersedia dari WhatsApp dapat diunduh.
+- Foto: WebP statis maksimal 100 KB, dengan beberapa tingkat kompresi.
+- Video/GIF animasi: WebP animasi maksimal 500 KB, video maksimal 10 detik, FPS/quality diturunkan bertahap bila perlu.
+- Pesan error tidak mengutip pesan sumber sehingga tidak membawa kartu preview GitHub.
+- Foto langsung dengan caption `.s` juga didukung.
+
+Untuk pengujian di TokoPanel, setelah source terbaru diterapkan dan bot direstart, reply foto dengan `.s`. Log yang benar diawali `[STICKER] Media terdeteksi`; kegagalan akan menampilkan `[STICKER] GAGAL` beserta tahap dan detail error. Jika server masih menampilkan pesan lama “Gagal membuat stiker dari media tersebut”, berarti plugin stiker yang aktif belum memakai versi diagnostik terbaru. Uji pula video pendek. Konten yang tidak ada di cache/payload WhatsApp harus dikirim ulang.
 
 ## Auto-download tautan (AutoDL)
 
