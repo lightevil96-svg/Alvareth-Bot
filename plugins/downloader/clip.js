@@ -80,7 +80,7 @@ const handler = async (m, { conn, text }) => {
     'Mulai: ' + formatTimestamp(start) + '\n' +
     'Akhir: ' + formatTimestamp(end) + '\n' +
     'Durasi: ' + Math.ceil(end - start) + ' detik\n' +
-    'Bot hanya meminta rentang waktu tersebut, bukan mengunduh seluruh video.'
+    'Metode utama mengambil rentang waktu secara langsung. Fallback terakhir mungkin mengunduh sumber sementara sebelum dipotong.'
   )
 
   let result
