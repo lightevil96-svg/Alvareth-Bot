@@ -52,7 +52,7 @@ test('MP4 video becomes an animated WebP sticker within the WhatsApp size limit'
   try {
     const generated = spawnSync('ffmpeg', [
       '-hide_banner', '-loglevel', 'error',
-      '-f', 'lavfi', '-i', 'color=c=red:s=160x160:r=12',
+      '-f', 'lavfi', '-i', 'testsrc2=size=160x160:rate=12',
       '-t', '1',
       '-c:v', 'libx264',
       '-pix_fmt', 'yuv420p',
@@ -76,6 +76,7 @@ test('MP4 video becomes an animated WebP sticker within the WhatsApp size limit'
     assert.ok(output.length > 0)
     assert.ok(output.length <= stickerLimits.maxStickerBytes)
     assert.equal((await fileTypeFromBuffer(output))?.mime, 'image/webp')
+    assert.ok(output.includes(Buffer.from('ANIM')), 'hasil video harus berupa WebP animasi')
 
     const image = new webp.Image()
     await image.load(output)
