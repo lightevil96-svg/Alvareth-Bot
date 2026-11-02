@@ -12,6 +12,7 @@ const MAX_CLIP_SECONDS = 15 * 60
 function createTerminalProgressReporter(jobId, startedAt) {
   let lastProgressPercent = -100
   let lastProgressAt = 0
+  let lastProgressSource = ''
   let lastStatus = ''
 
   return (percent, detail) => {
@@ -19,25 +20,41 @@ function createTerminalProgressReporter(jobId, startedAt) {
     if (!line) return
     const now = Date.now()
     const hasPercent = typeof percent === 'number' && Number.isFinite(percent)
-    const isTransferProgress = /\[(?:download|ffmpeg)\]/i.test(line)
+    const transferMatch = line.match(/^\[(download|ffmpeg)\]/i)
+    const isTransferProgress = Boolean(transferMatch)
 
-    if (isTransferProgress && hasPercent) {
-      const value = Math.max(0, Math.min(100, percent))
-      if (value < 100 && value - lastProgressPercent < 5 && now - lastProgressAt < 4000) return
-      const filled = Math.max(0, Math.min(20, Math.round(value / 5)))
-      const bar = '█'.repeat(filled) + '░'.repeat(20 - filled)
-      console.log('[CLIP:' + jobId + '] [' + bar + '] ' + value.toFixed(1) + '% | ' + line)
-      lastProgressPercent = value
-      lastProgressAt = now
-      return
-    }
+    if (isTransferProgress) {
+      const source = transferMatch[1].toLowerCase()
+      const value = hasPercent ? Math.max(0, Math.min(100, percent)) : null
+      // A new transfer/encoder phase or a reset to 0% starts a fresh progress bar.
+      if (source !== lastProgressSource || (value !== null && value < lastProgressPercent)) {
+        lastProgressPercent = -100
+        lastProgressAt = 0
+        lastProgressSource = source
+      }
 
-    // Providers without a reliable Content-Length still expose received bytes.
-    if (isTransferProgress && !hasPercent) {
+      if (value !== null) {
+        if (value < 100 && value - lastProgressPercent < 5 && now - lastProgressAt < 4000) return
+        const filled = Math.max(0, Math.min(20, Math.round(value / 5)))
+        const bar = '█'.repeat(filled) + '░'.repeat(20 - filled)
+        console.log('[CLIP:' + jobId + '] [' + bar + '] ' + value.toFixed(1) + '% | ' + line)
+        lastProgressPercent = value
+        lastProgressAt = now
+        return
+      }
+
+      // Some providers do not expose Content-Length, but still report received bytes.
       if (now - lastProgressAt < 4000) return
       console.log('[CLIP:' + jobId + '] ' + line)
       lastProgressAt = now
       return
+    }
+
+    if (/\[stage\].*Metode\s+\d+\/\d+/i.test(line) ||
+        /\[quality\].*Kompresi percobaan/i.test(line)) {
+      lastProgressPercent = -100
+      lastProgressAt = 0
+      lastProgressSource = ''
     }
 
     if (line === lastStatus) return
@@ -119,13 +136,6 @@ const handler = async (m, { conn, text }) => {
   console.log('[CLIP:' + jobId + '] Mulai pekerjaan YouTube Clip.')
   console.log('[CLIP:' + jobId + '] Rentang: ' + formatTimestamp(start) + ' - ' + formatTimestamp(end) + ' (' + Math.ceil(end - start) + ' detik).')
   await m.react('✂️').catch(() => {})
-  await m.reply(
-    '⏳ *Sedang membuat YouTube Clip*\n' +
-    'Mulai: ' + formatTimestamp(start) + '\n' +
-    'Akhir: ' + formatTimestamp(end) + '\n' +
-    'Durasi: ' + Math.ceil(end - start) + ' detik\n' +
-    'Metode utama mengambil rentang waktu secara langsung. Fallback terakhir mungkin mengunduh sumber sementara sebelum dipotong.'
-  )
 
   let result
   try {
@@ -156,7 +166,8 @@ const handler = async (m, { conn, text }) => {
     const video = await fs.readFile(result.path)
     if (!video.length) throw new Error('File clip kosong setelah diunduh.')
 
-    console.log('[CLIP:' + jobId + '] Mengirim video ke WhatsApp; progres unggah media tidak disediakan oleh sendMessage pada jalur ini.')
+    const uploadStartedAt = Date.now()
+    console.log('[CLIP:' + jobId + '] Mengirim video ke WhatsApp. Baileys sendMessage tidak menyediakan persentase upload pada jalur ini.')
     await conn.sendMessage(m.chat, {
       video,
       mimetype: 'video/mp4',
@@ -171,6 +182,7 @@ const handler = async (m, { conn, text }) => {
     }, { quoted: m })
 
     await m.react('✅').catch(() => {})
+    console.log('[CLIP:' + jobId + '] Pengiriman WhatsApp selesai dalam ' + Math.ceil((Date.now() - uploadStartedAt) / 1000) + ' detik.')
     console.log('[CLIP:' + jobId + '] Selesai. Metode=' + result.downloader + ', ukuran=' + (result.size / 1024 / 1024).toFixed(1) + ' MB, total=' + Math.ceil((Date.now() - startedAt) / 1000) + ' detik.')
   } catch (error) {
     console.error('[CLIP:' + jobId + '] Gagal membaca atau mengirim file final:', error?.stack || error)
