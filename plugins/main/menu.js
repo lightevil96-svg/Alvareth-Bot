@@ -2,18 +2,10 @@
 
 import moment from 'moment-timezone'
 import fs from 'fs'
-import { prepareWAMessageMedia } from 'baileys'
-
-let sharp
-try {
-  sharp = (await import('sharp')).default
-} catch {}
-
 moment.locale('id')
 
 const MENU_IMAGE = './media/alvareth-preview.jpg'
 const MENU_SOUND = './media/tes.mp3'
-const MENU_LINK = 'https://github.com/lightevil96-svg/Alvareth-Bot'
 
 const smallCaps = {
   a:'ᴀ', b:'ʙ', c:'ᴄ', d:'ᴅ', e:'ᴇ', f:'ꜰ', g:'ɢ', h:'ʜ',
@@ -141,11 +133,6 @@ ${global.dmenuf || '┗––––––––––✦'}
 
           optionText: 'Pilih Menu',
           optionTitle: '📄 Menu Tersedia',
-          offerText: 'Alvareth Bot',
-          offerCode: 'Alvareth Bot',
-          offerUrl: global.botLink,
-          offerExpiration: Date.now() + 86400000,
-
           nativeFlow: [
             {
               text: ' Pilih Kategori Menu',
@@ -171,12 +158,6 @@ ${global.dmenuf || '┗––––––––––✦'}
               text: '❏ Owner',
               id: `${usedPrefix}owner`,
               icon: 'promotion'
-            },
-            {
-              text: '❏ Channel',
-              url: global.botLink,
-              useWebview: true,
-              icon: 'image'
             }
           ],
           interactiveAsTemplate: false
@@ -187,7 +168,7 @@ ${global.dmenuf || '┗––––––––––✦'}
       }
     }
 
-    // ===== STYLE 2: LINK PREVIEW THUMBNAIL =====
+    // ===== STYLE 2: MENU BERGAMBAR TANPA LINK PREVIEW =====
     if (style === 2) {
 
       if (!menuType || (!categories[menuType] && menuType !== 'all')) {
@@ -207,38 +188,10 @@ ${arrayMenu.map(t => `❏ MENU ${t.toUpperCase()}`).join('\n')}
 ${toSmallCaps('ketik salah satu menu di atas')}
 `.trim()
 
-        let hdThumb = mainBuffer
-        if (sharp) {
-          hdThumb = await sharp(mainBuffer)
-            .resize(1280, 720)
-            .jpeg({ quality: 100 })
-            .toBuffer()
-        }
-
-        const { imageMessage: image } = await prepareWAMessageMedia({
-          image: hdThumb
-        }, {
-          upload: conn.waUploadToServer,
-          mediaTypeOverride: 'thumbnail-link'
-        })
-
-        image.width = 1280
-        image.height = 720
-
+        // Pertahankan gambar menu tanpa membangkitkan preview tautan GitHub.
         await conn.sendMessage(m.chat, {
-          text: `${MENU_LINK}\n\n${caption}`,
-          linkPreview: {
-            'matched-text': MENU_LINK,
-            title: botname,
-            description: 'Alvareth Bot — WhatsApp Bot',
-            previewType: 0,
-            jpegThumbnail: hdThumb,
-            highQualityThumbnail: image,
-            linkPreviewMetadata: {
-              linkMediaDuration: 0,
-              socialMediaPostType: 4
-            }
-          }
+          image: mainBuffer,
+          caption
         }, { quoted: m })
 
         await playSound()
@@ -249,38 +202,10 @@ ${toSmallCaps('ketik salah satu menu di atas')}
     const targets = menuType === 'all' ? arrayMenu : [menuType]
     const detailText = buildCategoryText(targets)
 
-    let hdThumbDetail = mainBuffer
-    if (sharp) {
-      hdThumbDetail = await sharp(mainBuffer)
-        .resize(1280, 720)
-        .jpeg({ quality: 100 })
-        .toBuffer()
-    }
-
-    const { imageMessage: detailImage } = await prepareWAMessageMedia({
-      image: hdThumbDetail
-    }, {
-      upload: conn.waUploadToServer,
-      mediaTypeOverride: 'thumbnail-link'
-    })
-
-    detailImage.width = 1280
-    detailImage.height = 720
-
+    // Detail menu tetap bergambar, tanpa teks URL atau metadata link preview.
     await conn.sendMessage(m.chat, {
-      text: `${MENU_LINK}\n\n${detailText}`,
-      linkPreview: {
-        'matched-text': MENU_LINK,
-        title: botname,
-        description: 'Alvareth Bot — WhatsApp Bot',
-        previewType: 0,
-        jpegThumbnail: hdThumbDetail,
-        highQualityThumbnail: detailImage,
-        linkPreviewMetadata: {
-          linkMediaDuration: 0,
-          socialMediaPostType: 4
-        }
-      }
+      image: mainBuffer,
+      caption: detailText
     }, { quoted: m })
 
   } catch (e) {
