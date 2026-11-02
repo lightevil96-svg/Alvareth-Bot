@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
+import { createClipProgress } from './clip-progress.js'
 import {
   downloadYoutubeClip,
   cleanupDownload
@@ -113,83 +114,100 @@ function formatTimestamp(totalSeconds) {
 }
 
 const handler = async (m, { conn, text }) => {
+  // Every response is a plain WhatsApp message without a GitHub link preview.
+  const say = message => conn.sendMessage(m.chat, { text: message })
   const request = extractRequest(text)
   if (!request) {
-    return m.reply(
+    return say(
       '*✂️ YOUTUBE CLIPPER*\n\n' +
       'Format:\n.clip URL waktu_mulai waktu_akhir\n\n' +
       'Contoh:\n.clip https://youtu.be/VIDEO_ID 25:00 27:00\n\n' +
-      'Format waktu: MM:SS atau HH:MM:SS. Durasi clip maksimal 15 menit.'
+      'Waktu: MM:SS atau HH:MM:SS. Durasi maksimal 15 menit.'
     )
   }
 
   const { url, start, end } = request
-  if (end <= start) return m.reply('Waktu akhir harus lebih besar daripada waktu mulai.')
-  if (end - start > MAX_CLIP_SECONDS) {
-    return m.reply('Durasi clip maksimal 15 menit per permintaan.')
-  }
+  if (end <= start) return say('Waktu akhir harus lebih besar daripada waktu mulai.')
+  if (end - start > MAX_CLIP_SECONDS) return say('Durasi clip maksimal 15 menit per permintaan.')
 
-  let outputDir = null
   const startedAt = Date.now()
   const jobId = randomUUID().slice(0, 8)
-  const reportProgress = createTerminalProgressReporter(jobId, startedAt)
-  console.log('[CLIP:' + jobId + '] Mulai pekerjaan YouTube Clip.')
-  console.log('[CLIP:' + jobId + '] Rentang: ' + formatTimestamp(start) + ' - ' + formatTimestamp(end) + ' (' + Math.ceil(end - start) + ' detik).')
+  const range = formatTimestamp(start) + ' – ' + formatTimestamp(end)
+  const terminalReport = createTerminalProgressReporter(jobId, startedAt)
+  const progress = createClipProgress({
+    conn,
+    chat: m.chat,
+    jobId,
+    range,
+    startedAt
+  })
+  const reportProgress = (percent, detail) => {
+    terminalReport(percent, detail)
+    progress.report(percent, detail)
+  }
 
-  let result
+  console.log('[CLIP:' + jobId + '] Mulai YouTube Clip: ' + range)
+  // Initial feedback is sent before yt-dlp runs, even if the provider is slow.
+  await progress.start()
+  let outputDir = null
   try {
-    result = await downloadYoutubeClip(url, start, end, {
+    const result = await downloadYoutubeClip(url, start, end, {
       outputRoot: './downloads/clip',
       maxOutputBytes: MAX_CLIP_BYTES,
       onProgress: reportProgress
     })
     outputDir = result.outputDir
-    console.log('[CLIP:' + jobId + '] File hasil tervalidasi: ' + (result.size / 1024 / 1024).toFixed(1) + ' MB' + (result.quality ? ', ' + result.quality + 'p' : '') + (result.fps ? ' @ ' + result.fps + ' FPS' : '') + '.')
+    console.log('[CLIP:' + jobId + '] Hasil tervalidasi: ' + (result.size / 1024 / 1024).toFixed(1) + ' MB.')
+
+    await progress.stage('📂 Memeriksa file hasil')
+    const stats = await fs.stat(result.path)
+    if (!stats.isFile() || stats.size < 1) throw new Error('File hasil clip kosong atau tidak ditemukan.')
+    if (stats.size > MAX_CLIP_BYTES) {
+      throw new Error('Video ' + (stats.size / 1024 / 1024).toFixed(1) + ' MB melebihi batas 45 MB.')
+    }
+
+    const caption =
+      '✅ *YouTube Clip berhasil dibuat!*\n' +
+      '⏱️ ' + range + '\n' +
+      '📦 ' + (stats.size / 1024 / 1024).toFixed(1) + ' MB' +
+      (result.quality ? '\n🎞️ ' + result.quality + 'p' : '') +
+      '\n⚙️ ' + String(result.downloader || 'yt-dlp + FFmpeg') +
+      '\n⌛ ' + Math.ceil((Date.now() - startedAt) / 1000) + ' detik'
+    const fileName = 'Alvareth-Clip-' +
+      formatTimestamp(start).replace(/:/g, '-') + '-' +
+      formatTimestamp(end).replace(/:/g, '-') + '.mp4'
+
+    // Baileys can stream a local file path: less RAM than holding a 45MB Buffer.
+    // If the fork cannot handle a path, use a Buffer as a one-time fallback.
+    await progress.stage('📤 Mengirim video ke WhatsApp (persentase upload tidak tersedia)')
+    const content = { video: { url: result.path }, mimetype: 'video/mp4', fileName, caption }
+    try {
+      await conn.sendMessage(m.chat, content)
+    } catch (sendError) {
+      console.warn('[CLIP:' + jobId + '] Pengiriman file path gagal, mencoba buffer:', sendError?.message || sendError)
+      await progress.stage('📤 Mengirim video melalui buffer cadangan')
+      const video = await fs.readFile(result.path)
+      await conn.sendMessage(m.chat, { video, mimetype: 'video/mp4', fileName, caption })
+    }
+
+    await progress.finish('success', 'Video berhasil dikirim. Silakan cek media di chat.')
+    try { await m.react('✅') } catch {}
+    console.log('[CLIP:' + jobId + '] Selesai; file telah dikirim ke WhatsApp.')
   } catch (error) {
-    const detail = String(error?.message || error || 'Kesalahan tidak diketahui').slice(0, 2600)
-    console.error('[CLIP:' + jobId + '] Semua metode gagal:', error?.stack || error)
-    const allMethodsFailed = error?.code === 'YOUTUBE_CLIP_ALL_METHODS_FAILED'
-    await m.reply(
-      '❌ *YouTube Clip gagal dibuat.*\n' +
-      (allMethodsFailed
-        ? 'Semua metode downloader sudah dicoba dan tidak ada yang berhasil.\n\n'
-        : 'Proses clip tidak dapat dimulai atau parameter tidak valid.\n\n') +
-      detail
-    )
-    await m.react('❌').catch(() => {})
-    return
-  }
-
-  try {
-    console.log('[CLIP:' + jobId + '] Membaca file final dari disk.')
-    const video = await fs.readFile(result.path)
-    if (!video.length) throw new Error('File clip kosong setelah diunduh.')
-
-    const uploadStartedAt = Date.now()
-    console.log('[CLIP:' + jobId + '] Mengirim video ke WhatsApp. Baileys sendMessage tidak menyediakan persentase upload pada jalur ini.')
-    await conn.sendMessage(m.chat, {
-      video,
-      mimetype: 'video/mp4',
-      fileName: 'Alvareth-Clip-' + formatTimestamp(start).replace(/:/g, '-') + '-' + formatTimestamp(end).replace(/:/g, '-') + '.mp4',
-      caption:
-        '✅ *YouTube Clip berhasil dibuat!*\n' +
-        '⏱️ ' + formatTimestamp(start) + ' – ' + formatTimestamp(end) + '\n' +
-        '📦 ' + (result.size / 1024 / 1024).toFixed(1) + ' MB' +
-        (result.quality ? '\n🎞️ ' + result.quality + 'p' : '') +
-        '\n⚙️ ' + String(result.downloader || 'yt-dlp + FFmpeg') +
-        '\n⏳ ' + Math.ceil((Date.now() - startedAt) / 1000) + ' detik'
-    }, { quoted: m })
-
-    await m.react('✅').catch(() => {})
-    console.log('[CLIP:' + jobId + '] Pengiriman WhatsApp selesai dalam ' + Math.ceil((Date.now() - uploadStartedAt) / 1000) + ' detik.')
-    console.log('[CLIP:' + jobId + '] Selesai. Metode=' + result.downloader + ', ukuran=' + (result.size / 1024 / 1024).toFixed(1) + ' MB, total=' + Math.ceil((Date.now() - startedAt) / 1000) + ' detik.')
-  } catch (error) {
-    console.error('[CLIP:' + jobId + '] Gagal membaca atau mengirim file final:', error?.stack || error)
-    throw error
+    const detail = String(error?.message || error || 'Kesalahan tidak diketahui')
+      .replace(/https?:\/\/[^\s"'<>]+/gi, '[tautan]')
+      .slice(0, 1100)
+    console.error('[CLIP:' + jobId + '] Gagal:', error?.stack || error)
+    await progress.finish('error', detail)
+    try { await m.react('❌') } catch {}
   } finally {
     if (outputDir) {
-      console.log('[CLIP:' + jobId + '] Membersihkan file sementara.')
-      await cleanupDownload(outputDir)
+      try {
+        await cleanupDownload(outputDir)
+        console.log('[CLIP:' + jobId + '] File sementara dibersihkan.')
+      } catch (error) {
+        console.warn('[CLIP:' + jobId + '] Cleanup gagal:', error?.message || error)
+      }
     }
   }
 }
