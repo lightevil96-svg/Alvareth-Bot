@@ -36,7 +36,7 @@ function parsePhase(percent, detail, currentMethod) {
     method: currentMethod,
     percent: clampPercent(percent),
     detail: text.replace(/^(?:\[[a-z-]+\]\s*)+/gi, ''),
-    urgent: tags.includes('stage') || tags.includes('quality') || /^Berhasil dengan /i.test(text)
+    urgent: /^Berhasil dengan /i.test(text)
   }
 }
 
@@ -135,11 +135,19 @@ export function createClipProgress({ conn, chat, jobId, range, startedAt = Date.
     report(value, message) {
       if (closed || finishing) return
       const next = parsePhase(value, message, method)
-      if (next.method !== method) method = next.method
+      const methodChanged = next.method !== method
+      const phaseChanged = next.phase !== phase
+      const firstPercentInPhase = next.percent !== null &&
+        (phaseChanged || percent === null)
+      const reachedPhaseEnd = next.percent === 100 && percent !== 100
+      method = next.method
       phase = next.phase
       percent = next.percent
       detail = next.detail
-      void publish(next.urgent)
+      // Show the first real number in a phase immediately, but throttle
+      // incremental updates so a busy download does not flood WhatsApp edits.
+      void publish(next.urgent || methodChanged || phaseChanged ||
+        firstPercentInPhase || reachedPhaseEnd)
     },
     async stage(label) {
       if (closed || finishing) return
