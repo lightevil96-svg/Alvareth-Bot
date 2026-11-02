@@ -75,7 +75,7 @@ Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes n
 
 ## 6. Pembaruan terbaru
 
-- 2026-11-02 — `.clip` sekarang tidak memiliki batas durasi, batas ukuran sumber/output yang ditetapkan plugin, idle timeout, atau hard timeout aplikasi. `runYtDlp` menerima `timeoutMs=0` untuk tiga strategi clip; `runClipFfmpeg` menerima `0`; Qbyte metadata/download memakai Axios `timeout: 0`; setup yt-dlp tidak memakai AbortSignal/timer. Qbyte video/audio memakai `Infinity` untuk batas byte. API YouTube downloader lain tetap memakai default timeout/batas masing-masing. Risiko yang tersisa: satu proses/provider yang macet dapat menunggu selamanya; kapasitas hosting dan batas platform eksternal tetap berlaku. Tes regresi `tests/clip-policy.test.js` ditambahkan; CI dan TokoPanel live belum diverifikasi.
+- 2026-11-02 — `.clip` tidak memiliki batas durasi, ukuran sumber/output internal, idle timeout, atau hard timeout aplikasi. Tiga strategi yt-dlp memakai `timeoutMs=0`; FFmpeg memakai `0`; Qbyte metadata/download memakai Axios `timeout: 0`; setup yt-dlp tanpa AbortSignal/timer; Qbyte video/audio memakai `Infinity`. Tes regresi `.clip` lulus 10/10 pada GitHub Actions `41487205018`, pemeriksaan sintaks lulus pada `41487205155`. Uji YouTube/WhatsApp langsung di TokoPanel belum dilakukan. Proses/provider yang macet dapat menunggu selamanya; batas eksternal dan kapasitas hosting tetap berlaku.
 
 - 2026-11-02 — Implementasi `.clip` yang aktif pada source saat ini menulis progres/tahap ke terminal melalui `clip-progress.js`; chat WhatsApp menerima hasil atau pesan gagal setelah proses. Video dialirkan dari path file lokal; bila kirim sebagai video ditolak, plugin mencoba kembali sebagai dokumen, bukan membaca seluruh file ke Buffer.
 
