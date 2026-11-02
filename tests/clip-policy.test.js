@@ -1,11 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-import { parseTimestamp } from '../plugins/downloader/clip.js'
-
 const clipPlugin = await readFile(new URL('../plugins/downloader/clip.js', import.meta.url), 'utf8')
 const youtubeSource = await readFile(new URL('../lib/scrape/youtube.js', import.meta.url), 'utf8')
 const clipPipeline = youtubeSource.slice(youtubeSource.indexOf('export async function downloadYoutubeClip'))
+const timestampSource = clipPlugin.match(/export function parseTimestamp\(value\) \{[\s\S]*?\n\}/)?.[0]
+if (!timestampSource) throw new Error('parseTimestamp source was not found')
+const parseTimestamp = new Function(timestampSource.replace(/^export /, '') + '; return parseTimestamp')()
 
 test('timestamp parser accepts clips longer than fifteen minutes', () => {
   assert.equal(parseTimestamp('01:30:00'), 90 * 60)
