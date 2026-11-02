@@ -6,7 +6,9 @@ import { fileTypeFromBuffer } from 'file-type'
 const MAX_INPUT_BYTES = 25 * 1024 * 1024
 const MAX_FFMPEG_OUTPUT_BYTES = 6 * 1024 * 1024
 const MAX_STICKER_BYTES = 500 * 1024
-const STATIC_TARGET_BYTES = 100 * 1024
+const MAX_STATIC_STICKER_BYTES = 100 * 1024
+const ANIMATED_TARGET_BYTES = 480 * 1024
+const STATIC_TARGET_BYTES = 96 * 1024
 const VIDEO_SECONDS = 10
 
 function isWebp(buffer) {
@@ -108,7 +110,7 @@ async function encodeStillWithFfmpeg(input) {
   let smallest = null
   let lastError = null
 
-  for (const quality of [75, 60, 45, 32]) {
+  for (const quality of [75, 60, 45, 32, 24, 18, 12]) {
     try {
       const output = await runFfmpeg(input, [
         '-map', '0:v:0',
@@ -130,7 +132,13 @@ async function encodeStillWithFfmpeg(input) {
     }
   }
 
-  if (smallest && smallest.length <= MAX_STICKER_BYTES) return smallest
+  if (smallest && smallest.length <= STATIC_TARGET_BYTES) return smallest
+  if (smallest) {
+    throw new Error(
+      'Gambar masih ' + Math.ceil(smallest.length / 1024) +
+      ' KB setelah kompresi. Batas stiker foto adalah 100 KB; pilih gambar yang lebih sederhana.'
+    )
+  }
   if (lastError) throw lastError
   throw new Error('Gambar terlalu besar untuk dikompres menjadi stiker WhatsApp.')
 }
@@ -143,7 +151,9 @@ async function encodeAnimatedWithFfmpeg(input) {
   const profiles = [
     { fps: 10, quality: 55 },
     { fps: 8, quality: 45 },
-    { fps: 6, quality: 35 }
+    { fps: 6, quality: 35 },
+    { fps: 5, quality: 28 },
+    { fps: 4, quality: 22 }
   ]
 
   for (const profile of profiles) {
@@ -187,18 +197,18 @@ async function encodeAnimatedWithFfmpeg(input) {
 
       if (!isWebp(output)) throw new Error('Output FFmpeg bukan WebP animasi yang valid.')
       if (!smallest || output.length < smallest.length) smallest = output
-      if (output.length <= MAX_STICKER_BYTES) return output
+      if (output.length <= ANIMATED_TARGET_BYTES) return output
     } catch (error) {
       lastError = error
       if (/FFmpeg tidak ditemukan|Tidak dapat menjalankan FFmpeg|Unknown encoder/i.test(error.message)) break
     }
   }
 
-  if (smallest && smallest.length <= MAX_STICKER_BYTES) return smallest
+  if (smallest && smallest.length <= ANIMATED_TARGET_BYTES) return smallest
   if (smallest) {
     throw new Error(
       'Hasil stiker video masih ' + Math.ceil(smallest.length / 1024) +
-      ' KB setelah kompresi. Batas stiker animasi adalah 500 KB; potong video atau pilih video yang lebih sederhana.'
+      ' KB setelah kompresi. Batas aman sebelum metadata adalah 480 KB; potong video atau pilih video yang lebih sederhana.'
     )
   }
   if (lastError) throw lastError
@@ -214,10 +224,10 @@ async function encodeImageWithSharp(input) {
     limitInputPixels: 268402689
   }).metadata()
   const animated = Number(metadata.pages || 1) > 1
-  const targetBytes = animated ? MAX_STICKER_BYTES : STATIC_TARGET_BYTES
+  const targetBytes = animated ? ANIMATED_TARGET_BYTES : STATIC_TARGET_BYTES
   let smallest = null
 
-  for (const quality of (animated ? [70, 60, 50, 40] : [82, 72, 62, 52, 42, 32])) {
+  for (const quality of (animated ? [70, 60, 50, 40, 32, 24] : [82, 72, 62, 52, 42, 32, 24, 18, 12])) {
     const output = await sharp(input, {
       animated: true,
       failOn: 'error',
@@ -244,7 +254,7 @@ async function encodeImageWithSharp(input) {
     if (output.length <= targetBytes) return output
   }
 
-  if (smallest && smallest.length <= MAX_STICKER_BYTES) return smallest
+  if (smallest && smallest.length <= targetBytes) return smallest
   if (animated) return encodeAnimatedWithFfmpeg(input)
   return encodeStillWithFfmpeg(input)
 }
@@ -334,8 +344,13 @@ export async function createStickerFromBuffer(input, options = {}) {
   }
 
   const finalBuffer = await attachStickerExif(webpBuffer, options.packname, options.author)
-  if (finalBuffer.length > MAX_STICKER_BYTES) {
-    throw new Error('File stiker akhir melebihi batas 500 KB setelah metadata ditambahkan.')
+  const isAnimatedOutput = webpBuffer.includes(Buffer.from('ANIM')) &&
+    webpBuffer.includes(Buffer.from('ANMF'))
+  const finalLimit = isAnimatedOutput ? MAX_STICKER_BYTES : MAX_STATIC_STICKER_BYTES
+  if (finalBuffer.length > finalLimit) {
+    throw new Error(isAnimatedOutput
+      ? 'File stiker animasi akhir melebihi batas 500 KB setelah metadata ditambahkan.'
+      : 'File stiker foto akhir melebihi batas 100 KB setelah metadata ditambahkan.')
   }
 
   return finalBuffer
@@ -344,5 +359,6 @@ export async function createStickerFromBuffer(input, options = {}) {
 export const stickerLimits = Object.freeze({
   maxInputBytes: MAX_INPUT_BYTES,
   maxStickerBytes: MAX_STICKER_BYTES,
+  maxStaticStickerBytes: MAX_STATIC_STICKER_BYTES,
   maxVideoSeconds: VIDEO_SECONDS
 })
