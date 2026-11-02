@@ -6,9 +6,6 @@ import {
   cleanupDownload
 } from '../../lib/scrape/youtube.js'
 
-const MAX_CLIP_BYTES = 45 * 1024 * 1024
-const MAX_CLIP_SECONDS = 15 * 60
-
 
 function parseTimestamp(value) {
   const raw = String(value || '').trim()
@@ -67,14 +64,12 @@ const handler = async (m, { conn, text }) => {
       '*✂️ YOUTUBE CLIPPER*\n\n' +
       'Format:\n.clip URL waktu_mulai waktu_akhir\n\n' +
       'Contoh:\n.clip https://youtu.be/VIDEO_ID 25:00 27:00\n\n' +
-      'Waktu: MM:SS atau HH:MM:SS. Durasi maksimal 15 menit.'
+      'Waktu: MM:SS atau HH:MM:SS. Tidak ada batas durasi dari bot.'
     )
   }
 
   const { url, start, end } = request
   if (end <= start) return say('Waktu akhir harus lebih besar daripada waktu mulai.')
-  if (end - start > MAX_CLIP_SECONDS) return say('Durasi clip maksimal 15 menit per permintaan.')
-
   const startedAt = Date.now()
   const jobId = randomUUID().slice(0, 8)
   const range = formatTimestamp(start) + ' – ' + formatTimestamp(end)
@@ -87,7 +82,6 @@ const handler = async (m, { conn, text }) => {
   try {
     const result = await downloadYoutubeClip(url, start, end, {
       outputRoot: './downloads/clip',
-      maxOutputBytes: MAX_CLIP_BYTES,
       onProgress: reportProgress
     })
     outputDir = result.outputDir
@@ -96,10 +90,6 @@ const handler = async (m, { conn, text }) => {
     progress.stage('📂 Memeriksa file hasil')
     const stats = await fs.stat(result.path)
     if (!stats.isFile() || stats.size < 1) throw new Error('File hasil clip kosong atau tidak ditemukan.')
-    if (stats.size > MAX_CLIP_BYTES) {
-      throw new Error('Video ' + (stats.size / 1024 / 1024).toFixed(1) + ' MB melebihi batas 45 MB.')
-    }
-
     const caption =
       '✅ *YouTube Clip berhasil dibuat!*\n' +
       '⏱️ ' + range + '\n' +
@@ -111,17 +101,19 @@ const handler = async (m, { conn, text }) => {
       formatTimestamp(start).replace(/:/g, '-') + '-' +
       formatTimestamp(end).replace(/:/g, '-') + '.mp4'
 
-    // Baileys can stream a local file path: less RAM than holding a 45MB Buffer.
-    // If the fork cannot handle a path, use a Buffer as a one-time fallback.
+    // Stream from disk so large clips do not need to be loaded fully into RAM.
+    // If WhatsApp rejects video media (e.g. its own media constraints), retry
+    // as a document. The platform may still reject files beyond its own limits.
     await progress.stage('📤 Mengirim video ke WhatsApp (persentase upload tidak tersedia)')
     const content = { video: { url: result.path }, mimetype: 'video/mp4', fileName, caption }
     try {
       await conn.sendMessage(m.chat, content)
     } catch (sendError) {
-      console.warn('[CLIP:' + jobId + '] Pengiriman file path gagal, mencoba buffer:', sendError?.message || sendError)
-      await progress.stage('📤 Mengirim video melalui buffer cadangan')
-      const video = await fs.readFile(result.path)
-      await conn.sendMessage(m.chat, { video, mimetype: 'video/mp4', fileName, caption })
+      console.warn('[CLIP:' + jobId + '] Pengiriman video gagal, mencoba sebagai dokumen:', sendError?.message || sendError)
+      await progress.stage('📤 Mencoba mengirim file sebagai dokumen')
+      await conn.sendMessage(m.chat, {
+        document: { url: result.path }, mimetype: 'video/mp4', fileName, caption
+      })
     }
 
     progress.finish('success', 'Video berhasil dikirim. Silakan cek media di chat.')
