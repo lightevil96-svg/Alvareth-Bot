@@ -40,7 +40,7 @@ function parsePhase(percent, detail, currentMethod) {
   }
 }
 
-export function formatClipProgress({ jobId, range, method, phase, percent, detail, startedAt, outcome = 'running' }) {
+export function formatClipProgress({ jobId, range, method, phase, percent, detail, startedAt, outcome = 'running', heartbeatCount = 0, inactiveSeconds = 0 }) {
   const elapsed = Math.max(0, Math.floor((Date.now() - startedAt) / 1000))
   const time = Math.floor(elapsed / 60) + 'm ' + (elapsed % 60) + 'd'
   const numeric = clampPercent(percent)
@@ -59,11 +59,13 @@ export function formatClipProgress({ jobId, range, method, phase, percent, detai
     numeric === null ? '📊 Persentase tahap belum tersedia' : '📊 Progres tahap: *' + numeric.toFixed(1) + '%*',
     detail ? '📝 ' + sanitizeDetail(detail) : null,
     '⌛ Waktu berjalan: ' + time,
+    outcome === 'running' && heartbeatCount > 0 && inactiveSeconds >= 30
+      ? '📡 Pemantauan #' + heartbeatCount + ': belum ada data baru selama ' + inactiveSeconds + ' detik.' : null,
     outcome === 'running' ? '_Persentase hanya untuk tahap aktif, bukan keseluruhan atau upload WhatsApp._' : null
   ].filter(Boolean).join('\n')
 }
 
-export function createClipProgress({ conn, chat, jobId, range, startedAt = Date.now(), updateIntervalMs = MIN_UPDATE_MS }) {
+export function createClipProgress({ conn, chat, jobId, range, startedAt = Date.now(), updateIntervalMs = MIN_UPDATE_MS, heartbeatIntervalMs = 15_000 }) {
   let method = ''
   let phase = 'Memulai pemrosesan'
   let percent = null
@@ -78,9 +80,13 @@ export function createClipProgress({ conn, chat, jobId, range, startedAt = Date.
   let sending = null
   let closed = false
   let finishing = false
+  let lastProviderAt = Date.now()
+  let heartbeatCount = 0
+  let heartbeatTimer = null
 
   const render = outcome => formatClipProgress({
-    jobId, range, method, phase, percent, detail, startedAt, outcome
+    jobId, range, method, phase, percent, detail, startedAt, outcome,
+    heartbeatCount, inactiveSeconds: Math.floor((Date.now() - lastProviderAt) / 1000)
   })
 
   function pump() {
@@ -131,9 +137,20 @@ export function createClipProgress({ conn, chat, jobId, range, startedAt = Date.
   return {
     async start() {
       await publish(true)
+      // Even if yt-dlp never emits progress (e.g. hangs on metadata),
+      // periodically edit the same message so the user sees the elapsed time.
+      if (!heartbeatTimer && !closed) {
+        heartbeatTimer = setInterval(() => {
+          if (closed || finishing) return
+          heartbeatCount += 1
+          void publish(true)
+        }, Math.max(1000, heartbeatIntervalMs))
+        heartbeatTimer.unref?.()
+      }
     },
     report(value, message) {
       if (closed || finishing) return
+      lastProviderAt = Date.now()
       const next = parsePhase(value, message, method)
       const methodChanged = next.method !== method
       const phaseChanged = next.phase !== phase
@@ -151,6 +168,7 @@ export function createClipProgress({ conn, chat, jobId, range, startedAt = Date.
     },
     async stage(label) {
       if (closed || finishing) return
+      lastProviderAt = Date.now()
       phase = String(label || 'Memproses')
       detail = ''
       percent = null
@@ -159,6 +177,8 @@ export function createClipProgress({ conn, chat, jobId, range, startedAt = Date.
     async finish(outcome, message) {
       if (closed) return
       finishing = true
+      if (heartbeatTimer) clearInterval(heartbeatTimer)
+      heartbeatTimer = null
       phase = outcome === 'success' ? 'Video berhasil dikirim ke WhatsApp' : 'Proses dihentikan'
       percent = outcome === 'success' ? 100 : null
       detail = sanitizeDetail(message)
