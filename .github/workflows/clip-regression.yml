@@ -8,6 +8,7 @@ on:
       - 'plugins/downloader/clip-progress.js'
       - 'lib/scrape/youtube.js'
       - 'tests/clip-progress.test.js'
+      - 'tests/clip-policy.test.js'
       - 'package.json'
       - '.github/workflows/clip-regression.yml'
   pull_request:
