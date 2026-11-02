@@ -1,5 +1,7 @@
 import { smsg } from './lib/simple.js'
 import { resolveAutoDownload, findAutoDownloadPrefix, claimAutoDownloadMessage, runAutoDownloadJob, isStandaloneOwnLinkMessage, wasBotSentMessage } from './lib/auto-download.js'
+
+console.log('[AUTODL] Router 2026-11-02/self-link-fix aktif; menunggu link WhatsApp.')
 import { format } from 'util'
 import { fileURLToPath } from 'url'
 import path, { join } from 'path'
@@ -947,6 +949,15 @@ if (autoDownloadRoute) {
     m.autoDownload = autoDownloadRoute
     console.log('[AUTODL] Tautan dikenali:', autoDownloadRoute.platform,
         '| plugin:', autoDownloadRoute.plugin, '| pesan akun sendiri:', Boolean(isOwnPastedLink))
+} else if (/^https?:\/\/\S+$/i.test(String(m.text || '').trim())) {
+    // Do not print full user URLs (they can contain private tokens).
+    console.log('[AUTODL] Link belum diproses:', !autoDownloadEnabled
+        ? 'dinonaktifkan untuk chat ini'
+        : !canRouteIncomingLink
+          ? 'pesan dari akun bot atau bukan link teks mandiri'
+          : detectedAutoRoute
+            ? 'plugin downloader tidak tersedia/disabled'
+            : 'domain atau jenis tautan belum didukung')
 }
 
 // Focused command-router trace for the image conversion regression.
