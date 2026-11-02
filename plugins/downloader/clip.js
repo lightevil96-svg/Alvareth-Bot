@@ -98,9 +98,12 @@ const handler = async (m, { conn, text }) => {
   } catch (error) {
     const detail = String(error?.message || error || 'Kesalahan tidak diketahui').slice(0, 2600)
     console.error('[CLIP] Semua metode gagal:', error?.stack || error)
+    const allMethodsFailed = error?.code === 'YOUTUBE_CLIP_ALL_METHODS_FAILED'
     await m.reply(
       '❌ *YouTube Clip gagal dibuat.*\n' +
-      'Semua metode downloader sudah dicoba dan tidak ada yang berhasil.\n\n' +
+      (allMethodsFailed
+        ? 'Semua metode downloader sudah dicoba dan tidak ada yang berhasil.\n\n'
+        : 'Proses clip tidak dapat dimulai atau parameter tidak valid.\n\n') +
       detail
     )
     await m.react('❌').catch(() => {})
