@@ -4,7 +4,8 @@ import {
   getQuotedMediaInfo,
   getQuotedStanzaId,
   resolveQuotedMediaInfo,
-  downloadQuotedMedia
+  downloadQuotedMedia,
+  cloneMessageForMediaCache
 } from '../lib/simple.js'
 
 const imageBuffer = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10])
@@ -126,4 +127,61 @@ test('No quoted media means a clean null rather than a crash', async () => {
   assert.equal(getQuotedStanzaId(m), '')
   assert.equal(await resolveQuotedMediaInfo(m, {}), null)
   assert.equal(await downloadQuotedMedia(m, {}), null)
+})
+
+
+test('Media cache clone preserves Buffer and Uint8Array encryption fields', () => {
+  const original = {
+    key: { id: 'binary-cache-test' },
+    message: {
+      imageMessage: {
+        mediaKey: Buffer.from([1, 2, 3, 4]),
+        fileEncSha256: new Uint8Array([5, 6, 7]),
+        fileSha256: Buffer.from([8, 9]),
+        jpegThumbnail: Buffer.from([10, 11])
+      }
+    }
+  }
+  const cached = cloneMessageForMediaCache(original)
+  assert.notEqual(cached, original)
+  assert.notEqual(cached.message, original.message)
+  assert.ok(Buffer.isBuffer(cached.message.imageMessage.mediaKey))
+  assert.ok(cached.message.imageMessage.fileEncSha256 instanceof Uint8Array)
+  assert.ok(Buffer.isBuffer(cached.message.imageMessage.fileSha256))
+  assert.ok(Buffer.isBuffer(cached.message.imageMessage.jpegThumbnail))
+  assert.deepEqual(cached.message.imageMessage.mediaKey, original.message.imageMessage.mediaKey)
+  assert.deepEqual(cached.message.imageMessage.fileEncSha256, original.message.imageMessage.fileEncSha256)
+  cached.message.imageMessage.mediaKey[0] = 99
+  assert.equal(original.message.imageMessage.mediaKey[0], 1)
+})
+
+test('Prefer cached original media even when the quoted preview has its own media key', async () => {
+  const previewKey = Buffer.from('preview-key')
+  const originalKey = Buffer.from('original-key')
+  const m = refMessage({
+    imageMessage: {
+      mimetype: 'image/jpeg',
+      mediaKey: previewKey,
+      fileEncSha256: Buffer.from('preview-encrypted-hash')
+    }
+  })
+  const conn = {
+    loadMessage: id => ({
+      key: { id },
+      message: {
+        imageMessage: {
+          mimetype: 'image/jpeg',
+          mediaKey: originalKey,
+          fileEncSha256: Buffer.from('original-encrypted-hash')
+        }
+      }
+    }),
+    downloadM: async media => {
+      assert.deepEqual(media.mediaKey, originalKey)
+      return imageBuffer
+    }
+  }
+  const resolved = await resolveQuotedMediaInfo(m, conn)
+  assert.deepEqual(resolved?.media?.mediaKey, originalKey)
+  assert.deepEqual(await downloadQuotedMedia(m, conn), imageBuffer)
 })
