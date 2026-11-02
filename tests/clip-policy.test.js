@@ -41,3 +41,32 @@ test('clip FFmpeg and Qbyte HTTP calls do not set application deadlines', () => 
   assert.match(clipPipeline, /getYoutubeInfo\(normalizedUrl, 0\)/)
   assert.equal((clipPipeline.match(/}, 0\n        \)/g) || []).length, 2)
 })
+
+test('Qbyte video format selection excludes audio-only formats without video dimensions', () => {
+  assert.match(youtubeSource, /\.filter\(f => getHeight\(f\) > 0 && f\.vcodec !== 'none'\)/)
+  assert.match(youtubeSource, /\.filter\(f => f\.vcodec === 'none' && Boolean\(f\.acodec\) && f\.acodec !== 'none'\)/)
+  assert.match(youtubeSource, /videoStream = await inspectVideoStream\(output\)/)
+  assert.match(youtubeSource, /audioStream = await inspectAudioStream\(output\)/)
+})
+
+test('every accepted clip must contain a real video stream and not be black for almost the whole range', () => {
+  assert.match(youtubeSource, /if \(!streamInfo\?\.width \|\| !streamInfo\?\.height\)/)
+  assert.match(youtubeSource, /assertClipHasVisibleVideo\(outputPath, durationSeconds\)/)
+  assert.match(youtubeSource, /blackdetect=d=/)
+  assert.match(youtubeSource, /black_duration:\(\[0-9\.\]\+\)/)
+  assert.match(youtubeSource, /Stream video hampir seluruhnya hitam/)
+})
+
+test('yt-dlp strategies prioritize the highest available resolution and FPS', () => {
+  assert.equal((clipPipeline.match(/'--format-sort-force'/g) || []).length, 3)
+  assert.equal((clipPipeline.match(/'--format-sort', 'res,fps,br'/g) || []).length, 3)
+  assert.equal((clipPipeline.match(/'--format', 'bestvideo\+bestaudio\/best'/g) || []).length, 3)
+})
+
+test('all clip transcodes retain high source quality and map the video stream explicitly', () => {
+  assert.match(clipPipeline, /'-map', '0:v:0'/)
+  assert.match(clipPipeline, /'-map', '0:a:0\?' /)
+  assert.equal((clipPipeline.match(/'-crf', '18'/g) || []).length, 3)
+  assert.equal((clipPipeline.match(/'-b:a', '192k'/g) || []).length, 3)
+  assert.match(clipPipeline, /alvareth-clip-sections\.mp4/)
+})
