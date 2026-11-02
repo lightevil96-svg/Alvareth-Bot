@@ -2,127 +2,89 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createClipProgress, formatClipProgress } from '../plugins/downloader/clip-progress.js'
 
-const createFakeConnection = ({ rejectEdits = false } = {}) => {
-  const messages = []
-  let counter = 0
+function createLogger() {
   return {
-    messages,
-    async sendMessage(chat, payload) {
-      messages.push({ chat, payload })
-      if (payload.edit && rejectEdits) throw new Error('message edit unsupported')
-      return { key: { id: String(++counter), remoteJid: chat, fromMe: true } }
-    }
+    lines: [],
+    log(line) { this.lines.push(String(line)) }
   }
 }
 
-test('Show real phase percentage and an accurate progress bar', () => {
+test('Format terminal progress contains the real percentage and progress bar', () => {
   const rendered = formatClipProgress({
-    jobId: 'abc12345', range: '01:00 – 02:00', phase: 'Mengunduh video',
-    method: '1/4 — yt-dlp', percent: 42.5, detail: '[download] 42.5% 8.5 MiB',
+    jobId: 'abc12345',
+    percent: 42.5,
+    detail: '[download] 42.5% of 10MiB',
     startedAt: Date.now() - 10_000
   })
-  assert.match(rendered, /42\.5%/)
-  assert.match(rendered, /Progres tahap/)
-  assert.match(rendered, /▓+░+/)
-  assert.match(rendered, /1\/4/)
-  assert.ok(!rendered.includes('100.0%'))
+  assert.match(rendered, /42\\.5%/)
+  assert.match(rendered, /█+░+/)
+  assert.match(rendered, /\\[CLIP:abc12345\\]/)
 })
 
 test('Unknown percentage never displays a fabricated numerical value', () => {
   const rendered = formatClipProgress({
-    jobId: 'abc12345', range: '01:00 – 02:00', phase: 'Mengirim video ke WhatsApp',
-    method: '1/4', percent: null, detail: '', startedAt: Date.now()
+    jobId: 'unknown',
+    percent: null,
+    detail: '[stage] Menunggu respons downloader',
+    startedAt: Date.now()
   })
-  assert.match(rendered, /Persentase tahap belum tersedia/)
-  assert.doesNotMatch(rendered, /Progres tahap: \*100/)
+  assert.match(rendered, /Menunggu respons downloader/)
+  assert.doesNotMatch(rendered, /100\\.0%/)
 })
 
-test('Initial WhatsApp status is sent before work, then edited and completed', async () => {
-  const conn = createFakeConnection()
-  const tracker = createClipProgress({
-    conn, chat: 'self@s.whatsapp.net', jobId: 'job12345',
-    range: '00:20 – 01:20', startedAt: Date.now(), updateIntervalMs: 0
-  })
-  await tracker.start()
-  assert.equal(conn.messages.length, 1)
-  assert.equal(conn.messages[0].payload.edit, undefined)
-  assert.match(conn.messages[0].payload.text, /PROGRES/)
-  tracker.report(51.2, '[download] 51.2% of 10MiB')
-  // Stage also flushes any queued in-flight edit without losing the latest state.
-  await new Promise(resolve => setImmediate(resolve))
-  assert.ok(conn.messages.some(x => x.payload.edit && x.payload.text.includes('51.2%')))
-  await tracker.stage('Mengirim video ke WhatsApp')
-  await tracker.finish('success', 'Video telah dikirim.')
-  assert.ok(conn.messages.at(-1).payload.edit)
-  assert.match(conn.messages.at(-1).payload.text, /SELESAI/)
-  assert.match(conn.messages.at(-1).payload.text, /100\.0%/)
-  assert.ok(conn.messages.every(x => !x.payload.quoted && !x.payload.contextInfo))
-})
-
-test('Failure updates the existing progress message with meaningful error', async () => {
-  const conn = createFakeConnection()
-  const tracker = createClipProgress({
-    conn, chat: 'chat', jobId: 'fail-123', range: '00:00 – 00:10',
-    startedAt: Date.now(), updateIntervalMs: 0
-  })
-  await tracker.start()
-  tracker.report(null, '[fallback] yt-dlp sedang mencoba metode lain')
-  await tracker.finish('error', 'Semua metode downloader gagal')
-  const last = conn.messages.at(-1).payload
-  assert.match(last.text, /CLIP GAGAL/)
-  assert.match(last.text, /Semua metode downloader gagal/)
-  assert.doesNotMatch(last.text, /100\.0%/)
-})
-
-test('If WhatsApp edits are unsupported, status falls back to plain messages', async () => {
-  const conn = createFakeConnection({ rejectEdits: true })
-  const tracker = createClipProgress({
-    conn, chat: 'chat', jobId: 'fallback1', range: '00:00 – 00:15',
-    startedAt: Date.now(), updateIntervalMs: 0
-  })
-  await tracker.start()
-  await tracker.finish('success', 'Media sudah terkirim.')
-  const plain = conn.messages.filter(x => !x.payload.edit)
-  assert.ok(plain.length >= 2, 'final state must still reach the chat')
-  assert.match(plain.at(-1).payload.text, /SELESAI/)
-  assert.ok(conn.messages.every(x => !x.payload.quoted))
-})
-
-test('Error details remove URLs so tokens never appear in progress messages', () => {
-  const rendered = formatClipProgress({
-    jobId: 'safe', range: '0:00 – 0:10', phase: 'Gagal', percent: null,
-    detail: 'API error https://example.com/secret?token=do-not-leak',
-    startedAt: Date.now(), outcome: 'error'
-  })
-  assert.doesNotMatch(rendered, /do-not-leak|example.com/)
-  assert.match(rendered, /\[tautan\]/)
-})
-
-
-test('Heartbeat shows the time since the last provider response without invented percentage', () => {
-  const rendered = formatClipProgress({
-    jobId: 'heartbeat', range: '00:20 – 00:50',
-    phase: 'Persiapan / validasi', percent: null, startedAt: Date.now() - 60_000,
-    heartbeatCount: 3, inactiveSeconds: 45
-  })
-  assert.match(rendered, /Pemantauan #3/)
-  assert.match(rendered, /45 detik/)
-  assert.match(rendered, /Persentase tahap belum tersedia/)
-})
-
-test('Even if yt-dlp sends nothing, the WhatsApp status is edited periodically', async () => {
-  const conn = createFakeConnection()
-  const tracker = createClipProgress({
-    conn, chat: 'self', jobId: 'idle123',
-    range: '00:30 – 01:00', startedAt: Date.now() - 30_000,
-    updateIntervalMs: 0, heartbeatIntervalMs: 1000
-  })
-  try {
-    await tracker.start()
-    await new Promise(resolve => setTimeout(resolve, 1250))
-    assert.ok(conn.messages.some(m => m.payload.edit && m.payload.text.includes('Waktu berjalan:')),
-      'heartbeat should update the existing message despite no provider progress')
-  } finally {
-    await tracker.finish('error', 'Tes selesai')
+test('Start, stages, progress and completion are logged only to terminal', () => {
+  const logger = createLogger()
+  const fakeConnection = {
+    messages: [],
+    async sendMessage(...args) { this.messages.push(args) }
   }
+  const tracker = createClipProgress({
+    // Extra connection/chat values are intentionally ignored by the terminal reporter.
+    conn: fakeConnection,
+    chat: 'chat@s.whatsapp.net',
+    jobId: 'terminal1',
+    range: '00:20 – 01:20',
+    startedAt: Date.now(),
+    logger
+  })
+
+  tracker.start()
+  tracker.stage('Mengambil metadata')
+  tracker.report(51.2, '[download] 51.2% of 10MiB')
+  tracker.finish('success', 'Video berhasil dikirim.')
+
+  assert.ok(logger.lines.some(line => line.includes('Mulai YouTube Clip')))
+  assert.ok(logger.lines.some(line => line.includes('51.2%')))
+  assert.ok(logger.lines.some(line => line.includes('Selesai')))
+  assert.equal(fakeConnection.messages.length, 0)
+})
+
+test('Progress from FFmpeg and download phases are logged independently', () => {
+  const logger = createLogger()
+  const tracker = createClipProgress({
+    jobId: 'phases',
+    range: '00:00 – 00:15',
+    startedAt: Date.now(),
+    logger
+  })
+
+  tracker.report(35, '[download] 35% of 5MiB')
+  tracker.report(12, '[ffmpeg] frame=12 time=00:00:01.20')
+  assert.equal(logger.lines.length, 2)
+  assert.match(logger.lines[0], /35\.0%/)
+  assert.match(logger.lines[1], /12\.0%/)
+})
+
+test('Failure details are written to terminal without any chat send', () => {
+  const logger = createLogger()
+  const tracker = createClipProgress({
+    jobId: 'failure',
+    range: '00:00 – 00:10',
+    startedAt: Date.now(),
+    logger
+  })
+  tracker.start()
+  tracker.finish('error', 'Semua metode downloader gagal')
+  assert.ok(logger.lines.some(line => line.includes('Semua metode downloader gagal')))
+  assert.ok(logger.lines.some(line => line.includes('Gagal')))
 })
