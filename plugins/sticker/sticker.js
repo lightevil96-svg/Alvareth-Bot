@@ -1,8 +1,12 @@
-import { sticker } from '../../lib/sticker.js'
-import uploadFile from '../../lib/uploadFile.js'
 import { getQuotedStanzaId, resolveQuotedMediaInfo, downloadQuotedMedia } from '../../lib/simple.js'
+import { createStickerFromBuffer, stickerLimits } from './sticker-engine.js'
 
 let handler = async (m, { conn, args = [], usedPrefix = '.', command = 's' }) => {
+  let stage = 'membaca pesan'
+  let mediaType = ''
+  let mime = ''
+  let inputBytes = 0
+
   const react = async emoji => {
     try {
       await conn.sendMessage(m.chat, { react: { text: emoji, key: m.key } })
@@ -11,106 +15,148 @@ let handler = async (m, { conn, args = [], usedPrefix = '.', command = 's' }) =>
     }
   }
 
-  // Plain reply only, without GitHub cards or externalAdReply metadata.
-  const replyText = text => conn.sendMessage(
-    m.chat, { text }, { quoted: m, noAlvarethPreview: true }
-  )
+  // Do not quote the source message here. A quoted image/link can carry
+  // externalAdReply metadata and recreate the unwanted GitHub preview.
+  const sendText = async text => conn.sendMessage(m.chat, { text })
 
   try {
-    let q
+    stage = 'membaca media yang direply'
+    let q = null
     try { q = m.quoted } catch (error) {
-      console.warn('[STICKER] Serializer quoted gagal:', error?.message || error)
+      console.warn('[STICKER] Serializer reply gagal:', error?.message || error)
     }
 
-    // Read the original Baileys contextInfo.quotedMessage, or recover the full
-    // media via stanzaId and conn.loadMessage when self-chat replies contain
-    // only a preview/thumbnail rather than the downloadable media itself.
+    const stanzaId = getQuotedStanzaId(m)
+    const hasReply = Boolean(stanzaId || q)
     const quotedInfo = await resolveQuotedMediaInfo(m, conn)
-    const mediaNode = quotedInfo?.media || q?.msg || q || m.msg || m
-    const mediaType = String(
+
+    const safeGet = (getter, fallback = '') => {
+      try { return getter() ?? fallback } catch { return fallback }
+    }
+    const directType = String(safeGet(() => m.mediaType) || safeGet(() => m.mtype))
+    mediaType = String(
       quotedInfo?.type ||
-      q?.mediaType || q?.mtype ||
-      m.mediaType || m.mtype || ''
+      safeGet(() => q?.mediaType) ||
+      safeGet(() => q?.mtype) ||
+      directType
     )
-    const mime = String(
+    const mediaNode = quotedInfo?.media ||
+      safeGet(() => q?.msg, null) ||
+      q ||
+      safeGet(() => m.msg, null) ||
+      m
+    mime = String(
       quotedInfo?.mime ||
-      mediaNode?.mimetype ||
-      q?.mimetype ||
-      m.mimetype ||
+      safeGet(() => mediaNode?.mimetype) ||
+      safeGet(() => q?.mimetype) ||
+      safeGet(() => m.mimetype) ||
       (/^imageMessage$/i.test(mediaType) ? 'image' : '') ||
       (/^(video|ptv)Message$/i.test(mediaType) ? 'video' : '')
     ).toLowerCase()
-    const isVideo = /^video\//i.test(mime) || /^video$/i.test(mime) ||
+
+    const isVideo = /^video\//i.test(mime) ||
       /^(video|ptv)Message$/i.test(mediaType)
-    const isImage = /^image\//i.test(mime) || /^image$/i.test(mime) ||
+    const isImage = /^image\//i.test(mime) ||
+      mime === 'image' ||
       /^imageMessage$/i.test(mediaType)
 
-    const message = m.rawMessage?.message || m.message || {}
-    const hasReplyContext = Boolean(q || getQuotedStanzaId(m))
-
-    console.log('[STICKER] Deteksi media', JSON.stringify({
-      hasReply: hasReplyContext,
-      quotedType: quotedInfo?.type || null,
-      detectedType: mediaType || null,
+    console.log('[STICKER] Media terdeteksi', JSON.stringify({
+      hasReply,
+      stanzaId: stanzaId ? 'ada' : 'tidak ada',
+      mediaType: mediaType || null,
       mime: mime || null,
-      rawKeys: Object.keys(message).slice(0, 6)
+      quotedInfo: Boolean(quotedInfo)
     }))
 
     if (!isImage && !isVideo) {
       await react('❌')
-      return replyText(hasReplyContext
-        ? '❌ Balasan terdeteksi, tetapi data gambar/video aslinya belum tersedia. Kirim ulang gambar atau video, lalu balas dengan *' + usedPrefix + command + '*.'
-        : 'Balas gambar atau video dengan command *' + usedPrefix + command + '*, atau kirim gambar dengan caption *' + usedPrefix + command + '*.')
+      return sendText(hasReply
+        ? '❌ Pesan yang dibalas terdeteksi, tetapi bukan gambar/video yang bisa dijadikan stiker. Coba reply langsung ke foto atau video aslinya.'
+        : 'Balas foto/video dengan command *' + usedPrefix + command + '*, atau kirim foto dengan caption *' + usedPrefix + command + '*.')
     }
 
     if (isVideo) {
-      const seconds = Number(mediaNode?.seconds ?? q?.seconds ?? m.msg?.seconds ?? 0)
-      if (seconds > 10) {
+      const seconds = Number(
+        mediaNode?.seconds ??
+        safeGet(() => q?.seconds, 0) ??
+        0
+      )
+      if (Number.isFinite(seconds) && seconds > stickerLimits.maxVideoSeconds) {
         await react('❌')
-        return replyText('Maksimal 10 detik untuk stiker video.')
+        return sendText('❌ Video terlalu panjang. Maksimal ' + stickerLimits.maxVideoSeconds + ' detik untuk stiker animasi.')
       }
     }
 
+    stage = 'mengunduh media'
     await react('🕒')
-    let [packname, ...authorArr] = args.join(' ').split('|')
-    packname = packname || global.stickpack
-    const author = authorArr.join('|') || global.stickauth
-
     let buffer = null
-    if (quotedInfo) {
+
+    if (hasReply || quotedInfo) {
       buffer = await downloadQuotedMedia(m, conn)
-    } else if (typeof q?.download === 'function' && (q?.mediaMessage || /^(image|video|ptv)Message$/i.test(mediaType))) {
-      buffer = await q.download()
+      if (!buffer && typeof q?.download === 'function') {
+        try { buffer = await q.download() } catch (error) {
+          console.warn('[STICKER] Fallback q.download gagal:', error?.message || error)
+        }
+      }
     } else if (typeof m.download === 'function') {
       buffer = await m.download()
     }
+
     if (!buffer || !(Buffer.isBuffer(buffer) || buffer instanceof Uint8Array) || !buffer.length) {
-      await react('❌')
-      return replyText('❌ Media ditemukan tetapi gagal diunduh. Coba kirim ulang media dan balas dengan *' + usedPrefix + command + '*.')
+      throw new Error('Media tidak berhasil diunduh dari WhatsApp. Kirim ulang foto/video lalu reply dengan command ' + usedPrefix + command + '.')
     }
-    const img = Buffer.from(buffer)
 
-    let result = false
-    try {
-      result = await sticker(img, false, packname, author)
-    } catch (error) {
-      console.warn('[STICKER] Konversi lokal gagal:', error?.message || error)
+    inputBytes = buffer.length
+    if (inputBytes > stickerLimits.maxInputBytes) {
+      throw new Error('Ukuran media melebihi batas ' + Math.round(stickerLimits.maxInputBytes / 1024 / 1024) + ' MB.')
     }
-    if (!result) {
-      const url = await uploadFile(img)
-      result = await sticker(false, url, packname, author)
-    }
-    if (!result) throw new Error('Konverter tidak menghasilkan stiker WebP.')
 
-    await conn.sendFile(m.chat, result, 'sticker.webp', '', m, false, {
-      asSticker: true,
-      noAlvarethPreview: true
+    stage = 'mengonversi ke WebP'
+    const [packnameRaw, ...authorParts] = args.join(' ').split('|')
+    const packname = (packnameRaw || global.stickpack || 'Alvareth Bot').trim()
+    const author = (authorParts.join('|') || global.stickauth || '').trim()
+    const stickerBuffer = await createStickerFromBuffer(Buffer.from(buffer), {
+      mimeHint: mime,
+      mediaType,
+      packname,
+      author
     })
+
+    stage = 'mengirim stiker ke WhatsApp'
+    // Send the sticker as a native media message, without quoting the original
+    // link/media. This avoids the old sendFile preview metadata path entirely.
+    await conn.sendMessage(m.chat, {
+      sticker: stickerBuffer,
+      mimetype: 'image/webp'
+    })
+
     await react('✨')
+    console.log('[STICKER] Berhasil', JSON.stringify({
+      mediaType,
+      mime: mime || null,
+      inputBytes,
+      outputBytes: stickerBuffer.length
+    }))
   } catch (error) {
-    console.error('[STICKER] Gagal membuat stiker:', error?.stack || error)
+    const detail = String(error?.message || error || 'Kesalahan tidak diketahui')
+      .replace(/https?:\/\/[^\s"'<>]+/gi, '[URL disamarkan]')
+      .replace(/\s+/g, ' ')
+      .slice(0, 500)
+
+    console.error('[STICKER] GAGAL', JSON.stringify({
+      stage,
+      mediaType: mediaType || null,
+      mime: mime || null,
+      inputBytes,
+      error: detail
+    }), error?.stack || '')
+
     await react('❌')
-    await replyText('❌ Gagal membuat stiker dari media tersebut. Coba ulangi atau periksa log [STICKER] di server.')
+    try {
+      await sendText('❌ Stiker gagal dibuat pada tahap: ' + stage + '.\nDetail: ' + detail)
+    } catch (sendError) {
+      console.error('[STICKER] Gagal mengirim pesan diagnostik:', sendError?.stack || sendError)
+    }
   }
 }
 
