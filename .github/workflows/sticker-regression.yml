@@ -1,0 +1,36 @@
+name: Sticker feature regression
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'plugins/sticker/**'
+      - 'lib/simple.js'
+      - 'tests/quoted-media.test.js'
+      - 'tests/sticker-engine.test.js'
+      - 'package.json'
+      - '.github/workflows/sticker-regression.yml'
+  pull_request:
+    paths:
+      - 'plugins/sticker/**'
+      - 'lib/simple.js'
+      - 'tests/quoted-media.test.js'
+      - 'tests/sticker-engine.test.js'
+      - 'package.json'
+      - '.github/workflows/sticker-regression.yml'
+
+jobs:
+  sticker-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install project dependencies
+        run: npm install --no-audit --no-fund
+      - name: Run syntax and regression tests
+        run: npm test
