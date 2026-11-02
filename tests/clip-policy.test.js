@@ -43,8 +43,8 @@ test('clip FFmpeg and Qbyte HTTP calls do not set application deadlines', () => 
 })
 
 test('Qbyte video format selection excludes audio-only formats without video dimensions', () => {
-  assert.match(youtubeSource, /\.filter\(f => getHeight\(f\) > 0 && f\.vcodec !== 'none'\)/)
-  assert.match(youtubeSource, /\.filter\(f => f\.vcodec === 'none' && Boolean\(f\.acodec\) && f\.acodec !== 'none'\)/)
+  assert.match(youtubeSource, /\.filter\(format => getHeight\(format\) > 0 && format\.vcodec && format\.vcodec !== 'none'\)/)
+  assert.match(youtubeSource, /\.filter\(format => format\.acodec && format\.acodec !== 'none' && format\.vcodec === 'none'\)/)
   assert.match(youtubeSource, /videoStream = await inspectVideoStream\(output\)/)
   assert.match(youtubeSource, /audioStream = await inspectAudioStream\(output\)/)
 })
@@ -57,10 +57,14 @@ test('every accepted clip must contain a real video stream and not be black for 
   assert.match(youtubeSource, /Stream video hampir seluruhnya hitam/)
 })
 
-test('yt-dlp strategies prioritize the highest available resolution and FPS', () => {
+test('every yt-dlp strategy probes and explicitly selects its highest available source formats', () => {
+  assert.equal((clipPipeline.match(/probeYtDlpFormats\\(runner, normalizedUrl/g) || []).length, 3)
   assert.equal((clipPipeline.match(/'--format-sort-force'/g) || []).length, 3)
-  assert.equal((clipPipeline.match(/'--format-sort', 'res,fps,br'/g) || []).length, 3)
-  assert.equal((clipPipeline.match(/'--format', 'bestvideo\+bestaudio\/best'/g) || []).length, 3)
+  assert.equal((clipPipeline.match(/'--format-sort', 'height,width,fps,vbr,br'/g) || []).length, 3)
+  assert.equal((clipPipeline.match(/'--format', selection\\.selector/g) || []).length, 3)
+  assert.match(youtubeSource, /'--dump-single-json'/)
+  assert.match(youtubeSource, /'--remote-components', 'ejs:github'/)
+  assert.match(youtubeSource, /videoTerbaik: formatInventorySummary/)
 })
 
 test('all clip transcodes retain high source quality and map the video stream explicitly', () => {
@@ -69,4 +73,23 @@ test('all clip transcodes retain high source quality and map the video stream ex
   assert.equal((clipPipeline.match(/'-crf', '18'/g) || []).length, 3)
   assert.equal((clipPipeline.match(/'-b:a', '192k'/g) || []).length, 3)
   assert.match(clipPipeline, /alvareth-clip-sections\.mp4/)
+})
+
+test('all downloader methods are evaluated and the best real output is selected', () => {
+  assert.equal((clipPipeline.match(/id: '(?:yt-dlp-sections|youtube-clipper-ffmpeg|youtube-clippy-ffmpeg|qbyte-api-ffmpeg)'/g) || []).length, 4)
+  assert.match(clipPipeline, /const candidates = \[\]/)
+  assert.match(clipPipeline, /candidates\.sort\(compareClipCandidates\)/)
+  assert.match(youtubeSource, /function compareClipCandidates\(a, b\)/)
+  assert.match(youtubeSource, /width \* height/)
+  assert.match(youtubeSource, /Number\(candidate\.fps \|\| 0\)/)
+  assert.match(clipPipeline, /Perbandingan kandidat kualitas/)
+  assert.match(clipPipeline, /Kandidat yang lebih rendah dibersihkan/)
+})
+
+test('quality diagnostics expose available resolutions and warn when YouTube only returns 360p', () => {
+  assert.match(youtubeSource, /jumlahVideo: selection\.videoFormats\.length/)
+  assert.match(youtubeSource, /getHeight\(best\) <= 360/)
+  assert.match(youtubeSource, /hanya melihat format sampai/)
+  assert.match(youtubeSource, /bitrate: Number\(stream\.bit_rate\) \|\| 0/)
+  assert.match(youtubeSource, /width: streamInfo\?\.width \|\| null/)
 })
