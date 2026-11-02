@@ -1,4 +1,5 @@
 import test from 'node:test'
+import legacyAutoDownload from '../plugins/anu/_autodl.js'
 import assert from 'node:assert/strict'
 import {
   resolveAutoDownload,
@@ -89,4 +90,35 @@ test('AutoDL limits concurrent jobs to two', async () => {
   }))
   assert.deepEqual(await Promise.all(jobs), [0, 1, 2, 3, 4])
   assert.ok(maxActive <= 2)
+})
+
+test('Legacy AutoDL skips messages already claimed by the central router', async () => {
+  const m = {
+    text: 'https://vt.tiktok.com/ZSexample/',
+    autoDownload: { platform: 'TikTok', command: 'tt' },
+    chat: 'test-chat', fromMe: false
+  }
+  const originalText = m.text
+  const handled = await legacyAutoDownload.before(m, { conn: {} })
+  assert.equal(handled, false)
+  assert.equal(m.text, originalText)
+})
+
+test('Legacy AutoDL keeps its extra AIO services without duplicate routing', async () => {
+  const prevDb = global.db
+  const prevPrefix = global.prefix
+  global.db = { data: { chats: { 'extra-chat': { autodl: true } } } }
+  global.prefix = /^[.!/#]/
+  try {
+    const m = {
+      text: 'https://www.reddit.com/r/videos/comments/123/example/',
+      chat: 'extra-chat', sender: 'tester@s.whatsapp.net',
+      key: { id: 'unique-extra-123' }, fromMe: false
+    }
+    assert.equal(await legacyAutoDownload.before(m, { conn: {} }), true)
+    assert.match(m.text, /^\.aio https:\/\/www\.reddit\.com\//)
+  } finally {
+    global.db = prevDb
+    global.prefix = prevPrefix
+  }
 })
