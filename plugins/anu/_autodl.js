@@ -1,3 +1,5 @@
+import { findAutoDownloadPrefix } from '../../lib/auto-download.js'
+
 // Auto-download router: detect the platform from a shared URL, then route the
 // message through that platform's existing downloader command so each service
 // keeps its own resolver, validation, captions, and media handling.
@@ -76,42 +78,10 @@ function resolveRoute(url) {
 // first literal prefix from the common setprefix-generated RegExp; /^/ means
 // the owner intentionally enabled no-prefix mode.
 function getCommandPrefix(conn) {
-  const configured = conn?.prefix ?? global.prefix;
-  if (typeof configured === 'string') return configured;
-  if (Array.isArray(configured)) {
-    const literal = configured.find(value => typeof value === 'string' && value.length);
-    if (literal) return literal;
-    const regex = configured.find(value => value instanceof RegExp);
-    if (regex) return getPrefixFromRegex(regex);
-  }
-  if (configured instanceof RegExp) return getPrefixFromRegex(configured);
-  return '.';
-}
-
-function getPrefixFromRegex(regex) {
-  const source = regex.source;
-  if (source === '^' || source === '(?:)' || source === '') return '';
-  const grouped = source.match(/^\^\((.*)\)$/);
-  if (grouped) {
-    // setprefix creates an escaped list such as ^(\\.|!|#). The first option
-    // is enough because any configured prefix is accepted by the dispatcher.
-    const first = grouped[1].split('|')[0];
-    return first.replace(/\\(.)/g, '$1');
-  }
-
-  // The startup CLI uses a character class such as ^[.!#]. Prefer a familiar
-  // dot prefix when allowed; otherwise use the first actual configured char.
-  const characterClass = source.match(/^\^\[([\s\S]*)\]$/);
-  if (characterClass) {
-    const chars = characterClass[1];
-    if (chars.includes('\\.')) return '.';
-    const escapedFirst = chars.match(/^\\(.)/);
-    if (escapedFirst) return escapedFirst[1];
-    return Array.from(chars)[0] || '.';
-  }
-
-  const literal = source.match(/^\^((?:\\.|[A-Za-z0-9_-])+)/);
-  return literal ? literal[1].replace(/\\(.)/g, '$1') : '.';
+  // Reuse the validated prefix chooser from the main router. This avoids
+  // interpreting the first invisible character in a regex character class
+  // as the command prefix when '.' is already permitted.
+  return findAutoDownloadPrefix(conn?.prefix ?? global.prefix);
 }
 
 function claimMessage(m) {
@@ -172,6 +142,10 @@ handler.before = async (m, { conn }) => {
     if (!claimMessage(m)) return true;
 
     const prefix = getCommandPrefix(conn);
+    if (prefix === null) {
+      console.warn('[AutoDL Router] Tidak ada prefix perintah yang dapat dipakai.')
+      return false
+    }
     const safeUrl = selected.url;
     // The existing command pipeline performs its normal permission checks,
     // per-user limits, and execution. Only the text is rewritten; URL parameters
