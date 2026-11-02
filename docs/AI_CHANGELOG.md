@@ -1,3 +1,11 @@
+## 2026-11-02 — Fitur `.sw` untuk unggah WhatsApp Status
+- **Permintaan:** reply video dengan `.sw` untuk langsung mengunggahnya ke Status; reply foto dengan `.sw`, lalu gunakan `.sw URL_YOUTUBE waktu_mulai waktu_akhir` untuk menambahkan potongan musik.
+- **Implementasi:** menambahkan `plugins/owner/sw.js` (owner-only). Video reply dikirim ke `status@broadcast`. Foto disimpan sementara per chat + pengirim (TTL 10 menit), lalu audio YouTube dicoba melalui yt-dlp dan fallback provider yang sudah ada; FFmpeg menggabungkan foto menjadi MP4 dengan bagian audio yang diminta. Status dikirim menggunakan `statusJidList` dari kontak pribadi yang tersedia di `conn.chats`, tanpa mengikutkan grup atau JID akun sendiri.
+- **Validasi/pembersihan:** menerima URL YouTube, memvalidasi timestamp dan urutannya, membatasi durasi musik/video Status hingga 90 detik, membatasi ukuran media, memeriksa durasi video bila ffprobe tersedia, dan membersihkan direktori sementara setelah pengiriman atau kegagalan. Tidak menambah dependency.
+- **Tes:** `package.json` diperbarui agar `npm test` menyertakan syntax check plugin baru. Pemeriksaan sintaks lokal, CI, pengunduhan YouTube, FFmpeg, serta upload Status WhatsApp live belum dijalankan pada saat commit ini.
+- **Batasan:** daftar penerima mengikuti kontak pribadi yang telah dimuat di cache `conn.chats`; cakupannya bergantung pada sinkronisasi/cache Baileys. Foto dengan musik diposting sebagai video MP4 statis, bukan fitur musik-native pada editor Status WhatsApp. Fitur perlu diuji di sesi WhatsApp/TokoPanel aktif.
+- **Pelajaran:** untuk status broadcast, `statusJidList` harus diisi dengan JID audiens; jangan mengirim seluruh entri cache karena dapat mencakup grup/channel. Simpan foto pending dengan key pengirim + chat agar tidak tertukar antar pengguna.
+
 ## 2026-11-02 — Progres YouTube Clip khusus terminal
 - **Permintaan:** indikator proses `.clip` harus terlihat real-time di terminal server saja, bukan sebagai pesan progres di chat WhatsApp.
 - **Akar penyebab:** reporter terminal sudah tersedia, tetapi plugin masih mengirim pesan status berjalan ke WhatsApp. Reporter juga mempertahankan persentase lintas fase sehingga progres transfer/encoder berikutnya dapat terlihat tidak bergerak ketika persentasenya kembali ke angka kecil.
