@@ -7,7 +7,7 @@ import {
 } from '../../lib/scrape/youtube.js'
 
 
-function parseTimestamp(value) {
+export function parseTimestamp(value) {
   const raw = String(value || '').trim()
   if (!/^\d+(?::\d{1,2}){0,2}(?:\.\d{1,3})?$/.test(raw)) return null
   const parts = raw.split(':')
