@@ -1,4 +1,5 @@
 import { smsg } from './lib/simple.js'
+import { resolveAutoDownload, findAutoDownloadPrefix, claimAutoDownloadMessage, runAutoDownloadJob } from './lib/auto-download.js'
 import { format } from 'util'
 import { fileURLToPath } from 'url'
 import path, { join } from 'path'
@@ -647,7 +648,7 @@ if (m.quoted?.sender?.endsWith('@lid')) {
             const chatDefaults = {
                 isBanned: false, welcome: false, detect: false, sWelcome: '', sBye: '', sPromote: '', sDemote: '',
                 delete: false, 
-                antiLink: false, viewonce: false, antiToxic: false, simi: false, autogpt: false, autoSticker: false, premium: false, premiumTime: false, nsfw: false, menu: true, rpgs: true, expired: 0
+                antiLink: false, viewonce: false, antiToxic: false, simi: false, autogpt: false, autodl: !m.isGroup, autoSticker: false, premium: false, premiumTime: false, nsfw: false, menu: true, rpgs: true, expired: 0
             }
             for (let key in chatDefaults) if (!(key in chat)) chat[key] = chatDefaults[key]
 
@@ -923,6 +924,24 @@ if (!isOwner && (isNumberBanned || isLegacyBanned)) {
   return;
 }
 
+// AutoDL: enabled in private chats by default; groups require .enable autodl.
+// Ignore bot-sent messages and status to prevent automatic reply loops.
+const autoDownloadChat = global.db.data.chats[m.chat] || {}
+const autoDownloadEnabled = m.isGroup
+    ? autoDownloadChat.autodl === true
+    : autoDownloadChat.autodl !== false
+const detectedAutoRoute = !m.fromMe && m.chat !== 'status@broadcast' && autoDownloadEnabled
+    ? resolveAutoDownload(m.text)
+    : null
+const autoDownloadRoute = detectedAutoRoute && global.plugins?.[detectedAutoRoute.plugin] &&
+    !global.plugins[detectedAutoRoute.plugin].disabled
+    ? detectedAutoRoute : null
+if (autoDownloadRoute) {
+    // Keep m.text unchanged so plugin all/before hooks see the user's original link.
+    m.autoDownload = autoDownloadRoute
+    console.log('[AUTODL] Tautan dikenali:', autoDownloadRoute.platform, '| plugin:', autoDownloadRoute.plugin)
+}
+
 // Focused command-router trace for the image conversion regression.
 const isImageCommandTrace = /^\\s*[.!/](?:toreal|tohitam|tochibi|toghibli)\\b/i.test(String(m.text || ''))
 if (isImageCommandTrace) {
@@ -971,6 +990,11 @@ for (let name in global.plugins) {
 
             const str2Regex = str => str.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&')
             let _prefix = plugin.customPrefix ? plugin.customPrefix : conn.prefix ? conn.prefix : global.prefix
+            const isAutoDownloadTarget = autoDownloadRoute?.plugin === name
+            const automaticPrefix = isAutoDownloadTarget ? findAutoDownloadPrefix(_prefix) : null
+            const routerText = isAutoDownloadTarget && automaticPrefix !== null
+                ? automaticPrefix + autoDownloadRoute.command + ' ' + autoDownloadRoute.input
+                : String(m.text || '')
             // Clone regexes and remove stateful g/y flags. Prefix regex objects are
             // shared across every plugin; calling exec() on a /g or /y regex mutates
             // lastIndex and can make commands randomly stop matching on later plugins.
@@ -978,7 +1002,7 @@ for (let name in global.plugins) {
                 const regex = prefix instanceof RegExp
                     ? new RegExp(prefix.source, prefix.flags.replace(/[gy]/g, ''))
                     : new RegExp(str2Regex(String(prefix)))
-                const result = regex.exec(String(m.text || ''))
+                const result = regex.exec(routerText)
                 return [result, regex]
             }
             const prefixCandidates = _prefix instanceof RegExp
@@ -1017,7 +1041,7 @@ for (let name in global.plugins) {
             
                     let usedPrefix
         if ((usedPrefix = (match[0] || '')[0])) {
-            let noPrefix = m.text.replace(usedPrefix, '')
+            let noPrefix = routerText.replace(usedPrefix, '')
             let [command, ...args] = noPrefix.trim().split` `.filter(v => v)
         
             args = args || []
@@ -1076,6 +1100,10 @@ for (let name in global.plugins) {
                     continue
                 }
 
+                if (isAutoDownloadTarget && !claimAutoDownloadMessage(m)) {
+                    console.log('[AUTODL] Pesan duplikat diabaikan:', name)
+                    continue
+                }
                 m.isCommand = true
                 let xp = 'exp' in plugin ? parseInt(plugin.exp) : 17
                 if (xp < 200 && user?.autolevelup) m.exp += xp
@@ -1109,7 +1137,8 @@ for (let name in global.plugins) {
                 }
 
                 try {
-                    await plugin.call(this, m, extra)
+                    if (isAutoDownloadTarget) await runAutoDownloadJob(() => plugin.call(this, m, extra))
+                    else await plugin.call(this, m, extra)
                     if (isImagePlugin) {
                         console.log(`[IMAGE] ✓ Handler selesai | command=.${command} | durasi=${((Date.now() - imageStartedAt) / 1000).toFixed(2)}s`)
                     }
