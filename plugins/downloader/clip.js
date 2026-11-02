@@ -83,9 +83,11 @@ const handler = async (m, { conn, text }) => {
     'Bot hanya meminta rentang waktu tersebut, bukan mengunduh seluruh video.'
   )
 
+  let result
   try {
-    const result = await downloadYoutubeClip(url, start, end, {
+    result = await downloadYoutubeClip(url, start, end, {
       outputRoot: './downloads/clip',
+      maxOutputBytes: MAX_CLIP_BYTES,
       onProgress: (percent, detail) => {
         if (percent === 0 || percent === 100) {
           console.log('[CLIP] ' + percent + '% ' + String(detail || '').slice(0, 180))
@@ -93,11 +95,19 @@ const handler = async (m, { conn, text }) => {
       }
     })
     outputDir = result.outputDir
+  } catch (error) {
+    const detail = String(error?.message || error || 'Kesalahan tidak diketahui').slice(0, 2600)
+    console.error('[CLIP] Semua metode gagal:', error?.stack || error)
+    await m.reply(
+      '❌ *YouTube Clip gagal dibuat.*\n' +
+      'Semua metode downloader sudah dicoba dan tidak ada yang berhasil.\n\n' +
+      detail
+    )
+    await m.react('❌').catch(() => {})
+    return
+  }
 
-    if (result.size > MAX_CLIP_BYTES) {
-      throw new Error('Ukuran hasil ' + (result.size / 1024 / 1024).toFixed(1) + ' MB melebihi batas pengiriman video WhatsApp 45 MB.')
-    }
-
+  try {
     const video = await fs.readFile(result.path)
     if (!video.length) throw new Error('File clip kosong setelah diunduh.')
 
@@ -106,16 +116,16 @@ const handler = async (m, { conn, text }) => {
       mimetype: 'video/mp4',
       fileName: 'Alvareth-Clip-' + formatTimestamp(start).replace(/:/g, '-') + '-' + formatTimestamp(end).replace(/:/g, '-') + '.mp4',
       caption:
-        '✅ *YouTube Clip berhasil dibuat!*\n' +
-        '⏱️ ' + formatTimestamp(start) + ' – ' + formatTimestamp(end) + '\n' +
+        '✅ *YouTube Clip berhasil dibuat!*\\n' +
+        '⏱️ ' + formatTimestamp(start) + ' – ' + formatTimestamp(end) + '\\n' +
         '📦 ' + (result.size / 1024 / 1024).toFixed(1) + ' MB' +
-        (result.quality ? '\n🎞️ ' + result.quality + 'p' : '') +
-        '\n⚙️ yt-dlp + FFmpeg' +
-        '\n⏳ ' + Math.ceil((Date.now() - startedAt) / 1000) + ' detik'
+        (result.quality ? '\\n🎞️ ' + result.quality + 'p' : '') +
+        '\\n⚙️ ' + String(result.downloader || 'yt-dlp + FFmpeg') +
+        '\\n⏳ ' + Math.ceil((Date.now() - startedAt) / 1000) + ' detik'
     }, { quoted: m })
 
     await m.react('✅').catch(() => {})
-    console.log('[CLIP] success start=' + start + ' end=' + end + ' bytes=' + result.size)
+    console.log('[CLIP] success start=' + start + ' end=' + end + ' bytes=' + result.size + ' method=' + result.downloader)
   } finally {
     if (outputDir) await cleanupDownload(outputDir)
   }
