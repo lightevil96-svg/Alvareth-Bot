@@ -138,6 +138,9 @@ function claimMessage(m) {
 const handler = {};
 handler.before = async (m, { conn }) => {
   try {
+    // The central handler already claimed this message and will invoke its
+    // chosen downloader. Never rewrite its command or start a second job.
+    if (m?.autoDownload) return false;
     if (!m || !m.chat || m.chat === 'status@broadcast') return false;
 
     const originalText = getMessageText(m);
@@ -147,7 +150,8 @@ handler.before = async (m, { conn }) => {
     if (!chats) return false;
     const chat = chats[m.chat];
     const links = extractUrls(originalText);
-    if (!links.length) return false;
+    // Never select one arbitrary URL from a message containing several links.
+    if (links.length !== 1) return false;
 
     let selected = null;
     for (const url of links) {
