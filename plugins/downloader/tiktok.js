@@ -1087,9 +1087,13 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
   const isPhotoToVideoCommand = /^ttfoto2video$/i.test(command)
   // Action commands include their own URL and photo index; prioritize their
   // payload over quoted text so interactive selections parse correctly.
-  const input = String((isPhotoOnlyCommand || isPhotoToVideoCommand)
-    ? (text || m.quoted?.text || m.quoted?.caption || '')
-    : (m.quoted ? (m.quoted.text || m.quoted.caption || text || '') : (text || ''))
+  // Automatic link routing must use the newly received URL, not an unrelated
+  // quoted message that may contain a different video or ordinary text.
+  const input = String(m.autoDownload
+    ? (text || '')
+    : (isPhotoOnlyCommand || isPhotoToVideoCommand)
+      ? (text || m.quoted?.text || m.quoted?.caption || '')
+      : (m.quoted ? (m.quoted.text || m.quoted.caption || text || '') : (text || ''))
   ).trim()
   let photoActionKey = null
   if (!input) {
