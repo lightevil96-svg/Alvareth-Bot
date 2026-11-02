@@ -16,9 +16,9 @@ test('Format terminal progress contains the real percentage and progress bar', (
     detail: '[download] 42.5% of 10MiB',
     startedAt: Date.now() - 10_000
   })
-  assert.match(rendered, /42\\.5%/)
+  assert.match(rendered, /42\.5%/)
   assert.match(rendered, /█+░+/)
-  assert.match(rendered, /\\[CLIP:abc12345\\]/)
+  assert.match(rendered, /\[CLIP:abc12345\]/)
 })
 
 test('Unknown percentage never displays a fabricated numerical value', () => {
@@ -29,7 +29,7 @@ test('Unknown percentage never displays a fabricated numerical value', () => {
     startedAt: Date.now()
   })
   assert.match(rendered, /Menunggu respons downloader/)
-  assert.doesNotMatch(rendered, /100\\.0%/)
+  assert.doesNotMatch(rendered, /100\.0%/)
 })
 
 test('Start, stages, progress and completion are logged only to terminal', () => {
