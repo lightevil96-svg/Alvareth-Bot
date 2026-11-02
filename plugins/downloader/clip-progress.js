@@ -37,7 +37,7 @@ export function createClipProgress({ jobId, range = '', startedAt = Date.now(), 
     if (!line) return
     const now = Date.now()
     const numeric = clampPercent(percent)
-    const transferMatch = line.match(/\\[(download|ffmpeg)\\]/i)
+    const transferMatch = line.match(/\[(download|ffmpeg)\]/i)
 
     if (transferMatch) {
       const source = transferMatch[1].toLowerCase()
@@ -63,8 +63,8 @@ export function createClipProgress({ jobId, range = '', startedAt = Date.now(), 
       return
     }
 
-    if (/\\[stage\\].*Metode\\s+\\d+\\/\\d+/i.test(line) ||
-        /\\[quality\\].*Percobaan kompresi/i.test(line)) {
+    if (/\[stage\].*Metode\s+\d+\/\d+/i.test(line) ||
+        /\[quality\].*Percobaan kompresi/i.test(line)) {
       lastPercent = -100
       lastProgressAt = 0
       lastSource = ''
