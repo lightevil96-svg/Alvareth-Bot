@@ -74,6 +74,7 @@ Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes n
 
 ## 6. Pembaruan terbaru
 
+- 2026-11-02 — `.clip` kini memakai fallback berurutan: yt-dlp section/keyframe, mode FFmpeg external downloader ala YouTube Clippy, section + encode FFmpeg terpisah ala YouTube Clipper, lalu API Qbyte + FFmpeg dengan batas ukuran sumber. Error baru dikirim setelah semua metode gagal; fallback terakhir dapat mengunduh sumber penuh sementara.
 - 2026-10-31 — Menambahkan `.clip URL mulai akhir` untuk memotong rentang YouTube langsung dengan yt-dlp `--download-sections` + FFmpeg/keyframe cuts; validasi domain/waktu/durasi, batas file 45 MB, folder sementara per job, dan cleanup setelah pengiriman.
 
 - 2026-10-31 — Menambahkan .aivideo/.text2video/.img2video untuk text-to-video dan image-to-video melalui model gratis FreeTheAI (fta/), dengan task polling, timeout, validasi output, batas ukuran, dan konfigurasi API key/model via .env. Layanan gratis tetap membutuhkan akun, verifikasi email, daily check-in, serta tunduk pada kuota/antrean.
