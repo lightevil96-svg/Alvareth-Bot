@@ -94,7 +94,7 @@ const handler = async (m, { conn, text }) => {
       '✅ *YouTube Clip berhasil dibuat!*\n' +
       '⏱️ ' + range + '\n' +
       '📦 ' + (stats.size / 1024 / 1024).toFixed(1) + ' MB' +
-      (result.quality ? '\n🎞️ ' + result.quality + 'p' : '') +
+      (result.quality ? '\n🎞️ ' + result.quality + 'p' + (result.fps ? ' @ ' + result.fps + ' FPS' : '') : '') +
       '\n⚙️ ' + String(result.downloader || 'yt-dlp + FFmpeg') +
       '\n⌛ ' + Math.ceil((Date.now() - startedAt) / 1000) + ' detik'
     const fileName = 'Alvareth-Clip-' +
