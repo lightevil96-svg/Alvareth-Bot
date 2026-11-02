@@ -97,3 +97,32 @@ test('Error details remove URLs so tokens never appear in progress messages', ()
   assert.doesNotMatch(rendered, /do-not-leak|example.com/)
   assert.match(rendered, /\[tautan\]/)
 })
+
+
+test('Heartbeat shows the time since the last provider response without invented percentage', () => {
+  const rendered = formatClipProgress({
+    jobId: 'heartbeat', range: '00:20 – 00:50',
+    phase: 'Persiapan / validasi', percent: null, startedAt: Date.now() - 60_000,
+    heartbeatCount: 3, inactiveSeconds: 45
+  })
+  assert.match(rendered, /Pemantauan #3/)
+  assert.match(rendered, /45 detik/)
+  assert.match(rendered, /Persentase tahap belum tersedia/)
+})
+
+test('Even if yt-dlp sends nothing, the WhatsApp status is edited periodically', async () => {
+  const conn = createFakeConnection()
+  const tracker = createClipProgress({
+    conn, chat: 'self', jobId: 'idle123',
+    range: '00:30 – 01:00', startedAt: Date.now() - 30_000,
+    updateIntervalMs: 0, heartbeatIntervalMs: 1000
+  })
+  try {
+    await tracker.start()
+    await new Promise(resolve => setTimeout(resolve, 1250))
+    assert.ok(conn.messages.some(m => m.payload.edit && m.payload.text.includes('Waktu berjalan:')),
+      'heartbeat should update the existing message despite no provider progress')
+  } finally {
+    await tracker.finish('error', 'Tes selesai')
+  }
+})
