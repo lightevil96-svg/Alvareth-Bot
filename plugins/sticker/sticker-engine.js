@@ -308,10 +308,15 @@ export async function createStickerFromBuffer(input, options = {}) {
   }
 
   let webpBuffer
-  if (isVideo) {
+  if (isVideo || detected?.ext === 'gif' || detected?.ext === 'apng') {
     webpBuffer = await encodeAnimatedWithFfmpeg(buffer)
   } else {
-    webpBuffer = await encodeImageWithSharp(buffer)
+    try {
+      webpBuffer = await encodeImageWithSharp(buffer)
+    } catch (error) {
+      console.warn('[STICKER] Sharp gagal; mencoba konversi gambar lokal dengan FFmpeg:', error?.message || error)
+      webpBuffer = await encodeStillWithFfmpeg(buffer)
+    }
   }
 
   if (!isWebp(webpBuffer)) {
