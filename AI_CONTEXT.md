@@ -75,6 +75,8 @@ Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes n
 
 ## 6. Pembaruan terbaru
 
+- 2026-11-02 — `.clip` **kini mengirim progres di WhatsApp**, mengedit satu pesan status melalui `clip-progress.js` saat yt-dlp/FFmpeg melaporkan persen, dan fallback ke pesan teks yang dibatasi ketika edit tidak didukung. Sebelumnya hanya terminal; kebijakan itu diganti sesuai permintaan terbaru. `runYtDlp` kini mengurai persen dari stdout dan stderr secara terpisah. Pengiriman MP4 memakai file path lokal dengan fallback Buffer untuk mengurangi RAM; respons awal/error/sukses selalu diupayakan; upload tidak diberi angka persen palsu. Tes `tests/clip-progress.test.js`, `npm run test:clip`, dan workflow `clip-regression.yml` ditambah. Unit dan mock integrasi telah diperiksa dalam sesi ini; TokoPanel live belum diuji.
+
 - 2026-11-02 — `.s` (stiker) kini memakai `resolveQuotedMediaInfo()` + `downloadQuotedMedia()` untuk menemukan gambar/video pada pesan reply asli atau media yang tersimpan berdasarkan stanzaId, termasuk media dikirim melalui self-chat. Balasan kesalahan tanpa externalAdReply. Cache `pushMessage` kini mempertahankan foto/video dari akun sendiri. Enam kasus logika helper media dan parsing V8 lolos, tetapi `npm test` dan uji live WhatsApp belum dijalankan.
 
 - 2026-11-02 — Perbaikan AutoDL pesan milik owner `fromMe`: URL tunggal berbentuk pesan teks `conversation` atau `extendedTextMessage` tanpa quote diproses melalui router terpusat, sementara ID pesan yang dikirim `conn.sendMessage` ditandai dan diabaikan agar tidak terjadi loop. Ada log build router dan alasan skip link. Link Facebook `/share/r/...` tercakup oleh tes regresi; restart TokoPanel dan uji unduhan live belum terverifikasi.
@@ -87,7 +89,7 @@ Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes n
 
 - 2026-11-02 — `.sw` (owner-only): reply video untuk upload Status; reply foto disimpan sementara per chat/pengirim, lalu `.sw URL mulai akhir` mengunduh audio YouTube dan membuat MP4 foto+musik dengan FFmpeg. Audiens Status diambil dari kontak pribadi yang tersimpan di `conn.chats`; potongan musik dibatasi 90 detik dan file sementara dibersihkan.
 
-- 2026-11-02 — `.clip` menampilkan progres real-time hanya di terminal per ID job; pesan status berjalan di WhatsApp dihapus (chat hanya menerima hasil akhir/kegagalan), progress bar di-reset saat fase/metode berganti, dan matcher mengenali progress yt-dlp, FFmpeg, serta stream Qbyte berlabel provider. Kecepatan/ETA ditampilkan bila sumber datanya tersedia.
+- 2026-11-02 — Riwayat lama (sudah diganti): `.clip` pernah menampilkan progres hanya di terminal per ID job. Permintaan terbaru membatalkan batasan terminal-only: status progres sekarang juga tersedia di WhatsApp melalui pesan yang diedit/fallback.
 - 2026-11-02 — `.clip` mengutamakan format video dan FPS tertinggi yang tersedia pada jalur yt-dlp dan Qbyte; urutan fallback disusun berdasarkan kualitas sumber lalu kompatibilitas MP4. Jika hasil melebihi 45 MB, FFmpeg melakukan transcode adaptif berdasarkan durasi/anggaran bitrate sebelum metode dianggap gagal.
 - 2026-10-31 — Menambahkan `.clip URL mulai akhir` untuk memotong rentang YouTube langsung dengan yt-dlp `--download-sections` + FFmpeg/keyframe cuts; validasi domain/waktu/durasi, batas file 45 MB, folder sementara per job, dan cleanup setelah pengiriman.
 
