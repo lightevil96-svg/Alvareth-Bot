@@ -1,15 +1,11 @@
-// Dedicated WhatsApp progress reporter for .clip only. Uses the same message
-// when Baileys supports edits and throttled plain-text fallbacks otherwise.
-const MIN_UPDATE_MS = 4_000
-const FALLBACK_UPDATE_MS = 25_000
-const MAX_FALLBACK_MESSAGES = 8
+// Terminal-only progress reporter for the .clip command.
+// This module intentionally has no WhatsApp/Baileys connection or chat API.
+const MIN_PERCENT_DELTA = 5
+const MIN_PROGRESS_INTERVAL_MS = 1_000
+const DETAIL_INTERVAL_MS = 4_000
 
-function sanitizeDetail(value) {
-  return String(value || '')
-    .replace(/https?:\/\/[^\s"'<>]+/gi, '[tautan]')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 170)
+function elapsedSeconds(startedAt) {
+  return Math.max(0, Math.floor((Date.now() - startedAt) / 1000))
 }
 
 function clampPercent(value) {
@@ -18,174 +14,81 @@ function clampPercent(value) {
     : null
 }
 
-function parsePhase(percent, detail, currentMethod) {
-  const text = sanitizeDetail(detail)
-  const method = text.match(/^\[stage\]\s*Metode\s+(\d+\/\d+)\s*:\s*(.*)$/i)
-  if (method) return { phase: 'Mencoba metode', method: method[1] + ' — ' + method[2], percent: null, detail: text, urgent: true }
-  if (/^\[fallback\]/i.test(text)) return { phase: 'Mencoba metode cadangan', method: currentMethod, percent: null, detail: text, urgent: true }
-  const tags = [...text.matchAll(/\[([a-z-]+)\]/gi)].map(m => m[1].toLowerCase())
-  const phase = tags.includes('ffmpeg') ? 'Memotong / mengode video'
-    : tags.includes('quality') ? 'Optimasi ukuran video'
-    : tags.includes('download') ? 'Mengunduh video'
-    : tags.includes('qbyte') ? 'Mengunduh melalui API cadangan'
-    : tags.includes('stage') ? 'Persiapan / validasi'
-    : /^Berhasil dengan /i.test(text) ? 'Video sudah diproses'
-    : 'Memproses video'
-  return {
-    phase,
-    method: currentMethod,
-    percent: clampPercent(percent),
-    detail: text.replace(/^(?:\[[a-z-]+\]\s*)+/gi, ''),
-    urgent: /^Berhasil dengan /i.test(text)
-  }
-}
-
-export function formatClipProgress({ jobId, range, method, phase, percent, detail, startedAt, outcome = 'running', heartbeatCount = 0, inactiveSeconds = 0 }) {
-  const elapsed = Math.max(0, Math.floor((Date.now() - startedAt) / 1000))
-  const time = Math.floor(elapsed / 60) + 'm ' + (elapsed % 60) + 'd'
+export function formatClipProgress({ jobId, percent, detail, startedAt = Date.now() }) {
   const numeric = clampPercent(percent)
-  const bar = numeric === null ? '⏳ Menunggu data persentase...' :
-    '▓'.repeat(Math.round(numeric / 5)) + '░'.repeat(20 - Math.round(numeric / 5))
-  const heading = outcome === 'success' ? '✅ *YOUTUBE CLIP SELESAI*'
-    : outcome === 'error' ? '❌ *YOUTUBE CLIP GAGAL*'
-    : '✂️ *YOUTUBE CLIP — PROGRES*'
-  return [
-    heading,
-    '🆔 Job: ' + jobId,
-    '⏱️ Potongan: ' + range,
-    method ? '🔄 Metode: ' + method : null,
-    '⚙️ Tahap: ' + phase,
-    bar,
-    numeric === null ? '📊 Persentase tahap belum tersedia' : '📊 Progres tahap: *' + numeric.toFixed(1) + '%*',
-    detail ? '📝 ' + sanitizeDetail(detail) : null,
-    '⌛ Waktu berjalan: ' + time,
-    outcome === 'running' && heartbeatCount > 0 && inactiveSeconds >= 30
-      ? '📡 Pemantauan #' + heartbeatCount + ': belum ada data baru selama ' + inactiveSeconds + ' detik.' : null,
-    outcome === 'running' ? '_Persentase hanya untuk tahap aktif, bukan keseluruhan atau upload WhatsApp._' : null
-  ].filter(Boolean).join('\n')
+  const elapsed = elapsedSeconds(startedAt)
+  const prefix = '[CLIP:' + jobId + '] +' + elapsed + 's'
+  if (numeric === null) return prefix + ' | ' + String(detail || '').trim()
+
+  const filled = Math.max(0, Math.min(20, Math.round(numeric / 5)))
+  const bar = '█'.repeat(filled) + '░'.repeat(20 - filled)
+  return '[CLIP:' + jobId + '] [' + bar + '] ' + numeric.toFixed(1) +
+    '% | +' + elapsed + 's | ' + String(detail || '').trim()
 }
 
-export function createClipProgress({ conn, chat, jobId, range, startedAt = Date.now(), updateIntervalMs = MIN_UPDATE_MS, heartbeatIntervalMs = 15_000 }) {
-  let method = ''
-  let phase = 'Memulai pemrosesan'
-  let percent = null
-  let detail = 'Memvalidasi permintaan dan menyiapkan downloader'
-  let messageKey = null
-  let lastSentAt = 0
-  let lastPlainAt = 0
-  let lastSentText = ''
-  let editingAvailable = true
-  let fallbackCount = 0
-  let pending = null
-  let sending = null
-  let closed = false
-  let finishing = false
-  let lastProviderAt = Date.now()
-  let heartbeatCount = 0
-  let heartbeatTimer = null
+export function createClipProgress({ jobId, range = '', startedAt = Date.now(), logger = console }) {
+  let lastPercent = -100
+  let lastProgressAt = 0
+  let lastSource = ''
+  let lastStatus = ''
 
-  const render = outcome => formatClipProgress({
-    jobId, range, method, phase, percent, detail, startedAt, outcome,
-    heartbeatCount, inactiveSeconds: Math.floor((Date.now() - lastProviderAt) / 1000)
-  })
-
-  function pump() {
-    if (sending) return sending
-    sending = (async () => {
-      while (pending !== null) {
-        const text = pending
-        pending = null
-        if (text === lastSentText) continue
-        if (messageKey && editingAvailable) {
-          try {
-            await conn.sendMessage(chat, { text, edit: messageKey })
-            lastSentText = text
-            continue
-          } catch (error) {
-            editingAvailable = false
-            console.warn('[CLIP:' + jobId + '] Edit pesan progres tidak didukung:', error?.message || error)
-          }
-        }
-        if (messageKey && !finishing && (fallbackCount >= MAX_FALLBACK_MESSAGES ||
-            Date.now() - lastPlainAt < FALLBACK_UPDATE_MS)) continue
-        try {
-          const sent = await conn.sendMessage(chat, { text })
-          if (sent?.key?.id) messageKey = sent.key
-          lastPlainAt = Date.now()
-          if (lastSentText) fallbackCount++
-          lastSentText = text
-        } catch (error) {
-          console.warn('[CLIP:' + jobId + '] Gagal mengirim pesan progres:', error?.message || error)
-        }
-      }
-    })().finally(() => {
-      sending = null
-      if (pending !== null) void pump()
-    })
-    return sending
-  }
-
-  function publish(force = false, outcome = 'running') {
-    if (closed) return Promise.resolve()
+  function report(percent, detail, force = false) {
+    const line = String(detail || '').trim()
+    if (!line) return
     const now = Date.now()
-    if (!force && now - lastSentAt < updateIntervalMs) return sending || Promise.resolve()
-    lastSentAt = now
-    pending = render(outcome)
-    return pump()
+    const numeric = clampPercent(percent)
+    const transferMatch = line.match(/\\[(download|ffmpeg)\\]/i)
+
+    if (transferMatch) {
+      const source = transferMatch[1].toLowerCase()
+      if (source !== lastSource || (numeric !== null && numeric < lastPercent)) {
+        lastPercent = -100
+        lastProgressAt = 0
+        lastSource = source
+      }
+
+      if (numeric !== null) {
+        if (!force && numeric < 100 &&
+            numeric - lastPercent < MIN_PERCENT_DELTA &&
+            now - lastProgressAt < MIN_PROGRESS_INTERVAL_MS) return
+        logger.log(formatClipProgress({ jobId, percent: numeric, detail: line, startedAt }))
+        lastPercent = numeric
+        lastProgressAt = now
+        return
+      }
+
+      if (!force && now - lastProgressAt < DETAIL_INTERVAL_MS) return
+      logger.log(formatClipProgress({ jobId, percent: null, detail: line, startedAt }))
+      lastProgressAt = now
+      return
+    }
+
+    if (/\\[stage\\].*Metode\\s+\\d+\\/\\d+/i.test(line) ||
+        /\\[quality\\].*Percobaan kompresi/i.test(line)) {
+      lastPercent = -100
+      lastProgressAt = 0
+      lastSource = ''
+    }
+
+    if (!force && line === lastStatus) return
+    logger.log(formatClipProgress({ jobId, percent: null, detail: line, startedAt }))
+    lastStatus = line
   }
 
   return {
-    async start() {
-      await publish(true)
-      // Even if yt-dlp never emits progress (e.g. hangs on metadata),
-      // periodically edit the same message so the user sees the elapsed time.
-      if (!heartbeatTimer && !closed) {
-        heartbeatTimer = setInterval(() => {
-          if (closed || finishing) return
-          heartbeatCount += 1
-          void publish(true)
-        }, Math.max(1000, heartbeatIntervalMs))
-        heartbeatTimer.unref?.()
-      }
+    start() {
+      logger.log('[CLIP:' + jobId + '] Mulai YouTube Clip: ' + range)
     },
-    report(value, message) {
-      if (closed || finishing) return
-      lastProviderAt = Date.now()
-      const next = parsePhase(value, message, method)
-      const methodChanged = next.method !== method
-      const phaseChanged = next.phase !== phase
-      const firstPercentInPhase = next.percent !== null &&
-        (phaseChanged || percent === null)
-      const reachedPhaseEnd = next.percent === 100 && percent !== 100
-      method = next.method
-      phase = next.phase
-      percent = next.percent
-      detail = next.detail
-      // Show the first real number in a phase immediately, but throttle
-      // incremental updates so a busy download does not flood WhatsApp edits.
-      void publish(next.urgent || methodChanged || phaseChanged ||
-        firstPercentInPhase || reachedPhaseEnd)
+    report(percent, detail) {
+      report(percent, detail)
     },
-    async stage(label) {
-      if (closed || finishing) return
-      lastProviderAt = Date.now()
-      phase = String(label || 'Memproses')
-      detail = ''
-      percent = null
-      await publish(true)
+    stage(label) {
+      report(null, '[stage] ' + String(label || 'Memproses'), true)
     },
-    async finish(outcome, message) {
-      if (closed) return
-      finishing = true
-      if (heartbeatTimer) clearInterval(heartbeatTimer)
-      heartbeatTimer = null
-      phase = outcome === 'success' ? 'Video berhasil dikirim ke WhatsApp' : 'Proses dihentikan'
-      percent = outcome === 'success' ? 100 : null
-      detail = sanitizeDetail(message)
-      await publish(true, outcome === 'success' ? 'success' : 'error')
-      // The publish may have been queued while another edit was in flight.
-      if (sending) await sending
-      closed = true
+    finish(outcome, message) {
+      const status = outcome === 'success' ? '✓ Selesai' : '✗ Gagal'
+      logger.log('[CLIP:' + jobId + '] ' + status + ' | +' +
+        elapsedSeconds(startedAt) + 's | ' + String(message || '').trim())
     }
   }
 }
