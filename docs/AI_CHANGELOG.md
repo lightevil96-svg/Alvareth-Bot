@@ -1,3 +1,11 @@
+## 2026-11-02 — Perbaikan menyeluruh jalur cache dan konversi fitur .s
+- **Temuan cache:** pesan media yang disimpan dengan `JSON.parse(JSON.stringify(message))` mengubah Buffer/Uint8Array (mediaKey, fileEncSha256, fileSha256, thumbnail) menjadi objek JSON biasa. Ini dapat membuat `conn.loadMessage()` mengembalikan kunci media yang tidak dapat dipakai Baileys saat reply self-chat.
+- **Perbaikan cache:** tambahkan `cloneMessageForMediaCache()` yang menyalin Buffer, typed arrays, ArrayBuffer, array, dan object secara rekursif dengan referensi siklik aman. Hanya pesan media yang memakai clone binary-safe; cache non-media tetap memakai serialisasi lama. Downloader memprioritaskan upload asli dari cache sebelum quoted thumbnail dan memilih source dengan binary mediaKey.
+- **Perbaikan konversi:** `plugins/sticker/sticker-engine.js` memproses foto/video lokal tanpa upload publik/API stiker eksternal. Foto dikompres bertahap hingga batas statis 100 KB; video/GIF dibuat WebP animasi hingga batas 500 KB, target kompresi diberi ruang untuk metadata EXIF. Deteksi animasi membaca chunk RIFF WebP (ANIM/ANMF), bukan pencarian string bebas. Video dibatasi 10 detik, input 25 MB, proses FFmpeg dibatasi waktu dan output.
+- **Tes yang ditambahkan/diperkuat:** pengujian clone binary, prioritas media asli, ukuran stiker foto/animasi, EXIF, dan output animasi. `npm test` memasukkan test media serta engine. Pemeriksaan parsing V8 untuk file terkait lolos; pipeline Sharp lokal menghasilkan WebP statis 850 byte dan pipeline FFmpeg 10 detik menghasilkan WebP animasi 477.334 byte (80 frame, di bawah target 480 KB). Tes integrasi penuh Node/WhatsApp dan deployment TokoPanel belum diverifikasi.
+- **Diagnostik:** plugin `.s` menulis `[STICKER] Media terdeteksi`, `[STICKER] GAGAL` dengan tahap, dan detail error. Jika server masih menampilkan pesan generik lama, source stiker di runtime belum diperbarui ke commit terbaru.
+- **Batasan:** hasil bergantung pada FFmpeg/Sharp dan ketersediaan media WhatsApp; konten yang tidak ada di cache/payload harus dikirim ulang.
+
 ## 2026-11-02 — Perbaikan .clip tidak merespons WhatsApp + progres persen nyata
 
 - **Gejala:** .clip terus mencatat operasi di console TokoPanel, tetapi chat WhatsApp tetap diam hingga pekerjaan selesai/gagal; user meminta indikator progres di chat.
