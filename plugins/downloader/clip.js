@@ -20,7 +20,7 @@ function createTerminalProgressReporter(jobId, startedAt) {
     if (!line) return
     const now = Date.now()
     const hasPercent = typeof percent === 'number' && Number.isFinite(percent)
-    const transferMatch = line.match(/^\[(download|ffmpeg)\]/i)
+    const transferMatch = line.match(/\[(download|ffmpeg)\]/i)
     const isTransferProgress = Boolean(transferMatch)
 
     if (isTransferProgress) {
