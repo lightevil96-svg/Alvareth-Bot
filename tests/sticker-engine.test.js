@@ -27,7 +27,7 @@ test('PNG image becomes a valid 512px WebP sticker with WhatsApp EXIF', async ()
   })
 
   assert.ok(output.length > 0)
-  assert.ok(output.length <= stickerLimits.maxStickerBytes)
+  assert.ok(output.length <= stickerLimits.maxStaticStickerBytes)
   assert.deepEqual(await fileTypeFromBuffer(output), {
     ext: 'webp',
     mime: 'image/webp'
@@ -85,6 +85,12 @@ test('MP4 video becomes an animated WebP sticker within the WhatsApp size limit'
   } finally {
     await rm(directory, { recursive: true, force: true })
   }
+})
+
+test('Static and animated sticker limits match WhatsApp constraints', () => {
+  assert.equal(stickerLimits.maxStaticStickerBytes, 100 * 1024)
+  assert.equal(stickerLimits.maxStickerBytes, 500 * 1024)
+  assert.equal(stickerLimits.maxVideoSeconds, 10)
 })
 
 test('Text or unsupported binary is rejected with a useful error', async () => {
