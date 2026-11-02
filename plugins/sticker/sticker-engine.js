@@ -18,6 +18,20 @@ function isWebp(buffer) {
     buffer.subarray(8, 12).toString('ascii') === 'WEBP'
 }
 
+function isAnimatedWebp(buffer) {
+  if (!isWebp(buffer)) return false
+  let offset = 12
+  while (offset + 8 <= buffer.length) {
+    const type = buffer.subarray(offset, offset + 4).toString('ascii')
+    const size = buffer.readUInt32LE(offset + 4)
+    if (type === 'ANIM' || type === 'ANMF') return true
+    const next = offset + 8 + size + (size & 1)
+    if (next <= offset || next > buffer.length) return false
+    offset = next
+  }
+  return false
+}
+
 function runFfmpeg(input, outputArgs, timeoutMs = 90_000) {
   return new Promise((resolve, reject) => {
     const args = [
@@ -344,8 +358,7 @@ export async function createStickerFromBuffer(input, options = {}) {
   }
 
   const finalBuffer = await attachStickerExif(webpBuffer, options.packname, options.author)
-  const isAnimatedOutput = webpBuffer.includes(Buffer.from('ANIM')) &&
-    webpBuffer.includes(Buffer.from('ANMF'))
+  const isAnimatedOutput = isAnimatedWebp(webpBuffer)
   const finalLimit = isAnimatedOutput ? MAX_STICKER_BYTES : MAX_STATIC_STICKER_BYTES
   if (finalBuffer.length > finalLimit) {
     throw new Error(isAnimatedOutput
