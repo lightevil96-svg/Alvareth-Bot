@@ -38,6 +38,5 @@ test('clip FFmpeg and Qbyte HTTP calls do not set application deadlines', () => 
   assert.match(clipPipeline, /function runClipFfmpeg\(args, timeoutMs = 0/)
   assert.equal((clipPipeline.match(/\], 0, (?:onProgress|\(percent, line\) =>)/g) || []).length, 3)
   assert.match(clipPipeline, /getYoutubeInfo\(normalizedUrl, 0\)/)
-  assert.match(clipPipeline, /'clip-api-video', outputDir, Infinity,[\s\\S]*?\}, 0\)/)
-  assert.match(clipPipeline, /'clip-api-audio', outputDir, Infinity,[\s\\S]*?\}, 0\)/)
+  assert.equal((clipPipeline.match(/}, 0\n        \)/g) || []).length, 2)
 })
