@@ -28,7 +28,7 @@ test('Qbyte clip source streams have no 256 MB or 96 MB client cap', () => {
 })
 
 test('clip yt-dlp calls have no idle or total execution deadline', () => {
-  assert.equal((clipPipeline.match(/\], 0, \(percent, line\) =>/g) || []).length, 5)
+  assert.equal((clipPipeline.match(/\], 0, \(percent, line\) =>/g) || []).length, 6)
   assert.doesNotMatch(clipPipeline, /idleTimeoutMs\s*:/)
   assert.doesNotMatch(clipPipeline, /6\s*\*\s*60\s*\*\s*1000/)
   assert.match(clipPipeline, /ensureYtDlpPythonRunner\(0\)/)
@@ -37,7 +37,7 @@ test('clip yt-dlp calls have no idle or total execution deadline', () => {
 
 test('clip FFmpeg and Qbyte HTTP calls do not set application deadlines', () => {
   assert.match(youtubeSource, /function runClipFfmpeg\(args, timeoutMs = 0/)
-  assert.equal((clipPipeline.match(/\], 0, (?:onProgress|\(percent, line\) =>)/g) || []).length, 5)
+  assert.equal((clipPipeline.match(/\], 0, (?:onProgress|\(percent, line\) =>)/g) || []).length, 6)
   assert.match(clipPipeline, /getYoutubeInfo\(normalizedUrl, 0\)/)
   assert.equal((clipPipeline.match(/}, 0\n        \)/g) || []).length, 2)
 })
