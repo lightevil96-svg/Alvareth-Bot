@@ -74,6 +74,8 @@ Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes n
 
 ## 6. Pembaruan terbaru
 
+- 2026-11-02 — `.sw` (owner-only): reply video untuk upload Status; reply foto disimpan sementara per chat/pengirim, lalu `.sw URL mulai akhir` mengunduh audio YouTube dan membuat MP4 foto+musik dengan FFmpeg. Audiens Status diambil dari kontak pribadi yang tersimpan di `conn.chats`; potongan musik dibatasi 90 detik dan file sementara dibersihkan.
+
 - 2026-11-02 — `.clip` menampilkan progres real-time hanya di terminal per ID job; pesan status berjalan di WhatsApp dihapus (chat hanya menerima hasil akhir/kegagalan), progress bar di-reset saat fase/metode berganti, dan matcher mengenali progress yt-dlp, FFmpeg, serta stream Qbyte berlabel provider. Kecepatan/ETA ditampilkan bila sumber datanya tersedia.
 - 2026-11-02 — `.clip` mengutamakan format video dan FPS tertinggi yang tersedia pada jalur yt-dlp dan Qbyte; urutan fallback disusun berdasarkan kualitas sumber lalu kompatibilitas MP4. Jika hasil melebihi 45 MB, FFmpeg melakukan transcode adaptif berdasarkan durasi/anggaran bitrate sebelum metode dianggap gagal.
 - 2026-10-31 — Menambahkan `.clip URL mulai akhir` untuk memotong rentang YouTube langsung dengan yt-dlp `--download-sections` + FFmpeg/keyframe cuts; validasi domain/waktu/durasi, batas file 45 MB, folder sementara per job, dan cleanup setelah pengiriman.
