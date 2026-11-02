@@ -105,7 +105,7 @@ function parseTimestamp(value) {
 }
 
 function parseYoutubeRequest(input) {
-  const normalized = String(input || '').trim().replace(/^(?:\\.sw|sw)\\s+/i, '')
+  const normalized = String(input || '').trim().replace(/^(?:\.sw|sw)\s+/i, '')
   const parts = normalized.split(/\s+/).filter(Boolean)
   if (parts.length !== 3) return null
 
