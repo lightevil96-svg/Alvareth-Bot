@@ -74,7 +74,7 @@ Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes n
 
 ## 6. Pembaruan terbaru
 
-- 2026-11-02 — `.clip` menampilkan progres real-time khusus terminal per ID job: parser progres yt-dlp diperbaiki, FFmpeg melaporkan waktu/speed encoding, fallback API mencatat bytes/kecepatan/ETA bila Content-Length tersedia, serta log tahap/fallback/pengiriman/cleanup; chat WhatsApp tidak menerima pembaruan progres.
+- 2026-11-02 — `.clip` menampilkan progres real-time hanya di terminal per ID job; pesan status berjalan di WhatsApp dihapus (chat hanya menerima hasil akhir/kegagalan), progres di-reset saat transfer/encoding/fallback berganti, dan log mencatat tahap/fallback/pengiriman/cleanup. Kecepatan/ETA hanya ditampilkan bila sumber menyediakannya.
 - 2026-11-02 — `.clip` mengutamakan format video dan FPS tertinggi yang tersedia pada jalur yt-dlp dan Qbyte; urutan fallback disusun berdasarkan kualitas sumber lalu kompatibilitas MP4. Jika hasil melebihi 45 MB, FFmpeg melakukan transcode adaptif berdasarkan durasi/anggaran bitrate sebelum metode dianggap gagal.
 - 2026-10-31 — Menambahkan `.clip URL mulai akhir` untuk memotong rentang YouTube langsung dengan yt-dlp `--download-sections` + FFmpeg/keyframe cuts; validasi domain/waktu/durasi, batas file 45 MB, folder sementara per job, dan cleanup setelah pengiriman.
 
