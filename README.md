@@ -56,6 +56,12 @@ pm2 logs alvareth-bot
 
 Ikuti instruksi yang dikeluarkan oleh `pm2 startup` jika diminta. Hindari menjalankan dua instance bot menggunakan sesi WhatsApp yang sama.
 
+## Perbaikan reply gambar/video pada `.s`
+
+Perintah `.s` sekarang membaca media yang di-reply dari payload asli WhatsApp, bukan hanya `m.quoted.mimetype`. Jika pesan reply hanya berisi preview/thumbnail, bot mencoba mencari media asli memakai ID pesan yang dibalas dan cache lokal (termasuk gambar/video yang dikirim dari akun WhatsApp sendiri). Balasan petunjuk/error stiker dikirim sebagai teks biasa tanpa kartu tautan GitHub. Alternatif: kirim foto dengan caption `.s`. Video stiker tetap maksimal 10 detik.
+
+Untuk pengujian di TokoPanel: setelah update source dan restart, reply sebuah foto dengan `.s`. Cari log `[STICKER] Deteksi media` dengan `quotedType: "imageMessage"`, kemudian pastikan stiker benar-benar terkirim. Coba pula reply video pendek. Jika `hasReply: true` tetapi `quotedType: null`, kirim ulang medianya karena payload asli belum terambil di sesi bot tersebut. Perubahan ini tidak menjamin konten yang tidak tersedia dari WhatsApp dapat diunduh.
+
 ## Auto-download tautan (AutoDL)
 
 Cukup kirim **satu tautan media/file yang didukung** dalam satu pesan WhatsApp, tanpa mengetik perintah unduh. Bot akan meneruskan link itu ke plugin downloader yang sudah ada (bukan membuat permintaan ke provider acak). Link yang tidak cocok dan pesan berisi beberapa link tidak diproses otomatis.
