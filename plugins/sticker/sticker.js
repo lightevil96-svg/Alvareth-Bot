@@ -78,7 +78,8 @@ let handler = async (m, { conn, args = [], usedPrefix = '.', command = 's' }) =>
     if (isVideo) {
       const seconds = Number(
         mediaNode?.seconds ??
-        safeGet(() => q?.seconds, 0) ??
+        safeGet(() => q?.seconds) ??
+        safeGet(() => quotedInfo?.media?.seconds) ??
         0
       )
       if (Number.isFinite(seconds) && seconds > stickerLimits.maxVideoSeconds) {
