@@ -58,10 +58,10 @@ test('every accepted clip must contain a real video stream and not be black for 
 })
 
 test('every yt-dlp strategy probes and explicitly selects its highest available source formats', () => {
-  assert.equal((clipPipeline.match(/probeYtDlpFormats\\(runner, normalizedUrl/g) || []).length, 3)
+  assert.equal((clipPipeline.match(/probeYtDlpFormats\(runner, normalizedUrl/g) || []).length, 3)
   assert.equal((clipPipeline.match(/'--format-sort-force'/g) || []).length, 3)
   assert.equal((clipPipeline.match(/'--format-sort', 'height,width,fps,vbr,br'/g) || []).length, 3)
-  assert.equal((clipPipeline.match(/'--format', selection\\.selector/g) || []).length, 3)
+  assert.equal((clipPipeline.match(/'--format', selection\.selector/g) || []).length, 3)
   assert.match(youtubeSource, /'--dump-single-json'/)
   assert.match(youtubeSource, /'--remote-components', 'ejs:github'/)
   assert.match(youtubeSource, /videoTerbaik: formatInventorySummary/)
