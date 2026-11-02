@@ -65,7 +65,7 @@ test('yt-dlp strategies prioritize the highest available resolution and FPS', ()
 
 test('all clip transcodes retain high source quality and map the video stream explicitly', () => {
   assert.match(clipPipeline, /'-map', '0:v:0'/)
-  assert.match(clipPipeline, /'-map', '0:a:0\?' /)
+  assert.match(clipPipeline, /'-map', '0:a:0\\?'/)
   assert.equal((clipPipeline.match(/'-crf', '18'/g) || []).length, 3)
   assert.equal((clipPipeline.match(/'-b:a', '192k'/g) || []).length, 3)
   assert.match(clipPipeline, /alvareth-clip-sections\.mp4/)
