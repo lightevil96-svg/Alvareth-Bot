@@ -116,12 +116,12 @@ const handler = async (m, { conn, text }) => {
       mimetype: 'video/mp4',
       fileName: 'Alvareth-Clip-' + formatTimestamp(start).replace(/:/g, '-') + '-' + formatTimestamp(end).replace(/:/g, '-') + '.mp4',
       caption:
-        '✅ *YouTube Clip berhasil dibuat!*\\n' +
-        '⏱️ ' + formatTimestamp(start) + ' – ' + formatTimestamp(end) + '\\n' +
+        '✅ *YouTube Clip berhasil dibuat!*\n' +
+        '⏱️ ' + formatTimestamp(start) + ' – ' + formatTimestamp(end) + '\n' +
         '📦 ' + (result.size / 1024 / 1024).toFixed(1) + ' MB' +
-        (result.quality ? '\\n🎞️ ' + result.quality + 'p' : '') +
-        '\\n⚙️ ' + String(result.downloader || 'yt-dlp + FFmpeg') +
-        '\\n⏳ ' + Math.ceil((Date.now() - startedAt) / 1000) + ' detik'
+        (result.quality ? '\n🎞️ ' + result.quality + 'p' : '') +
+        '\n⚙️ ' + String(result.downloader || 'yt-dlp + FFmpeg') +
+        '\n⏳ ' + Math.ceil((Date.now() - startedAt) / 1000) + ' detik'
     }, { quoted: m })
 
     await m.react('✅').catch(() => {})
