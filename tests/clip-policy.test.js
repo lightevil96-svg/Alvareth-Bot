@@ -93,3 +93,11 @@ test('quality diagnostics expose available resolutions and warn when YouTube onl
   assert.match(youtubeSource, /bitrate: Number\(stream\.bit_rate\) \|\| 0/)
   assert.match(youtubeSource, /width: streamInfo\?\.width \|\| null/)
 })
+
+test('YouTube format probing checks HLS and optional PO-token player profiles', () => {
+  assert.match(youtubeSource, /web_safari HLS/)
+  assert.match(youtubeSource, /mweb \+ PO Token Provider/)
+  assert.match(youtubeSource, /YTDLP_POT_PROVIDER_URL/)
+  assert.match(youtubeSource, /candidates\.sort\(\(a, b\) => compareVideoFormats\(a\.video, b\.video\)\)/)
+  assert.equal((clipPipeline.match(/\.\.\.selection\.extractorArgs/g) || []).length, 3)
+})
