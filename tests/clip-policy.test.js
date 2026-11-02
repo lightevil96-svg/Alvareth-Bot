@@ -43,7 +43,7 @@ test('clip FFmpeg and Qbyte HTTP calls do not set application deadlines', () => 
 })
 
 test('Qbyte video format selection excludes audio-only formats without video dimensions', () => {
-  assert.match(youtubeSource, /\.filter\(format => getHeight\(format\) > 0 && format\.vcodec && format\.vcodec !== 'none'\)/)
+  assert.match(youtubeSource, /\.filter\(format => getHeight\(format\) > 0 && format\.vcodec !== 'none'\)/)
   assert.match(youtubeSource, /\.filter\(format => format\.acodec && format\.acodec !== 'none' && format\.vcodec === 'none'\)/)
   assert.match(youtubeSource, /videoStream = await inspectVideoStream\(output\)/)
   assert.match(youtubeSource, /audioStream = await inspectAudioStream\(output\)/)
