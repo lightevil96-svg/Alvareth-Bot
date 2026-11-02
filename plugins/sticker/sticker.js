@@ -1,6 +1,6 @@
 import { sticker } from '../../lib/sticker.js'
 import uploadFile from '../../lib/uploadFile.js'
-import { resolveQuotedMediaInfo, downloadQuotedMedia } from '../../lib/simple.js'
+import { getQuotedStanzaId, resolveQuotedMediaInfo, downloadQuotedMedia } from '../../lib/simple.js'
 
 let handler = async (m, { conn, args = [], usedPrefix = '.', command = 's' }) => {
   const react = async emoji => {
@@ -46,12 +46,7 @@ let handler = async (m, { conn, args = [], usedPrefix = '.', command = 's' }) =>
       /^imageMessage$/i.test(mediaType)
 
     const message = m.rawMessage?.message || m.message || {}
-    const hasReplyContext = Boolean(
-      q ||
-      message.extendedTextMessage?.contextInfo?.stanzaId ||
-      message.imageMessage?.contextInfo?.stanzaId ||
-      message.videoMessage?.contextInfo?.stanzaId
-    )
+    const hasReplyContext = Boolean(q || getQuotedStanzaId(m))
 
     console.log('[STICKER] Deteksi media', JSON.stringify({
       hasReply: hasReplyContext,
