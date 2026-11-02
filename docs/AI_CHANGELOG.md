@@ -1,3 +1,11 @@
+## 2026-11-02 — Progres YouTube Clip khusus terminal
+- **Permintaan:** indikator proses `.clip` harus terlihat real-time di terminal server saja, bukan sebagai pesan progres di chat WhatsApp.
+- **Akar penyebab:** reporter terminal sudah tersedia, tetapi plugin masih mengirim pesan status berjalan ke WhatsApp. Reporter juga mempertahankan persentase lintas fase sehingga progres transfer/encoder berikutnya dapat terlihat tidak bergerak ketika persentasenya kembali ke angka kecil.
+- **Perubahan:** `plugins/downloader/clip.js` menghapus pesan status sementara di WhatsApp; chat tetap menerima hasil akhir atau pesan kegagalan. Reporter terminal per-ID job kini mereset progress bar saat sumber transfer/encoder berubah, persentase kembali turun (misalnya unduhan video lalu audio), atau metode fallback/percobaan kompresi baru dimulai. Log tetap memuat tahap, persentase nyata, kecepatan/ETA bila tersedia, fallback, validasi, pengiriman, dan cleanup. Lama pengiriman WhatsApp dicatat, tetapi persentase upload tidak dibuat-buat karena `sendMessage` pada jalur ini tidak menyediakan callback progres.
+- **Tes:** perlu menjalankan `npm test` dan memeriksa GitHub Actions setelah commit. Belum dilakukan unduhan YouTube atau pengiriman WhatsApp live dari server Pterodactyl.
+- **Belum diverifikasi:** tampilan log aktual pada terminal hosting serta durasi upload media pada jaringan server.
+- **Pelajaran regresi:** setiap fase transfer yang dimulai ulang harus mendapatkan progress bar baru; jangan mengirim pembaruan progres berulang ke chat bila pengguna meminta pemantauan terminal saja.
+
 ## 2026-11-02 — Indikator progres YouTube Clip khusus terminal
 - **Permintaan:** tampilkan apa yang sedang dilakukan .clip dan progres sebenarnya secara real-time, tetapi indikator hanya terlihat di terminal/log Pterodactyl, bukan sebagai pesan progres di chat WhatsApp.
 - **Akar penyebab:** plugin sebelumnya hanya mencatat callback progres pada batas 0%/100%; runYtDlp() juga memakai pola pemisah baris dan regex [download] yang terlalu ter-escape sehingga baris progres yt-dlp tidak terurai dengan benar. Runner FFmpeg belum meneruskan informasi out_time/speed, dan fallback Qbyte belum melaporkan kemajuan transfer stream.
