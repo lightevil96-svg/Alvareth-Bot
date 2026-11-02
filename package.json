@@ -13,7 +13,7 @@
     "start": "node scripts/start-with-update.js",
     "test": "node --check index.js && node --check main.js && node --check handler.js && node --check lib/simple.js && node --check lib/auto-update.js && node --check scripts/start-with-update.js && node --check lib/scrape/tikwm.js && node --check plugins/downloader/tiktok.js && node --check plugins/image/tohitam.js && node --check plugins/ai/aivideo.js && node --check lib/scrape/youtube.js && node --check plugins/downloader/clip.js && node --check plugins/owner/sw.js && node --check lib/auto-download.js && node --test tests/auto-download.test.js && node --check plugins/sticker/sticker.js && node --test tests/quoted-media.test.js && node --check plugins/sticker/sticker-engine.js && node --test tests/sticker-engine.test.js && npm run test:clip",
     "dev": "node --watch index.js",
-    "test:clip": "node --check plugins/downloader/clip-progress.js && node --check plugins/downloader/clip.js && node --test tests/clip-progress.test.js"
+    "test:clip": "node --check lib/scrape/youtube.js && node --check plugins/downloader/clip-progress.js && node --check plugins/downloader/clip.js && node --test tests/clip-progress.test.js"
   },
   "keywords": [
     "alvareth-bot",
