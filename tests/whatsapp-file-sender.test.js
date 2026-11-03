@@ -105,7 +105,7 @@ test('failed WhatsApp send is not retried and source file remains available', as
 
   await assert.rejects(
     sendLocalFile(conn, '628123@s.whatsapp.net', filePath, { checkTempSpace: false }),
-    /simulated upload disconnect/
+    /ECONNRESET/
   )
   assert.equal(calls, 1)
   assert.equal((await fs.stat(filePath)).isFile(), true)
