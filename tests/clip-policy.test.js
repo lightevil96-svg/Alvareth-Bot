@@ -28,16 +28,17 @@ test('Qbyte clip source streams have no 256 MB or 96 MB client cap', () => {
 })
 
 test('clip yt-dlp calls have no idle or total execution deadline', () => {
-  assert.equal((clipPipeline.match(/\], 0, \(percent, line\) =>/g) || []).length, 6)
   assert.doesNotMatch(clipPipeline, /idleTimeoutMs\s*:/)
   assert.doesNotMatch(clipPipeline, /6\s*\*\s*60\s*\*\s*1000/)
   assert.match(clipPipeline, /ensureYtDlpPythonRunner\(0\)/)
   assert.match(clipPipeline, /ensureYtDlpBinary\(0\)/)
+  assert.match(youtubeSource, /runYtDlpWithEjsFallback\(runner, args, 0, onProgress\)/)
+  assert.equal((clipPipeline.match(/downloadValidatedClipFormat\(/g) || []).length, 3)
 })
 
 test('clip FFmpeg and Qbyte HTTP calls do not set application deadlines', () => {
   assert.match(youtubeSource, /function runClipFfmpeg\(args, timeoutMs = 0/)
-  assert.equal((clipPipeline.match(/\], 0, (?:onProgress|\(percent, line\) =>)/g) || []).length, 6)
+  assert.equal((clipPipeline.match(/\], 0, options\?\.onProgress, duration\)/g) || []).length, 3)
   assert.match(clipPipeline, /getYoutubeInfo\(normalizedUrl, 0\)/)
   assert.equal((clipPipeline.match(/}, 0\n        \)/g) || []).length, 2)
 })
@@ -59,9 +60,9 @@ test('every accepted clip must contain a real video stream and not be black for 
 
 test('every yt-dlp strategy probes and explicitly selects its highest available source formats', () => {
   assert.equal((clipPipeline.match(/probeYtDlpFormats\(runner, normalizedUrl/g) || []).length, 3)
-  assert.equal((clipPipeline.match(/'--format-sort-force'/g) || []).length, 3)
-  assert.equal((clipPipeline.match(/'--format-sort', 'height,width,fps,vbr,br'/g) || []).length, 3)
-  assert.equal((clipPipeline.match(/'--format', selection\.selector/g) || []).length, 3)
+  assert.equal((clipPipeline.match(/'--format', candidate\.selector/g) || []).length, 3)
+  assert.equal((clipPipeline.match(/'--merge-output-format', 'mkv'/g) || []).length, 3)
+  assert.equal((clipPipeline.match(/\.\.\.candidate\.extractorArgs/g) || []).length, 3)
   assert.match(youtubeSource, /'--dump-single-json'/)
   assert.match(youtubeSource, /'--remote-components', 'ejs:github'/)
   assert.match(youtubeSource, /videoTerbaik: formatInventorySummary/)
@@ -70,8 +71,8 @@ test('every yt-dlp strategy probes and explicitly selects its highest available 
 test('all clip transcodes retain high source quality and map the video stream explicitly', () => {
   assert.match(clipPipeline, /'-map', '0:v:0'/)
   assert.ok(clipPipeline.includes("'0:a:0?'"))
-  assert.equal((clipPipeline.match(/'-crf', '18'/g) || []).length, 3)
-  assert.equal((clipPipeline.match(/'-b:a', '192k'/g) || []).length, 3)
+  assert.equal((clipPipeline.match(/'-crf', '18'/g) || []).length, 4)
+  assert.equal((clipPipeline.match(/'-b:a', '192k'/g) || []).length, 4)
   assert.match(clipPipeline, /alvareth-clip-sections\.mp4/)
 })
 
@@ -88,7 +89,7 @@ test('all downloader methods are evaluated and the best real output is selected'
 
 test('quality diagnostics expose available resolutions and warn when YouTube only returns 360p', () => {
   assert.match(youtubeSource, /jumlahVideo: selection\.videoFormats\.length/)
-  assert.match(youtubeSource, /getHeight\(best\.video\) <= 360/)
+  assert.match(youtubeSource, /topHeight <= 360/)
   assert.match(youtubeSource, /hanya melihat format sampai/)
   assert.match(youtubeSource, /bitrate: Number\(stream\.bit_rate\) \|\| 0/)
   assert.match(youtubeSource, /width: streamInfo\?\.width \|\| null/)
@@ -98,6 +99,89 @@ test('YouTube format probing checks HLS and optional PO-token player profiles', 
   assert.match(youtubeSource, /web_safari HLS/)
   assert.match(youtubeSource, /mweb \+ PO Token Provider/)
   assert.match(youtubeSource, /YTDLP_POT_PROVIDER_URL/)
-  assert.match(youtubeSource, /candidates\.sort\(\(a, b\) => compareVideoFormats\(a\.video, b\.video\)\)/)
-  assert.equal((clipPipeline.match(/\.\.\.selection\.extractorArgs/g) || []).length, 3)
+  assert.match(youtubeSource, /attempts\.sort\(\(a, b\) => compareAccessibleVideo\(a\.video, b\.video\)\)/)
+  assert.equal((clipPipeline.match(/\.\.\.candidate\.extractorArgs/g) || []).length, 3)
+})
+
+test('source with 1080p metadata but audio-only output retries an alternate 1080p format', async () => {
+  const begin = youtubeSource.indexOf('async function downloadValidatedClipFormat(')
+  const end = youtubeSource.indexOf('\n/**\n * Download a YouTube time range', begin)
+  assert.ok(begin >= 0 && end > begin)
+  const helperCode = youtubeSource.slice(begin, end)
+  const createHelper = new Function('deps', [
+    'const { getWidth, getHeight, runYtDlpWithEjsFallback, getYtDlpOutputPath,',
+    ' inspectVideoStream, assertClipHasVisibleVideo, fsp, console } = deps;',
+    helperCode,
+    'return downloadValidatedClipFormat'
+  ].join('\n'))
+
+  const downloaded = []
+  const cleaned = []
+  const make = files => createHelper({
+    getWidth: v => v.width,
+    getHeight: v => v.height,
+    runYtDlpWithEjsFallback: async (runner, args, timeoutMs) => {
+      assert.equal(timeoutMs, 0)
+      const id = args[1]
+      downloaded.push(id)
+      return { stdout: files[id] }
+    },
+    getYtDlpOutputPath: stdout => stdout,
+    inspectVideoStream: async file => {
+      if (file === '/tmp/audio-only.mp4') return null
+      if (file === '/tmp/360-pretending-to-be-1080.mp4') return { width: 640, height: 360 }
+      return { width: 1920, height: 1080, fps: 24 }
+    },
+    assertClipHasVisibleVideo: async () => {},
+    fsp: { rm: async dir => cleaned.push(dir), mkdir: async () => {} },
+    console: { log() {}, warn() {} }
+  })
+  const attempts = ['616+140', '270+140', '137+140'].map(selector => ({
+    selector, video: { width: 1920, height: 1080, protocol: 'https' }
+  }))
+  const helper = make({
+    '616+140': '/tmp/audio-only.mp4',
+    '270+140': '/tmp/360-pretending-to-be-1080.mp4',
+    '137+140': '/tmp/real-1080.mp4'
+  })
+  const result = await helper(null, 'https://youtube.com/watch?v=test', '/tmp/clip-test',
+    'test method', { attempts }, selected => ['--format', selected.selector],
+    async inputPath => ({ path: inputPath }), null, 90)
+  assert.equal(result.path, '/tmp/real-1080.mp4')
+  assert.equal(result.sourceHeight, 1080)
+  assert.deepEqual(downloaded, ['616+140', '270+140', '137+140'])
+  assert.equal(cleaned.length, 2)
+})
+
+test('clip source validation rejects every audio-only candidate instead of sending a black video', async () => {
+  const begin = youtubeSource.indexOf('async function downloadValidatedClipFormat(')
+  const end = youtubeSource.indexOf('\n/**\n * Download a YouTube time range', begin)
+  const helperCode = youtubeSource.slice(begin, end)
+  const createHelper = new Function('deps', [
+    'const { getWidth, getHeight, runYtDlpWithEjsFallback, getYtDlpOutputPath,',
+    ' inspectVideoStream, assertClipHasVisibleVideo, fsp, console } = deps;',
+    helperCode,
+    'return downloadValidatedClipFormat'
+  ].join('\n'))
+  const helper = createHelper({
+    getWidth: v => v.width,
+    getHeight: v => v.height,
+    runYtDlpWithEjsFallback: async () => ({ stdout: '/tmp/audio-only.mp4' }),
+    getYtDlpOutputPath: stdout => stdout,
+    inspectVideoStream: async () => null,
+    assertClipHasVisibleVideo: async () => {},
+    fsp: { rm: async () => {}, mkdir: async () => {} },
+    console: { log() {}, warn() {} }
+  })
+  await assert.rejects(helper(null, '', '/tmp/clip-failed', 'test method',
+    { attempts: [{ selector: '616+140', video: { width: 1920, height: 1080 } }] },
+    () => ['--format', '616+140'], async p => ({ path: p }), null, 90),
+  /tidak ada format video yang benar-benar dapat dipotong/)
+})
+
+test('Qbyte retries advertised video IDs and verifies the actual downloaded resolution', () => {
+  assert.match(clipPipeline, /videoFormats\.slice\(0, 12\)/)
+  assert.match(clipPipeline, /actualStream\.height < advertisedHeight \* 0\.90/)
+  assert.match(clipPipeline, /Qbyte video tervalidasi/)
+  assert.match(clipPipeline, /if \(!videoPath\)/)
 })
