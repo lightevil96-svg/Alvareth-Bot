@@ -1,3 +1,11 @@
+## 2026-11-03 — Fix candidate undefined pada finalisasi kualitas tertinggi
+
+- **Gejala:** uji .clip nyata menemukan format 720p melalui metadata, tetapi kedua kandidat (136+251 HTTPS dan 232+251 HLS) gagal pada tahap FFmpeg dengan candidate is not defined. Fallback Qbyte hanya menyediakan 360p dan benar dibatalkan karena lebih rendah dari 720p.
+- **Akar masalah:** helper downloadValidatedClipFormat memanggil finalize(inputPath, candidate), tetapi callback finalisasi strategi utama hanya mendeklarasikan parameter inputPath. Callback lalu membaca candidate.video untuk menentukan codec, dimensi, dan opsi stream-copy/encode sehingga terjadi ReferenceError.
+- **Perbaikan:** callback kini menerima kedua argumen: async (inputPath, candidate) => { ... }. Format tertinggi tetap satu-satunya yang diunduh; maksimal satu alternatif pada resolusi yang sama tetap menjadi batas retry. Tidak mengaktifkan kembali lima metode download berurutan dan tidak mengizinkan fallback ke resolusi lebih rendah.
+- **Regresi:** tambah tes yang memastikan callback finalisasi menerima kandidat terpilih dan menggunakan metadata video kandidat tersebut.
+- **Validasi:** pemeriksaan sintaks dan npm run test:clip dijalankan melalui GitHub Actions setelah commit. Live download YouTube dan upload WhatsApp pada TokoPanel tetap perlu diuji.
+
 ## 2026-11-03 — .clip memindai metadata dahulu dan hanya mengunduh kualitas tertinggi
 
 - **Gejala/permintaan:** log menunjukkan lima metode downloader dijalankan berurutan meskipun metode pertama sudah menghasilkan 720p. Setiap metode mengulang download/crop/FFmpeg; API Qbyte bahkan mengunduh video 497,7 MB dan audio 258,5 MB untuk hasil 360p. Pengguna meminta sistem melihat semua kualitas lebih dahulu dan hanya mengambil kualitas tertinggi tanpa mengunduh semua kandidat.

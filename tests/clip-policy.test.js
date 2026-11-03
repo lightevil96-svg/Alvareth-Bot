@@ -249,6 +249,15 @@ test('real FFprobe distinguishes audio-only MP4 from a decodable 720p video', as
 })
 
 
+test('highest-quality FFmpeg finalizer receives the selected format candidate', () => {
+  const strategyStart = clipPipeline.indexOf("id: 'yt-dlp-best-quality'")
+  const strategyEnd = clipPipeline.indexOf("id: 'qbyte-api-fallback'", strategyStart)
+  assert.ok(strategyStart >= 0 && strategyEnd > strategyStart)
+  const strategy = clipPipeline.slice(strategyStart, strategyEnd)
+  assert.match(strategy, /async \(inputPath, candidate\) => \{/)
+  assert.match(strategy, /candidate\.video\?\.vcodec/)
+  assert.match(strategy, /getWidth\(candidate\.video\)/)
+})
 test('clip downloads only the highest-ranked format and trims one selected section', () => {
   assert.match(clipPipeline, /id: 'yt-dlp-best-quality'/)
   assert.match(clipPipeline, /'--download-sections', section/)
