@@ -334,3 +334,18 @@ test('Qbyte HTTP 502 is retried once but permanent errors fail without retry', a
   assert.equal(failures, 1)
 })
 
+
+test('invalid .clip range explains how the bot parsed each timestamp', () => {
+  assert.match(clipPlugin, /Waktu mulai sebagai \\*' \\+ formatTimestamp\\(start\\)/)
+  assert.match(clipPlugin, /Waktu akhir sebagai \\*' \\+ formatTimestamp\\(end\\)/)
+  assert.match(clipPlugin, /Contoh: \.clip URL 2:03:15 2:09:34/)
+})
+
+test('.clip and global error reporter do not retry sends on a closed WhatsApp socket', async () => {
+  const handlerSource = await readFile(new URL('../handler.js', import.meta.url), 'utf8')
+  assert.match(clipPlugin, /conn\\?\\.ws\\?\\.readyState !== undefined && conn\\.ws\\.readyState !== 1/)
+  assert.match(clipPlugin, /Gagal mengirim pesan WhatsApp; detail utama tetap dicatat di terminal/)
+  assert.match(handlerSource, /Laporan WhatsApp dilewati karena socket tertutup/)
+  assert.match(handlerSource, /statusCode === 428/)
+  assert.match(handlerSource, /Fallback dibatalkan: koneksi WhatsApp sudah tertutup/)
+})
