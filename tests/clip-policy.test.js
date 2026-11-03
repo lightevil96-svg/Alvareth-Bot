@@ -66,7 +66,8 @@ test('every accepted clip must contain a real video stream and not be black for 
 })
 
 test('every yt-dlp strategy probes and explicitly selects its highest available source formats', () => {
-  assert.equal((clipPipeline.match(/probeYtDlpFormats\(runner, normalizedUrl/g) || []).length, 4)
+  assert.equal((clipPipeline.match(/await getSharedSelection\(runner,/g) || []).length, 4)
+  assert.match(clipPipeline, /sharedSelectionPromise = probeYtDlpFormats\(runner, normalizedUrl/)
   assert.equal((clipPipeline.match(/'--format', candidate\.selector/g) || []).length, 3)
   assert.equal((clipPipeline.match(/'--merge-output-format', 'mkv'/g) || []).length, 3)
   assert.equal((clipPipeline.match(/\.\.\.candidate\.extractorArgs/g) || []).length, 5)
@@ -257,6 +258,13 @@ test('HD source downgrade is reported rather than described as best available qu
   assert.match(clipPlugin, /tidak berhasil diekstrak sebagai video valid/)
 })
 
+
+test('a single source inventory is reused across all four yt-dlp methods', () => {
+  assert.match(clipPipeline, /let sharedSelectionPromise = null/)
+  assert.match(clipPipeline, /if \(!sharedSelectionPromise\)/)
+  assert.equal((clipPipeline.match(/await getSharedSelection\(runner,/g) || []).length, 4)
+  assert.match(clipPipeline, /return sharedSelectionPromise/)
+})
 
 test('private YouTube cookies are passed only as server-side file paths', async () => {
   const begin = youtubeSource.indexOf('function getClipCookiesArgs() {')
