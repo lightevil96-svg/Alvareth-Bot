@@ -1,3 +1,13 @@
+## 2026-11-03 — .clip memindai metadata dahulu dan hanya mengunduh kualitas tertinggi
+
+- **Gejala/permintaan:** log menunjukkan lima metode downloader dijalankan berurutan meskipun metode pertama sudah menghasilkan 720p. Setiap metode mengulang download/crop/FFmpeg; API Qbyte bahkan mengunduh video 497,7 MB dan audio 258,5 MB untuk hasil 360p. Pengguna meminta sistem melihat semua kualitas lebih dahulu dan hanya mengambil kualitas tertinggi tanpa mengunduh semua kandidat.
+- **Akar masalah:** pipeline lama membandingkan kualitas setelah setiap metode menghasilkan file. Inventaris metadata yt-dlp sudah tersedia, tetapi empat strategi yt-dlp dan satu fallback Qbyte tetap dijalankan untuk membandingkan output yang sudah diunduh.
+- **Perubahan:** .clip kini memindai seluruh format dari profil YouTube yang tersedia menggunakan --dump-single-json --skip-download, mencatat semua resolusi unik, lalu memilih stream dengan resolusi/piksel tertinggi, FPS, protokol, dan bitrate. Hanya satu metode yt-dlp yang mengunduh dan memotong segmen terpilih. Jika stream tertinggi tidak valid, maksimal satu alternatif pada dimensi/resolusi yang sama boleh dicoba; sistem tidak turun berurutan ke 720p/480p/360p untuk membandingkan hasil.
+- **Fallback:** Qbyte hanya dipanggil satu kali jika yt-dlp gagal. Qbyte memeriksa metadata dahulu dan hanya mengunduh satu pasangan video/audio terbaik; fallback di bawah resolusi yang sebelumnya ditemukan yt-dlp dibatalkan. Ukuran sumber dibatasi default 256 MiB per stream, dapat diubah melalui ALVARETH_CLIP_QBYTE_MAX_SOURCE_BYTES.
+- **Optimasi FFmpeg:** jika video sumber sudah H.264 dan dimensi kompatibel, video di-stream-copy alih-alih di-encode ulang. Audio hanya di-encode ke AAC bila codec sumber tidak kompatibel dengan MP4.
+- **Tes:** GitHub Actions npm run test:clip lulus 31/31 (run 41634506716); pemeriksaan sintaks JavaScript seluruh repo lulus (run 41634506676). Tes mencakup inventaris metadata-only, pemilihan satu resolusi tertinggi, satu alternatif pada resolusi sama, fallback Qbyte satu pasangan, validasi stream video, dan fixture FFprobe nyata.
+- **Belum diverifikasi:** uji live download YouTube dan pengiriman video ke WhatsApp melalui TokoPanel harus dilakukan setelah bot direstart. Metadata tidak menjamin stream dapat diunduh; bila format tertinggi ditolak YouTube, sistem akan mencoba satu alternatif pada resolusi sama lalu melaporkan kegagalan, bukan mengunduh semua resolusi.
+
 ## 2026-11-03 — Semua ukuran video `.clip` dan `.download` dikirim sebagai video
 
 - **Permintaan:** jangan mengubah video berukuran besar menjadi dokumen. Aturan harus sama pada `.clip` dan `.download`.
