@@ -225,8 +225,8 @@ export async function handler(chatUpdate) {
     const selectedButtonId = extractSelectedCommandId(rawContent)
     if (typeof selectedButtonId === 'string' && selectedButtonId.trim()) {
         m.text = selectedButtonId.trim()
-        if (/download\\s+(?:send|open|back|page)\\s/i.test(m.text)) {
-            const action = m.text.trim().split(/\\s+/).slice(0, 2).join(' ')
+        if (/download\s+(?:send|open|back|page)\s/i.test(m.text)) {
+            const action = m.text.trim().split(/\s+/).slice(0, 2).join(' ')
             console.log('[DOWNLOAD ROUTER] Balasan interaktif diterima:', action)
         }
     } else if (typeof m.text !== 'string' || !m.text.trim()) {
@@ -967,7 +967,7 @@ if (autoDownloadRoute) {
 }
 
 // Focused command-router trace for the image conversion regression.
-const isImageCommandTrace = /^\\s*[.!/](?:toreal|tohitam|tochibi|toghibli)\\b/i.test(String(m.text || ''))
+const isImageCommandTrace = /^\s*[.!/](?:toreal|tohitam|tochibi|toghibli)\\b/i.test(String(m.text || ''))
 if (isImageCommandTrace) {
     const prefix = conn.prefix ?? global.prefix
     const prefixDescription = prefix instanceof RegExp
@@ -976,11 +976,11 @@ if (isImageCommandTrace) {
         : { type: typeof prefix, value: String(prefix) }
     const candidates = Object.entries(global.plugins || {}).filter(([name, plugin]) => {
         const commands = plugin?.command
-        if (commands instanceof RegExp) return new RegExp(commands.source, commands.flags.replace(/[gy]/g, '')).test(String(m.text).trim().slice(1).split(/\\s+/)[0])
+        if (commands instanceof RegExp) return new RegExp(commands.source, commands.flags.replace(/[gy]/g, '')).test(String(m.text).trim().slice(1).split(/\s+/)[0])
         if (Array.isArray(commands)) return commands.some(value => value instanceof RegExp
-            ? new RegExp(value.source, value.flags.replace(/[gy]/g, '')).test(String(m.text).trim().slice(1).split(/\\s+/)[0])
-            : String(value).toLowerCase() === String(m.text).trim().slice(1).split(/\\s+/)[0].toLowerCase())
-        return typeof commands === 'string' && commands.toLowerCase() === String(m.text).trim().slice(1).split(/\\s+/)[0].toLowerCase()
+            ? new RegExp(value.source, value.flags.replace(/[gy]/g, '')).test(String(m.text).trim().slice(1).split(/\s+/)[0])
+            : String(value).toLowerCase() === String(m.text).trim().slice(1).split(/\s+/)[0].toLowerCase())
+        return typeof commands === 'string' && commands.toLowerCase() === String(m.text).trim().slice(1).split(/\s+/)[0].toLowerCase()
     }).map(([name, plugin]) => ({ name, tags: plugin?.tags || [], disabled: Boolean(plugin?.disabled), isFunction: typeof plugin === 'function' }))
     console.log('[COMMAND TRACE] image-command received', JSON.stringify({
         text: m.text, chat: m.chat, sender: m.sender, fromMe: m.fromMe,
@@ -1153,7 +1153,7 @@ for (let name in global.plugins) {
 
                 const isImagePlugin = Array.isArray(plugin.tags)
                     ? plugin.tags.some(tag => String(tag).toLowerCase() === 'image')
-                    : String(plugin.tags || '').toLowerCase().split(/[\\s,]+/).includes('image')
+                    : String(plugin.tags || '').toLowerCase().split(/[\s,]+/).includes('image')
                 const imageStartedAt = isImagePlugin ? Date.now() : 0
                 if (isImagePlugin) {
                     console.log(`[IMAGE] ▶ Mulai | command=.${command} | plugin=${name} | sender=${String(m.sender || '').split('@')[0]}`)
