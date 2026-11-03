@@ -88,7 +88,7 @@ test('all downloader methods are evaluated and the best real output is selected'
 
 test('quality diagnostics expose available resolutions and warn when YouTube only returns 360p', () => {
   assert.match(youtubeSource, /jumlahVideo: selection\.videoFormats\.length/)
-  assert.match(youtubeSource, /getHeight\(best\) <= 360/)
+  assert.match(youtubeSource, /getHeight\(best\.video\) <= 360/)
   assert.match(youtubeSource, /hanya melihat format sampai/)
   assert.match(youtubeSource, /bitrate: Number\(stream\.bit_rate\) \|\| 0/)
   assert.match(youtubeSource, /width: streamInfo\?\.width \|\| null/)
