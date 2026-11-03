@@ -1,0 +1,31 @@
+name: Downloads file manager regression
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/download-browser.js'
+      - 'plugins/downloader/download.js'
+      - 'plugins/downloader/clip.js'
+      - 'tests/download-browser.test.js'
+      - 'package.json'
+      - '.github/workflows/download-regression.yml'
+  pull_request:
+    paths:
+      - 'lib/download-browser.js'
+      - 'plugins/downloader/download.js'
+      - 'plugins/downloader/clip.js'
+      - 'tests/download-browser.test.js'
+      - 'package.json'
+
+jobs:
+  download-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check syntax and filesystem safety regressions
+        run: npm run test:download
