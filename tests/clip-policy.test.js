@@ -336,28 +336,29 @@ test('Qbyte HTTP 502 is retried once but permanent errors fail without retry', a
 
 
 test('invalid .clip range explains how the bot parsed each timestamp', () => {
-  assert.match(clipPlugin, /Waktu mulai sebagai \\*' \\+ formatTimestamp\\(start\\)/)
-  assert.match(clipPlugin, /Waktu akhir sebagai \\*' \\+ formatTimestamp\\(end\\)/)
-  assert.match(clipPlugin, /Contoh: \.clip URL 2:03:15 2:09:34/)
+  assert.ok(clipPlugin.includes("Bot membaca waktu mulai sebagai *' + formatTimestamp(start)"))
+  assert.ok(clipPlugin.includes("waktu akhir sebagai *' + formatTimestamp(end)"))
+  assert.ok(clipPlugin.includes('Contoh: .clip URL 2:03:15 2:09:34'))
 })
+
 
 test('.clip and global error reporter do not retry sends on a closed WhatsApp socket', async () => {
   const handlerSource = await readFile(new URL('../handler.js', import.meta.url), 'utf8')
-  assert.match(clipPlugin, /conn\\?\\.ws\\?\\.readyState !== undefined && conn\\.ws\\.readyState !== 1/)
-  assert.match(clipPlugin, /Gagal mengirim pesan WhatsApp; detail utama tetap dicatat di terminal/)
+  assert.ok(clipPlugin.includes('conn?.ws?.readyState !== undefined && conn.ws.readyState !== 1'))
+  assert.ok(clipPlugin.includes('Gagal mengirim pesan WhatsApp; detail utama tetap dicatat di terminal'))
   assert.match(handlerSource, /Laporan WhatsApp dilewati karena socket tertutup/)
   assert.match(handlerSource, /statusCode === 428/)
   assert.match(handlerSource, /Fallback dibatalkan: koneksi WhatsApp sudah tertutup/)
 })
 
 
-test('.clip delegates to the shared sender and retains the final file when WhatsApp upload fails', async () => {
+test('.clip uses the shared uploader and retains completed output after send failure', async () => {
   const senderSource = await readFile(new URL('../lib/whatsapp-file-sender.js', import.meta.url), 'utf8')
-  assert.match(clipPlugin, /await sendLocalFile\(conn, m\.chat, savedPath/)
-  assert.match(clipPlugin, /File tetap tersimpan: downloads\/clip\//)
-  assert.match(clipPlugin, /cleanupDownload\(outputDir\)/)
-  assert.doesNotMatch(clipPlugin, /catch \(sendError\)/)
-  assert.match(senderSource, /No automatic retry is performed/)
-  assert.match(senderSource, /mediaUploadTimeoutMs: timeoutMs/)
-  assert.match(senderSource, /stats\.size <= inlineVideoMaxBytes \? 'video' : 'document'/)
+  assert.ok(clipPlugin.includes('await sendLocalFile(conn, m.chat, savedPath'))
+  assert.ok(clipPlugin.includes('File tetap tersimpan: downloads/clip/'))
+  assert.ok(clipPlugin.includes('await cleanupDownload(outputDir)'))
+  assert.ok(!clipPlugin.includes('await conn.sendMessage(m.chat, content)'))
+  assert.ok(senderSource.includes('No automatic retry is performed'))
+  assert.ok(senderSource.includes('mediaUploadTimeoutMs: timeoutMs'))
+  assert.ok(senderSource.includes("stats.size <= inlineVideoMaxBytes ? 'video' : 'document'"))
 })
