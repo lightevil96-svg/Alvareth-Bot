@@ -344,10 +344,24 @@ async function inferInstalledBaseSha(root) {
 
 async function compareCommits(baseSha, headSha) {
   if (baseSha === headSha) return { status: 'identical', ahead_by: 0, files: [] }
-  const data = await fetchJson(
-    API_ROOT + '/compare/' + baseSha + '...' + headSha,
-    'Membandingkan file antarversi'
-  )
+  let data
+  try {
+    data = await fetchJson(
+      API_ROOT + '/compare/' + baseSha + '...' + headSha,
+      'Membandingkan file antarversi'
+    )
+  } catch (error) {
+    if (!shouldUseGitFallback(error)) throw error
+    log('GitHub REST tidak dapat membandingkan commit (HTTP ' + (error.status || '?') +
+      '). Memakai Git diff read-only sebagai cadangan.')
+    try {
+      data = await compareCommitsViaGit(baseSha, headSha)
+    } catch (fallbackError) {
+      throw new Error('API GitHub ditolak dan perbandingan Git cadangan gagal. ' +
+        'Tidak ada file yang diubah. Periksa koneksi GitHub atau ALVARETH_GITHUB_TOKEN. ' +
+        'Detail: ' + fallbackError.message)
+    }
+  }
   if (data?.status === 'behind' || data?.status === 'diverged') {
     throw new Error('Riwayat lokal dan branch GitHub tidak lagi berada pada satu jalur commit. Tidak ada file yang diubah demi keamanan; baseline perlu diperiksa manual.')
   }
@@ -358,7 +372,9 @@ async function compareCommits(baseSha, headSha) {
     throw new Error('Ada 300 atau lebih file berubah sejak baseline. Update otomatis dihentikan agar daftar file yang terpotong tidak menyebabkan sinkronisasi tidak lengkap.')
   }
   if (Number(data.ahead_by) > 0 && data.files.length === 0) {
-    throw new Error('GitHub melaporkan commit baru tanpa daftar file. Update dibatalkan demi keamanan.')
+    // A valid commit can change only parent metadata or produce an empty tree diff.
+    // Never perform a blind write; record the new commit without touching files.
+    log('Perbedaan commit kosong; tidak ada file yang akan diganti.')
   }
   return data
 }
