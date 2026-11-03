@@ -3,6 +3,8 @@
 // QR login, auto-reconnect, recursive plugin loader, lowdb
 // ═══════════════════════════════════════════════════════════════
 
+import 'dotenv/config'
+import './lib/whatsapp-temp-bootstrap.js'
 import './config.js'
 
 import { join, dirname, relative, sep, resolve } from 'path'

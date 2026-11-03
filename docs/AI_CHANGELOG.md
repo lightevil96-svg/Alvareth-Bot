@@ -1,3 +1,12 @@
+## 2026-11-03 — Alihkan temporary storage Baileys dari tmpfs Pterodactyl
+
+- **Gejala:** upload dokumen MP4 181,6 MB ditolak oleh preflight karena os.tmpdir() hanya menyediakan 100,0 MB, sementara estimasi kebutuhan Baileys 233,9 MB. File sumber tetap tersimpan.
+- **Akar penyebab:** Baileys menulis file sementara saat menyiapkan/enkripsi media keluar. Pada Pterodactyl Wings, /tmp container secara default adalah tmpfs 100 MiB yang memakai memori host dan terpisah dari disk server. Node.js memakai /tmp jika TMPDIR tidak diatur.
+- **Perubahan:** lib/whatsapp-temp-dir.js menyiapkan dan menguji direktori writable di storage server; default <ALVARETH_DATA_DIR atau ~/.alvareth-bot-data>/tmp, dapat dioverride dengan ALVARETH_WA_TMPDIR. lib/whatsapp-temp-bootstrap.js dijalankan setelah dotenv/config tetapi sebelum import Baileys di main.js, lalu mengatur TMPDIR. Jika override tidak valid, bot mencoba direktori data default. lib/whatsapp-file-sender.js mencatat lokasi temp aktual. Tes regresi mencakup default, override, dan fallback; README, .env.example, serta workflow diperbarui.
+- **Tes:** npm run test:media dan GitHub Actions JavaScript syntax checks akan dijalankan setelah commit; hasil akan dicatat setelah workflow selesai. Tidak ada tes lokal atau pengiriman WhatsApp live pada saat commit.
+- **Batasan:** perubahan ini memindahkan file sementara dari tmpfs /tmp ke storage server Pterodactyl; tidak menambah kuota disk server dan tidak mengubah batas file WhatsApp. Disk server tetap harus memiliki ruang kosong sesuai kebutuhan file dan proses enkripsi. Pengiriman live di TokoPanel/WhatsApp masih perlu diverifikasi.
+- **Pelajaran regresi:** jangan hanya menaikkan batas ukuran file atau menonaktifkan preflight saat os.tmpdir() adalah tmpfs 100 MiB. Periksa TMPDIR, filesystem aktual, serta kuota disk container sebelum mengubah batas upload.
+
 ## 2026-11-03 — Audit dan perbaikan pengiriman `.clip` / `.download` ke WhatsApp
 
 - **Gejala screenshot:** terminal menemukan sumber sekitar 417,6 MB dan format 1920×1080 60 FPS; bot kemudian menyatakan `.clip` gagal, sementara file tetap tersedia di server dan bisa diambil melalui panel. `.download` menampilkan browser folder, tetapi jalur pemilihan/pengiriman belum memberikan hasil yang konsisten.
