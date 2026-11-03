@@ -40,7 +40,8 @@ test('clip FFmpeg and Qbyte HTTP calls do not set application deadlines', () => 
   assert.match(youtubeSource, /function runClipFfmpeg\(args, timeoutMs = 0/)
   assert.equal((clipPipeline.match(/\], 0, options\?\.onProgress, duration\)/g) || []).length, 3)
   assert.match(clipPipeline, /getYoutubeInfo\(normalizedUrl, 0\)/)
-  assert.equal((clipPipeline.match(/}, 0\n        \)/g) || []).length, 2)
+  assert.equal((clipPipeline.match(/}, 0\n        \)/g) || []).length, 1)
+  assert.match(clipPipeline, /videoFormats\.slice\(0, 12\)/)
 })
 
 test('Qbyte video format selection excludes audio-only formats without video dimensions', () => {
