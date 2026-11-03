@@ -85,9 +85,9 @@ const handler = async (m, { conn, text }) => {
   const { url, start, end } = request
   if (end <= start) {
     return say(
-      '❌ Rentang waktu tidak valid. Waktu akhir harus lebih besar daripada waktu mulai.\\n\\n' +
+      '❌ Rentang waktu tidak valid. Waktu akhir harus lebih besar daripada waktu mulai.\n\n' +
       'Bot membaca waktu mulai sebagai *' + formatTimestamp(start) + '* dan waktu akhir sebagai *' + formatTimestamp(end) + '*.' +
-      '\\nPeriksa penulisan timestamp. Gunakan HH:MM:SS untuk durasi lebih dari satu jam.\\n' +
+      '\nPeriksa penulisan timestamp. Gunakan HH:MM:SS untuk durasi lebih dari satu jam.\\n' +
       'Contoh: .clip URL 2:03:15 2:09:34'
     )
   }
