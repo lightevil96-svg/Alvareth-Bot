@@ -2,7 +2,7 @@
 
 - **Gejala:** file MP4 181,6 MB yang dipilih dari `.download` dikirim sebagai dokumen karena helper bersama memakai ambang video inline default 64 MiB.
 - **Perubahan:** `.download` kini mengirim opsi `forceVideo` khusus untuk file berekstensi `.mp4`; helper `lib/whatsapp-file-sender.js` mengabaikan ambang 64 MiB hanya ketika opsi tersebut aktif dan ekstensi file `.mp4`. File MP4 dari `.download` menggunakan payload `video`, sedangkan file lain tetap dokumen. `.clip` tidak mengaktifkan override ini sehingga kebijakan sebelumnya (MP4 besar sebagai dokumen) tetap sama. Perbaikan temporary storage global tetap berlaku untuk keduanya.
-- **Tes:** ditambahkan tes regresi MP4 70 MiB dengan `forceVideo: true`; GitHub Actions akan memvalidasi bersama seluruh tes `test:media`. Tes mock memverifikasi payload video, bukan pengiriman live WhatsApp.
+- **Tes:** GitHub Actions `npm run test:media` 17/17 lulus (run 41626225894), termasuk tes MP4 70 MiB dengan `forceVideo: true`; JavaScript syntax checks lulus (run 41626225846) dan download-browser regression lulus (run 41626225965). Tes mock memverifikasi payload video, bukan pengiriman live WhatsApp.
 - **Batasan:** video MP4 berukuran sangat besar tetap tunduk pada batas endpoint video WhatsApp/provider. Jika ditolak, bot tidak mengubahnya otomatis menjadi dokumen; file sumber tetap tersimpan untuk dicoba ulang atau diproses dengan kebijakan lain.
 
 ## 2026-11-03 — Alihkan temporary storage Baileys dari tmpfs Pterodactyl
