@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises'
+import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { createClipProgress } from './clip-progress.js'
 import {
@@ -99,16 +100,25 @@ const handler = async (m, { conn, text }) => {
   // Progress is written to the process terminal only; no WhatsApp status message is sent.
   progress.start()
   let outputDir = null
+  let savedPath = null
   try {
+    const downloadRoot = path.resolve(process.env.ALVARETH_DOWNLOAD_DIR || './downloads')
+    const clipRoot = path.join(downloadRoot, 'clip')
+    await fs.mkdir(clipRoot, { recursive: true })
     const result = await downloadYoutubeClip(url, start, end, {
-      outputRoot: './downloads/clip',
+      outputRoot: clipRoot,
       onProgress: reportProgress
     })
     outputDir = result.outputDir
     console.log('[CLIP:' + jobId + '] Hasil tervalidasi: ' + (result.size / 1024 / 1024).toFixed(1) + ' MB.')
 
-    progress.stage('📂 Memeriksa file hasil')
-    const stats = await fs.stat(result.path)
+    progress.stage('📂 Menyimpan file ke folder downloads/clip')
+    const fileName = 'Alvareth-Clip-' +
+      formatTimestamp(start).replace(/:/g, '-') + '-' +
+      formatTimestamp(end).replace(/:/g, '-') + '-' + jobId + '.mp4'
+    savedPath = path.join(clipRoot, fileName)
+    await fs.rename(result.path, savedPath)
+    const stats = await fs.stat(savedPath)
     if (!stats.isFile() || stats.size < 1) throw new Error('File hasil clip kosong atau tidak ditemukan.')
     const caption =
       '✅ *YouTube Clip berhasil dibuat!*\n' +
@@ -118,28 +128,24 @@ const handler = async (m, { conn, text }) => {
       (result.qualityDowngraded ? '\n⚠️ Format ' + result.sourceMaxQuality + 'p ditemukan, tetapi tidak berhasil diekstrak sebagai video valid. Ini kualitas terbaik yang berhasil diproses.' : '') +
       '\n⚙️ ' + String(result.downloader || 'yt-dlp + FFmpeg') +
       '\n⌛ ' + Math.ceil((Date.now() - startedAt) / 1000) + ' detik'
-    const fileName = 'Alvareth-Clip-' +
-      formatTimestamp(start).replace(/:/g, '-') + '-' +
-      formatTimestamp(end).replace(/:/g, '-') + '.mp4'
-
     // Stream from disk so large clips do not need to be loaded fully into RAM.
     // If WhatsApp rejects video media (e.g. its own media constraints), retry
     // as a document. The platform may still reject files beyond its own limits.
     await progress.stage('📤 Mengirim video ke WhatsApp (persentase upload tidak tersedia)')
-    const content = { video: { url: result.path }, mimetype: 'video/mp4', fileName, caption }
+    const content = { video: { url: savedPath }, mimetype: 'video/mp4', fileName, caption }
     try {
       await conn.sendMessage(m.chat, content)
     } catch (sendError) {
       console.warn('[CLIP:' + jobId + '] Pengiriman video gagal, mencoba sebagai dokumen:', sendError?.message || sendError)
       await progress.stage('📤 Mencoba mengirim file sebagai dokumen')
       await conn.sendMessage(m.chat, {
-        document: { url: result.path }, mimetype: 'video/mp4', fileName, caption
+        document: { url: savedPath }, mimetype: 'video/mp4', fileName, caption
       })
     }
 
     progress.finish('success', 'Video berhasil dikirim. Silakan cek media di chat.')
     try { await m.react('✅') } catch {}
-    console.log('[CLIP:' + jobId + '] Selesai; file telah dikirim ke WhatsApp.')
+    console.log('[CLIP:' + jobId + '] Selesai; file tersimpan di ' + savedPath + ' dan telah dikirim ke WhatsApp.')
   } catch (error) {
     const detail = String(error?.message || error || 'Kesalahan tidak diketahui')
       .replace(/https?:\/\/[^\s"'<>]+/gi, '[tautan]')
