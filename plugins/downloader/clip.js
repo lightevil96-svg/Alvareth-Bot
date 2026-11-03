@@ -126,6 +126,10 @@ const handler = async (m, { conn, text }) => {
     const stats = await fs.stat(savedPath)
     if (!stats.isFile() || stats.size < 1) throw new Error('File hasil clip kosong atau tidak ditemukan.')
     console.log('[CLIP:' + jobId + '] [stage] File tervalidasi: ' + savedPath + ' (' + (stats.size / 1024 / 1024).toFixed(1) + ' MB).')
+    const configuredInlineLimit = Number(process.env.ALVARETH_WA_INLINE_VIDEO_MAX_BYTES)
+    const inlineVideoLimit = Number.isSafeInteger(configuredInlineLimit) && configuredInlineLimit > 0
+      ? configuredInlineLimit
+      : 64 * 1024 * 1024
     const caption =
       '✅ *YouTube Clip berhasil dibuat!*\n' +
       '⏱️ ' + range + '\n' +
@@ -142,7 +146,7 @@ const handler = async (m, { conn, text }) => {
     const delivery = await sendLocalFile(conn, m.chat, savedPath, {
       jobId,
       mimetype: 'video/mp4',
-      caption: stats.size > Number(process.env.ALVARETH_WA_INLINE_VIDEO_MAX_BYTES || 64 * 1024 * 1024)
+      caption: stats.size > inlineVideoLimit
         ? caption + '\n📎 MP4 berukuran besar dikirim sebagai dokumen agar kualitas asli tetap terjaga.'
         : caption,
       seconds: result.duration,
