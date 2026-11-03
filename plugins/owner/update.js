@@ -139,13 +139,143 @@ async function fetchJson(url, label) {
   return response.json()
 }
 
+// Git smart HTTP does not consume the unauthenticated GitHub REST API quota.
+// All commands run against an isolated, temporary bare repository: never reset
+// or change the current bot's files, repository, runtime data or Git metadata.
+function shouldUseGitFallback(error) {
+  return error?.status === 403 || error?.status === 429 ||
+    (Number(error?.status) >= 500 && Number(error?.status) <= 599) ||
+    error?.code === 'ETIMEDOUT' || error?.code === 'ECONNRESET'
+}
+
+async function runReadOnlyGit(args, cwd = process.cwd()) {
+  try {
+    const { stdout } = await new Promise((resolve, reject) => {
+      const child = spawn('git', args, {
+        cwd,
+        env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_CONFIG_NOSYSTEM: '1' },
+        stdio: ['ignore', 'pipe', 'pipe']
+      })
+      let stdout = ''
+      let stderr = ''
+      let settled = false
+      const timeout = setTimeout(() => {
+        child.kill('SIGKILL')
+        if (!settled) {
+          settled = true
+          reject(new Error('Git cadangan melewati batas waktu 120 detik.'))
+        }
+      }, 120_000)
+      const done = (error, value) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timeout)
+        if (error) reject(error)
+        else resolve(value)
+      }
+      child.stdout.on('data', chunk => {
+        stdout += chunk.toString('utf8')
+        if (stdout.length > 5 * 1024 * 1024) {
+          child.kill('SIGKILL')
+          done(new Error('Output Git cadangan terlalu besar.'))
+        }
+      })
+      child.stderr.on('data', chunk => {
+        stderr = (stderr + chunk.toString('utf8')).slice(-5000)
+      })
+      child.once('error', error => done(new Error('Git cadangan tidak tersedia: ' + error.message)))
+      child.once('close', code => {
+        if (code !== 0) return done(new Error('Git cadangan gagal (code ' + code + '): ' + stderr.trim().slice(-350)))
+        done(null, { stdout })
+      })
+    })
+    return stdout
+  } catch (error) {
+    throw error
+  }
+}
+
+async function fetchLatestCommitViaGit() {
+  const ref = 'refs/heads/' + BRANCH
+  const output = await runReadOnlyGit(['ls-remote', '--exit-code', GIT_REMOTE_URL, ref])
+  const line = output.split('\n').find(row => row.endsWith('\t' + ref))
+  const sha = line?.split('\t')[0]?.trim()
+  if (!isSha(sha)) throw new Error('Git cadangan tidak bisa memverifikasi SHA branch ' + BRANCH)
+  return sha
+}
+
+function parseGitNameStatusZ(output) {
+  const entries = String(output).split('\0')
+  const files = []
+  let index = 0
+  while (index < entries.length && entries[index] !== '') {
+    const status = entries[index++]
+    const filename = entries[index++]
+    if (!filename) throw new Error('Output diff Git cadangan tidak lengkap.')
+    if (/^R[0-9]+$/.test(status)) {
+      const renamedTo = entries[index++]
+      if (!renamedTo) throw new Error('Nama file rename dari Git cadangan hilang.')
+      files.push({ status: 'renamed', previous_filename: filename, filename: renamedTo })
+    } else {
+      if (!/^[AMDT]$/.test(status)) {
+        throw new Error('Status file dari Git cadangan tidak dikenal: ' + status.slice(0, 15))
+      }
+      files.push({ status: status === 'D' ? 'removed' : status === 'A' ? 'added' : 'modified', filename })
+    }
+    if (files.length >= MAX_COMPARE_FILES) {
+      throw new Error('Git cadangan mendeteksi 300 atau lebih file berubah; sinkronisasi dibatalkan.')
+    }
+  }
+  return files
+}
+
+async function compareCommitsViaGit(baseSha, headSha) {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'alvareth-update-git-'))
+  try {
+    await runReadOnlyGit(['init', '--quiet', '--bare', tempDir])
+    await runReadOnlyGit([
+      '-C', tempDir, 'fetch', '--quiet', '--no-tags', '--filter=blob:none',
+      GIT_REMOTE_URL, 'refs/heads/' + BRANCH
+    ])
+    await runReadOnlyGit(['-C', tempDir, 'cat-file', '-e', baseSha + '^{commit}'])
+    await runReadOnlyGit(['-C', tempDir, 'cat-file', '-e', headSha + '^{commit}'])
+    try {
+      await runReadOnlyGit(['-C', tempDir, 'merge-base', '--is-ancestor', baseSha, headSha])
+    } catch {
+      throw new Error('Baseline lokal bukan leluhur commit terbaru GitHub. Update dibatalkan demi keamanan.')
+    }
+    const aheadText = await runReadOnlyGit(['-C', tempDir, 'rev-list', '--count', baseSha + '..' + headSha])
+    const aheadBy = Number(aheadText.trim())
+    if (!Number.isSafeInteger(aheadBy) || aheadBy < 0) throw new Error('Jumlah commit Git cadangan tidak valid.')
+    const output = await runReadOnlyGit([
+      '-C', tempDir, 'diff', '--no-ext-diff', '--name-status', '-z',
+      '--find-renames', baseSha, headSha
+    ])
+    return { status: aheadBy === 0 ? 'identical' : 'ahead', ahead_by: aheadBy, files: parseGitNameStatusZ(output) }
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {})
+  }
+}
+
 async function fetchLatestCommitSha() {
-  const data = await fetchJson(
-    API_ROOT + '/commits/' + encodeURIComponent(BRANCH),
-    'Membaca commit terbaru'
-  )
-  if (!isSha(data?.sha)) throw new Error('GitHub tidak mengembalikan SHA commit branch yang valid.')
-  return data.sha
+  try {
+    const data = await fetchJson(
+      API_ROOT + '/commits/' + encodeURIComponent(BRANCH),
+      'Membaca commit terbaru'
+    )
+    if (!isSha(data?.sha)) throw new Error('GitHub tidak mengembalikan SHA commit branch yang valid.')
+    return data.sha
+  } catch (error) {
+    if (!shouldUseGitFallback(error)) throw error
+    log('GitHub REST tidak dapat membaca commit (HTTP ' + (error.status || '?') +
+      '). Memakai Git read-only sebagai cadangan tanpa mengubah file lokal.')
+    try { return await fetchLatestCommitViaGit() }
+    catch (fallbackError) {
+      throw new Error('GitHub API ditolak dan jalur Git cadangan gagal. ' +
+        'Periksa akses github.com dari server atau atur ALVARETH_GITHUB_TOKEN pada environment server. ' +
+        'Detail: ' + fallbackError.message)
+    }
+  }
 }
 
 async function readSavedState() {
