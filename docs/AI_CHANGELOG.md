@@ -4,7 +4,7 @@
 - **Akar masalah:** helper downloadValidatedClipFormat memanggil finalize(inputPath, candidate), tetapi callback finalisasi strategi utama hanya mendeklarasikan parameter inputPath. Callback lalu membaca candidate.video untuk menentukan codec, dimensi, dan opsi stream-copy/encode sehingga terjadi ReferenceError.
 - **Perbaikan:** callback kini menerima kedua argumen: async (inputPath, candidate) => { ... }. Format tertinggi tetap satu-satunya yang diunduh; maksimal satu alternatif pada resolusi yang sama tetap menjadi batas retry. Tidak mengaktifkan kembali lima metode download berurutan dan tidak mengizinkan fallback ke resolusi lebih rendah.
 - **Regresi:** tambah tes yang memastikan callback finalisasi menerima kandidat terpilih dan menggunakan metadata video kandidat tersebut.
-- **Validasi:** pemeriksaan sintaks dan npm run test:clip dijalankan melalui GitHub Actions setelah commit. Live download YouTube dan upload WhatsApp pada TokoPanel tetap perlu diuji.
+- **Validasi:** GitHub Actions npm run test:clip lulus 32/32, termasuk tes regresi callback finalizer (run 41636334551); pemeriksaan sintaks JavaScript seluruh repo juga lulus (run 41636334438). Live download YouTube dan upload WhatsApp pada TokoPanel tetap perlu diuji.
 
 ## 2026-11-03 — .clip memindai metadata dahulu dan hanya mengunduh kualitas tertinggi
 
