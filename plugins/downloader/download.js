@@ -199,7 +199,17 @@ const handler = async (m, { conn, text, usedPrefix, command }) => {
     await sendFolderList(m, conn, { root, relativePath, page, usedPrefix, command })
   } catch (error) {
     console.error('[DOWNLOAD] Gagal memproses file manager:', error?.stack || error)
-    await m.reply('❌ ' + String(error?.message || error) + '\nKetik .download untuk membuka folder utama lagi.')
+    const message = '❌ ' + String(error?.message || error) +
+      '\nFile sumber tidak dihapus. Setelah memperbaiki masalah, ketik .download dan pilih file yang sama untuk mencoba lagi.'
+    if (conn?.ws?.readyState !== undefined && conn.ws.readyState !== 1) {
+      console.warn('[DOWNLOAD] Notifikasi gagal tidak dikirim karena socket WhatsApp tertutup.')
+      return
+    }
+    try {
+      await m.reply(message)
+    } catch (replyError) {
+      console.error('[DOWNLOAD] Gagal mengirim notifikasi error WhatsApp:', replyError?.stack || replyError)
+    }
   }
 }
 
