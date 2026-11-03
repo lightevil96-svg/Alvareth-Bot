@@ -1,3 +1,11 @@
+## 2026-11-03 — .clip: hentikan retry upload saat storage ENOSPC
+
+- **Gejala:** klip 181,6 MB selesai dibuat dan tersimpan di `downloads/clip`, tetapi upload WhatsApp gagal dengan `ENOSPC: no space left on device, write`.
+- **Akar masalah yang terlihat:** kegagalan terjadi pada tahap upload media, bukan download YouTube. Jalur lama mencoba upload ulang file yang sama sebagai dokumen setelah upload video gagal; ketika penyebabnya ruang disk habis, percobaan kedua dapat mengulang kegagalan dan memperburuk tekanan storage.
+- **Perbaikan:** `plugins/downloader/clip.js` mengenali ENOSPC termasuk error bersarang, membaca kapasitas tersedia pada direktori temp Node (`TMPDIR` atau `os.tmpdir()`) untuk diagnostik terminal, dan tidak mengulang upload sebagai dokumen untuk error ini. File hasil final tetap dipertahankan di `downloads/clip`; bot memberi instruksi mengosongkan ruang temporary/server lalu mengambil ulang melalui `.download`. Fallback dokumen tetap aktif untuk kegagalan video non-ENOSPC.
+- **Tes regresi:** ditambahkan klasifikasi ENOSPC bersarang, pembeda error lain, dan pemeriksaan bahwa jalur ENOSPC tidak menjalankan fallback dokumen serta file hasil tidak dihapus. Tes lokal/CI dan pengiriman live WhatsApp belum dijalankan pada server pengguna.
+- **Batasan:** perubahan ini mencegah retry sia-sia dan kehilangan hasil download, tetapi tidak menambah kapasitas disk server. Untuk mengirim file 181,6 MB, ruang temporary pada container/host tetap harus tersedia; setelah ruang dibebaskan, gunakan `.download` dan pilih file di `downloads/clip`.
+
 ## 2026-11-03 — File manager WhatsApp `.download` dan penyimpanan hasil clip
 
 - **Permintaan:** sediakan browser folder di chat dengan daftar interaktif, navigasi masuk/naik halaman, dan kirim file ketika dipilih.
