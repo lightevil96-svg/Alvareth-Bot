@@ -1,0 +1,137 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
+import { sendLocalFile } from '../lib/whatsapp-file-sender.js'
+
+async function makeMp4(directory, name, size = 128) {
+  const filePath = path.join(directory, name)
+  const header = Buffer.from([0, 0, 0, 24, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 0, 0, 0, 0])
+  await fs.writeFile(filePath, header)
+  if (size > header.length) await fs.truncate(filePath, size)
+  return filePath
+}
+
+function socket(sendMessage, readyState = 1) {
+  return { ws: { readyState }, user: { id: 'bot@s.whatsapp.net' }, sendMessage }
+}
+
+test('small MP4 is streamed as inline video with Baileys upload timeout', async t => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'alvareth-wa-small-'))
+  t.after(() => fs.rm(directory, { recursive: true, force: true }))
+  const filePath = await makeMp4(directory, 'small.mp4', 1024)
+  let captured
+  const conn = socket(async (...args) => {
+    captured = args
+    return { key: { id: 'message-small' } }
+  })
+
+  const result = await sendLocalFile(conn, '628123@s.whatsapp.net', filePath, {
+    mimetype: 'video/mp4',
+    caption: 'clip',
+    seconds: 12,
+    mediaUploadTimeoutMs: 45000,
+    checkTempSpace: false
+  })
+
+  assert.equal(result.mediaType, 'video')
+  assert.equal(result.messageId, 'message-small')
+  assert.equal(captured[1].video.url, await fs.realpath(filePath))
+  assert.equal(captured[1].seconds, 12)
+  assert.equal(captured[1].caption, 'clip')
+  assert.equal(captured[2].mediaUploadTimeoutMs, 45000)
+  assert.equal(Buffer.isBuffer(captured[1].video), false)
+})
+
+test('large MP4 is sent as document, not inline video, preserving original file', async t => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'alvareth-wa-large-'))
+  t.after(() => fs.rm(directory, { recursive: true, force: true }))
+  const filePath = await makeMp4(directory, 'large.mp4', 70 * 1024 * 1024)
+  let captured
+  const conn = socket(async (...args) => {
+    captured = args
+    return { key: { id: 'message-large' } }
+  })
+
+  const result = await sendLocalFile(conn, '628123@s.whatsapp.net', filePath, {
+    mimetype: 'video/mp4',
+    maxBytes: 100 * 1024 * 1024,
+    inlineVideoMaxBytes: 64 * 1024 * 1024,
+    checkTempSpace: false
+  })
+
+  assert.equal(result.mediaType, 'document')
+  assert.equal(captured[1].document.url, await fs.realpath(filePath))
+  assert.equal(captured[1].mimetype, 'video/mp4')
+  assert.equal(captured[1].fileName, 'large.mp4')
+  assert.equal('video' in captured[1], false)
+  assert.equal((await fs.stat(filePath)).size, 70 * 1024 * 1024)
+})
+
+test('upload queue serializes concurrent media sends per WhatsApp socket', async t => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'alvareth-wa-queue-'))
+  t.after(() => fs.rm(directory, { recursive: true, force: true }))
+  const first = await makeMp4(directory, 'first.mp4')
+  const second = await makeMp4(directory, 'second.mp4')
+  let active = 0
+  let maximumActive = 0
+  let id = 0
+  const conn = socket(async () => {
+    active++
+    maximumActive = Math.max(maximumActive, active)
+    await new Promise(resolve => setTimeout(resolve, 25))
+    active--
+    return { key: { id: 'queued-' + (++id) } }
+  })
+
+  await Promise.all([
+    sendLocalFile(conn, '628123@s.whatsapp.net', first, { checkTempSpace: false }),
+    sendLocalFile(conn, '628123@s.whatsapp.net', second, { checkTempSpace: false })
+  ])
+  assert.equal(maximumActive, 1)
+  assert.equal(id, 2)
+})
+
+test('failed WhatsApp send is not retried and source file remains available', async t => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'alvareth-wa-fail-'))
+  t.after(() => fs.rm(directory, { recursive: true, force: true }))
+  const filePath = await makeMp4(directory, 'keep.mp4')
+  let calls = 0
+  const conn = socket(async () => {
+    calls++
+    throw Object.assign(new Error('simulated upload disconnect'), { code: 'ECONNRESET' })
+  })
+
+  await assert.rejects(
+    sendLocalFile(conn, '628123@s.whatsapp.net', filePath, { checkTempSpace: false }),
+    /simulated upload disconnect/
+  )
+  assert.equal(calls, 1)
+  assert.equal((await fs.stat(filePath)).isFile(), true)
+})
+
+test('missing, oversized and disconnected sends fail before upload', async t => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'alvareth-wa-preflight-'))
+  t.after(() => fs.rm(directory, { recursive: true, force: true }))
+  const filePath = await makeMp4(directory, 'file.mp4', 100)
+  let calls = 0
+  const conn = socket(async () => {
+    calls++
+    return { key: { id: 'should-not-send' } }
+  })
+
+  await assert.rejects(
+    sendLocalFile(conn, '628123@s.whatsapp.net', path.join(directory, 'missing.mp4'), { checkTempSpace: false }),
+    /File tidak dapat ditemukan/
+  )
+  await assert.rejects(
+    sendLocalFile(conn, '628123@s.whatsapp.net', filePath, { maxBytes: 10, checkTempSpace: false }),
+    /melebihi batas konfigurasi/
+  )
+  await assert.rejects(
+    sendLocalFile(socket(async () => { calls++ }, 3), '628123@s.whatsapp.net', filePath, { checkTempSpace: false }),
+    /WebSocket readyState=3/
+  )
+  assert.equal(calls, 0)
+})
