@@ -1,0 +1,28 @@
+name: Alvareth Updater Regression
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'plugins/owner/update.js'
+      - 'tests/update-transport.test.js'
+      - '.github/workflows/update-regression.yml'
+  pull_request:
+    paths:
+      - 'plugins/owner/update.js'
+      - 'tests/update-transport.test.js'
+      - '.github/workflows/update-regression.yml'
+
+jobs:
+  updater:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check updater JavaScript syntax
+        run: node --check plugins/owner/update.js
+      - name: Test Git fallback and safe changed-file comparison
+        run: node --test tests/update-transport.test.js
