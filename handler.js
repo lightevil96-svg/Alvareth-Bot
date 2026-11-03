@@ -58,17 +58,30 @@ async function sendErrorReport(conn, m, error, pluginName = 'handler', command =
         'Catatan: URL dan parameter sensitif disamarkan otomatis.'
     ].filter(Boolean).join('\n')
 
+    // Baileys rejects sendMessage on a closed WebSocket with 428 / Connection Closed.
+    // Do not attempt a second send on the same dead socket: preserve the original error.
+    if (conn?.ws?.readyState !== undefined && conn.ws.readyState !== 1) {
+        console.error('[ERROR REPORT] Laporan WhatsApp dilewati karena socket tertutup (readyState=' + conn.ws.readyState + '). Log lengkap tersedia di terminal.')
+        return
+    }
+
     try {
         if (typeof conn.sendMessage !== 'function' || !m?.chat) return
         await conn.sendMessage(m.chat, { text: report }, m.key ? { quoted: m } : {})
     } catch (sendError) {
-        console.error('[ERROR REPORT] Gagal mengirim laporan teks:', sendError)
-        // Last-resort attempt without quote metadata for clients/forks that
-        // reject the quoted message object.
+        console.error('[ERROR REPORT] Gagal mengirim laporan teks:', sendError?.stack || sendError)
+        // Only retry without quote metadata for a live socket; never retry 428/closed sockets.
+        const statusCode = sendError?.output?.statusCode || sendError?.statusCode
+        const message = String(sendError?.message || '')
+        if (statusCode === 428 || /connection closed|socket.*closed/i.test(message) ||
+            (conn?.ws?.readyState !== undefined && conn.ws.readyState !== 1)) {
+            console.error('[ERROR REPORT] Fallback dibatalkan: koneksi WhatsApp sudah tertutup.')
+            return
+        }
         try {
             await conn.sendMessage(m.chat, { text: report })
         } catch (fallbackError) {
-            console.error('[ERROR REPORT] Gagal mengirim fallback laporan:', fallbackError)
+            console.error('[ERROR REPORT] Gagal mengirim fallback laporan:', fallbackError?.stack || fallbackError)
         }
     }
 }
