@@ -28,5 +28,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Check syntax and WhatsApp progress behavior
+      - name: Install FFmpeg and FFprobe for real media regression
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - name: Check syntax and clip quality behavior
         run: npm run test:clip
