@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { sendLocalFile } from '../lib/whatsapp-file-sender.js'
+import { sendLocalFile, describeWhatsAppUploadError } from '../lib/whatsapp-file-sender.js'
 
 async function makeMp4(directory, name, size = 128) {
   const filePath = path.join(directory, name)
@@ -134,4 +134,12 @@ test('missing, oversized and disconnected sends fail before upload', async t => 
     /WebSocket readyState=3/
   )
   assert.equal(calls, 0)
+})
+
+test('upload errors explain disk, connection, timeout and provider size failures', () => {
+  assert.match(describeWhatsAppUploadError(Object.assign(new Error('write failed'), { code: 'ENOSPC' })), /Ruang penyimpanan sementara/)
+  assert.match(describeWhatsAppUploadError(Object.assign(new Error('socket closed'), { output: { statusCode: 428 } })), /HTTP 428/)
+  assert.match(describeWhatsAppUploadError(Object.assign(new Error('Payload too large'), { status: 413 })), /HTTP 413/)
+  assert.match(describeWhatsAppUploadError(Object.assign(new Error('Upload timeout'), { code: 'ETIMEDOUT' })), /melewati batas waktu/)
+  assert.match(describeWhatsAppUploadError(Object.assign(new Error('connection reset'), { code: 'ECONNRESET' })), /ECONNRESET/)
 })
