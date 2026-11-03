@@ -6,6 +6,7 @@ import fs from 'node:fs'
 import { spawn, spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { isNoSpaceError } from '../plugins/downloader/clip.js'
 const clipPlugin = await readFile(new URL('../plugins/downloader/clip.js', import.meta.url), 'utf8')
 const youtubeSource = await readFile(new URL('../lib/scrape/youtube.js', import.meta.url), 'utf8')
 const clipPipeline = youtubeSource.slice(youtubeSource.indexOf('export async function downloadYoutubeClip'))
@@ -348,4 +349,20 @@ test('.clip and global error reporter do not retry sends on a closed WhatsApp so
   assert.match(handlerSource, /Laporan WhatsApp dilewati karena socket tertutup/)
   assert.match(handlerSource, /statusCode === 428/)
   assert.match(handlerSource, /Fallback dibatalkan: koneksi WhatsApp sudah tertutup/)
+})
+
+
+test('ENOSPC is classified through nested causes and is not confused with other upload failures', () => {
+  assert.equal(isNoSpaceError(Object.assign(new Error('write failed'), {
+    cause: Object.assign(new Error('no space left on device'), { code: 'ENOSPC' })
+  })), true)
+  assert.equal(isNoSpaceError(Object.assign(new Error('write failed'), { code: 'EPIPE' })), false)
+})
+
+test('.clip does not retry an ENOSPC video upload as a document and preserves the finished file', () => {
+  assert.match(clipPlugin, /if \(isNoSpaceError\(sendError\)\)/)
+  assert.match(clipPlugin, /wrapped\.code = 'CLIP_UPLOAD_NO_SPACE'/)
+  assert.match(clipPlugin, /File asli TIDAK dihapus dan tetap ada di folder downloads\/clip/)
+  assert.match(clipPlugin, /if \(outputDir\) \{/)
+  assert.doesNotMatch(clipPlugin, /catch \(sendError\) \{[\s\S]{0,240}if \(isNoSpaceError\(sendError\)\)[\s\S]{0,280}await progress\.stage\('📤 Mencoba mengirim file sebagai dokumen'\)/)
 })
