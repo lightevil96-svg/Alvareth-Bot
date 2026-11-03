@@ -11,10 +11,11 @@
   },
   "scripts": {
     "start": "node scripts/start-with-update.js",
-    "test": "node --check index.js && node --check main.js && node --check handler.js && node --check lib/simple.js && node --check lib/auto-update.js && node --check scripts/start-with-update.js && node --check lib/scrape/tikwm.js && node --check plugins/downloader/tiktok.js && node --check plugins/image/tohitam.js && node --check plugins/ai/aivideo.js && node --check lib/scrape/youtube.js && node --check plugins/downloader/clip.js && node --check plugins/owner/sw.js && node --check lib/auto-download.js && node --test tests/auto-download.test.js && node --check plugins/sticker/sticker.js && node --test tests/quoted-media.test.js && node --check plugins/sticker/sticker-engine.js && node --test tests/sticker-engine.test.js && npm run test:clip && npm run test:download",
+    "test": "node --check index.js && node --check main.js && node --check handler.js && node --check lib/simple.js && node --check lib/auto-update.js && node --check scripts/start-with-update.js && node --check lib/scrape/tikwm.js && node --check plugins/downloader/tiktok.js && node --check plugins/image/tohitam.js && node --check plugins/ai/aivideo.js && node --check lib/scrape/youtube.js && node --check plugins/downloader/clip.js && node --check plugins/owner/sw.js && node --check lib/auto-download.js && node --test tests/auto-download.test.js && node --check plugins/sticker/sticker.js && node --test tests/quoted-media.test.js && node --check plugins/sticker/sticker-engine.js && node --test tests/sticker-engine.test.js && npm run test:clip && npm run test:download && npm run test:media",
     "dev": "node --watch index.js",
     "test:clip": "node --check lib/scrape/youtube.js && node --check plugins/downloader/clip-progress.js && node --check plugins/downloader/clip.js && node --test tests/clip-progress.test.js tests/clip-policy.test.js",
-    "test:download": "node --check lib/download-browser.js && node --check plugins/downloader/download.js && node --test tests/download-browser.test.js"
+    "test:download": "node --check lib/download-browser.js && node --check plugins/downloader/download.js && node --test tests/download-browser.test.js",
+    "test:media": "node --check lib/whatsapp-file-sender.js && node --check lib/interactive-command.js && node --check plugins/downloader/clip.js && node --check plugins/downloader/download.js && node --check handler.js && node --test tests/whatsapp-file-sender.test.js tests/interactive-command.test.js"
   },
   "keywords": [
     "alvareth-bot",
