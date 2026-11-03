@@ -10,6 +10,7 @@ import {
   listDownloadEntries,
   resolveDownloadPath
 } from '../../lib/download-browser.js'
+import { sendLocalFile } from '../../lib/whatsapp-file-sender.js'
 
 const MIME_BY_EXTENSION = {
   '.7z': 'application/x-7z-compressed',
@@ -139,6 +140,7 @@ const handler = async (m, { conn, text, usedPrefix, command }) => {
   const root = await getDownloadRoot()
   const parts = String(text || '').trim().split(/\s+/).filter(Boolean)
   const action = (parts[0] || 'browse').toLowerCase()
+  console.log('[DOWNLOAD] Permintaan diterima:', { action, hasSelectionToken: Boolean(parts[1]), chat: m.chat })
   let relativePath = '.'
   let page = 0
 
@@ -168,20 +170,28 @@ const handler = async (m, { conn, text, usedPrefix, command }) => {
       const detected = await fileTypeFromFile(target).catch(() => null)
       const mimetype = getMimeType(target, detected)
       const fileName = path.basename(target)
-      console.log('[DOWNLOAD] Mengirim file pilihan pengguna:', {
+      console.log('[DOWNLOAD] File pilihan tervalidasi; menyiapkan pengiriman:', {
         relativePath,
         size: info.size,
         mimetype,
         chat: m.chat
       })
-      await conn.sendMessage(m.chat, {
-        document: { url: target },
+      const delivery = await sendLocalFile(conn, m.chat, target, {
+        jobId: 'download',
         mimetype,
         fileName,
+        maxBytes,
+        quoted: m,
         caption: '📁 *File dari Alvareth Downloads*\n' +
           '📄 ' + fileName + '\n' +
           '📦 ' + formatDownloadSize(info.size)
-      }, { quoted: m })
+      })
+      console.log('[DOWNLOAD] WhatsApp upload berhasil:', {
+        messageId: delivery.messageId,
+        mediaType: delivery.mediaType,
+        size: delivery.size,
+        fileName: delivery.fileName
+      })
       try { await m.react('✅') } catch {}
       return
     }
