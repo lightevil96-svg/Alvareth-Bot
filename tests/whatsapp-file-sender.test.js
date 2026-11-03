@@ -69,6 +69,25 @@ test('large MP4 is sent as document, not inline video, preserving original file'
   assert.equal((await fs.stat(filePath)).size, 70 * 1024 * 1024)
 })
 
+test('non-MP4 video containers are sent as documents even when small', async t => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'alvareth-wa-container-'))
+  t.after(() => fs.rm(directory, { recursive: true, force: true }))
+  const filePath = await makeMp4(directory, 'source.mkv', 1024)
+  let captured
+  const conn = socket(async (...args) => {
+    captured = args
+    return { key: { id: 'message-mkv' } }
+  })
+
+  const result = await sendLocalFile(conn, '628123@s.whatsapp.net', filePath, {
+    mimetype: 'video/x-matroska',
+    checkTempSpace: false
+  })
+  assert.equal(result.mediaType, 'document')
+  assert.equal(captured[1].document.url, await fs.realpath(filePath))
+  assert.equal('video' in captured[1], false)
+})
+
 test('upload queue serializes concurrent media sends per WhatsApp socket', async t => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'alvareth-wa-queue-'))
   t.after(() => fs.rm(directory, { recursive: true, force: true }))
