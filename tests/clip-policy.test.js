@@ -6,7 +6,6 @@ import fs from 'node:fs'
 import { spawn, spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { isNoSpaceError } from '../plugins/downloader/clip.js'
 const clipPlugin = await readFile(new URL('../plugins/downloader/clip.js', import.meta.url), 'utf8')
 const youtubeSource = await readFile(new URL('../lib/scrape/youtube.js', import.meta.url), 'utf8')
 const clipPipeline = youtubeSource.slice(youtubeSource.indexOf('export async function downloadYoutubeClip'))
@@ -352,17 +351,13 @@ test('.clip and global error reporter do not retry sends on a closed WhatsApp so
 })
 
 
-test('ENOSPC is classified through nested causes and is not confused with other upload failures', () => {
-  assert.equal(isNoSpaceError(Object.assign(new Error('write failed'), {
-    cause: Object.assign(new Error('no space left on device'), { code: 'ENOSPC' })
-  })), true)
-  assert.equal(isNoSpaceError(Object.assign(new Error('write failed'), { code: 'EPIPE' })), false)
-})
-
-test('.clip does not retry an ENOSPC video upload as a document and preserves the finished file', () => {
-  assert.match(clipPlugin, /if \(isNoSpaceError\(sendError\)\)/)
-  assert.match(clipPlugin, /wrapped\.code = 'CLIP_UPLOAD_NO_SPACE'/)
-  assert.match(clipPlugin, /File asli TIDAK dihapus dan tetap ada di folder downloads\/clip/)
-  assert.match(clipPlugin, /if \(outputDir\) \{/)
-  assert.doesNotMatch(clipPlugin, /catch \(sendError\) \{[\s\S]{0,240}if \(isNoSpaceError\(sendError\)\)[\s\S]{0,280}await progress\.stage\('📤 Mencoba mengirim file sebagai dokumen'\)/)
+test('.clip delegates to the shared sender and retains the final file when WhatsApp upload fails', async () => {
+  const senderSource = await readFile(new URL('../lib/whatsapp-file-sender.js', import.meta.url), 'utf8')
+  assert.match(clipPlugin, /await sendLocalFile\(conn, m\.chat, savedPath/)
+  assert.match(clipPlugin, /File tetap tersimpan: downloads\/clip\//)
+  assert.match(clipPlugin, /cleanupDownload\(outputDir\)/)
+  assert.doesNotMatch(clipPlugin, /catch \(sendError\)/)
+  assert.match(senderSource, /No automatic retry is performed/)
+  assert.match(senderSource, /mediaUploadTimeoutMs: timeoutMs/)
+  assert.match(senderSource, /stats\.size <= inlineVideoMaxBytes \? 'video' : 'document'/)
 })
