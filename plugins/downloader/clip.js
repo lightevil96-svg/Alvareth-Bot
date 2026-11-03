@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { createClipProgress } from './clip-progress.js'
 import {
@@ -44,6 +45,41 @@ function extractRequest(input) {
   const end = parseTimestamp(times[1])
   if (start === null || end === null) return null
   return { url, start, end }
+}
+
+export function isNoSpaceError(error) {
+  const seen = new Set()
+  let current = error
+  while (current && typeof current === 'object' && !seen.has(current)) {
+    seen.add(current)
+    if (current.code === 'ENOSPC' || current.errno === 'ENOSPC' ||
+        /no space left on device/i.test(String(current.message || ''))) return true
+    current = current.cause
+  }
+  return false
+}
+
+async function getTemporaryDiskDiagnostic() {
+  const directory = path.resolve(process.env.TMPDIR || tmpdir())
+  try {
+    const stats = await fs.statfs(directory)
+    const available = Number(stats.bavail) * Number(stats.bsize)
+    return { directory, available: Number.isFinite(available) ? available : null }
+  } catch (error) {
+    return { directory, available: null, error: String(error?.message || error) }
+  }
+}
+
+function formatBytes(bytes) {
+  if (!Number.isFinite(bytes) || bytes < 0) return 'tidak diketahui'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let value = bytes
+  let unit = 0
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024
+    unit++
+  }
+  return value.toFixed(unit === 0 ? 0 : 1) + ' ' + units[unit]
 }
 
 function formatTimestamp(totalSeconds) {
@@ -136,6 +172,17 @@ const handler = async (m, { conn, text }) => {
     try {
       await conn.sendMessage(m.chat, content)
     } catch (sendError) {
+      if (isNoSpaceError(sendError)) {
+        const disk = await getTemporaryDiskDiagnostic()
+        const wrapped = new Error(
+          'ENOSPC: ruang penyimpanan sementara server habis saat upload. ' +
+          'Direktori temp: ' + disk.directory + '. Ruang tersedia: ' +
+          formatBytes(disk.available) + '. File hasil tetap disimpan di downloads/clip.'
+        )
+        wrapped.code = 'CLIP_UPLOAD_NO_SPACE'
+        wrapped.cause = sendError
+        throw wrapped
+      }
       console.warn('[CLIP:' + jobId + '] Pengiriman video gagal, mencoba sebagai dokumen:', sendError?.message || sendError)
       await progress.stage('📤 Mencoba mengirim file sebagai dokumen')
       await conn.sendMessage(m.chat, {
@@ -153,11 +200,13 @@ const handler = async (m, { conn, text }) => {
     console.error('[CLIP:' + jobId + '] Gagal:', error?.stack || error)
     progress.finish('error', detail)
     const accessProblem = error?.code === 'YOUTUBE_AUTH_REQUIRED' || error?.code === 'YOUTUBE_COOKIES_INVALID'
-    const response = accessProblem
-      ? (error.code === 'YOUTUBE_COOKIES_INVALID'
-        ? '❌ File autentikasi YouTube di server tidak dapat dibaca. Periksa YTDLP_COOKIES_FILE pada pengaturan server TokoPanel, lalu restart bot. Jangan mengirim cookies melalui chat.'
-        : '❌ YouTube meminta verifikasi akun dan menolak akses downloader dari server. API cadangan juga tidak berhasil. Atur file cookies dari akun YouTube milikmu sendiri secara privat di TokoPanel (YTDLP_COOKIES_FILE), lalu coba lagi. Jangan mengirim cookies melalui WhatsApp atau GitHub.')
-      : '❌ YouTube Clip gagal dibuat. Detail proses tercatat di terminal.'
+    const response = error.code === 'CLIP_UPLOAD_NO_SPACE'
+      ? '⚠️ Video berhasil dibuat, tetapi WhatsApp gagal menerima upload karena ruang sementara server habis (ENOSPC). File asli TIDAK dihapus dan tetap ada di folder downloads/clip. Kosongkan ruang disk/temporary storage server, lalu ketik .download untuk mengirim ulang file tersebut. Detail kapasitas temp tercatat di terminal.'
+      : accessProblem
+        ? (error.code === 'YOUTUBE_COOKIES_INVALID'
+          ? '❌ File autentikasi YouTube di server tidak dapat dibaca. Periksa YTDLP_COOKIES_FILE pada pengaturan server TokoPanel, lalu restart bot. Jangan mengirim cookies melalui chat.'
+          : '❌ YouTube meminta verifikasi akun dan menolak akses downloader dari server. API cadangan juga tidak berhasil. Atur file cookies dari akun YouTube milikmu sendiri secara privat di TokoPanel (YTDLP_COOKIES_FILE), lalu coba lagi. Jangan mengirim cookies melalui WhatsApp atau GitHub.')
+        : '❌ YouTube Clip gagal dibuat. Detail proses tercatat di terminal.'
     await say(response)
     try { await m.react('❌') } catch {}
   } finally {
