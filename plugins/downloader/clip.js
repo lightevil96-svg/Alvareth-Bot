@@ -126,7 +126,13 @@ const handler = async (m, { conn, text }) => {
       .slice(0, 1100)
     console.error('[CLIP:' + jobId + '] Gagal:', error?.stack || error)
     progress.finish('error', detail)
-    await say('❌ YouTube Clip gagal dibuat. Detail proses tercatat di terminal.')
+    const accessProblem = error?.code === 'YOUTUBE_AUTH_REQUIRED' || error?.code === 'YOUTUBE_COOKIES_INVALID'
+    const response = accessProblem
+      ? (error.code === 'YOUTUBE_COOKIES_INVALID'
+        ? '❌ File autentikasi YouTube di server tidak dapat dibaca. Periksa YTDLP_COOKIES_FILE pada pengaturan server TokoPanel, lalu restart bot. Jangan mengirim cookies melalui chat.'
+        : '❌ YouTube meminta verifikasi akun dan menolak akses downloader dari server. API cadangan juga tidak berhasil. Atur file cookies dari akun YouTube milikmu sendiri secara privat di TokoPanel (YTDLP_COOKIES_FILE), lalu coba lagi. Jangan mengirim cookies melalui WhatsApp atau GitHub.')
+      : '❌ YouTube Clip gagal dibuat. Detail proses tercatat di terminal.'
+    await say(response)
     try { await m.react('❌') } catch {}
   } finally {
     if (outputDir) {
