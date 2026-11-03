@@ -1,4 +1,5 @@
 import path from 'node:path'
+import fs from 'node:fs/promises'
 import { fileTypeFromFile } from 'file-type'
 import {
   DOWNLOAD_PAGE_SIZE,
@@ -154,7 +155,7 @@ const handler = async (m, { conn, text, usedPrefix, command }) => {
 
     if (action === 'send') {
       const target = await resolveDownloadPath(root, relativePath)
-      const info = await (await import('node:fs/promises')).stat(target)
+      const info = await fs.stat(target)
       if (!info.isFile()) throw new Error('Item yang dipilih bukan file.')
       const maxBytes = Number(process.env.ALVARETH_DOWNLOAD_MAX_BYTES || (2 * 1024 ** 3 - 10 * 1024 ** 2))
       if (info.size > maxBytes) {
