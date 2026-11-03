@@ -79,3 +79,14 @@ test('falls back to the managed data directory when the override is unusable', t
   assert.equal(os.tmpdir(), result.path)
   assert.equal(warnings.length, 1)
 })
+
+test('main configures TMPDIR before importing Baileys', () => {
+  const source = fs.readFileSync(new URL('../main.js', import.meta.url), 'utf8')
+  const dotenvImport = source.indexOf("import 'dotenv/config'")
+  const bootstrapImport = source.indexOf("import './lib/whatsapp-temp-bootstrap.js'")
+  const baileysImport = source.indexOf("from 'baileys'")
+
+  assert.ok(dotenvImport >= 0, 'dotenv must load before temp configuration')
+  assert.ok(bootstrapImport > dotenvImport, 'temp bootstrap must run after dotenv')
+  assert.ok(baileysImport > bootstrapImport, 'temp bootstrap must precede Baileys imports')
+})
