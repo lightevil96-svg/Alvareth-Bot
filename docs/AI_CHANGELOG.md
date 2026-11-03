@@ -1,3 +1,13 @@
+## 2026-11-03 — Hotfix 1080p terdeteksi tetapi file hasil tidak memiliki track video
+
+- **Bukti pengguna:** TokoPanel mengiklankan 1920x1080/24 FPS melalui yt-dlp (format 616+140), namun saat memasuki tahap FFmpeg muncul `stream map 0:v:0 matches no streams`. Alhasil metode yang tampak berhasil berikutnya hanya menghasilkan 360p. Ini membuktikan metadata 1080p belum menjamin bahwa file 1080p benar-benar berhasil diunduh.
+- **Perbaikan:** setiap strategi sekarang mencoba beberapa format/codec video HD secara berurutan. Setelah yt-dlp selesai, FFprobe wajib menemukan dimensi video yang setidaknya 90% dari resolusi format yang dijanjikan. File audio-only, klip yang turun resolusinya, dan hasil yang hampir seluruhnya hitam ditolak agar alternatif HD berikutnya dicoba.
+- **Metode tambahan:** `yt-dlp-isolated-tracks` mengunduh ID video sendiri, memverifikasi track gambar lebih dahulu, lalu mengunduh/mengecek ID audio terpisah sebelum mux. Ini menghindari ketergantungan pada intermediate gabungan yang sebelumnya bisa tidak memuat video.
+- **Kompatibilitas kontainer:** metode yt-dlp lain sekarang menggunakan MKV sebagai intermediate (untuk VP9/AV1 + audio lintas codec) sebelum encoding H.264 CRF18/AAC MP4. FFmpeg menggunakan pemetaan video/audio eksplisit.
+- **Seleksi final:** lima kandidat metode dinilai berdasarkan resolusi, FPS, dan bitrate nyata. Hasil inferior segera dibersihkan dari disk untuk menjaga ruang sementara. Qbyte juga mencoba berbagai ID video dengan validasi sumber. Caption memberi peringatan jika sumber mengiklankan HD tetapi server hanya bisa memperoleh SD.
+- **Risiko yang belum terselesaikan:** akses YouTube dapat membatasi stream 1080p berdasarkan profil/client/IP/PO Token. Tanpa akses ke sumber yang benar-benar dapat diunduh, bot tidak dapat memaksa 1080p. Semua retry tetap tanpa batas waktu aplikasi atas permintaan sebelumnya; sumber yang macet dapat menunggu tanpa akhir.
+- **Pengujian:** unit/mocks menguji transisi metadata 1080p → audio-only → pilihan 1080p valid, metadata 1080p tetapi video nyata 360p, validasi penolakan audio-only, dan pemeriksaan format multi-metode. GitHub Actions sekarang memasang FFmpeg untuk menjalankan tes fixture media nyata. Uji live YouTube dan WhatsApp pada server pengguna belum dilakukan.
+
 ## 2026-11-03 — Periksa semua metode dan kirim kandidat .clip dengan kualitas tertinggi
 
 - **Gejala/permintaan:** output .clip berhenti di 360p; pengguna meminta setiap metode memeriksa kualitas tertinggi yang tersedia dan memilih metode terbaik.
