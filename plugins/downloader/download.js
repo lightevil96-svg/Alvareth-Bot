@@ -133,6 +133,9 @@ async function sendFolderList(m, conn, { root, relativePath, page, usedPrefix, c
 }
 
 const handler = async (m, { conn, text, usedPrefix, command }) => {
+  if (String(m.chat || '').endsWith('@g.us')) {
+    return m.reply('📁 Fitur tombol .download hanya tersedia di chat pribadi WhatsApp. Silakan buka chat pribadi dengan bot lalu ketik .download.')
+  }
   const root = await getDownloadRoot()
   const parts = String(text || '').trim().split(/\s+/).filter(Boolean)
   const action = (parts[0] || 'browse').toLowerCase()
