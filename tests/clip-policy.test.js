@@ -89,7 +89,9 @@ test('all downloader methods are evaluated and the best real output is selected'
   assert.match(youtubeSource, /width \* height/)
   assert.match(youtubeSource, /Number\(candidate\.fps \|\| 0\)/)
   assert.match(clipPipeline, /Perbandingan kandidat kualitas/)
-  assert.match(clipPipeline, /Kandidat yang lebih rendah dibersihkan/)
+  assert.match(clipPipeline, /Kandidat lebih rendah langsung dibersihkan/)
+  assert.match(clipPipeline, /let bestOnDisk = null/)
+  assert.match(clipPipeline, /compareClipCandidates\(candidate, bestOnDisk\) < 0/)
 })
 
 test('quality diagnostics expose available resolutions and warn when YouTube only returns 360p', () => {
@@ -243,5 +245,13 @@ test('isolated HD method downloads video-only and audio-only separately before m
   assert.match(clipPipeline, /alvareth-clip-isolated\.mp4/)
   assert.match(youtubeSource, /sourceStream\.height < getHeight\(video\) \* 0\.90/)
   assert.match(youtubeSource, /assertClipHasVisibleVideo\(finalPath, duration\)/)
+})
+
+
+test('HD source downgrade is reported rather than described as best available quality', () => {
+  assert.match(clipPipeline, /sourceMaxQuality: Math\.max\(0, \.\.\.advertisedMaxHeights\)/)
+  assert.match(clipPipeline, /qualityDowngraded:/)
+  assert.match(clipPlugin, /result\.qualityDowngraded/)
+  assert.match(clipPlugin, /tidak berhasil diekstrak sebagai video valid/)
 })
 
