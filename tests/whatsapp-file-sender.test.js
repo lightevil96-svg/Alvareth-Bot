@@ -44,7 +44,7 @@ test('small MP4 is streamed as inline video with Baileys upload timeout', async 
   assert.equal(Buffer.isBuffer(captured[1].video), false)
 })
 
-test('large MP4 is sent as document, not inline video, preserving original file', async t => {
+test('large MP4 is always sent as video regardless of the old inline size threshold', async t => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'alvareth-wa-large-'))
   t.after(() => fs.rm(directory, { recursive: true, force: true }))
   const filePath = await makeMp4(directory, 'large.mp4', 70 * 1024 * 1024)
@@ -57,19 +57,18 @@ test('large MP4 is sent as document, not inline video, preserving original file'
   const result = await sendLocalFile(conn, '628123@s.whatsapp.net', filePath, {
     mimetype: 'video/mp4',
     maxBytes: 100 * 1024 * 1024,
-    inlineVideoMaxBytes: 64 * 1024 * 1024,
+    inlineVideoMaxBytes: 1,
     checkTempSpace: false
   })
 
-  assert.equal(result.mediaType, 'document')
-  assert.equal(captured[1].document.url, await fs.realpath(filePath))
+  assert.equal(result.mediaType, 'video')
+  assert.equal(captured[1].video.url, await fs.realpath(filePath))
   assert.equal(captured[1].mimetype, 'video/mp4')
-  assert.equal(captured[1].fileName, 'large.mp4')
-  assert.equal('video' in captured[1], false)
+  assert.equal('document' in captured[1], false)
   assert.equal((await fs.stat(filePath)).size, 70 * 1024 * 1024)
 })
 
-test('non-MP4 video containers are sent as documents even when small', async t => {
+test('non-MP4 video containers are sent as video messages', async t => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'alvareth-wa-container-'))
   t.after(() => fs.rm(directory, { recursive: true, force: true }))
   const filePath = await makeMp4(directory, 'source.mkv', 1024)
@@ -83,9 +82,10 @@ test('non-MP4 video containers are sent as documents even when small', async t =
     mimetype: 'video/x-matroska',
     checkTempSpace: false
   })
-  assert.equal(result.mediaType, 'document')
-  assert.equal(captured[1].document.url, await fs.realpath(filePath))
-  assert.equal('video' in captured[1], false)
+  assert.equal(result.mediaType, 'video')
+  assert.equal(captured[1].video.url, await fs.realpath(filePath))
+  assert.equal(captured[1].mimetype, 'video/x-matroska')
+  assert.equal('document' in captured[1], false)
 })
 
 test('upload queue serializes concurrent media sends per WhatsApp socket', async t => {
@@ -164,29 +164,48 @@ test('upload errors explain disk, connection, timeout and provider size failures
 })
 
 
-test('.download can force a large MP4 to be sent as a WhatsApp video message', async t => {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'alvareth-wa-forced-video-'))
+test('large WebM video is sent as video without a per-feature force flag', async t => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'alvareth-wa-large-webm-'))
   t.after(() => fs.rm(directory, { recursive: true, force: true }))
-  const filePath = await makeMp4(directory, 'large-download.mp4', 70 * 1024 * 1024)
+  const filePath = await makeMp4(directory, 'large-download.webm', 70 * 1024 * 1024)
   let captured
   const conn = socket(async (...args) => {
     captured = args
-    return { key: { id: 'message-forced-video' } }
+    return { key: { id: 'message-large-webm' } }
   })
 
   const result = await sendLocalFile(conn, '628123@s.whatsapp.net', filePath, {
-    mimetype: 'video/mp4',
+    mimetype: 'video/webm',
     maxBytes: 100 * 1024 * 1024,
-    inlineVideoMaxBytes: 64 * 1024 * 1024,
-    forceVideo: true,
-    caption: 'download MP4',
+    caption: 'download video',
     checkTempSpace: false
   })
 
   assert.equal(result.mediaType, 'video')
   assert.equal(captured[1].video.url, await fs.realpath(filePath))
-  assert.equal(captured[1].mimetype, 'video/mp4')
-  assert.equal(captured[1].caption, 'download MP4')
+  assert.equal(captured[1].mimetype, 'video/webm')
+  assert.equal(captured[1].caption, 'download video')
   assert.equal('document' in captured[1], false)
   assert.equal((await fs.stat(filePath)).size, 70 * 1024 * 1024)
+})
+
+test('non-video files remain WhatsApp documents', async t => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'alvareth-wa-pdf-'))
+  t.after(() => fs.rm(directory, { recursive: true, force: true }))
+  const filePath = path.join(directory, 'report.pdf')
+  await fs.writeFile(filePath, '%PDF-1.4 test')
+  let captured
+  const conn = socket(async (...args) => {
+    captured = args
+    return { key: { id: 'message-pdf' } }
+  })
+
+  const result = await sendLocalFile(conn, '628123@s.whatsapp.net', filePath, {
+    mimetype: 'application/pdf',
+    checkTempSpace: false
+  })
+
+  assert.equal(result.mediaType, 'document')
+  assert.equal(captured[1].document.url, await fs.realpath(filePath))
+  assert.equal('video' in captured[1], false)
 })

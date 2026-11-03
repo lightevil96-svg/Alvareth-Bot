@@ -170,12 +170,10 @@ const handler = async (m, { conn, text, usedPrefix, command }) => {
       const detected = await fileTypeFromFile(target).catch(() => null)
       const mimetype = getMimeType(target, detected)
       const fileName = path.basename(target)
-      const forceVideo = path.extname(target).toLowerCase() === '.mp4'
       console.log('[DOWNLOAD] File pilihan tervalidasi; menyiapkan pengiriman:', {
         relativePath,
         size: info.size,
         mimetype,
-        forceVideo,
         chat: m.chat
       })
       const delivery = await sendLocalFile(conn, m.chat, target, {
@@ -183,7 +181,6 @@ const handler = async (m, { conn, text, usedPrefix, command }) => {
         mimetype,
         fileName,
         maxBytes,
-        forceVideo,
         quoted: m,
         caption: '📁 *File dari Alvareth Downloads*\n' +
           '📄 ' + fileName + '\n' +

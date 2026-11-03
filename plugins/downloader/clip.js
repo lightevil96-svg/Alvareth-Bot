@@ -126,10 +126,6 @@ const handler = async (m, { conn, text }) => {
     const stats = await fs.stat(savedPath)
     if (!stats.isFile() || stats.size < 1) throw new Error('File hasil clip kosong atau tidak ditemukan.')
     console.log('[CLIP:' + jobId + '] [stage] File tervalidasi: ' + savedPath + ' (' + (stats.size / 1024 / 1024).toFixed(1) + ' MB).')
-    const configuredInlineLimit = Number(process.env.ALVARETH_WA_INLINE_VIDEO_MAX_BYTES)
-    const inlineVideoLimit = Number.isSafeInteger(configuredInlineLimit) && configuredInlineLimit > 0
-      ? configuredInlineLimit
-      : 64 * 1024 * 1024
     const caption =
       '✅ *YouTube Clip berhasil dibuat!*\n' +
       '⏱️ ' + range + '\n' +
@@ -138,25 +134,20 @@ const handler = async (m, { conn, text }) => {
       (result.qualityDowngraded ? '\n⚠️ Format ' + result.sourceMaxQuality + 'p ditemukan, tetapi tidak berhasil diekstrak sebagai video valid. Ini kualitas terbaik yang berhasil diproses.' : '') +
       '\n⚙️ ' + String(result.downloader || 'yt-dlp + FFmpeg') +
       '\n⌛ ' + Math.ceil((Date.now() - startedAt) / 1000) + ' detik'
-    // Large MP4 files are sent as documents from disk. This avoids the
-    // inline-video endpoint for very large clips and preserves the best source
-    // quality. Baileys streams the local path; the whole file is not read into RAM.
+    // Every clip remains a WhatsApp video message regardless of file size.
+    // If WhatsApp rejects the video payload, keep the source file and report
+    // the upload error rather than silently changing it into a document.
     phase = 'whatsapp-upload'
     await progress.stage('📤 Mengirim file ke WhatsApp melalui Baileys (upload disk-streaming)')
     const delivery = await sendLocalFile(conn, m.chat, savedPath, {
       jobId,
       mimetype: 'video/mp4',
-      caption: stats.size > inlineVideoLimit
-        ? caption + '\n📎 MP4 berukuran besar dikirim sebagai dokumen agar kualitas asli tetap terjaga.'
-        : caption,
+      caption,
       seconds: result.duration,
       quoted: m
     })
 
-    progress.finish('success',
-      delivery.mediaType === 'document'
-        ? 'MP4 berhasil dikirim sebagai dokumen. File asli tetap tersedia di downloads/clip.'
-        : 'Video berhasil dikirim dan dapat diputar langsung di chat.')
+    progress.finish('success', 'Video berhasil dikirim sebagai video WhatsApp dan dapat diputar langsung di chat.')
     try { await m.react('✅') } catch {}
     console.log('[CLIP:' + jobId + '] [stage] WhatsApp upload berhasil; messageId=' +
       delivery.messageId + '; mediaType=' + delivery.mediaType + '; file=' + savedPath)

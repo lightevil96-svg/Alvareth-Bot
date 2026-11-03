@@ -1,3 +1,10 @@
+## 2026-11-03 — Semua ukuran video `.clip` dan `.download` dikirim sebagai video
+
+- **Permintaan:** jangan mengubah video berukuran besar menjadi dokumen. Aturan harus sama pada `.clip` dan `.download`.
+- **Perubahan:** helper bersama mengklasifikasikan semua MIME `video/*` dan ekstensi video umum (MP4, M4V, MOV, MKV, WebM, AVI, MPEG/MPG, 3GP, FLV, WMV, TS/M2TS, OGV, dan lainnya) sebagai payload `video`, tanpa ambang 64 MiB. `.clip` tidak lagi menambahkan caption dokumen atau menampilkan status sukses dokumen. `.download` tidak lagi memerlukan `forceVideo` khusus MP4. File nonvideo tetap memakai payload dokumen. Variabel `ALVARETH_WA_INLINE_VIDEO_MAX_BYTES` dihapus dari contoh konfigurasi/dokumentasi.
+- **Perilaku gagal:** jika WhatsApp/provider menolak payload video karena ukuran atau container, bot melaporkan kegagalan dan mempertahankan file sumber. Tidak ada fallback otomatis ke dokumen.
+- **Tes:** diperbarui untuk memverifikasi MP4 besar dan WebM besar tetap payload video, MKV memakai payload video, dan PDF tetap dokumen. GitHub Actions akan dijalankan setelah commit; pengiriman live ke WhatsApp masih perlu diverifikasi.
+
 ## 2026-11-03 — Paksa MP4 pada `.download` dikirim sebagai video
 
 - **Gejala:** file MP4 181,6 MB yang dipilih dari `.download` dikirim sebagai dokumen karena helper bersama memakai ambang video inline default 64 MiB.
