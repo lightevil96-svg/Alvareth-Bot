@@ -26,10 +26,11 @@ test('clip has no application-level duration or output-file size cap', () => {
 })
 
 test('Qbyte clip source streams have no 256 MB or 96 MB client cap', () => {
-  assert.match(clipPipeline, /'clip-api-video', outputDir, Infinity/)
-  assert.match(clipPipeline, /'clip-api-audio', outputDir, Infinity/)
-  assert.doesNotMatch(clipPipeline, /256\s*\*\s*1024\s*\*\s*1024/)
-  assert.doesNotMatch(clipPipeline, /96\s*\*\s*1024\s*\*\s*1024/)
+  assert.match(clipPipeline, /'clip-api-video', outputDir, qbyteMaxBytes/)
+  assert.match(clipPipeline, /'clip-api-audio', outputDir, qbyteMaxBytes/)
+  assert.match(clipPipeline, /ALVARETH_CLIP_QBYTE_MAX_SOURCE_BYTES/)
+  assert.match(clipPipeline, /256 \* 1024 \* 1024/)
+  assert.doesNotMatch(clipPipeline, /videoFormats\.slice\(0, 12\)/)
 })
 
 test('clip yt-dlp calls have no idle or total execution deadline', () => {
@@ -38,16 +39,16 @@ test('clip yt-dlp calls have no idle or total execution deadline', () => {
   assert.match(clipPipeline, /ensureYtDlpPythonRunner\(0\)/)
   assert.match(clipPipeline, /ensureYtDlpBinary\(0\)/)
   assert.match(youtubeSource, /runYtDlpWithEjsFallback\(runner, args, 0, onProgress\)/)
-  assert.equal((clipPipeline.match(/downloadValidatedClipFormat\(/g) || []).length, 4)
+  assert.equal((clipPipeline.match(/downloadValidatedClipFormat\(/g) || []).length, 1)
 })
 
 test('clip FFmpeg and Qbyte HTTP calls do not set application deadlines', () => {
   assert.match(youtubeSource, /function runClipFfmpeg\(args, timeoutMs = 0/)
-  assert.equal((clipPipeline.match(/\], 0, options\?\.onProgress, duration\)/g) || []).length, 4)
+  assert.match(clipPipeline, /runClipFfmpeg\(ffmpegArgs, 0, options\?\.onProgress, duration\)/)
   assert.match(clipPipeline, /getClipYoutubeInfo\(normalizedUrl, options\?\.onProgress\)/)
   assert.match(youtubeSource, /return await getYoutubeInfo\(url, 0\)/)
-  assert.equal((clipPipeline.match(/}, 0\n        \)/g) || []).length, 1)
-  assert.match(clipPipeline, /videoFormats\.slice\(0, 12\)/)
+  assert.match(clipPipeline, /const qbyteMaxBytes = Number\(process\.env\.ALVARETH_CLIP_QBYTE_MAX_SOURCE_BYTES/)
+  assert.doesNotMatch(clipPipeline, /videoFormats\.slice\(0, 12\)/)
 })
 
 test('Qbyte video format selection excludes audio-only formats without video dimensions', () => {
@@ -66,39 +67,47 @@ test('every accepted clip must contain a real video stream and not be black for 
 })
 
 test('every yt-dlp strategy probes and explicitly selects its highest available source formats', () => {
-  assert.equal((clipPipeline.match(/await getSharedSelection\(runner,/g) || []).length, 4)
+  assert.equal((clipPipeline.match(/await getSharedSelection\(runner,/g) || []).length, 1)
   assert.match(clipPipeline, /sharedSelectionPromise = probeYtDlpFormats\(runner, normalizedUrl/)
-  assert.equal((clipPipeline.match(/'--format', candidate\.selector/g) || []).length, 3)
-  assert.equal((clipPipeline.match(/'--merge-output-format', 'mkv'/g) || []).length, 3)
-  assert.equal((clipPipeline.match(/\.\.\.candidate\.extractorArgs/g) || []).length, 5)
+  assert.equal((clipPipeline.match(/'--format', candidate\.selector/g) || []).length, 1)
+  assert.equal((clipPipeline.match(/'--merge-output-format', 'mkv'/g) || []).length, 1)
+  assert.equal((clipPipeline.match(/\.\.\.candidate\.extractorArgs/g) || []).length, 1)
   assert.match(youtubeSource, /'--dump-single-json'/)
   assert.match(youtubeSource, /'--remote-components', 'ejs:github'/)
-  assert.match(youtubeSource, /videoTerbaik: formatInventorySummary/)
+  assert.match(youtubeSource, /availableQualities/)
+  assert.match(youtubeSource, /Semua resolusi tersedia/)
 })
 
 test('all clip transcodes retain high source quality and map the video stream explicitly', () => {
   assert.match(clipPipeline, /'-map', '0:v:0'/)
   assert.ok(clipPipeline.includes("'0:a:0?'"))
-  assert.equal((clipPipeline.match(/'-crf', '18'/g) || []).length, 5)
-  assert.equal((clipPipeline.match(/'-b:a', '192k'/g) || []).length, 5)
-  assert.match(clipPipeline, /alvareth-clip-sections\.mp4/)
+  assert.match(clipPipeline, /'-crf', '18'/)
+  assert.match(clipPipeline, /'-b:a', '192k'/)
+  assert.match(clipPipeline, /alvareth-clip-best\.mp4/)
+  assert.match(clipPipeline, /canCopyVideo/)
+  assert.match(clipPipeline, /canCopyAudio/)
 })
 
-test('all downloader methods are evaluated and the best real output is selected', () => {
-  assert.equal((clipPipeline.match(/id: '(?:yt-dlp-isolated-tracks|yt-dlp-sections|youtube-clipper-ffmpeg|youtube-clippy-ffmpeg|qbyte-api-ffmpeg)'/g) || []).length, 5)
-  assert.match(clipPipeline, /const candidates = \[\]/)
-  assert.match(clipPipeline, /candidates\.sort\(compareClipCandidates\)/)
-  assert.match(youtubeSource, /function compareClipCandidates\(a, b\)/)
-  assert.match(youtubeSource, /width \* height/)
-  assert.match(youtubeSource, /Number\(candidate\.fps \|\| 0\)/)
-  assert.match(clipPipeline, /Perbandingan kandidat kualitas/)
-  assert.match(clipPipeline, /Kandidat lebih rendah langsung dibersihkan/)
-  assert.match(clipPipeline, /let bestOnDisk = null/)
-  assert.match(clipPipeline, /compareClipCandidates\(candidate, bestOnDisk\) < 0/)
+test('available quality inventory is metadata-only and includes all advertised resolutions', () => {
+  assert.match(youtubeSource, /--dump-single-json/)
+  assert.match(youtubeSource, /--skip-download/)
+  assert.match(youtubeSource, /const availableQualities = \[\.\.\.qualityMap\.values\(\)\]/)
+  assert.match(youtubeSource, /Semua resolusi tersedia/)
+  assert.match(clipPipeline, /Memindai kualitas melalui metadata; belum ada file video yang diunduh/)
+})
+
+test('metadata is ranked first and only the highest-quality download strategy is run', () => {
+  assert.equal((clipPipeline.match(/id: '(?:yt-dlp-best-quality|qbyte-api-fallback)'/g) || []).length, 2)
+  assert.match(clipPipeline, /Memindai kualitas melalui metadata; belum ada file video yang diunduh/)
+  assert.match(clipPipeline, /Mengunduh satu kualitas tertinggi/)
+  assert.match(clipPipeline, /Tidak ada kandidat metode lain yang diunduh/)
+  assert.doesNotMatch(clipPipeline, /yt-dlp-isolated-tracks|yt-dlp-sections|youtube-clipper-ffmpeg|youtube-clippy-ffmpeg/)
+  assert.doesNotMatch(clipPipeline, /candidates\.sort\(compareClipCandidates\)/)
 })
 
 test('quality diagnostics expose available resolutions and warn when YouTube only returns 360p', () => {
   assert.match(youtubeSource, /jumlahVideo: selection\.videoFormats\.length/)
+  assert.match(youtubeSource, /availableQualities/)
   assert.match(youtubeSource, /topHeight <= 360/)
   assert.match(youtubeSource, /hanya melihat format sampai/)
   assert.match(youtubeSource, /bitrate: Number\(stream\.bit_rate\) \|\| 0/)
@@ -110,7 +119,7 @@ test('YouTube format probing checks HLS and optional PO-token player profiles', 
   assert.match(youtubeSource, /mweb \+ PO Token Provider/)
   assert.match(youtubeSource, /YTDLP_POT_PROVIDER_URL/)
   assert.match(youtubeSource, /attempts\.sort\(\(a, b\) => compareAccessibleVideo\(a\.video, b\.video\)\)/)
-  assert.equal((clipPipeline.match(/\.\.\.candidate\.extractorArgs/g) || []).length, 5)
+  assert.equal((clipPipeline.match(/\.\.\.candidate\.extractorArgs/g) || []).length, 1)
 })
 
 test('source with 1080p metadata but audio-only output retries an alternate 1080p format', async () => {
@@ -146,12 +155,11 @@ test('source with 1080p metadata but audio-only output retries an alternate 1080
     fsp: { rm: async dir => cleaned.push(dir), mkdir: async () => {} },
     console: { log() {}, warn() {} }
   })
-  const attempts = ['616+140', '270+140', '137+140'].map(selector => ({
+  const attempts = ['616+140', '137+140'].map(selector => ({
     selector, video: { width: 1920, height: 1080, protocol: 'https' }
   }))
   const helper = make({
     '616+140': '/tmp/audio-only.mp4',
-    '270+140': '/tmp/360-pretending-to-be-1080.mp4',
     '137+140': '/tmp/real-1080.mp4'
   })
   const result = await helper(null, 'https://youtube.com/watch?v=test', '/tmp/clip-test',
@@ -159,8 +167,8 @@ test('source with 1080p metadata but audio-only output retries an alternate 1080
     async inputPath => ({ path: inputPath }), null, 90)
   assert.equal(result.path, '/tmp/real-1080.mp4')
   assert.equal(result.sourceHeight, 1080)
-  assert.deepEqual(downloaded, ['616+140', '270+140', '137+140'])
-  assert.equal(cleaned.length, 2)
+  assert.deepEqual(downloaded, ['616+140', '137+140'])
+  assert.equal(cleaned.length, 1)
 })
 
 test('clip source validation rejects every audio-only candidate instead of sending a black video', async () => {
@@ -189,11 +197,13 @@ test('clip source validation rejects every audio-only candidate instead of sendi
   /tidak ada format video yang benar-benar dapat dipotong/)
 })
 
-test('Qbyte retries advertised video IDs and verifies the actual downloaded resolution', () => {
-  assert.match(clipPipeline, /videoFormats\.slice\(0, 12\)/)
-  assert.match(clipPipeline, /actualStream\.height < advertisedHeight \* 0\.90/)
-  assert.match(clipPipeline, /Qbyte video tervalidasi/)
-  assert.match(clipPipeline, /if \(!videoPath\)/)
+test('Qbyte fallback inspects metadata and downloads only one best video/audio pair', () => {
+  assert.match(clipPipeline, /const videoFormat = pickBestVideo\(info\)/)
+  assert.match(clipPipeline, /const audioFormat = pickBestAudio\(info\)/)
+  assert.match(clipPipeline, /downloadFormat\([\s\S]*?videoFormat[\s\S]*?qbyteMaxBytes/)
+  assert.match(clipPipeline, /downloadFormat\([\s\S]*?audioFormat[\s\S]*?qbyteMaxBytes/)
+  assert.match(clipPipeline, /actualStream\.height < qbyteTopHeight \* 0\.90/)
+  assert.doesNotMatch(clipPipeline, /for \(const format of videoFormats/)
 })
 
 
@@ -239,31 +249,33 @@ test('real FFprobe distinguishes audio-only MP4 from a decodable 720p video', as
 })
 
 
-test('isolated HD method downloads video-only and audio-only separately before muxing', () => {
-  assert.match(clipPipeline, /id: 'yt-dlp-isolated-tracks'/)
-  assert.match(clipPipeline, /candidate\.video\.format_id \|\| candidate\.video\.itag/)
-  assert.match(clipPipeline, /candidate\.audio\?\.format_id \|\| candidate\.audio\?\.itag/)
-  assert.match(clipPipeline, /audioStream = await inspectAudioStream\(audioPath\)/)
-  assert.match(clipPipeline, /audioPath \? '1:a:0' : '0:a:0\?'/)
-  assert.match(clipPipeline, /alvareth-clip-isolated\.mp4/)
+test('clip downloads only the highest-ranked format and trims one selected section', () => {
+  assert.match(clipPipeline, /id: 'yt-dlp-best-quality'/)
+  assert.match(clipPipeline, /'--download-sections', section/)
+  assert.match(clipPipeline, /'--format', candidate\.selector/)
+  assert.match(clipPipeline, /'--merge-output-format', 'mkv'/)
+  assert.match(clipPipeline, /alvareth-clip-best\.mp4/)
   assert.match(youtubeSource, /sourceStream\.height < getHeight\(video\) \* 0\.90/)
   assert.match(youtubeSource, /assertClipHasVisibleVideo\(finalPath, duration\)/)
 })
 
 
 test('HD source downgrade is reported rather than described as best available quality', () => {
-  assert.match(clipPipeline, /sourceMaxQuality: Math\.max\(0, \.\.\.advertisedMaxHeights\)/)
+  assert.match(clipPipeline, /sourceMaxQuality,/)
   assert.match(clipPipeline, /qualityDowngraded:/)
   assert.match(clipPlugin, /result\.qualityDowngraded/)
   assert.match(clipPlugin, /tidak berhasil diekstrak sebagai video valid/)
 })
 
 
-test('a single source inventory is reused across all four yt-dlp methods', () => {
+test('one metadata inventory is reused and the selected top resolution is downloaded once', () => {
   assert.match(clipPipeline, /let sharedSelectionPromise = null/)
   assert.match(clipPipeline, /if \(!sharedSelectionPromise\)/)
-  assert.equal((clipPipeline.match(/await getSharedSelection\(runner,/g) || []).length, 4)
+  assert.equal((clipPipeline.match(/await getSharedSelection\(runner,/g) || []).length, 1)
   assert.match(clipPipeline, /return sharedSelectionPromise/)
+  assert.match(youtubeSource, /slice\(0, 2\)/)
+  assert.match(youtubeSource, /getWidth\(item\.video\) === topWidth/)
+  assert.match(youtubeSource, /getHeight\(item\.video\) === topHeight/)
 })
 
 test('private YouTube cookies are passed only as server-side file paths', async () => {
@@ -295,13 +307,15 @@ test('private YouTube cookies are passed only as server-side file paths', async 
   }
 })
 
-test('verification failure skips repeated yt-dlp methods but still tries the independent API', () => {
-  assert.match(clipPipeline, /if \(youtubeAccessError && method\.id !== 'qbyte-api-ffmpeg'\)/)
+test('verification failure permits only one bounded API fallback after the best yt-dlp attempt', () => {
+  assert.match(clipPipeline, /id: 'yt-dlp-best-quality'/)
+  assert.match(clipPipeline, /id: 'qbyte-api-fallback'/)
   assert.match(clipPipeline, /youtubeAccessError = error\?\.code === 'YOUTUBE_COOKIES_INVALID'/)
   assert.match(clipPipeline, /accessError\.code = youtubeAccessError/)
   assert.match(clipPlugin, /error\?\.code === 'YOUTUBE_AUTH_REQUIRED'/)
   assert.match(clipPlugin, /YTDLP_COOKIES_FILE/)
   assert.match(youtubeSource, /if \(isYoutubeVerificationError\(error\)\) throw error/)
+  assert.match(clipPipeline, /download dibatalkan/)
 })
 
 test('Qbyte HTTP 502 is retried once but permanent errors fail without retry', async () => {
