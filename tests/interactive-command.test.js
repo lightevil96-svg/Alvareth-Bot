@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import fs from 'node:fs/promises'
 import {
   extractSelectedCommandId,
   unwrapInteractiveMessageContent
@@ -60,4 +61,14 @@ test('returns empty string for non-interactive messages and malformed params', (
       nativeFlowResponseMessage: { paramsJson: '{broken' }
     }
   }), '')
+})
+
+test('download list selection is routed through handler and calls the shared sender', async () => {
+  const handlerSource = await fs.readFile(new URL('../handler.js', import.meta.url), 'utf8')
+  const downloadSource = await fs.readFile(new URL('../plugins/downloader/download.js', import.meta.url), 'utf8')
+  assert.ok(handlerSource.includes("extractSelectedCommandId(rawContent)"))
+  assert.ok(handlerSource.includes("m.text = selectedButtonId.trim()"))
+  assert.ok(downloadSource.includes("import { sendLocalFile } from '../../lib/whatsapp-file-sender.js'"))
+  assert.ok(downloadSource.includes("await sendLocalFile(conn, m.chat, target"))
+  assert.ok(downloadSource.includes("if (action === 'send')"))
 })
