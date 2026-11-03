@@ -37,12 +37,12 @@ test('clip yt-dlp calls have no idle or total execution deadline', () => {
   assert.match(clipPipeline, /ensureYtDlpPythonRunner\(0\)/)
   assert.match(clipPipeline, /ensureYtDlpBinary\(0\)/)
   assert.match(youtubeSource, /runYtDlpWithEjsFallback\(runner, args, 0, onProgress\)/)
-  assert.equal((clipPipeline.match(/downloadValidatedClipFormat\(/g) || []).length, 3)
+  assert.equal((clipPipeline.match(/downloadValidatedClipFormat\(/g) || []).length, 4)
 })
 
 test('clip FFmpeg and Qbyte HTTP calls do not set application deadlines', () => {
   assert.match(youtubeSource, /function runClipFfmpeg\(args, timeoutMs = 0/)
-  assert.equal((clipPipeline.match(/\], 0, options\?\.onProgress, duration\)/g) || []).length, 3)
+  assert.equal((clipPipeline.match(/\], 0, options\?\.onProgress, duration\)/g) || []).length, 4)
   assert.match(clipPipeline, /getYoutubeInfo\(normalizedUrl, 0\)/)
   assert.equal((clipPipeline.match(/}, 0\n        \)/g) || []).length, 1)
   assert.match(clipPipeline, /videoFormats\.slice\(0, 12\)/)
@@ -64,10 +64,10 @@ test('every accepted clip must contain a real video stream and not be black for 
 })
 
 test('every yt-dlp strategy probes and explicitly selects its highest available source formats', () => {
-  assert.equal((clipPipeline.match(/probeYtDlpFormats\(runner, normalizedUrl/g) || []).length, 3)
+  assert.equal((clipPipeline.match(/probeYtDlpFormats\(runner, normalizedUrl/g) || []).length, 4)
   assert.equal((clipPipeline.match(/'--format', candidate\.selector/g) || []).length, 3)
   assert.equal((clipPipeline.match(/'--merge-output-format', 'mkv'/g) || []).length, 3)
-  assert.equal((clipPipeline.match(/\.\.\.candidate\.extractorArgs/g) || []).length, 3)
+  assert.equal((clipPipeline.match(/\.\.\.candidate\.extractorArgs/g) || []).length, 5)
   assert.match(youtubeSource, /'--dump-single-json'/)
   assert.match(youtubeSource, /'--remote-components', 'ejs:github'/)
   assert.match(youtubeSource, /videoTerbaik: formatInventorySummary/)
@@ -76,13 +76,13 @@ test('every yt-dlp strategy probes and explicitly selects its highest available 
 test('all clip transcodes retain high source quality and map the video stream explicitly', () => {
   assert.match(clipPipeline, /'-map', '0:v:0'/)
   assert.ok(clipPipeline.includes("'0:a:0?'"))
-  assert.equal((clipPipeline.match(/'-crf', '18'/g) || []).length, 4)
-  assert.equal((clipPipeline.match(/'-b:a', '192k'/g) || []).length, 4)
+  assert.equal((clipPipeline.match(/'-crf', '18'/g) || []).length, 5)
+  assert.equal((clipPipeline.match(/'-b:a', '192k'/g) || []).length, 5)
   assert.match(clipPipeline, /alvareth-clip-sections\.mp4/)
 })
 
 test('all downloader methods are evaluated and the best real output is selected', () => {
-  assert.equal((clipPipeline.match(/id: '(?:yt-dlp-sections|youtube-clipper-ffmpeg|youtube-clippy-ffmpeg|qbyte-api-ffmpeg)'/g) || []).length, 4)
+  assert.equal((clipPipeline.match(/id: '(?:yt-dlp-isolated-tracks|yt-dlp-sections|youtube-clipper-ffmpeg|youtube-clippy-ffmpeg|qbyte-api-ffmpeg)'/g) || []).length, 5)
   assert.match(clipPipeline, /const candidates = \[\]/)
   assert.match(clipPipeline, /candidates\.sort\(compareClipCandidates\)/)
   assert.match(youtubeSource, /function compareClipCandidates\(a, b\)/)
@@ -105,7 +105,7 @@ test('YouTube format probing checks HLS and optional PO-token player profiles', 
   assert.match(youtubeSource, /mweb \+ PO Token Provider/)
   assert.match(youtubeSource, /YTDLP_POT_PROVIDER_URL/)
   assert.match(youtubeSource, /attempts\.sort\(\(a, b\) => compareAccessibleVideo\(a\.video, b\.video\)\)/)
-  assert.equal((clipPipeline.match(/\.\.\.candidate\.extractorArgs/g) || []).length, 3)
+  assert.equal((clipPipeline.match(/\.\.\.candidate\.extractorArgs/g) || []).length, 5)
 })
 
 test('source with 1080p metadata but audio-only output retries an alternate 1080p format', async () => {
@@ -231,5 +231,17 @@ test('real FFprobe distinguishes audio-only MP4 from a decodable 720p video', as
   } finally {
     await rm(root, { recursive: true, force: true })
   }
+})
+
+
+test('isolated HD method downloads video-only and audio-only separately before muxing', () => {
+  assert.match(clipPipeline, /id: 'yt-dlp-isolated-tracks'/)
+  assert.match(clipPipeline, /candidate\.video\.format_id \|\| candidate\.video\.itag/)
+  assert.match(clipPipeline, /candidate\.audio\?\.format_id \|\| candidate\.audio\?\.itag/)
+  assert.match(clipPipeline, /audioStream = await inspectAudioStream\(audioPath\)/)
+  assert.match(clipPipeline, /audioPath \? '1:a:0' : '0:a:0\?'/)
+  assert.match(clipPipeline, /alvareth-clip-isolated\.mp4/)
+  assert.match(youtubeSource, /sourceStream\.height < getHeight\(video\) \* 0\.90/)
+  assert.match(youtubeSource, /assertClipHasVisibleVideo\(finalPath, duration\)/)
 })
 
