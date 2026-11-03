@@ -1,3 +1,13 @@
+## 2026-11-03 — Periksa semua metode dan kirim kandidat .clip dengan kualitas tertinggi
+
+- **Gejala/permintaan:** output .clip berhenti di 360p; pengguna meminta setiap metode memeriksa kualitas tertinggi yang tersedia dan memilih metode terbaik.
+- **Akar kelemahan alur lama:** tiga strategi yt-dlp memakai selector generik dan pipeline berhenti pada metode pertama yang berhasil. Qbyte hanya dicoba jika seluruh strategi yt-dlp gagal, sehingga format lebih tinggi dari provider lain tidak pernah dibandingkan.
+- **Inventaris per metode:** setiap strategi yt-dlp menjalankan --dump-single-json, membaca semua format video/audio, dan memilih format ID video berdasarkan jumlah piksel, tinggi/lebar, FPS, bitrate, lalu ukuran. Audio terbaik dipilih terpisah jika video tidak membawa audio. Perintah download menggunakan format ID yang dipilih dan mencatat format aktual sebelum download. Qbyte mengurutkan inventarisnya sendiri dengan metrik yang sama.
+- **Profil YouTube:** probe memeriksa profil default dan web_safari HLS. Jika YTDLP_POT_PROVIDER_URL tersedia, probe juga mencoba mweb melalui plugin bgutil PO Token Provider. Profil terbaik dipakai kembali pada perintah download. --remote-components ejs:github diaktifkan agar solver JavaScript eksternal tersedia; bila komponen GitHub gagal, probe/download mencoba fallback tanpa komponen remote.
+- **Pemilihan metode:** semua empat metode dijalankan berurutan (3 strategi yt-dlp + Qbyte), setiap output lolos pemeriksaan FFprobe dan blackdetect, lalu kandidat dibandingkan berdasarkan luas piksel aktual, tinggi, lebar, FPS, bitrate, dan ukuran. Hanya kandidat terbaik dipertahankan untuk dikirim; direktori kandidat lain dibersihkan. Dampak: proses lebih lambat dan memakai bandwidth/ruang sementara lebih besar, tetapi tidak lagi berhenti pada hasil 360p pertama yang berhasil.
+- **Batas penting:** bot tidak meng-upscale resolusi sumber. Jika seluruh inventaris dari profil/provider hanya menunjukkan 360p, YouTube mungkin memang hanya menyajikan 360p ke server atau membutuhkan PO Token. YTDLP_POT_PROVIDER_URL hanya bekerja jika plugin bgutil dan server provider telah dipasang/berjalan; server provider harus tetap di localhost/jaringan privat.
+- **Tes:** regresi .clip dan pemeriksaan sintaks diperbarui untuk memeriksa format inventory, profil alternatif, pemilihan kandidat, dan fallback EJS. Uji jaringan YouTube serta upload WhatsApp langsung di TokoPanel belum dilakukan.
+
 ## 2026-11-02 — Perbaiki .clip yang terkirim sebagai layar hitam dengan audio saja
 
 - **Gejala:** file MP4 yang dikirim terlihat seperti video, tetapi gambar hitam dan hanya musik/audio terdengar. Pemeriksaan lama hanya memeriksa signature/container MIME video; file tanpa stream video yang valid masih berpotensi lolos.
