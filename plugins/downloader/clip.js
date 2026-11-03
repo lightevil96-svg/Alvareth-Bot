@@ -1,8 +1,8 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { createClipProgress } from './clip-progress.js'
+import { sendLocalFile } from '../../lib/whatsapp-file-sender.js'
 import {
   downloadYoutubeClip,
   cleanupDownload
@@ -45,41 +45,6 @@ function extractRequest(input) {
   const end = parseTimestamp(times[1])
   if (start === null || end === null) return null
   return { url, start, end }
-}
-
-export function isNoSpaceError(error) {
-  const seen = new Set()
-  let current = error
-  while (current && typeof current === 'object' && !seen.has(current)) {
-    seen.add(current)
-    if (current.code === 'ENOSPC' || current.errno === 'ENOSPC' ||
-        /no space left on device/i.test(String(current.message || ''))) return true
-    current = current.cause
-  }
-  return false
-}
-
-async function getTemporaryDiskDiagnostic() {
-  const directory = path.resolve(process.env.TMPDIR || tmpdir())
-  try {
-    const stats = await fs.statfs(directory)
-    const available = Number(stats.bavail) * Number(stats.bsize)
-    return { directory, available: Number.isFinite(available) ? available : null }
-  } catch (error) {
-    return { directory, available: null, error: String(error?.message || error) }
-  }
-}
-
-function formatBytes(bytes) {
-  if (!Number.isFinite(bytes) || bytes < 0) return 'tidak diketahui'
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  let value = bytes
-  let unit = 0
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024
-    unit++
-  }
-  return value.toFixed(unit === 0 ? 0 : 1) + ' ' + units[unit]
 }
 
 function formatTimestamp(totalSeconds) {
@@ -137,18 +102,21 @@ const handler = async (m, { conn, text }) => {
   progress.start()
   let outputDir = null
   let savedPath = null
+  let phase = 'download/crop'
   try {
     const downloadRoot = path.resolve(process.env.ALVARETH_DOWNLOAD_DIR || './downloads')
     const clipRoot = path.join(downloadRoot, 'clip')
     await fs.mkdir(clipRoot, { recursive: true })
+    console.log('[CLIP:' + jobId + '] [stage] Download dimulai: ' + url.replace(/[?&](?:si|feature)=[^&]*/gi, ''))
+    progress.stage('⬇️ Mengunduh dan memotong video dari YouTube')
     const result = await downloadYoutubeClip(url, start, end, {
       outputRoot: clipRoot,
       onProgress: reportProgress
     })
     outputDir = result.outputDir
-    console.log('[CLIP:' + jobId + '] Hasil tervalidasi: ' + (result.size / 1024 / 1024).toFixed(1) + ' MB.')
-
-    progress.stage('📂 Menyimpan file ke folder downloads/clip')
+    console.log('[CLIP:' + jobId + '] [stage] Download/crop selesai; hasil kandidat ' + (result.size / 1024 / 1024).toFixed(1) + ' MB.')
+    phase = 'filesystem-validation'
+    progress.stage('📂 Memvalidasi dan menyimpan file ke downloads/clip')
     const fileName = 'Alvareth-Clip-' +
       formatTimestamp(start).replace(/:/g, '-') + '-' +
       formatTimestamp(end).replace(/:/g, '-') + '-' + jobId + '.mp4'
@@ -156,6 +124,7 @@ const handler = async (m, { conn, text }) => {
     await fs.rename(result.path, savedPath)
     const stats = await fs.stat(savedPath)
     if (!stats.isFile() || stats.size < 1) throw new Error('File hasil clip kosong atau tidak ditemukan.')
+    console.log('[CLIP:' + jobId + '] [stage] File tervalidasi: ' + savedPath + ' (' + (stats.size / 1024 / 1024).toFixed(1) + ' MB).')
     const caption =
       '✅ *YouTube Clip berhasil dibuat!*\n' +
       '⏱️ ' + range + '\n' +
@@ -164,35 +133,28 @@ const handler = async (m, { conn, text }) => {
       (result.qualityDowngraded ? '\n⚠️ Format ' + result.sourceMaxQuality + 'p ditemukan, tetapi tidak berhasil diekstrak sebagai video valid. Ini kualitas terbaik yang berhasil diproses.' : '') +
       '\n⚙️ ' + String(result.downloader || 'yt-dlp + FFmpeg') +
       '\n⌛ ' + Math.ceil((Date.now() - startedAt) / 1000) + ' detik'
-    // Stream from disk so large clips do not need to be loaded fully into RAM.
-    // If WhatsApp rejects video media (e.g. its own media constraints), retry
-    // as a document. The platform may still reject files beyond its own limits.
-    await progress.stage('📤 Mengirim video ke WhatsApp (persentase upload tidak tersedia)')
-    const content = { video: { url: savedPath }, mimetype: 'video/mp4', fileName, caption }
-    try {
-      await conn.sendMessage(m.chat, content)
-    } catch (sendError) {
-      if (isNoSpaceError(sendError)) {
-        const disk = await getTemporaryDiskDiagnostic()
-        const wrapped = new Error(
-          'ENOSPC: ruang penyimpanan sementara server habis saat upload. ' +
-          'Direktori temp: ' + disk.directory + '. Ruang tersedia: ' +
-          formatBytes(disk.available) + '. File hasil tetap disimpan di downloads/clip.'
-        )
-        wrapped.code = 'CLIP_UPLOAD_NO_SPACE'
-        wrapped.cause = sendError
-        throw wrapped
-      }
-      console.warn('[CLIP:' + jobId + '] Pengiriman video gagal, mencoba sebagai dokumen:', sendError?.message || sendError)
-      await progress.stage('📤 Mencoba mengirim file sebagai dokumen')
-      await conn.sendMessage(m.chat, {
-        document: { url: savedPath }, mimetype: 'video/mp4', fileName, caption
-      })
-    }
+    // Large MP4 files are sent as documents from disk. This avoids the
+    // inline-video endpoint for very large clips and preserves the best source
+    // quality. Baileys streams the local path; the whole file is not read into RAM.
+    phase = 'whatsapp-upload'
+    await progress.stage('📤 Mengirim file ke WhatsApp melalui Baileys (upload disk-streaming)')
+    const delivery = await sendLocalFile(conn, m.chat, savedPath, {
+      jobId,
+      mimetype: 'video/mp4',
+      caption: stats.size > Number(process.env.ALVARETH_WA_INLINE_VIDEO_MAX_BYTES || 64 * 1024 * 1024)
+        ? caption + '\n📎 MP4 berukuran besar dikirim sebagai dokumen agar kualitas asli tetap terjaga.'
+        : caption,
+      seconds: result.duration,
+      quoted: m
+    })
 
-    progress.finish('success', 'Video berhasil dikirim. Silakan cek media di chat.')
+    progress.finish('success',
+      delivery.mediaType === 'document'
+        ? 'MP4 berhasil dikirim sebagai dokumen. File asli tetap tersedia di downloads/clip.'
+        : 'Video berhasil dikirim dan dapat diputar langsung di chat.')
     try { await m.react('✅') } catch {}
-    console.log('[CLIP:' + jobId + '] Selesai; file tersimpan di ' + savedPath + ' dan telah dikirim ke WhatsApp.')
+    console.log('[CLIP:' + jobId + '] [stage] WhatsApp upload berhasil; messageId=' +
+      delivery.messageId + '; mediaType=' + delivery.mediaType + '; file=' + savedPath)
   } catch (error) {
     const detail = String(error?.message || error || 'Kesalahan tidak diketahui')
       .replace(/https?:\/\/[^\s"'<>]+/gi, '[tautan]')
@@ -200,13 +162,16 @@ const handler = async (m, { conn, text }) => {
     console.error('[CLIP:' + jobId + '] Gagal:', error?.stack || error)
     progress.finish('error', detail)
     const accessProblem = error?.code === 'YOUTUBE_AUTH_REQUIRED' || error?.code === 'YOUTUBE_COOKIES_INVALID'
-    const response = error.code === 'CLIP_UPLOAD_NO_SPACE'
-      ? '⚠️ Video berhasil dibuat, tetapi WhatsApp gagal menerima upload karena ruang sementara server habis (ENOSPC). File asli TIDAK dihapus dan tetap ada di folder downloads/clip. Kosongkan ruang disk/temporary storage server, lalu ketik .download untuk mengirim ulang file tersebut. Detail kapasitas temp tercatat di terminal.'
+    const response = savedPath
+      ? '⚠️ Clip berhasil dibuat dan disimpan, tetapi pengiriman WhatsApp gagal pada tahap ' +
+        String(error?.stage || phase) + '.\n📁 File tetap tersimpan: downloads/clip/' + path.basename(savedPath) +
+        '\n📦 ' + (await fs.stat(savedPath).then(info => (info.size / 1024 / 1024).toFixed(1) + ' MB').catch(() => 'ukuran tidak tersedia')) +
+        '\nKetik .download untuk mencoba mengirim file tersebut lagi setelah memperbaiki koneksi/ruang sementara.\nDetail: ' + detail
       : accessProblem
         ? (error.code === 'YOUTUBE_COOKIES_INVALID'
           ? '❌ File autentikasi YouTube di server tidak dapat dibaca. Periksa YTDLP_COOKIES_FILE pada pengaturan server TokoPanel, lalu restart bot. Jangan mengirim cookies melalui chat.'
           : '❌ YouTube meminta verifikasi akun dan menolak akses downloader dari server. API cadangan juga tidak berhasil. Atur file cookies dari akun YouTube milikmu sendiri secara privat di TokoPanel (YTDLP_COOKIES_FILE), lalu coba lagi. Jangan mengirim cookies melalui WhatsApp atau GitHub.')
-        : '❌ YouTube Clip gagal dibuat. Detail proses tercatat di terminal.'
+        : '❌ YouTube Clip gagal pada tahap ' + String(error?.stage || phase) + '. Detail: ' + detail
     await say(response)
     try { await m.react('❌') } catch {}
   } finally {
