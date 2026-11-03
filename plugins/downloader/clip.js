@@ -57,7 +57,20 @@ function formatTimestamp(totalSeconds) {
 
 const handler = async (m, { conn, text }) => {
   // Every response is a plain WhatsApp message without a GitHub link preview.
-  const say = message => conn.sendMessage(m.chat, { text: message })
+  const say = async message => {
+    // A closed Baileys socket rejects sendMessage with 428 / Connection Closed.
+    // Never let a secondary notification error hide the actual clip failure.
+    if (conn?.ws?.readyState !== undefined && conn.ws.readyState !== 1) {
+      console.warn('[CLIP] Pesan WhatsApp tidak dikirim karena socket tidak terbuka (readyState=' + conn.ws.readyState + ').')
+      return null
+    }
+    try {
+      return await conn.sendMessage(m.chat, { text: message })
+    } catch (sendError) {
+      console.error('[CLIP] Gagal mengirim pesan WhatsApp; detail utama tetap dicatat di terminal:', sendError?.stack || sendError)
+      return null
+    }
+  }
   const request = extractRequest(text)
   if (!request) {
     return say(
@@ -69,7 +82,14 @@ const handler = async (m, { conn, text }) => {
   }
 
   const { url, start, end } = request
-  if (end <= start) return say('Waktu akhir harus lebih besar daripada waktu mulai.')
+  if (end <= start) {
+    return say(
+      '❌ Rentang waktu tidak valid. Waktu akhir harus lebih besar daripada waktu mulai.\\n\\n' +
+      'Bot membaca waktu mulai sebagai *' + formatTimestamp(start) + '* dan waktu akhir sebagai *' + formatTimestamp(end) + '*.' +
+      '\\nPeriksa penulisan timestamp. Gunakan HH:MM:SS untuk durasi lebih dari satu jam.\\n' +
+      'Contoh: .clip URL 2:03:15 2:09:34'
+    )
+  }
   const startedAt = Date.now()
   const jobId = randomUUID().slice(0, 8)
   const range = formatTimestamp(start) + ' – ' + formatTimestamp(end)
