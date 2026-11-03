@@ -360,5 +360,5 @@ test('.clip uses the shared uploader and retains completed output after send fai
   assert.ok(!clipPlugin.includes('await conn.sendMessage(m.chat, content)'))
   assert.ok(senderSource.includes('No automatic retry is performed'))
   assert.ok(senderSource.includes('mediaUploadTimeoutMs: timeoutMs'))
-  assert.ok(senderSource.includes("stats.size <= inlineVideoMaxBytes ? 'video' : 'document'"))
+  assert.ok(senderSource.includes("inlineVideoSupported && stats.size <= inlineVideoMaxBytes"))
 })
