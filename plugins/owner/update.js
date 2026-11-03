@@ -18,11 +18,14 @@ const STATE_DIRECTORY = process.env.ALVARETH_DATA_DIR
   : path.join(os.homedir(), '.alvareth-bot-data')
 const STATE_PATH = path.join(STATE_DIRECTORY, 'update-state-v1.json')
 
+const githubToken = String(process.env.ALVARETH_GITHUB_TOKEN || process.env.GITHUB_TOKEN || '').trim()
 const requestHeaders = {
   'User-Agent': 'Alvareth-Bot-Updater',
   'Accept': 'application/vnd.github+json',
-  'X-GitHub-Api-Version': '2022-11-28'
+  'X-GitHub-Api-Version': '2022-11-28',
+  ...(githubToken ? { Authorization: 'Bearer ' + githubToken } : {})
 }
+const GIT_REMOTE_URL = 'https://github.com/' + REPOSITORY + '.git'
 
 const sha256 = (buffer) => crypto.createHash('sha256').update(buffer).digest('hex')
 const isSha = (value) => /^[0-9a-f]{40}$/i.test(String(value || ''))
@@ -119,7 +122,19 @@ function normalizeRepoPath(input) {
 async function fetchJson(url, label) {
   const response = await fetchWithRetry(url, { headers: requestHeaders }, label || 'GitHub API')
   if (!response.ok) {
-    throw new Error((label || 'GitHub API') + ' gagal: HTTP ' + response.status)
+    const remaining = response.headers.get('x-ratelimit-remaining')
+    const reset = Number(response.headers.get('x-ratelimit-reset') || 0)
+    const retryAfter = Number(response.headers.get('retry-after') || 0)
+    const error = new Error((label || 'GitHub API') + ' gagal: HTTP ' + response.status +
+      (remaining === '0' && reset > 0
+        ? ' (batas permintaan GitHub tercapai sampai ' + new Date(reset * 1000).toISOString() + ')'
+        : retryAfter > 0 ? ' (GitHub meminta menunggu ' + retryAfter + ' detik)' : ''))
+    error.status = response.status
+    error.rateLimited = (response.status === 403 || response.status === 429) &&
+      (remaining === '0' || retryAfter > 0)
+    error.retryAfter = retryAfter
+    error.resetAt = reset
+    throw error
   }
   return response.json()
 }
