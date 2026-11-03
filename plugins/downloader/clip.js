@@ -95,6 +95,7 @@ const handler = async (m, { conn, text }) => {
       '⏱️ ' + range + '\n' +
       '📦 ' + (stats.size / 1024 / 1024).toFixed(1) + ' MB' +
       (result.quality ? '\n🎞️ ' + result.quality + 'p' + (result.fps ? ' @ ' + result.fps + ' FPS' : '') : '') +
+      (result.qualityDowngraded ? '\n⚠️ Format ' + result.sourceMaxQuality + 'p ditemukan, tetapi tidak berhasil diekstrak sebagai video valid. Ini kualitas terbaik yang berhasil diproses.' : '') +
       '\n⚙️ ' + String(result.downloader || 'yt-dlp + FFmpeg') +
       '\n⌛ ' + Math.ceil((Date.now() - startedAt) / 1000) + ' detik'
     const fileName = 'Alvareth-Clip-' +
