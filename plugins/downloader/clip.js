@@ -120,8 +120,9 @@ const handler = async (m, { conn, text }) => {
     const fileName = 'Alvareth-Clip-' +
       formatTimestamp(start).replace(/:/g, '-') + '-' +
       formatTimestamp(end).replace(/:/g, '-') + '-' + jobId + '.mp4'
-    savedPath = path.join(clipRoot, fileName)
-    await fs.rename(result.path, savedPath)
+    const destinationPath = path.join(clipRoot, fileName)
+    await fs.rename(result.path, destinationPath)
+    savedPath = destinationPath
     const stats = await fs.stat(savedPath)
     if (!stats.isFile() || stats.size < 1) throw new Error('File hasil clip kosong atau tidak ditemukan.')
     console.log('[CLIP:' + jobId + '] [stage] File tervalidasi: ' + savedPath + ' (' + (stats.size / 1024 / 1024).toFixed(1) + ' MB).')
