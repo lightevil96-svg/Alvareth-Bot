@@ -1,3 +1,11 @@
+## 2026-11-03 — Fix .update gagal membaca commit terbaru GitHub HTTP 403
+
+- Gejala: .update di WhatsApp membatalkan update pada 'Membaca commit terbaru gagal: HTTP 403'. Limit GitHub REST API tanpa autentikasi atau penolakan server dapat menyebabkannya; screenshot tidak menunjukkan header pembeda.
+- Perbaikan: token GitHub opsional dari ALVARETH_GITHUB_TOKEN/GITHUB_TOKEN; API membaca header retry-after dan x-ratelimit-reset. Apabila REST 403/429/5xx, fallback read-only Git ls-remote/ Git fetch/ Git diff di bare repository terisolasi untuk menemukan SHA terbaru dan daftar perubahan.
+- Keamanan: tetap wajib memvalidasi ancestry SHA, baseline file, hash lokal, filter file protected. Tidak memakai git reset --hard, tidak mengubah checkout lokal, tidak menaruh token pada log, dan membersihkan temp.
+- Bootstrap satu kali: karena updater lama sudah terblokir, pengguna perlu memasang versi terbaru plugins/owner/update.js lewat TokoPanel Files, restart, lalu .update lagi. State baseline update-state-v1.json wajib tetap ada.
+- Pengujian: 4/4 tests/update-transport.test.js lulus pada workflow 41558270979 menggunakan Git repo dummy lokal, termasuk operasi rename/add/delete/modify; syntax juga lulus. Uji langsung TokoPanel masih diperlukan.
+
 ## 2026-11-03 — Fix YouTube anti-bot verification and Qbyte 502 on .clip
 
 - **Evidence from live TokoPanel:** video `iKLqlb_oX60` repeatedly returned `Sign in to confirm you're not a bot` from yt-dlp for default and `web_safari` player clients. API Qbyte returned HTTP 502. These are access/provider failures, not MP4 encoding or available resolution. No amount of picking 1080p will succeed unless at least one provider can supply the actual stream.
