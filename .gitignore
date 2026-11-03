@@ -20,3 +20,8 @@ baileys_auth_info/
 
 # Cache font yang diunduh oleh plugin .ping; dibuat ulang otomatis.
 assets/pingcanvas/
+
+# Private persistent data and authenticated YouTube cookies (never commit).
+.alvareth-bot-data/
+youtube-cookies.txt
+*.cookies.txt
