@@ -163,10 +163,11 @@ const handler = async (m, { conn, text }) => {
     console.error('[CLIP:' + jobId + '] Gagal:', error?.stack || error)
     progress.finish('error', detail)
     const accessProblem = error?.code === 'YOUTUBE_AUTH_REQUIRED' || error?.code === 'YOUTUBE_COOKIES_INVALID'
-    const response = savedPath
+    const savedStats = savedPath ? await fs.stat(savedPath).catch(() => null) : null
+    const response = savedStats
       ? '⚠️ Clip berhasil dibuat dan disimpan, tetapi pengiriman WhatsApp gagal pada tahap ' +
         String(error?.stage || phase) + '.\n📁 File tetap tersimpan: downloads/clip/' + path.basename(savedPath) +
-        '\n📦 ' + (await fs.stat(savedPath).then(info => (info.size / 1024 / 1024).toFixed(1) + ' MB').catch(() => 'ukuran tidak tersedia')) +
+        '\n📦 ' + (savedStats.size / 1024 / 1024).toFixed(1) + ' MB' +
         '\nKetik .download untuk mencoba mengirim file tersebut lagi setelah memperbaiki koneksi/ruang sementara.\nDetail: ' + detail
       : accessProblem
         ? (error.code === 'YOUTUBE_COOKIES_INVALID'
