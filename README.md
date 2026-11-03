@@ -88,7 +88,17 @@ Jika akses Git menggunakan `git ls-remote` juga ditolak/tidak tersedia, opsional
 
 Kirim `.clip https://youtu.be/VIDEO_ID 25:00 27:00`. Format waktu mendukung `MM:SS` atau `HH:MM:SS`; durasi tidak dibatasi oleh kode bot. Progres persentase dan tahap proses dicatat di terminal TokoPanel melalui log `[CLIP:<job>]`. Chat WhatsApp menerima hasil video atau pesan gagal setelah proses selesai.
 
-Tidak ada batas ukuran sumber 256 MB/96 MB atau batas output 45 MB yang dipaksakan oleh plugin. Jika pengiriman sebagai video ditolak WhatsApp, bot mencoba mengirim file yang sama sebagai dokumen. File dialirkan dari disk agar tidak perlu dimuat seluruhnya ke RAM, dan folder sementara dibersihkan setelah proses selesai.
+Downloader tidak memaksakan batas sumber 256 MB/96 MB atau kompresi output 45 MB. Pengiriman memakai satu helper bersama untuk `.clip` dan `.download`: file lokal divalidasi (path, izin baca, ukuran, MIME, dan ruang temp), lalu Baileys membaca path dari disk sehingga video ratusan MB tidak dimuat utuh ke RAM. Video sampai 64 MiB secara default dikirim sebagai video inline; MP4 yang lebih besar dikirim sebagai **dokumen MP4** sejak awal agar tidak memakai endpoint video inline dan kualitas sumber tetap terjaga. Tidak ada retry otomatis atau fallback kedua setelah status upload ambigu, untuk menghindari pesan ganda. File final tetap disimpan di `downloads/clip` agar dapat dikirim ulang melalui `.download`; hanya folder kerja sementara yang dibersihkan.
+
+**Pengiriman WhatsApp:** Baileys `0.3.18-final` menerima `{ url: absolutePath }` untuk media dan opsi `mediaUploadTimeoutMs`; helper mengatur timeout upload default 30 menit. Satu upload diproses pada satu waktu per socket, dengan antrean maksimum 3 pekerjaan. Sebelum upload, helper memeriksa ruang `os.tmpdir()`: perkiraan kebutuhan 1,2× ukuran file + 16 MiB untuk dokumen, atau 2,2× untuk video inline (Baileys juga menyimpan salinan sementara untuk thumbnail). Batas ukuran di sisi bot default 2 GiB − 10 MiB; batas layanan WhatsApp/hosting dapat lebih rendah. Jika upload gagal, file tidak dihapus dan pesan error membedakan ENOSPC, ENOENT, EACCES, timeout, ECONNRESET, HTTP 413, dan HTTP 428. Resolusi `sendMessage` dengan ID pesan berarti proses Baileys selesai mengirim/relay; itu **bukan** bukti tanda terima atau pesan sudah dibaca penerima.
+
+**File manager (`.download`):** ketik `.download` di chat pribadi, buka folder `clip`, lalu pilih file. Balasan daftar WhatsApp (list/button/native-flow), termasuk yang dibungkus ephemeral/view-once, dirutekan kembali ke perintah. File MP4 kecil dikirim sebagai video; file besar sebagai dokumen MP4; jenis lain dikirim sebagai dokumen dengan MIME yang terdeteksi. Jika upload gagal, file tetap tersedia di folder asal untuk dicoba kembali setelah memperbaiki koneksi/ruang temp.
+
+**Environment opsional:**
+- `ALVARETH_DOWNLOAD_MAX_BYTES`: batas ukuran file yang boleh dikirim; default `2 GiB - 10 MiB`.
+- `ALVARETH_WA_INLINE_VIDEO_MAX_BYTES`: ambang video inline; default `64 MiB`. Di atasnya dikirim sebagai dokumen.
+- `ALVARETH_WA_UPLOAD_TIMEOUT_MS`: batas waktu upload media Baileys; default `1800000` (30 menit).
+- `ALVARETH_WA_MAX_PENDING_UPLOADS`: maksimum upload aktif + antrean; default `3` (satu diproses pada satu waktu).
 
 **Batas waktu:** tidak ada idle timeout atau hard timeout aplikasi pada yt-dlp, FFmpeg, pemeriksaan metadata, dan unduhan API khusus `.clip`. Proses menunggu sampai program/provider mengembalikan hasil atau error. Ini berarti satu metode yang benar-benar macet tidak akan otomatis dialihkan ke metode berikutnya. Tidak ada batas durasi/ukuran dari kode bot, tetapi YouTube, API pihak ketiga, WhatsApp, dan kapasitas disk/hosting tetap dapat membatasi atau menolak permintaan.
 
