@@ -1,7 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import fs from 'node:fs'
 import { spawn, spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -43,7 +44,8 @@ test('clip yt-dlp calls have no idle or total execution deadline', () => {
 test('clip FFmpeg and Qbyte HTTP calls do not set application deadlines', () => {
   assert.match(youtubeSource, /function runClipFfmpeg\(args, timeoutMs = 0/)
   assert.equal((clipPipeline.match(/\], 0, options\?\.onProgress, duration\)/g) || []).length, 4)
-  assert.match(clipPipeline, /getYoutubeInfo\(normalizedUrl, 0\)/)
+  assert.match(clipPipeline, /getClipYoutubeInfo\(normalizedUrl, options\?\.onProgress\)/)
+  assert.match(youtubeSource, /return await getYoutubeInfo\(url, 0\)/)
   assert.equal((clipPipeline.match(/}, 0\n        \)/g) || []).length, 1)
   assert.match(clipPipeline, /videoFormats\.slice\(0, 12\)/)
 })
@@ -253,5 +255,74 @@ test('HD source downgrade is reported rather than described as best available qu
   assert.match(clipPipeline, /qualityDowngraded:/)
   assert.match(clipPlugin, /result\.qualityDowngraded/)
   assert.match(clipPlugin, /tidak berhasil diekstrak sebagai video valid/)
+})
+
+
+test('private YouTube cookies are passed only as server-side file paths', async () => {
+  const begin = youtubeSource.indexOf('function getClipCookiesArgs() {')
+  const end = youtubeSource.indexOf('\nfunction getYtDlpPotProviderArgs()', begin)
+  assert.ok(begin >= 0 && end > begin)
+  const code = youtubeSource.slice(begin, end)
+  const build = env => new Function('fs', 'path', 'process', code +
+    '\nreturn { getClipCookiesArgs, isYoutubeVerificationError }')(fs, path, { env })
+  const privateDir = await mkdtemp(path.join(tmpdir(), 'alvareth-cookie-test-'))
+  const cookiePath = path.join(privateDir, 'youtube-cookies.txt')
+  try {
+    await writeFile(cookiePath,
+      '# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2000000000\tPREF\tdummy\n')
+    const helpers = build({ YTDLP_COOKIES_FILE: cookiePath })
+    assert.deepEqual(helpers.getClipCookiesArgs(), ['--cookies', cookiePath])
+    assert.equal(helpers.isYoutubeVerificationError("Sign in to confirm you're not a bot"), true)
+    assert.equal(helpers.isYoutubeVerificationError('Use --cookies for authentication'), true)
+    assert.equal(helpers.isYoutubeVerificationError('Requested format is not available'), false)
+    assert.match(youtubeSource, /filePath = configured \|\| privatePath/)
+    assert.match(clipPipeline, /getClipCookiesArgs\(\)/)
+    await writeFile(cookiePath, '{"cookies": "not-netscape-format"}')
+    assert.throws(() => helpers.getClipCookiesArgs(),
+      error => error?.code === 'YOUTUBE_COOKIES_INVALID')
+    assert.throws(() => build({ YTDLP_COOKIES_FILE: path.join(privateDir, 'missing.txt') }).getClipCookiesArgs(),
+      error => error?.code === 'YOUTUBE_COOKIES_INVALID')
+  } finally {
+    await rm(privateDir, { recursive: true, force: true })
+  }
+})
+
+test('verification failure skips repeated yt-dlp methods but still tries the independent API', () => {
+  assert.match(clipPipeline, /if \(youtubeAccessError && method\.id !== 'qbyte-api-ffmpeg'\)/)
+  assert.match(clipPipeline, /youtubeAccessError = error\?\.code === 'YOUTUBE_COOKIES_INVALID'/)
+  assert.match(clipPipeline, /accessError\.code = youtubeAccessError/)
+  assert.match(clipPlugin, /error\?\.code === 'YOUTUBE_AUTH_REQUIRED'/)
+  assert.match(clipPlugin, /YTDLP_COOKIES_FILE/)
+  assert.match(youtubeSource, /if \(isYoutubeVerificationError\(error\)\) throw error/)
+})
+
+test('Qbyte HTTP 502 is retried once but permanent errors fail without retry', async () => {
+  const begin = youtubeSource.indexOf('async function getClipYoutubeInfo(')
+  const end = youtubeSource.indexOf('\nfunction pickVideo(', begin)
+  assert.ok(begin >= 0 && end > begin)
+  const source = youtubeSource.slice(begin, end)
+  const messages = []
+  let calls = 0
+  const getYoutubeInfo = async () => {
+    calls++
+    if (calls === 1) throw new Error('Gagal ambil info HTTP 502')
+    return { formats: [{ format_id: '137' }] }
+  }
+  const helper = new Function('getYoutubeInfo', 'console', 'setTimeout',
+    source + '\nreturn getClipYoutubeInfo')(getYoutubeInfo, { warn: message => messages.push(message) },
+    callback => callback())
+  const result = await helper('https://youtu.be/example')
+  assert.equal(result.formats[0].format_id, '137')
+  assert.equal(calls, 2)
+  assert.equal(messages.length, 1)
+
+  let failures = 0
+  const hardFail = new Function('getYoutubeInfo', 'console', 'setTimeout',
+    source + '\nreturn getClipYoutubeInfo')(async () => {
+      failures++
+      throw new Error('Gagal ambil info HTTP 403')
+    }, { warn() {} }, callback => callback())
+  await assert.rejects(hardFail('https://youtu.be/example'), /HTTP 403/)
+  assert.equal(failures, 1)
 })
 
