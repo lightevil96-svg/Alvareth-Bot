@@ -1,0 +1,37 @@
+name: WhatsApp Media Delivery Regression
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/whatsapp-file-sender.js'
+      - 'lib/interactive-command.js'
+      - 'plugins/downloader/clip.js'
+      - 'plugins/downloader/download.js'
+      - 'handler.js'
+      - 'tests/whatsapp-file-sender.test.js'
+      - 'tests/interactive-command.test.js'
+      - 'package.json'
+      - '.github/workflows/media-delivery-regression.yml'
+  pull_request:
+    paths:
+      - 'lib/whatsapp-file-sender.js'
+      - 'lib/interactive-command.js'
+      - 'plugins/downloader/clip.js'
+      - 'plugins/downloader/download.js'
+      - 'handler.js'
+      - 'tests/whatsapp-file-sender.test.js'
+      - 'tests/interactive-command.test.js'
+      - 'package.json'
+
+jobs:
+  media-delivery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check syntax and media-delivery regressions
+        run: npm run test:media
