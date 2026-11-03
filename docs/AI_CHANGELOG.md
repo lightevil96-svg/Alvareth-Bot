@@ -1,3 +1,12 @@
+## 2026-11-03 — Fix YouTube anti-bot verification and Qbyte 502 on .clip
+
+- **Evidence from live TokoPanel:** video `iKLqlb_oX60` repeatedly returned `Sign in to confirm you're not a bot` from yt-dlp for default and `web_safari` player clients. API Qbyte returned HTTP 502. These are access/provider failures, not MP4 encoding or available resolution. No amount of picking 1080p will succeed unless at least one provider can supply the actual stream.
+- **Authentication:** added optional `YTDLP_COOKIES_FILE` absolute path or automatic detection of `/home/container/.alvareth-bot-data/youtube-cookies.txt` (working directory must be /home/container). Both metadata and video/audio yt-dlp processes receive `--cookies` pointing to a private file. Cookie files must be Netscape/Mozilla format and readable. Code never logs contents or exports cookies to WhatsApp/GitHub.
+- **Security:** added `.alvareth-bot-data/`, `youtube-cookies.txt`, and `*.cookies.txt` to gitignore; instruct the owner to apply restricted permissions and keep session exports private. The owner must supply a legitimate session; the code cannot fabricate authentication or guarantee that YouTube will accept a server IP.
+- **No redundant login requests:** classify verification errors and skip the remaining yt-dlp methods once access is denied, while still trying Qbyte. Metadata format inventory is cached for the current clip job and shared among the four yt-dlp strategies rather than downloaded four times.
+- **Provider resilience:** Qbyte HTTP 502/503/504 receives one extra attempt after a brief delay. Permanent HTTP errors still fail without extra calls. The WhatsApp error for auth failures now tells the owner exactly which private server setting to check without exposing secrets.
+- **Testing:** added real Node tests using a dummy Netscape cookie file, invalid/missing cookie paths, login error classification, rate-limit retry behavior, and inventory reuse. GitHub Actions regression and JavaScript syntax check are the source-level verification; live YouTube and WhatsApp download still require a configured, accepted session.
+
 ## 2026-11-03 — Hotfix 1080p terdeteksi tetapi file hasil tidak memiliki track video
 
 - **Bukti pengguna:** TokoPanel mengiklankan 1920x1080/24 FPS melalui yt-dlp (format 616+140), namun saat memasuki tahap FFmpeg muncul `stream map 0:v:0 matches no streams`. Alhasil metode yang tampak berhasil berikutnya hanya menghasilkan 360p. Ini membuktikan metadata 1080p belum menjamin bahwa file 1080p benar-benar berhasil diunduh.
