@@ -1,6 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { spawn, spawnSync } from 'node:child_process'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 const clipPlugin = await readFile(new URL('../plugins/downloader/clip.js', import.meta.url), 'utf8')
 const youtubeSource = await readFile(new URL('../lib/scrape/youtube.js', import.meta.url), 'utf8')
 const clipPipeline = youtubeSource.slice(youtubeSource.indexOf('export async function downloadYoutubeClip'))
@@ -186,3 +190,46 @@ test('Qbyte retries advertised video IDs and verifies the actual downloaded reso
   assert.match(clipPipeline, /Qbyte video tervalidasi/)
   assert.match(clipPipeline, /if \(!videoPath\)/)
 })
+
+
+test('real FFprobe distinguishes audio-only MP4 from a decodable 720p video', async t => {
+  if (spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' }).error ||
+      spawnSync('ffprobe', ['-version'], { stdio: 'ignore' }).error) {
+    t.skip('ffmpeg/ffprobe binaries are not installed')
+    return
+  }
+  const start = youtubeSource.indexOf('async function inspectVideoStream(')
+  const end = youtubeSource.indexOf('\nasync function inspectAudioStream(', start)
+  assert.ok(start >= 0 && end > start)
+  const inspect = new Function('spawn', 'console',
+    youtubeSource.slice(start, end) + '\nreturn inspectVideoStream')(spawn, { warn() {} })
+
+  const root = await mkdtemp(path.join(tmpdir(), 'alvareth-clip-ffprobe-'))
+  try {
+    const audioPath = path.join(root, 'audio-only.mp4')
+    const videoPath = path.join(root, 'valid-720p.mp4')
+    const audio = spawnSync('ffmpeg', [
+      '-hide_banner', '-loglevel', 'error',
+      '-f', 'lavfi', '-i', 'sine=frequency=440:duration=0.4',
+      '-c:a', 'aac', '-y', audioPath
+    ], { encoding: 'utf8' })
+    assert.equal(audio.status, 0, audio.stderr)
+
+    const video = spawnSync('ffmpeg', [
+      '-hide_banner', '-loglevel', 'error',
+      '-f', 'lavfi', '-i', 'testsrc2=size=1280x720:rate=24:duration=0.4',
+      '-c:v', 'libx264', '-threads', '2', '-pix_fmt', 'yuv420p',
+      '-y', videoPath
+    ], { encoding: 'utf8' })
+    assert.equal(video.status, 0, video.stderr)
+
+    assert.equal(await inspect(audioPath), null)
+    const inspected = await inspect(videoPath)
+    assert.equal(inspected.width, 1280)
+    assert.equal(inspected.height, 720)
+    assert.ok(inspected.fps >= 24)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
