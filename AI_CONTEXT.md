@@ -78,6 +78,7 @@ Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes n
 
 ## 6. Pembaruan terbaru
 
+- 2026-11-03 — `.clip` mengenali ENOSPC saat upload, tidak mengulang upload dokumen pada disk penuh, mencatat ruang direktori temp, dan mempertahankan hasil di `downloads/clip` agar dapat dikirim ulang setelah storage server dibersihkan.
 - 2026-11-03 — `.clip`: validasi rentang waktu menampilkan nilai yang dibaca bot; balasan dan pelaporan error global tidak mengulang `sendMessage` pada socket Baileys tertutup/428. Hasil clip kini dipertahankan di `downloads/clip` agar dapat diambil ulang lewat `.download`.
 - 2026-11-03 — `.download`: file manager interaktif WhatsApp untuk menelusuri folder dan mengirim file terpilih; akses dibatasi ke `ALVARETH_DOWNLOAD_DIR` (default `./downloads`), dotfiles/symlink disembunyikan atau ditolak, dan daftar dipaginasi. Tes helper filesystem ditambahkan; uji langsung list response dan pengiriman dokumen di WhatsApp/TokoPanel belum dilakukan.
 
