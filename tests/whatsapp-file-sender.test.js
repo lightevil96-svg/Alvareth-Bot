@@ -162,3 +162,31 @@ test('upload errors explain disk, connection, timeout and provider size failures
   assert.match(describeWhatsAppUploadError(Object.assign(new Error('Upload timeout'), { code: 'ETIMEDOUT' })), /melewati batas waktu/)
   assert.match(describeWhatsAppUploadError(Object.assign(new Error('connection reset'), { code: 'ECONNRESET' })), /ECONNRESET/)
 })
+
+
+test('.download can force a large MP4 to be sent as a WhatsApp video message', async t => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'alvareth-wa-forced-video-'))
+  t.after(() => fs.rm(directory, { recursive: true, force: true }))
+  const filePath = await makeMp4(directory, 'large-download.mp4', 70 * 1024 * 1024)
+  let captured
+  const conn = socket(async (...args) => {
+    captured = args
+    return { key: { id: 'message-forced-video' } }
+  })
+
+  const result = await sendLocalFile(conn, '628123@s.whatsapp.net', filePath, {
+    mimetype: 'video/mp4',
+    maxBytes: 100 * 1024 * 1024,
+    inlineVideoMaxBytes: 64 * 1024 * 1024,
+    forceVideo: true,
+    caption: 'download MP4',
+    checkTempSpace: false
+  })
+
+  assert.equal(result.mediaType, 'video')
+  assert.equal(captured[1].video.url, await fs.realpath(filePath))
+  assert.equal(captured[1].mimetype, 'video/mp4')
+  assert.equal(captured[1].caption, 'download MP4')
+  assert.equal('document' in captured[1], false)
+  assert.equal((await fs.stat(filePath)).size, 70 * 1024 * 1024)
+})
