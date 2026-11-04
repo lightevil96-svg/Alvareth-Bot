@@ -157,3 +157,10 @@ Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes n
 ## Diagnostik command image
 - Untuk command `.toreal`/konversi image yang tidak merespons, periksa log `[COMMAND TRACE]` sebelum mengubah API gambar. Trace mencatat prefix aktif dan kandidat plugin yang cocok, tanpa isi media/kredensial.
 - Jika ada kandidat image tetapi tidak ada `[IMAGE] ▶ Mulai`, telusuri tahap plugin loop, status disabled, dan tipe export plugin. Jika `[IMAGE] ▶ Mulai` muncul, lanjutkan ke tahap download/upload/API.
+
+
+## LightJurnal Video Studio — deployment notes (2026-11-04)
+- `main.js` starts the optional HTTP server when `PORT` or Pterodactyl's `SERVER_PORT` is present; `server.js` listens on `PORT` first, then `SERVER_PORT`.
+- Video Studio API creates a 256-bit random API key on first startup when `VIDEO_STUDIO_API_KEY` is not set. It persists at `~/.alvareth-bot-data/video-studio/api-key` (or under `ALVARETH_DATA_DIR`) with mode 0600. Do not commit this file or disclose its contents in logs/chat.
+- LightJurnal still requires a public HTTPS URL and the generated key in the browser session. A raw Pterodactyl TCP allocation is not automatically HTTPS; configure a reverse proxy or Cloudflare Tunnel before calling the deployment live.
+- Do not claim deployment is complete until dependency installation, health check, authenticated limits request, and a real short MP4 render have succeeded on the user's Pterodactyl instance.
