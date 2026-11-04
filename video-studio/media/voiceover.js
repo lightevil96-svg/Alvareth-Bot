@@ -119,7 +119,11 @@ async function requestSpeech(chunk, voiceId, apiKey, modelId, previousText, next
   const format = String(process.env.VIDEO_STUDIO_ELEVENLABS_OUTPUT_FORMAT || "mp3_44100_128");
   const endpoint = "https://api.elevenlabs.io/v1/text-to-speech/" + encodeURIComponent(voiceId) +
     "/with-timestamps?output_format=" + encodeURIComponent(format);
-  const payload = { text: chunk.text, model_id: modelId };
+  const payload = {
+    text: chunk.text,
+    model_id: modelId,
+    voice_settings: { stability: 0.48, similarity_boost: 0.78, style: 0.2, use_speaker_boost: true }
+  };
   if (previousText) payload.previous_text = previousText.slice(-500);
   if (nextText) payload.next_text = nextText.slice(0, 500);
   return fetchJson(endpoint, {
@@ -165,7 +169,11 @@ export async function prepareVoiceover(project, jobId) {
     const filename = "voice-" + String(chunkIndex + 1).padStart(2, "0") + ".mp3";
     await writeFile(join(folder, filename), audio);
     const alignment = response.alignment || response.normalized_alignment || null;
+    if (!alignment || !Array.isArray(alignment.characters) || !Array.isArray(alignment.character_start_times_seconds) || !Array.isArray(alignment.character_end_times_seconds)) {
+      throw new Error("ElevenLabs tidak mengembalikan timing karakter; voice-over tidak dapat disinkronkan dengan aman.");
+    }
     const localWords = alignmentWords(alignment, timelineOffset);
+    if (!localWords.length) throw new Error("Data timing voice-over kosong; audio dilewati agar tidak terpotong.");
     const localEnd = localWords.reduce((max, word) => Math.max(max, word.endSeconds), timelineOffset);
     const audioDuration = Math.max(0.1, localEnd - timelineOffset);
     voiceoverTracks.push({

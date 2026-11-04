@@ -104,7 +104,7 @@ export function validateVideoProject(input) {
       points,
       narration: text(scene.narration, 1200),
       visualDescription: text(scene.visualDescription, 400),
-      stockSearchQuery: text(scene.stockSearchQuery, 100),
+      stockSearchQuery: scene.stockSearchQuery === undefined ? text(scene.visualDescription, 100) : text(scene.stockSearchQuery, 100),
       layout: LAYOUTS.includes(scene.layout) ? scene.layout : index === 0 ? "hero" : index === rawScenes.length - 1 ? "outro" : "editorial",
       motif: MOTIFS.includes(scene.motif) ? scene.motif : ["rings", "wave", "grid", "orbit", "bars", "ribbon"][index % 6],
       motion: MOTIONS.includes(scene.motion) ? scene.motion : ["fade-up", "scale-in", "slide-left", "reveal"][index % 4],

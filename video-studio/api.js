@@ -52,7 +52,7 @@ export function mountVideoStudioApi(app) {
     status: "ok",
     configured: apiKey.length >= 32,
     media: {
-      voiceover: Boolean(process.env.VIDEO_STUDIO_ELEVENLABS_API_KEY && process.env.VIDEO_STUDIO_ELEVENLABS_VOICE_ID),
+      voiceover: Boolean((process.env.VIDEO_STUDIO_ELEVENLABS_API_KEY || process.env.ELEVENLABS_API_KEY) && process.env.VIDEO_STUDIO_ELEVENLABS_VOICE_ID),
       stockFootage: Boolean(process.env.VIDEO_STUDIO_PEXELS_API_KEY)
     }
   }))
