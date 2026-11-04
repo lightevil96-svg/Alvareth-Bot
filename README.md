@@ -150,3 +150,32 @@ Repository ini mewarisi struktur dan sebagian kode dari source sebelumnya. Perta
 ## Panduan AI dan kontribusi
 
 Sebelum mengubah kode, AI/developer wajib membaca [`AGENTS.md`](AGENTS.md), [`AI_CONTEXT.md`](AI_CONTEXT.md), dan [`docs/AI_CHANGELOG.md`](docs/AI_CHANGELOG.md). Setiap perubahan bermakna harus memperbarui changelog dan ringkasan terbaru di `AI_CONTEXT.md` dalam PR yang sama. Ikuti aturan keamanan, jalankan tes yang relevan, dan laporkan dengan jujur apa yang sudah serta belum diverifikasi.
+
+
+## LightJurnal Video Studio (remote Remotion rendering)
+
+LightJurnal can submit text-motion video projects to the existing Alvareth-Bot HTTP process. The bot validates the project, stores a small persistent render queue under `~/.alvareth-bot-data/video-studio`, and renders MP4 files with Remotion. This first release supports animated typography scenes only; media uploads, audio tracks, and a drag-and-drop timeline are not included yet.
+
+### Setup
+
+1. Install dependencies after updating the bot: `npm install`.
+2. Set `VIDEO_STUDIO_API_KEY` in the Pterodactyl server Environment to a unique random secret of at least 32 characters. Do not put this secret in GitHub or WhatsApp.
+3. Set `VIDEO_STUDIO_ALLOWED_ORIGINS=https://lightjurnal.my.id`.
+4. Ensure the Pterodactyl server has a public allocation and expose its HTTP port through an HTTPS reverse proxy. Do not expose the raw API over plain HTTP to browsers.
+5. Ensure the startup environment contains `PORT` so the existing optional `server.js` starts. The existing WhatsApp bot and this API run in the same Alvareth-Bot process.
+6. In LightJurnal → Video Studio, enter the HTTPS API URL and the API key. The key is kept in the current browser session only.
+
+### API
+
+- `GET /api/video-studio/health` — public readiness check (does not reveal the key).
+- `GET /api/video-studio/limits` — supported project limits; requires Bearer authentication.
+- `GET /api/video-studio/jobs` — recent render jobs.
+- `POST /api/video-studio/jobs` — enqueue a project.
+- `GET /api/video-studio/jobs/:id` — inspect job status.
+- `GET /api/video-studio/jobs/:id/download` — download completed MP4.
+
+All routes except health require `Authorization: Bearer <VIDEO_STUDIO_API_KEY>`. CORS defaults to the LightJurnal production origin. The initial queue permits up to five active jobs and renders one job at a time to protect the WhatsApp process. Completed files and queue metadata are stored outside the Git checkout.
+
+### Current limitations
+
+The first implementation renders text-only scenes at 24/25/30 FPS, in 9:16, 16:9, or 1:1 ratios, with a 90-second maximum. It does not yet accept uploaded photos/videos/audio or send the final video to WhatsApp. A VPS deployment, dependency installation, HTTPS reverse proxy, and real render test are still required.
