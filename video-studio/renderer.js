@@ -11,6 +11,7 @@ async function getServeUrl() {
     serveUrlPromise = ensureVideoAudioAssets().then(() => import("@remotion/bundler")).then(({ bundle }) => bundle({
       entryPoint: join(__dirname, "remotion", "index.jsx"),
       publicDir: join(__dirname, "remotion", "public"),
+      symlinkPublicDir: true,
       webpackOverride: config => config
     })).catch(error => { serveUrlPromise = null; throw error; });
   }
