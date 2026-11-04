@@ -27,7 +27,7 @@ export function mountVideoStudioApi(app) {
   app.use('/api/video-studio', (req, res, next) => {
     const expected = process.env.VIDEO_STUDIO_API_KEY
     if (!expected || expected.length < 32) return res.status(503).json({ error: 'Video Studio API belum dikonfigurasi dengan API key minimal 32 karakter.' })
-    const supplied = String(req.headers.authorization || '').replace(/^Bearer\\s+/i, '')
+    const supplied = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '')
     if (!safeEqual(supplied, expected)) return res.status(401).json({ error: 'API key tidak valid.' })
     next()
   })
