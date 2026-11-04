@@ -154,6 +154,8 @@ export function validateVideoProject(input) {
       narration: text(scene.narration, 1200),
       visualDescription: text(scene.visualDescription, 400),
       stockSearchQuery: scene.stockSearchQuery === undefined ? text(scene.visualDescription, 100) : text(scene.stockSearchQuery, 100),
+      generateAiFootage: scene.generateAiFootage === true,
+      aiVideoPrompt: text(scene.aiVideoPrompt, 1800),
       visualType,
       backgroundEffect: BACKGROUND_EFFECTS.includes(scene.backgroundEffect) ? scene.backgroundEffect : "orbs",
       backgroundEffectIntensity: Number.isFinite(Number(scene.backgroundEffectIntensity)) ? Math.max(0, Math.min(0.65, Number(scene.backgroundEffectIntensity))) : 0.26,
