@@ -8,7 +8,12 @@ const MUSIC_STYLES = ["cinematic", "upbeat", "calm", "none"];
 const LAYOUTS = ["hero", "editorial", "split", "stat", "quote", "steps", "outro"];
 const MOTIFS = ["rings", "orbit", "wave", "grid", "bars", "ribbon", "spark", "none"];
 const MOTIONS = ["fade-up", "scale-in", "slide-left", "slide-right", "reveal", "float", "count-up"];
-const TRANSITIONS = ["cut", "fade", "wipe", "slide", "zoom"];
+const TRANSITIONS = ["cut", "fade", "crossfade", "wipe", "wipe-left", "wipe-right", "wipe-up", "wipe-down", "slide", "slide-left", "slide-right", "slide-up", "slide-down", "zoom", "glitch", "dissolve", "flash", "dip-to-black"];
+const VISUAL_TYPES = ["cinematic", "kinetic", "editorial", "data-chart", "diagram", "app-mockup", "waveform"];
+const BACKGROUND_EFFECTS = ["none", "orbs", "particles", "grid", "waves", "dots", "vignette"];
+const CAMERA_MOTIONS = ["static", "push-in", "pull-out", "pan-left", "pan-right", "tilt-up", "tilt-down", "drift"];
+const COLOR_GRADES = ["neutral", "warm", "cool", "film", "vivid", "mono"];
+const CAPTION_STYLES = ["tiktok", "karaoke", "subtitle", "pop", "typewriter", "highlight", "wave"];
 const SOUND_CUES = ["none", "whoosh", "pop", "impact"];
 const PALETTES = [
   { background: "#111827", accent: "#68DDB8" },
@@ -67,6 +72,11 @@ export function validateVideoProject(input) {
   const fps = Number(input.fps || 30);
   if (![24, 25, 30].includes(fps)) throw new Error("FPS yang didukung: 24, 25, atau 30.");
   const musicStyle = MUSIC_STYLES.includes(input.musicStyle) ? input.musicStyle : "cinematic";
+  const captionStyle = CAPTION_STYLES.includes(input.captionStyle) ? input.captionStyle : "tiktok";
+  const captionPosition = ["top", "center", "bottom"].includes(input.captionPosition) ? input.captionPosition : "bottom";
+  const musicTrackSrc = assetPath(input.musicTrackSrc);
+  const musicBpm = Number.isFinite(Number(input.musicBpm)) && Number(input.musicBpm) >= 0 && Number(input.musicBpm) <= 240 ? Number(input.musicBpm) : 0;
+  const musicVolume = Number.isFinite(Number(input.musicVolume)) ? Math.max(0, Math.min(0.5, Number(input.musicVolume))) : 0.16;
   const soundEffects = input.soundEffects !== false;
   const rawScenes = Array.isArray(input.scenes) ? input.scenes : [];
   if (rawScenes.length < 1 || rawScenes.length > 60) throw new Error("Proyek harus memiliki 1 sampai 60 scene.");
@@ -92,6 +102,45 @@ export function validateVideoProject(input) {
     const footageSrc = assetPath(scene.footageSrc);
     const footageCredit = footageSrc ? text(scene.footageCredit, 90) : "";
     const footageUrl = footageSrc ? pexelsUrl(scene.footageUrl) : "";
+    const chartData = Array.isArray(scene.chartData) ? scene.chartData.slice(0, 8).map(item => ({
+      label: text(item?.label, 48),
+      value: Number(item?.value)
+    })).filter(item => item.label && Number.isFinite(item.value) && item.value >= 0 && item.value <= 1e12) : [];
+    const diagramNodes = Array.isArray(scene.diagramNodes) ? scene.diagramNodes.slice(0, 7).map((item, nodeIndex) => ({
+      id: text(item?.id, 32) || "node-" + (nodeIndex + 1),
+      label: text(item?.label, 64),
+      x: Number.isFinite(Number(item?.x)) ? Math.max(8, Math.min(92, Number(item.x))) : null,
+      y: Number.isFinite(Number(item?.y)) ? Math.max(15, Math.min(85, Number(item.y))) : null
+    })).filter(item => item.label) : [];
+    const nodeIds = new Set(diagramNodes.map(item => item.id));
+    const diagramEdges = Array.isArray(scene.diagramEdges) ? scene.diagramEdges.slice(0, 10).map(item => ({
+      from: text(item?.from, 32),
+      to: text(item?.to, 32),
+      label: text(item?.label, 48)
+    })).filter(item => nodeIds.has(item.from) && nodeIds.has(item.to) && item.from !== item.to) : [];
+    const notifications = Array.isArray(scene.notifications) ? scene.notifications.slice(0, 3).map(item => ({
+      sender: text(item?.sender, 48),
+      text: text(item?.text, 120),
+      delaySeconds: Math.max(0, Math.min(18, Number(item?.delaySeconds) || 0)),
+      durationSeconds: Math.max(0.8, Math.min(8, Number(item?.durationSeconds) || 2.6))
+    })).filter(item => item.text) : [];
+    const callouts = Array.isArray(scene.callouts) ? scene.callouts.slice(0, 3).map(item => ({
+      text: text(item?.text, 90),
+      position: ["top", "center", "bottom"].includes(item?.position) ? item.position : "bottom",
+      delaySeconds: Math.max(0, Math.min(18, Number(item?.delaySeconds) || 0)),
+      durationSeconds: Math.max(0.8, Math.min(8, Number(item?.durationSeconds) || 2))
+    })).filter(item => item.text) : [];
+    const appMockup = scene.appMockup && typeof scene.appMockup === "object" ? {
+      title: text(scene.appMockup.title, 80),
+      rows: Array.isArray(scene.appMockup.rows) ? scene.appMockup.rows.slice(0, 5).map(item => text(item, 64)).filter(Boolean) : [],
+      cta: text(scene.appMockup.cta, 48)
+    } : null;
+    const requestedVisualType = VISUAL_TYPES.includes(scene.visualType) ? scene.visualType : "cinematic";
+    const visualType = requestedVisualType === "data-chart" && !chartData.length ? "editorial"
+      : requestedVisualType === "diagram" && !diagramNodes.length ? "editorial"
+      : requestedVisualType === "app-mockup" && !appMockup ? "editorial"
+      : requestedVisualType;
+    const facecamSrc = assetPath(scene.facecamSrc);
     return {
       id: text(scene.id, 40) || "scene-" + String(index + 1).padStart(2, "0"),
       purpose: text(scene.purpose, 50) || "story",
@@ -105,6 +154,23 @@ export function validateVideoProject(input) {
       narration: text(scene.narration, 1200),
       visualDescription: text(scene.visualDescription, 400),
       stockSearchQuery: scene.stockSearchQuery === undefined ? text(scene.visualDescription, 100) : text(scene.stockSearchQuery, 100),
+      visualType,
+      backgroundEffect: BACKGROUND_EFFECTS.includes(scene.backgroundEffect) ? scene.backgroundEffect : "orbs",
+      backgroundEffectIntensity: Number.isFinite(Number(scene.backgroundEffectIntensity)) ? Math.max(0, Math.min(0.65, Number(scene.backgroundEffectIntensity))) : 0.26,
+      cameraMotion: CAMERA_MOTIONS.includes(scene.cameraMotion) ? scene.cameraMotion : "static",
+      colorGrade: COLOR_GRADES.includes(scene.colorGrade) ? scene.colorGrade : "neutral",
+      chartTitle: text(scene.chartTitle, 100),
+      chartUnit: text(scene.chartUnit, 20),
+      chartSource: text(scene.chartSource, 180),
+      chartData,
+      diagramNodes,
+      diagramEdges,
+      appMockup,
+      notifications,
+      callouts,
+      soundIntensity: Number.isFinite(Number(scene.soundIntensity)) ? Math.max(0, Math.min(1, Number(scene.soundIntensity))) : 0.55,
+      ...(facecamSrc ? { facecamSrc, facecamPosition: ["bottom-left", "bottom-right", "top-left", "top-right"].includes(scene.facecamPosition) ? scene.facecamPosition : "bottom-right" } : {}),
+      footagePosition: ["center", "top", "bottom", "left", "right"].includes(scene.footagePosition) ? scene.footagePosition : "center",
       layout: LAYOUTS.includes(scene.layout) ? scene.layout : index === 0 ? "hero" : index === rawScenes.length - 1 ? "outro" : "editorial",
       motif: MOTIFS.includes(scene.motif) ? scene.motif : ["rings", "wave", "grid", "orbit", "bars", "ribbon"][index % 6],
       motion: MOTIONS.includes(scene.motion) ? scene.motion : ["fade-up", "scale-in", "slide-left", "reveal"][index % 4],
