@@ -26,7 +26,9 @@ The 13 official skills are installed locally under .agents/skills for compatible
 - Keep LightJurnal's creative UI prompt-only. Never add manual scene-duration, background-color, palette, music, FPS, aspect-ratio, or transition controls.
 - Let the planner choose scene pacing from narration length, reading time, visual action, and story beats.
 - Keep the composition deterministic: all movement must derive from useCurrentFrame() and useVideoConfig(), not CSS animation timers.
-- Use Sequence boundaries for scene timing. Keep each scene's video layers and audio cues synchronized inside the same timing boundary.
-- Avoid repetitive motion, overused transitions, constant zooms, excessive SFX, and dense on-screen paragraphs.
-- Do not claim voice-over, stock footage, AI-generated footage, or 3D assets until those paths are implemented and render-tested.
+- Use Sequence boundaries for scene timing. Keep voice-over tracks, word-timed caption phrases, footage layers, and scene boundaries synchronized.
+- Voice-over is optional and uses ElevenLabs with timestamp alignment; stock footage is optional and uses Pexels. Missing provider keys must produce clear warnings and a clean motion-graphics fallback.
+- Pexels footage must be downloaded to the Remotion public asset directory, validated as a local safe path, and credited on-screen with the photographer and Pexels.
+- Music must be quieter when voice-over exists. Avoid repetitive motion, overused transitions, constant zooms, excessive SFX, and dense on-screen paragraphs.
+- Do not claim AI-generated footage, uploaded-media editing, or 3D assets; those paths are not implemented. A real MP4 render on the production VPS still needs verification.
 - Preserve Remotion version alignment. Current core packages are pinned to 4.0.540.

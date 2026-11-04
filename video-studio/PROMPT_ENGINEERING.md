@@ -2,7 +2,7 @@
 
 > **Purpose:** This document tells an AI coding agent how to design and implement the prompt-understanding layer for LightJurnal Video Studio. Read this before changing Video Studio prompt, storyboard, scene schema, or Remotion rendering code.
 >
-> **Status (2026-11-04):** Prompt-to-storyboard planning, safe compilation, variable scene timing, and a richer motion-graphics composition are implemented. Spoken TTS, stock-footage retrieval, AI-generated scene footage, uploaded-media editing, and a drag-and-drop timeline are not implemented.
+> **Status (2026-11-04):** Prompt-to-storyboard planning, safe compilation, variable scene timing, optional ElevenLabs voice-over with character-level timing, word-highlighted captions, optional Pexels stock-footage retrieval, and a richer motion-graphics composition are implemented. AI-generated scene footage, uploaded-media editing, and a drag-and-drop timeline are not implemented. Provider credentials and a live VPS MP4 render still need verification.
 >
 > **Current implementation:** `video-studio/api.js`, `validate.js`, `queue.js`, `renderer.js`, `audio-assets.js`, and `remotion/Composition.jsx`. The current UI is in the separate repository `lightevil96-svg/lightjurnal-site`, file `video-studio.js`.
 

@@ -1,3 +1,12 @@
+## 2026-11-04 — Optional AI voice-over, word-timed captions, and Pexels footage
+
+- Added an optional ElevenLabs TTS pipeline using the `/with-timestamps` endpoint. Character alignment is converted to timed word groups; scene durations are aligned to speech when the alignment fits the renderer's limits.
+- Added a Pexels video search/download pipeline. The planner now emits concise English `stockSearchQuery` values for scenes where real-world footage improves the story. Downloaded assets are stored under the Remotion public directory, selected for the target aspect ratio, and credited on-screen and in job metadata.
+- Remotion now layers stock footage under designed typography, plays voice-over tracks, displays word-highlighted captions, and ducks background music when narration exists.
+- Added optional server environment variables for ElevenLabs and Pexels. Missing keys produce explicit job warnings and the renderer falls back to motion graphics without blocking the video.
+- Added stage indicators for media preparation, voice generation, footage search, and rendering; added focused unit tests for alignment grouping, scene-aligned chunking, footage selection, asset-path validation, and media metadata.
+- **Verification boundary:** CI can verify syntax, JSX compilation, and deterministic unit tests. It cannot prove that the user's provider keys are valid, that the Pexels catalogue returns suitable footage for every topic, or that the final MP4 renders correctly on the Pterodactyl VPS. A live provider/render test remains required.
+
 ## 2026-11-04 — Remotion JSX compile and focused regression checks passed
 
 - **CI result:** Video Studio regression workflow passed JavaScript module syntax checks, compiled video-studio/remotion/index.jsx with esbuild (including Composition.jsx), and passed every test in tests/video-studio.test.js.

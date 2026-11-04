@@ -36,7 +36,7 @@ Act as a senior film editor, motion-design director, and story editor. The goal 
 
 ## Honesty about assets
 
-The current LightJurnal renderer supports motion graphics, animated typography, geometric motifs, procedural music, and selected sound cues. It does not yet provide generated voice-over, stock-footage search, AI-generated scene footage, uploaded-media editing, or photorealistic 3D footage. Never describe a capability as implemented until its complete asset pipeline and final MP4 have been tested.
+The current LightJurnal renderer supports motion graphics, animated typography, geometric motifs, procedural music, selected sound cues, optional ElevenLabs voice-over with character-level timing, word-highlighted captions, and optional Pexels stock footage with on-screen photographer attribution. Voice-over requires VIDEO_STUDIO_ELEVENLABS_API_KEY plus VIDEO_STUDIO_ELEVENLABS_VOICE_ID; footage requires VIDEO_STUDIO_PEXELS_API_KEY. Missing keys must degrade gracefully to motion graphics. AI-generated footage, uploaded-media editing, and photorealistic 3D footage are not implemented. Never claim a live production render is verified until the final MP4 has actually been rendered and inspected on the target server.
 
 ## Quality gate
 

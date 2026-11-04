@@ -164,7 +164,8 @@ LightJurnal sends one natural-language prompt to Alvareth-Bot. The AI planner tu
 4. CORS defaults to https://lightjurnal.my.id; override with VIDEO_STUDIO_ALLOWED_ORIGINS only when needed.
 5. The HTTP server starts when Pterodactyl provides SERVER_PORT (or when PORT is explicitly set). The existing WhatsApp bot and this API run in the same Alvareth-Bot process.
 6. The HTTP API still requires an HTTPS reverse proxy or Cloudflare Tunnel in front of the Pterodactyl allocation. Do not expose the raw API over plain HTTP to browsers.
-7. In LightJurnal → Video Studio, enter the HTTPS API URL and API key once. These are connection credentials, not creative settings; the prompt is the only video brief input.
+7. Optional but recommended for full media production: set VIDEO_STUDIO_ELEVENLABS_API_KEY and VIDEO_STUDIO_ELEVENLABS_VOICE_ID for AI narration with character-level timing; set VIDEO_STUDIO_PEXELS_API_KEY for relevant licensed stock footage. Keep all three values in the private Pterodactyl environment, never in GitHub or the browser.
+8. In LightJurnal → Video Studio, enter the HTTPS API URL and API key once. These are connection credentials, not creative settings; the prompt is the only video brief input.
 
 ### API
 
@@ -181,9 +182,11 @@ All routes except health require a Bearer VIDEO_STUDIO_API_KEY. Model credential
 ### Creative and rendering behavior
 
 - The AI chooses narrative structure, scene count, variable scene durations, visual hierarchy, palette, composition, motion, transitions, music mood and selected sound cues.
-- The renderer currently supports typography and designed motion graphics: hero, editorial, split, stat, quote, steps and outro layouts, plus animated geometric motifs.
+- The renderer supports typography and designed motion graphics (hero, editorial, split, stat, quote, steps and outro), animated geometric motifs, optional generated voice-over, word-timed captions, and optional downloaded stock video.
+- Voice-over uses the ElevenLabs text-to-speech-with-timestamps endpoint. Its character alignment is converted into timed subtitle phrases and scene timing; music is automatically ducked under narration.
+- Stock footage uses Pexels video search, downloads selected MP4 assets to the server, places them behind the motion design, and burns photographer/Pexels credits into the relevant scenes. Scenes without a useful stock search phrase remain motion graphics.
 - Renderer safety limits: maximum 60 scenes, 20 seconds per scene, and 300 seconds total. These are server safeguards, not user-facing controls.
-- Not yet implemented: synthesized spoken voice-over, automatic stock-footage search, AI-generated scene footage, uploaded-media editing, photorealistic/3D assets, and a drag-and-drop editing timeline. Narration is currently retained as a script in the storyboard, not spoken audio.
+- Still not implemented: AI-generated scene footage, uploaded-media editing, photorealistic/3D assets, and a drag-and-drop editing timeline. Voice-over and Pexels footage are optional and stay inactive until their server API keys are configured.
 - A VPS deployment, dependency installation, HTTPS reverse proxy, configured AI provider, browser Chromium and real MP4 render test must be verified on the live Pterodactyl instance before claiming production readiness.
 
 ### Official Remotion Agent Skills

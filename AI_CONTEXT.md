@@ -9,7 +9,7 @@
 
 ## Pembaruan terbaru
 
-- 2026-11-04: LightJurnal Video Studio memakai satu prompt sebagai input kreatif; Alvareth memiliki AI storyboard planner, compiler Remotion tervalidasi, komposisi motion-graphics yang lebih adaptif, serta 13 skill resmi Remotion dan skill editor profesional di `.agents/skills/`. CI Video Studio dan pemeriksaan kualitas/deployment Pages LightJurnal lulus; render MP4 langsung di VPS belum diverifikasi.
+- 2026-11-04: LightJurnal Video Studio tetap prompt-only. Alvareth kini memiliki pipeline opsional ElevenLabs TTS dengan alignment karakter untuk subtitle per kata, Pexels stock-footage retrieval dan atribusi, music ducking, media validation, serta status tahap persiapan media. Fitur TTS memerlukan VIDEO_STUDIO_ELEVENLABS_API_KEY + VIDEO_STUDIO_ELEVENLABS_VOICE_ID; footage memerlukan VIDEO_STUDIO_PEXELS_API_KEY. CI/JSX compile/regression harus lulus; render MP4 live pada VPS dan validasi akun provider belum dilakukan.
 
 ## 1. Gambaran proyek
 
