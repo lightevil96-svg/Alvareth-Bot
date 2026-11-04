@@ -23,6 +23,6 @@ jobs:
         with:
           node-version: 22
       - name: Check updater JavaScript syntax
-        run: node --check plugins/owner/update.js
-      - name: Test Git fallback and safe changed-file comparison
-        run: node --test tests/update-transport.test.js
+        run: node --check plugins/owner/update.js && node --check lib/auto-update.js && node --check main.js
+      - name: Test safe updater transport and automatic scheduling bridge
+        run: node --test tests/update-transport.test.js tests/auto-update.test.js

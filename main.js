@@ -22,6 +22,7 @@ import { JSONFile } from 'lowdb/node'
 import syntaxerror from 'syntax-error'
 import { useMultiFileAuthState, fetchLatestWaWebVersion, makeCacheableSignalKeyStore, DisconnectReason } from 'baileys'
 import { makeWASocket } from './lib/simple.js'
+import { startAutoUpdate } from './lib/auto-update.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -658,6 +659,9 @@ await global.reloadHandler()
 await filesInit()
 console.log(chalk.green(`✔ ${Object.keys(global.plugins).length} plugin dimuat`))
 watchPlugins()
+
+// Reuse the protected owner updater automatically; no .update command is required.
+startAutoUpdate()
 
 
 // HTTP health-check opsional untuk hosting.
