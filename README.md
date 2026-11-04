@@ -177,9 +177,11 @@ LightJurnal sends one natural-language prompt to Alvareth-Bot. The AI planner tu
 3. The API key for LightJurnal is generated automatically on first startup and saved outside the Git checkout at ~/.alvareth-bot-data/video-studio/api-key with owner-only file permissions. It is never committed to GitHub. An explicit VIDEO_STUDIO_API_KEY environment value (at least 32 characters) overrides the generated key.
 4. CORS defaults to https://lightjurnal.my.id; override with VIDEO_STUDIO_ALLOWED_ORIGINS only when needed.
 5. The HTTP server starts when Pterodactyl provides SERVER_PORT (or when PORT is explicitly set). The existing WhatsApp bot and this API run in the same Alvareth-Bot process.
-6. The HTTP API still requires an HTTPS reverse proxy or Cloudflare Tunnel in front of the Pterodactyl allocation. Do not expose the raw API over plain HTTP to browsers.
-7. Optional but recommended for full media production: set VIDEO_STUDIO_ELEVENLABS_API_KEY and VIDEO_STUDIO_ELEVENLABS_VOICE_ID for AI narration with character-level timing; set VIDEO_STUDIO_PEXELS_API_KEY for relevant licensed stock footage. Keep all three values in the private Pterodactyl environment, never in GitHub or the browser.
-8. In LightJurnal → Video Studio, enter the HTTPS API URL and API key once. These are connection credentials, not creative settings; the prompt is the only video brief input.
+6. The dedicated remotely-managed Cloudflare Tunnel publishes `https://video.lightjurnal.my.id` to the local HTTP server on port 2132. Its hostname route and DNS record are provisioned in Cloudflare; the existing `chromebook-lightjurnal` SSH tunnel is not modified.
+7. Add `VIDEO_STUDIO_TUNNEL_TOKEN` to the private Pterodactyl environment using the token from Cloudflare Zero Trust → Networks → Tunnels → `lightjurnal-video-studio` → Add a replica. The token is written to the persistent data directory with owner-only permissions and is never committed or logged. Alternatively, upload it as `~/.alvareth-bot-data/video-studio/tunnel-token` with mode `0600`.
+8. On startup, the bot detects `cloudflared` in its configured/local/PATH locations; if absent on Linux x64/ARM64, it downloads the official release and verifies the published SHA-256 before execution. The named tunnel reconnects automatically with bounded exponential backoff. Do not use a Quick Tunnel for the stable production hostname.
+9. Optional but recommended for full media production: set VIDEO_STUDIO_ELEVENLABS_API_KEY and VIDEO_STUDIO_ELEVENLABS_VOICE_ID for AI narration with character-level timing; set VIDEO_STUDIO_PEXELS_API_KEY for relevant licensed stock footage. Keep all three values in the private Pterodactyl environment, never in GitHub or the browser.
+10. In LightJurnal → Video Studio, the HTTPS API URL is prefilled as `https://video.lightjurnal.my.id`; enter the API key once. These are connection credentials, not creative settings; the prompt is the only video brief input.
 
 ### API
 
