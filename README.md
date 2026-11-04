@@ -40,6 +40,20 @@ Nomor WhatsApp di `.env` menggunakan angka internasional saja tanpa tanda `+` at
 - `AUTO_UPDATE_ENABLED=false` menonaktifkan pembaruan startup.
 - `AUTO_UPDATE_BRANCH` mengubah branch yang diperiksa; default-nya `main`.
 - `npm run dev` menjalankan mode watch untuk `index.js` dan melewati updater startup.
+
+## Pembaruan otomatis tanpa perintah
+
+Alvareth memeriksa pembaruan GitHub sendiri setelah bot aktif; owner tidak perlu mengetik `.update`.
+
+- Saat `npm start` dijalankan dari Git checkout yang bersih, updater startup mencoba fast-forward ke branch yang dipilih.
+- Setelah plugin selesai dimuat, worker menjalankan pemeriksaan latar belakang pertama setelah 90 detik, lalu setiap 10 menit secara default. Pemeriksaan berkala ini juga bekerja pada instalasi ZIP/non-Git selama server dapat mengakses GitHub.
+- Pemeriksaan berkala memakai mesin yang sama dengan perintah owner-only `.update`: membandingkan commit, mengambil hanya file yang berubah, memeriksa hash baseline sebelum menimpa file, dan mempertahankan file lokal yang mengalami konflik.
+- File konfigurasi rahasia, sesi WhatsApp, database, data runtime, dan `node_modules` tetap dilindungi. Jika manifest dependency berubah, updater menjalankan `npm install --omit=dev --no-audit --no-fund`.
+- Setelah perubahan diterapkan, updater meminta supervisor `index.js` memulai ulang worker secara terkendali. Tidak memerlukan PM2 dan tidak membuat koneksi WhatsApp kedua secara bersamaan.
+- `.update` tetap tersedia untuk pemeriksaan manual. Gunakan `AUTO_UPDATE_ENABLED=false` untuk menonaktifkan update otomatis, `AUTO_UPDATE_BRANCH` untuk mengganti branch, atau `AUTO_UPDATE_INTERVAL_MINUTES` untuk mengubah interval (default 10 menit).
+- `ALVARETH_GITHUB_TOKEN` opsional untuk meningkatkan batas GitHub API; simpan hanya di environment server, jangan pernah di-commit.
+
+Jika ada perubahan lokal pada file yang juga berubah di GitHub, updater akan mempertahankan file tersebut dan mencatat konflik di log, bukan menimpanya. Pembaruan otomatis membutuhkan izin tulis pada folder instalasi dan akses jaringan ke GitHub.
 - `npm test` menjalankan pemeriksaan sintaks pada file entry dan beberapa modul utama. GitHub Actions juga menjalankan pemeriksaan sintaks terhadap seluruh file JavaScript.
 
 ## Menjalankan dengan PM2
