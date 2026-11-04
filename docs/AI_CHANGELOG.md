@@ -5,7 +5,7 @@
 - **Perubahan:** `plugins/owner/update.js` kini beralih otomatis ke `git diff --name-status -z` pada repository bare sementara ketika respons REST mencapai 300 file, sehingga daftar lengkap dapat diperoleh tanpa mengubah checkout bot. Parser Git mendukung hingga 20.000 entri; di atas batas pengaman itu proses tetap dibatalkan. Batas output Git dinaikkan menjadi 20 MiB dengan penghentian aman jika terlampaui. Pemeriksaan ancestor, validasi path, perlindungan file lokal/runtime, baseline hash, dan daftar perubahan tetap dipertahankan.
 - **Tes:** ditambahkan regresi untuk 301 file, batas 20.001 file, serta fallback dari respons REST 300 file ke diff lengkap 347 file. Hasil workflow dan `npm test` menunggu verifikasi setelah commit.
 - **Belum diverifikasi:** pembaruan live pada instalasi TokoPanel belum dijalankan; tes harus lulus dan owner perlu menjalankan `.update` ulang dari bot aktif.
-- **Referensi:** commit kode `40bdd4dfb9e45a5b8130cc7f400a916743f36536`; commit tes `7e7b13af25d24caa151ce8f9a895a1f18313448c`.
+- **Referensi:** commit kode `40bdd4dfb9e45a5b8130cc7f400a916743f36536`; commit tes `28893b101bc718f11c1a911bddfb7a035813c083`.
 - **Pelajaran regresi:** batas 300 milik GitHub REST bukan batas jumlah file proyek. Jangan menerima daftar REST yang mencapai batas itu sebagai lengkap; ambil diff penuh dari Git read-only sebelum menulis file apa pun.
 
 ## 2026-11-04 — Dedicated Cloudflare Tunnel for LightJurnal Video Studio
