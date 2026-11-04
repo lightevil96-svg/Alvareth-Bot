@@ -152,30 +152,40 @@ Repository ini mewarisi struktur dan sebagian kode dari source sebelumnya. Perta
 Sebelum mengubah kode, AI/developer wajib membaca [`AGENTS.md`](AGENTS.md), [`AI_CONTEXT.md`](AI_CONTEXT.md), dan [`docs/AI_CHANGELOG.md`](docs/AI_CHANGELOG.md). Setiap perubahan bermakna harus memperbarui changelog dan ringkasan terbaru di `AI_CONTEXT.md` dalam PR yang sama. Ikuti aturan keamanan, jalankan tes yang relevan, dan laporkan dengan jujur apa yang sudah serta belum diverifikasi.
 
 
-## LightJurnal Video Studio (remote Remotion rendering)
+## LightJurnal Video Studio — prompt-first Remotion editing
 
-LightJurnal can submit text-motion video projects to the existing Alvareth-Bot HTTP process. The bot validates the project, stores a small persistent render queue under `~/.alvareth-bot-data/video-studio`, and renders MP4 files with Remotion. This first release supports animated typography scenes only; media uploads, audio tracks, and a drag-and-drop timeline are not included yet.
+LightJurnal sends one natural-language prompt to Alvareth-Bot. The AI planner turns the brief into a creative direction and storyboard, then compiles it into a validated Remotion project. Scene count, per-scene pacing, aspect ratio, FPS, palette, layout, motion, transitions, music mood and sound cues are inferred from the prompt; users do not configure them manually.
 
 ### Setup
 
-1. Install dependencies after updating the bot: `npm install`.
-2. The API key is generated automatically on first startup and saved outside the Git checkout at `~/.alvareth-bot-data/video-studio/api-key` with owner-only file permissions. It is never committed to GitHub. Copy its contents from the Pterodactyl Files view into LightJurnal → Video Studio. An explicit `VIDEO_STUDIO_API_KEY` environment value (at least 32 characters) overrides the generated key.
-3. CORS defaults to `https://lightjurnal.my.id`; override with `VIDEO_STUDIO_ALLOWED_ORIGINS` only when needed.
-4. The HTTP server starts when Pterodactyl provides `SERVER_PORT` (or when `PORT` is explicitly set). The existing WhatsApp bot and this API run in the same Alvareth-Bot process.
-5. The API still requires an HTTPS reverse proxy or Cloudflare Tunnel in front of the Pterodactyl allocation. Do not expose the raw API over plain HTTP to browsers. The public HTTPS hostname must point to the server allocation.
-6. In LightJurnal → Video Studio, enter the HTTPS API URL and the API key. The key is kept in the current browser session only.
+1. Install dependencies after updating the bot: npm install.
+2. Optional but recommended: configure a text-model provider using VIDEO_STUDIO_AI_API_KEY, VIDEO_STUDIO_AI_BASE_URL, and VIDEO_STUDIO_AI_MODEL in the private server environment. The default base URL is OpenAI-compatible (https://api.openai.com/v1). If no key is supplied, the planner tries the existing API-Faa GPT-prompt endpoint as a best-effort fallback.
+3. The API key for LightJurnal is generated automatically on first startup and saved outside the Git checkout at ~/.alvareth-bot-data/video-studio/api-key with owner-only file permissions. It is never committed to GitHub. An explicit VIDEO_STUDIO_API_KEY environment value (at least 32 characters) overrides the generated key.
+4. CORS defaults to https://lightjurnal.my.id; override with VIDEO_STUDIO_ALLOWED_ORIGINS only when needed.
+5. The HTTP server starts when Pterodactyl provides SERVER_PORT (or when PORT is explicitly set). The existing WhatsApp bot and this API run in the same Alvareth-Bot process.
+6. The HTTP API still requires an HTTPS reverse proxy or Cloudflare Tunnel in front of the Pterodactyl allocation. Do not expose the raw API over plain HTTP to browsers.
+7. In LightJurnal → Video Studio, enter the HTTPS API URL and API key once. These are connection credentials, not creative settings; the prompt is the only video brief input.
 
 ### API
 
-- `GET /api/video-studio/health` — public readiness check (does not reveal the key).
-- `GET /api/video-studio/limits` — supported project limits; requires Bearer authentication.
-- `GET /api/video-studio/jobs` — recent render jobs.
-- `POST /api/video-studio/jobs` — enqueue a project.
-- `GET /api/video-studio/jobs/:id` — inspect job status.
-- `GET /api/video-studio/jobs/:id/download` — download completed MP4.
+- GET /api/video-studio/health — public readiness check (does not reveal the key).
+- GET /api/video-studio/limits — supported renderer limits; requires Bearer authentication.
+- POST /api/video-studio/plan — accepts a prompt and returns a normalized creative brief/storyboard.
+- POST /api/video-studio/jobs — accepts a validated plan and enqueues the compiled Remotion project. Legacy manual payloads remain supported for compatibility.
+- GET /api/video-studio/jobs — recent render jobs.
+- GET /api/video-studio/jobs/:id — inspect job status.
+- GET /api/video-studio/jobs/:id/download — download completed MP4.
 
-All routes except health require `Authorization: Bearer <VIDEO_STUDIO_API_KEY>`. CORS defaults to the LightJurnal production origin. The initial queue permits up to five active jobs and renders one job at a time to protect the WhatsApp process. Completed files and queue metadata are stored outside the Git checkout.
+All routes except health require a Bearer VIDEO_STUDIO_API_KEY. Model credentials stay on the server and are never sent to the browser.
 
-### Current limitations
+### Creative and rendering behavior
 
-The first implementation renders text-only scenes at 24/25/30 FPS, in 9:16, 16:9, or 1:1 ratios, with a 90-second maximum. It does not yet accept uploaded photos/videos/audio or send the final video to WhatsApp. A VPS deployment, dependency installation, HTTPS reverse proxy, and real render test are still required.
+- The AI chooses narrative structure, scene count, variable scene durations, visual hierarchy, palette, composition, motion, transitions, music mood and selected sound cues.
+- The renderer currently supports typography and designed motion graphics: hero, editorial, split, stat, quote, steps and outro layouts, plus animated geometric motifs.
+- Renderer safety limits: maximum 60 scenes, 20 seconds per scene, and 300 seconds total. These are server safeguards, not user-facing controls.
+- Not yet implemented: synthesized spoken voice-over, automatic stock-footage search, AI-generated scene footage, uploaded-media editing, photorealistic/3D assets, and a drag-and-drop editing timeline. Narration is currently retained as a script in the storyboard, not spoken audio.
+- A VPS deployment, dependency installation, HTTPS reverse proxy, configured AI provider, browser Chromium and real MP4 render test must be verified on the live Pterodactyl instance before claiming production readiness.
+
+### Official Remotion Agent Skills
+
+Run npm run skills:remotion in the repository to install the full official Remotion Agent Skills collection. See video-studio/SKILLS.md for the 13 skills and when to load each one.

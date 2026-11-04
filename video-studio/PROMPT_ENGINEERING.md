@@ -2,7 +2,7 @@
 
 > **Purpose:** This document tells an AI coding agent how to design and implement the prompt-understanding layer for LightJurnal Video Studio. Read this before changing Video Studio prompt, storyboard, scene schema, or Remotion rendering code.
 >
-> **Status:** Architecture/specification only. It is NOT a claim that an AI prompt interpreter, LLM provider integration, automatic storyboard generation, TTS voice-over, or natural-language-to-Remotion feature is already implemented.
+> **Status (2026-11-04):** Prompt-to-storyboard planning, safe compilation, variable scene timing, and a richer motion-graphics composition are implemented. Spoken TTS, stock-footage retrieval, AI-generated scene footage, uploaded-media editing, and a drag-and-drop timeline are not implemented.
 >
 > **Current implementation:** `video-studio/api.js`, `validate.js`, `queue.js`, `renderer.js`, `audio-assets.js`, and `remotion/Composition.jsx`. The current UI is in the separate repository `lightevil96-svg/lightjurnal-site`, file `video-studio.js`.
 
@@ -37,7 +37,7 @@ Implement the workflow as explicit stages with typed outputs. Each stage should 
    - Divide the requested duration into scenes. Each scene must have a distinct narrative purpose; avoid repetitive title cards.
    - For each scene specify: narration/voice-over text (if voice-over is enabled), on-screen text, visual subject, composition, action, camera movement, motion timing, transition in/out, scene duration, and sound cue.
    - Hook quickly. Give each scene enough time to read. Keep on-screen text concise and avoid putting the entire narration on screen.
-   - Scene durations must add up to the requested total (within a small rounding tolerance) and obey current server limits: 1–15 seconds per scene, maximum 30 scenes, maximum 90 seconds total.
+   - Scene durations must be chosen dynamically from narration length, reading time, visual action, and emotional beats. When the user requests a total duration, distribute time naturally across scenes. Current server safeguards: maximum 20 seconds per scene, 60 scenes, and 300 seconds total.
 
 5. **Audio direction**
    - Select one background-music mood based on the story (currently supported: `cinematic`, `upbeat`, `calm`, `none`).
@@ -140,10 +140,9 @@ This is a **planning envelope**, not the current `validateVideoProject()` input 
 
 The current server validator accepts:
 - `title`, `mode`, `ratio` (`9:16`, `16:9`, `1:1`), `fps` (24/25/30)
-- `scenes[]` with `text`, `duration` (1–15 sec), `background` (#RRGGBB)
-- `musicStyle` (`cinematic`, `upbeat`, `calm`, `none`)
-- `soundEffects` boolean
-- Total maximum 30 scenes / 90 seconds.
+- `scenes[]` with text, variable duration (1–20 sec), background/accent colors, layout, motif, motion, transition, narration metadata, and allowlisted sound cue
+- `musicStyle` (`cinematic`, `upbeat`, `calm`, `none`) and `soundEffects` boolean
+- Total maximum 60 scenes / 300 seconds.
 
 Current Remotion composition supports animated typography, entrance motion, scene sequences, procedural background music, and a limited repeating set of SFX. It does **not** yet support AI-generated visuals, uploaded images/video, arbitrary camera/3D animation, per-scene custom audio cues, generated voice-over, precise audio ducking, or an editable keyframe timeline.
 
@@ -219,3 +218,15 @@ When asked to implement this feature:
 | AI voice-over / TTS | Not implemented |
 | Uploaded image/video assets | Not implemented |
 | Preview/edit storyboard before render | Not implemented |
+
+
+## 10. Implemented prompt-first workflow (2026-11-04)
+
+The current end-to-end planning path is:
+1. LightJurnal sends only the user's natural-language prompt to POST /api/video-studio/plan.
+2. video-studio/prompt/planner.js calls the configured OpenAI-compatible text model, or the existing API-Faa GPT-prompt service as a best-effort fallback, then normalizes the JSON and derives variable scene durations.
+3. video-studio/prompt/compile.js maps the plan to the allowlisted render schema and calls validateVideoProject().
+4. LightJurnal shows the generated storyboard as read-only information and submits it to POST /api/video-studio/jobs.
+5. The existing single-worker queue renders the MP4 with the updated motion-graphics composition.
+
+The prompt-only UI must not expose manual controls for scene duration, colors, aspect ratio, FPS, music, or transitions. Infrastructure connection credentials remain separate. Current visual output is motion graphics, not generated footage. Narration remains text metadata until a real TTS provider and audio-duration alignment are implemented.

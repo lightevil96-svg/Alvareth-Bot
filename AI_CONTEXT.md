@@ -79,13 +79,20 @@ Perintah dasar:
 
 Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes nyata, commit/PR, serta batasan yang belum diuji. Tes sintaks bukan bukti API pihak ketiga atau pengiriman WhatsApp berhasil.
 
-## Video Studio — prompt understanding
+## Video Studio — prompt-first creative director
 
-- **Panduan wajib untuk AI/developer:** baca `video-studio/PROMPT_ENGINEERING.md` sebelum membangun atau mengubah fitur yang memahami prompt, membuat storyboard, menyusun audio direction, atau menerjemahkan instruksi ke Remotion.
-- Dokumen tersebut menjelaskan pipeline prompt → intent → creative brief → storyboard → audio direction → JSON terstruktur → compiler aman → validator → Remotion, termasuk kontrak data, batas renderer saat ini, acceptance criteria, dan daftar fitur yang belum dibuat.
-- Status jujur: dokumen ini adalah spesifikasi untuk implementasi berikutnya. Natural-language AI prompt interpreter, storyboard generator, compiler, dan voice-over belum tersedia.
+- LightJurnal now submits one natural-language prompt. The AI planner in video-studio/prompt/planner.js creates a structured creative brief and storyboard; video-studio/prompt/compile.js safely compiles it to the validated Remotion schema.
+- Authenticated POST /api/video-studio/plan returns the plan. POST /api/video-studio/jobs accepts the validated plan (legacy manual payloads remain supported for compatibility).
+- The planner prefers an OpenAI-compatible text model configured through VIDEO_STUDIO_AI_API_KEY, VIDEO_STUDIO_AI_BASE_URL, and VIDEO_STUDIO_AI_MODEL. If no key is configured, it tries the existing API-Faa GPT-prompt service as a best-effort fallback. The LightJurnal browser never receives model credentials.
+- Creative decisions are inferred: scene count and timing, aspect ratio, FPS, palette, layout, motion, transitions, music mood, and sound cues. Current render limits are 60 scenes, 20 seconds per scene, and 300 seconds total.
+- video-studio/remotion/Composition.jsx supports varied hero/editorial/split/stat/quote/steps/outro layouts, animated geometric motifs, motion presets, a scene progress indicator, music fades, and allowlisted sound cues.
+- Honest capability boundary: narration is planned as script metadata but is not yet synthesized into spoken audio. The renderer does not yet fetch stock footage, create AI-generated video assets, or render photorealistic/3D footage. Current output is designed motion graphics with procedural music and selected SFX.
+- Do not reintroduce manual creative settings in the LightJurnal UI. Keep only the single prompt field; API connection credentials are infrastructure settings, not creative controls.
+
 
 ## 6. Pembaruan terbaru
+
+- 2026-11-04 — Video Studio prompt-first pipeline implemented: structured AI planning, safe plan compiler, dynamic scene durations, richer motion-graphics layouts, and read-only storyboard output. Official Remotion skills installer added; TTS/stock footage/AI-generated scene footage remain future capabilities.
 
 - 2026-11-04 — Added LightJurnal remote Video Studio API to the existing optional Alvareth HTTP server. API key auth, strict origin allowlist, JSON project validation, a disk-persisted single-worker queue with bounded history/partial-output cleanup, and Remotion text-motion rendering are implemented. The first LightJurnal UI supports Simple/Professional project modes, professional scene duration/background controls, job status, preview and download; media upload/audio/timeline editing and WhatsApp send are not yet implemented. GitHub Actions JavaScript syntax checks passed on commit d558398; local project validation tests passed 4/4. VPS deployment, dependency installation, HTTPS reverse proxy and live render remain unverified.
 

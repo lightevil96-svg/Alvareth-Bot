@@ -1,3 +1,15 @@
+## 2026-11-04 — Video Studio prompt-only AI Creative Director
+
+- Permintaan: membuat hasil Remotion lebih natural dan profesional, menghapus pengaturan kreatif manual, serta menjadikan prompt sebagai satu-satunya input untuk menentukan pacing, warna, scene, motion, transisi, rasio, FPS, dan audio.
+- Akar masalah: LightJurnal sebelumnya membagi teks per baris menjadi scene dengan durasi seragam, warna latar seragam, dan beberapa pengaturan kreatif manual. Backend hanya memvalidasi payload teks sederhana; AI prompt interpreter dan storyboard compiler belum ada. Komposisi Remotion masih berupa typography dengan gerakan yang terbatas.
+- Perubahan backend: menambahkan video-studio/prompt/planner.js untuk prompt-to-storyboard JSON, provider OpenAI-compatible yang dikonfigurasi di server, dan fallback best-effort ke API-Faa GPT-prompt. Menambahkan video-studio/prompt/compile.js sebagai adapter aman dari storyboard ke schema Remotion. POST /api/video-studio/plan menghasilkan storyboard; POST /jobs menerima plan yang sudah dikompilasi. Validasi mendukung durasi dinamis, maksimal 60 scene, 20 detik per scene, dan 300 detik total.
+- Perubahan visual: Composition.jsx sekarang memiliki layout hero/editorial/split/stat/quote/steps/outro, motif geometris bergerak, beberapa preset motion, progress scene, musik fade-in/fade-out, dan sound cue yang dipilih per scene alih-alih SFX acak pada setiap scene.
+- Skills: menambahkan npm run skills:remotion untuk memasang 13 official Remotion Agent Skills dari remotion-dev/skills, beserta panduan pemilihan skill di video-studio/SKILLS.md.
+- Kompatibilitas: payload manual lama tetap didukung oleh endpoint jobs; API key LightJurnal tetap terpisah dari kredensial model AI. Prompt, plan, dan metadata pekerjaan tidak menyimpan API key.
+- Batasan jujur: narration baru disimpan sebagai naskah dan belum disintesis menjadi suara. Pencarian stock footage, AI-generated video per scene, upload media, 3D/photorealistic footage, dan timeline drag-and-drop belum tersedia. Hasil renderer saat ini berupa motion graphics dengan musik prosedural dan SFX terpilih.
+- Tes: menambahkan unit tests untuk normalisasi storyboard, variasi durasi berdasarkan panjang narasi, parsing JSON, durasi eksplisit, validasi compiler, enum allowlist, dan kompatibilitas payload lama. Hasil runtime test/CI belum dijalankan pada saat commit ini; render MP4 live, API AI provider, Chromium/Pterodactyl, dan koneksi browser tetap perlu diverifikasi.
+- Skills: versi official Remotion skills yang dituju 4.0.540, sesuai versi Remotion pada package.json. Instalasi aktual perlu dijalankan pada checkout lokal dengan npm run skills:remotion.
+
 ## 2026-11-04 — Spesifikasi AI Prompt Understanding untuk Video Studio
 
 - **Permintaan:** dokumentasikan di repository bagaimana AI berikutnya harus memahami prompt pengguna dan menerjemahkannya menjadi storyboard serta proyek Remotion, agar AI coding agent lain dapat membaca GitHub dan melanjutkan implementasi.
