@@ -3,6 +3,7 @@ import {
   AbsoluteFill,
   Audio,
   OffthreadVideo,
+  Loop,
   Composition,
   Sequence,
   interpolate,
@@ -125,7 +126,7 @@ const getCameraTransform = (motion, frame, durationFrames) => {
 
 const Scene = ({ scene, index, total, durationFrames, transitionInFrames }) => {
   const frame = useCurrentFrame();
-  const { fps, height } = useVideoConfig();
+  const { fps, height, width } = useVideoConfig();
   const entry = spring({ frame, fps, config: { damping: 22, stiffness: 92, mass: 0.9 } });
   const motion = scene.motion || "fade-up";
   let x = 0;
@@ -177,18 +178,20 @@ const Scene = ({ scene, index, total, durationFrames, transitionInFrames }) => {
     maxWidth: hasSideVisual ? "50%" : layout === "split" ? "68%" : "100%",
     textAlign: alignLeft ? "left" : "center",
     opacity: transitionOpacity,
-    transform: "translate3d(" + (x + transitionX) + "%," + (y + transitionY) + "px,0) scale(" + (scale * transitionScale) + ")",
+    transform: "translate3d(" + (x + transitionX * width / 100) + "px," + (y + transitionY * height / 100) + "px,0) scale(" + (scale * transitionScale) + ")",
     clipPath,
     position: "relative",
     zIndex: 2
   };
   const Renderer = getSceneRenderer(visualType);
-  const specialVisual = Renderer ? <Renderer scene={scene} accent={accent} foreground={foreground} /> : null;
+  const specialVisual = Renderer && visualType !== "kinetic" ? <Renderer scene={scene} accent={accent} foreground={foreground} /> : null;
   const kinetic = visualType === "kinetic";
   const grade = ({ warm: "saturate(1.08) sepia(.12) contrast(1.05)", cool: "saturate(.88) hue-rotate(8deg) contrast(1.05)", film: "saturate(.82) contrast(1.1) brightness(.96)", vivid: "saturate(1.25) contrast(1.06)", mono: "grayscale(1) contrast(1.08)", neutral: "saturate(.92) contrast(1.04)" })[scene.colorGrade] || "saturate(.92) contrast(1.04)";
   return <AbsoluteFill style={{ background: scene.footageSrc ? "#111827" : "linear-gradient(135deg, " + background + ", " + accent + "24)", color: foreground, overflow: "hidden", fontFamily: "Inter, Arial, sans-serif" }}>
     {scene.footageSrc ? <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
-      <OffthreadVideo src={staticFile(scene.footageSrc)} muted loop style={{ position: "absolute", width: "100%", height: "100%", objectFit: "cover", objectPosition: scene.footagePosition || "center", transform: getCameraTransform(scene.cameraMotion, frame, durationFrames), filter: grade }} />
+      <Loop durationInFrames={Math.max(1, durationFrames)}>
+        <OffthreadVideo src={staticFile(scene.footageSrc)} muted style={{ position: "absolute", width: "100%", height: "100%", objectFit: "cover", objectPosition: scene.footagePosition || "center", transform: getCameraTransform(scene.cameraMotion, frame, durationFrames), filter: grade }} />
+      </Loop>
     </div> : null}
     <AbsoluteFill style={{ background: scene.footageSrc ? "linear-gradient(180deg, rgba(8,12,20,.34), rgba(8,12,20,.78))" : "radial-gradient(ellipse at 78% 24%, " + accent + "30, transparent 54%), linear-gradient(160deg, transparent 55%, rgba(0,0,0,.16))" }} />
     <BackgroundEffects type={scene.backgroundEffect || (scene.footageSrc ? "vignette" : "orbs")} accent={accent} intensity={scene.backgroundEffectIntensity ?? 0.26} />
@@ -224,7 +227,6 @@ const Scene = ({ scene, index, total, durationFrames, transitionInFrames }) => {
     </div>
     {scene.footageCredit ? <div style={{ position: "absolute", left: "8%", bottom: "2.5%", zIndex: 14, color: foreground, opacity: 0.62, fontSize: 10 * fontScale, fontWeight: 600 }}>Footage via Pexels · {scene.footageCredit} · pexels.com</div> : null}
     {scene.transition === "flash" && frame < transitionInFrames ? <AbsoluteFill style={{ background: "#fff", opacity: (1 - transitionProgress) * 0.5 }} /> : null}
-    <SceneSound cue="none" />
   </AbsoluteFill>;
 };
 

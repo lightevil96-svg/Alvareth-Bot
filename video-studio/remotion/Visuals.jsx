@@ -2,6 +2,7 @@ import React from "react";
 import {
   AbsoluteFill,
   OffthreadVideo,
+  Loop,
   interpolate,
   spring,
   useCurrentFrame,
@@ -57,7 +58,7 @@ export const KineticTypography = ({ text = "", highlight = "", accent = "#68DDB8
 
 export const DataChartScene = ({ scene = {}, accent = "#68DDB8", foreground = "#fff" }) => {
   const frame = useCurrentFrame();
-  const { width } = useVideoConfig();
+  const { width, fps } = useVideoConfig();
   const data = Array.isArray(scene.chartData) ? scene.chartData.slice(0, 8) : [];
   if (!data.length) return null;
   const max = Math.max(1, ...data.map(item => Math.max(0, Number(item.value) || 0)));
@@ -65,7 +66,7 @@ export const DataChartScene = ({ scene = {}, accent = "#68DDB8", foreground = "#
     {scene.chartTitle ? <div style={{ fontSize: Math.max(14, width * 0.017), fontWeight: 800, marginBottom: 18 }}>{scene.chartTitle}</div> : null}
     <div style={{ display: "grid", gap: 13 }}>
       {data.map((item, index) => {
-        const progress = spring({ frame: Math.max(0, frame - index * 5), fps: 30, config: { damping: 20, stiffness: 90 } });
+        const progress = spring({ frame: Math.max(0, frame - index * 5), fps, config: { damping: 20, stiffness: 90 } });
         const value = Math.max(0, Number(item.value) || 0);
         return <div key={index} style={{ display: "grid", gridTemplateColumns: "minmax(70px, 28%) 1fr auto", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: 13, opacity: 0.84, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.label}</span>
@@ -113,7 +114,8 @@ export const AppMockupScene = ({ scene = {}, accent = "#68DDB8" }) => {
   const { width } = useVideoConfig();
   const mockup = scene.appMockup || {};
   const rows = Array.isArray(mockup.rows) ? mockup.rows.slice(0, 5) : [];
-  const progress = spring({ frame, fps: 30, config: { damping: 18, stiffness: 80 } });
+  const { fps } = useVideoConfig();
+  const progress = spring({ frame, fps, config: { damping: 18, stiffness: 80 } });
   return <div style={{ position: "absolute", right: "8%", bottom: "10%", width: "40%", maxWidth: 470, padding: 12, borderRadius: 30, background: "linear-gradient(145deg,#f7f9fc,#d9e0e9)", boxShadow: "0 32px 90px rgba(0,0,0,.38)", color: "#152236", transform: "translateY(" + (1 - progress) * 50 + "px) rotate(-2deg)" }}>
     <div style={{ height: 18, display: "flex", justifyContent: "center", alignItems: "center" }}><div style={{ width: 64, height: 5, borderRadius: 10, background: "#aab4c1" }} /></div>
     <div style={{ padding: "18px 17px 20px", borderRadius: 20, background: "#fff", minHeight: width * 0.36 }}>
@@ -144,8 +146,11 @@ export const FaceBubble = ({ src, position = "bottom-right" }) => {
     "top-right": { right: "7%", top: "12%" },
     "top-left": { left: "7%", top: "12%" }
   };
-  return <div style={{ position: "absolute", ...placements[position] || placements["bottom-right"], width: "24%", aspectRatio: "1", borderRadius: "50%", overflow: "hidden", border: "5px solid rgba(255,255,255,.9)", boxShadow: "0 12px 36px rgba(0,0,0,.38)", zIndex: 8 }}>
-    <OffthreadVideo src={staticFile(src)} muted loop style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+  const { durationInFrames } = useVideoConfig();
+  return <div style={{ position: "absolute", ...(placements[position] || placements["bottom-right"]), width: "24%", aspectRatio: "1", borderRadius: "50%", overflow: "hidden", border: "5px solid rgba(255,255,255,.9)", boxShadow: "0 12px 36px rgba(0,0,0,.38)", zIndex: 8 }}>
+    <Loop durationInFrames={Math.max(1, durationInFrames)}>
+      <OffthreadVideo src={staticFile(src)} muted style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+    </Loop>
   </div>;
 };
 
