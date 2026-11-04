@@ -23,7 +23,7 @@ Bot WhatsApp Multi-Device berbasis Node.js, Baileys, dan sistem plugin. Nama bot
 
 ## Kebutuhan
 
-Gunakan Node.js 22+ dan npm. Beberapa fitur multimedia memerlukan FFmpeg serta tools gambar yang sesuai dengan fitur yang dipakai. Git diperlukan agar updater saat startup dapat mengambil perubahan dari remote.
+Gunakan Node.js 22+ dan npm. Beberapa fitur multimedia memerlukan FFmpeg serta tools gambar yang sesuai dengan fitur yang dipakai. Git bersifat opsional untuk instalasi ZIP: updater berkala memakai GitHub API, sedangkan Git dibutuhkan untuk fast-forward saat startup pada checkout Git dan sebagai jalur fallback pembandingan.
 
 ## Instalasi dan menjalankan
 
