@@ -1,32 +1,111 @@
-import test from 'node:test'
-import assert from 'node:assert/strict'
-import { getVideoStudioLimits, validateVideoProject } from '../video-studio/validate.js'
+import test from "node:test";
+import assert from "node:assert/strict";
+import { getVideoStudioLimits, validateVideoProject } from "../video-studio/validate.js";
+import { normalizeVideoPlan, parseJsonResponse } from "../video-studio/prompt/planner.js";
+import { compileVideoPlan } from "../video-studio/prompt/compile.js";
 
-test('normalizes a valid vertical video project', () => {
-  const project = validateVideoProject({ title: 'Demo', mode: 'professional', ratio: '9:16', fps: 30, scenes: [{ text: 'Scene one', duration: 4, background: '#112233' }, { text: 'Scene two', duration: 3, background: '#445566' }] })
-  assert.equal(project.width, 1080)
-  assert.equal(project.height, 1920)
-  assert.equal(project.durationSeconds, 7)
-  assert.equal(project.durationInFrames, 210)
-  assert.equal(project.mode, 'professional')
-  assert.equal(project.musicStyle, 'cinematic')
-  assert.equal(project.soundEffects, true)
-})
-test('rejects an empty scene list and invalid duration', () => {
-  assert.throws(() => validateVideoProject({ scenes: [] }), /1 sampai 30 scene/)
-  assert.throws(() => validateVideoProject({ scenes: [{ text: 'x', duration: 20 }] }), /1–15 detik/)
-})
-test('rejects unsafe project size and unsupported fps', () => {
-  assert.throws(() => validateVideoProject({ fps: 60, scenes: [{ text: 'x' }] }), /FPS/)
-  assert.throws(() => validateVideoProject({ scenes: Array.from({ length: 31 }, () => ({ text: 'x' })) }), /1 sampai 30 scene/)
-  assert.throws(() => validateVideoProject({ scenes: Array.from({ length: 7 }, () => ({ text: 'x', duration: 15 })) }), /maksimal 90 detik/)
-})
-test('publishes conservative limits for the first release', () => {
-  assert.deepEqual(getVideoStudioLimits(), { ratios: ['9:16', '16:9', '1:1'], fps: [24, 25, 30], maxScenes: 30, maxSceneSeconds: 15, maxDurationSeconds: 90, musicStyles: ['cinematic', 'upbeat', 'calm', 'none'] })
-})
+test("normalizes a legacy manual project and keeps its dimensions", () => {
+  const project = validateVideoProject({
+    title: "Demo",
+    mode: "professional",
+    ratio: "9:16",
+    fps: 30,
+    scenes: [
+      { text: "Scene one", duration: 4, background: "#112233" },
+      { text: "Scene two", duration: 3, background: "#445566" }
+    ]
+  });
+  assert.equal(project.width, 1080);
+  assert.equal(project.height, 1920);
+  assert.equal(project.durationSeconds, 7);
+  assert.equal(project.durationInFrames, 210);
+  assert.equal(project.mode, "professional");
+  assert.equal(project.musicStyle, "cinematic");
+});
 
-test('accepts music mood and can disable scene sound effects', () => {
-  const project = validateVideoProject({ musicStyle: 'upbeat', soundEffects: false, scenes: [{ text: 'Promo' }] })
-  assert.equal(project.musicStyle, 'upbeat')
-  assert.equal(project.soundEffects, false)
-})
+test("rejects empty scenes, invalid duration, and unsupported fps", () => {
+  assert.throws(() => validateVideoProject({ scenes: [] }), /1 sampai 60 scene/);
+  assert.throws(() => validateVideoProject({ scenes: [{ text: "x", duration: 21 }] }), /1–20 detik/);
+  assert.throws(() => validateVideoProject({ fps: 60, scenes: [{ text: "x" }] }), /FPS/);
+});
+
+test("rejects projects that exceed scene and total-duration limits", () => {
+  assert.throws(() => validateVideoProject({ scenes: Array.from({ length: 61 }, () => ({ text: "x" })) }), /1 sampai 60 scene/);
+  assert.throws(() => validateVideoProject({ scenes: Array.from({ length: 16 }, () => ({ text: "x", duration: 20 })) }), /maksimal 300 detik/);
+});
+
+test("publishes dynamic renderer limits without exposing user-facing scene settings", () => {
+  assert.deepEqual(getVideoStudioLimits(), {
+    ratios: ["9:16", "16:9", "1:1"],
+    fps: [24, 25, 30],
+    maxScenes: 60,
+    maxSceneSeconds: 20,
+    maxDurationSeconds: 300,
+    musicStyles: ["cinematic", "upbeat", "calm", "none"]
+  });
+});
+
+test("parses JSON returned inside a markdown fence", () => {
+  const parsed = parseJsonResponse("\x60\x60\x60json\n{\"title\":\"Demo\",\"scenes\":[]}\n\x60\x60\x60");
+  assert.equal(parsed.title, "Demo");
+});
+
+test("derives varied scene durations from narration and reading time", () => {
+  const plan = normalizeVideoPlan({
+    title: "Cerita singkat",
+    category: "educational",
+    ratio: "9:16",
+    fps: 30,
+    musicStyle: "calm",
+    scenes: [
+      { text: "Pernah bertanya?", narration: "Pernah bertanya mengapa hal ini bisa terjadi?", durationSeconds: 2.5 },
+      { text: "Ada tiga alasan utama", narration: "Pertama, kita perlu memahami konteksnya. Kedua, kebiasaan sehari-hari ikut memengaruhi hasil. Ketiga, keputusan kecil yang konsisten dapat mengubah proses.", durationSeconds: 2.5 }
+    ]
+  }, "Buat video edukasi singkat");
+  assert.notEqual(plan.scenes[0].durationSeconds, plan.scenes[1].durationSeconds);
+  assert.ok(plan.totalDurationSeconds > 0);
+});
+
+test("fits scene durations to an explicit duration requested in the prompt", () => {
+  const plan = normalizeVideoPlan({
+    title: "Demo 30 detik",
+    ratio: "9:16",
+    scenes: [
+      { text: "Pembuka", narration: "Mari kita mulai." },
+      { text: "Penjelasan", narration: "Sekarang kita lihat bagaimana proses ini bekerja." },
+      { text: "Penutup", narration: "Mulai dari langkah kecil hari ini." }
+    ]
+  }, "Buat video 30 detik tentang kebiasaan membaca");
+  assert.equal(Math.round(plan.totalDurationSeconds), 30);
+});
+
+test("compiles a safe AI plan into a validated Remotion project", () => {
+  const plan = normalizeVideoPlan({
+    title: "Belajar fokus",
+    category: "educational",
+    ratio: "9:16",
+    fps: 30,
+    musicStyle: "calm",
+    creativeBrief: { coreMessage: "Fokus dibangun lewat kebiasaan kecil." },
+    scenes: [
+      { text: "Mulai dari satu hal", narration: "Jangan mulai dengan sepuluh target sekaligus.", layout: "hero", motif: "rings", motion: "fade-up", background: "#111827", accent: "#68DDB8" },
+      { text: "Kurangi gangguan", narration: "Jauhkan notifikasi yang tidak dibutuhkan saat bekerja.", layout: "editorial", motif: "grid", motion: "slide-left", background: "#122B35", accent: "#F18A70" }
+    ]
+  }, "Buat video edukasi tentang fokus");
+  const project = compileVideoPlan(plan);
+  assert.equal(project.scenes.length, 2);
+  assert.equal(project.scenes[0].layout, "hero");
+  assert.equal(project.sourcePrompt, "Buat video edukasi tentang fokus");
+  assert.equal(project.ratio, "9:16");
+});
+
+test("preserves the user's prompt as metadata and ignores unsupported creative enums", () => {
+  const plan = normalizeVideoPlan({
+    title: "Video",
+    ratio: "9:16",
+    scenes: [{ text: "Satu ide", layout: "unknown-layout", motion: "run-code", motif: "javascript", background: "url(https://example.com)" }]
+  }, "Buat video");
+  assert.equal(plan.scenes[0].layout, "hero");
+  assert.equal(plan.scenes[0].motion, "fade-up");
+  assert.match(plan.scenes[0].background, /^#[0-9a-f]{6}$/i);
+});
