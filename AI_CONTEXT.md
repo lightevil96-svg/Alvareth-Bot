@@ -9,6 +9,8 @@
 
 ## Pembaruan terbaru
 
+- 2026-11-04: Updater `.update` tidak lagi menganggap batas 300 file dari GitHub REST sebagai daftar lengkap; otomatis memakai Git diff read-only pada repository bare sementara untuk diff penuh, dengan batas pengaman 20.000 file dan output 20 MiB.
+
 - 2026-11-04: Video Studio memakai named Cloudflare Tunnel khusus `video.lightjurnal.my.id`; bot auto-detect/auto-install cloudflared (SHA-256), membaca token privat dari environment/file, dan reconnect dengan backoff. DNS dan remote ingress sudah diprovisikan; konektor live menunggu token di environment Pterodactyl.
 
 - 2026-11-04: Automatic self-update kini dijalankan setelah plugin dimuat (90 detik awal, lalu interval AUTO_UPDATE_INTERVAL_MINUTES); memakai ulang plugins/owner/update.js, menjaga .env/sesi/database/file konflik, memasang dependency berubah, lalu meminta supervisor index.js restart worker. Tidak memerlukan .update atau PM2.
@@ -64,6 +66,7 @@ Alvareth Bot adalah bot WhatsApp Multi-Device berbasis Node.js, ES Modules, Bail
 
 ## 4. Gotcha arsitektur yang penting
 
+- **Updater dan batas GitHub Compare API:** endpoint REST `/compare` hanya mengembalikan maksimal 300 file. Jika respons mencapai 300, `plugins/owner/update.js` harus mengambil daftar lengkap lewat `git diff --name-status -z` pada repository bare sementara yang read-only; jangan memotong daftar, menaikkan baseline, atau menulis file dari daftar yang berpotensi terpotong. Parser menerima hingga 20.000 entri dan output Git dibatasi 20 MiB; bila batas pengaman terlampaui, batalkan sebelum menulis file. Pertahankan pemeriksaan ancestor, baseline hash, path allow/deny, dan konflik file lokal.
 - **Koneksi WhatsApp tertutup saat fitur mengirim balasan:** sebelum `conn.sendMessage`, periksa `conn.ws.readyState` bila tersedia. Status `3` berarti socket sudah tertutup; jangan retry pengiriman laporan error pada socket yang sama. Pertahankan error utama downloader/proses di terminal dan jadwalkan reconnect melalui lifecycle socket, bukan dengan mengirim pesan tambahan.
 - **WhatsApp video delivery policy:** the shared `lib/whatsapp-file-sender.js` classifies every detected video MIME/known video extension as `mediaType: 'video'` regardless of file size or container. This applies equally to `.clip` and `.download`. Non-video files remain documents. Never reintroduce a size threshold or automatic video-to-document fallback; if WhatsApp rejects a video payload, preserve the source and report failure. The service may reject unsupported containers or very large uploads.
 - **Baileys temporary media storage on Pterodactyl:** `lib/whatsapp-temp-bootstrap.js` must be imported after `dotenv/config` but before Baileys in `main.js`. It sets `TMPDIR` to `ALVARETH_WA_TMPDIR` or `<ALVARETH_DATA_DIR or ~/.alvareth-bot-data>/tmp`, a writable directory on the server's disk. Pterodactyl Wings defaults `/tmp` tmpfs to 100 MiB; do not merely raise `ALVARETH_DOWNLOAD_MAX_BYTES` or disable the temp-space preflight. Confirm the server disk quota/free space is sufficient. If the override is invalid, the bootstrap falls back to the managed data directory and logs a warning.
