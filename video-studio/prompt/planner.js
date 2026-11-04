@@ -81,7 +81,7 @@ function inferRequestedDuration(prompt) {
   if (seconds) return Math.round(Number(seconds[1]));
   return null;
 }
-function parseJsonResponse(value) {
+export function parseJsonResponse(value) {
   if (value && typeof value === "object" && !Array.isArray(value)) return value;
   const text = String(value || "").trim();
   const fence = String.fromCharCode(96).repeat(3);

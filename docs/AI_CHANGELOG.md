@@ -1,3 +1,11 @@
+## 2026-11-04 — Video Studio test fix: export JSON parser
+
+- **Temuan CI:** focused Video Studio regression workflow passed all JavaScript syntax checks but failed before test execution because tests imported parseJsonResponse while planner.js kept it private.
+- **Akar masalah:** the parser was intentionally used internally but was also directly covered by a unit test; its function declaration was not exported.
+- **Perbaikan:** exported parseJsonResponse from video-studio/prompt/planner.js so the parser can be tested without calling an external AI provider.
+- **Tes:** rerun Video Studio regression workflow after this commit. The first run failed at module instantiation; do not treat it as a passing test. Full test result remains pending.
+- **Pelajaran:** test helper visibility must match test imports; verify focused workflow logs rather than relying only on repository-wide syntax checks.
+
 ## 2026-11-04 — Video Studio prompt-only AI Creative Director
 
 - Permintaan: membuat hasil Remotion lebih natural dan profesional, menghapus pengaturan kreatif manual, serta menjadikan prompt sebagai satu-satunya input untuk menentukan pacing, warna, scene, motion, transisi, rasio, FPS, dan audio.
