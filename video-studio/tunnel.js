@@ -21,6 +21,8 @@ const TOKEN_FILE = process.env.VIDEO_STUDIO_TUNNEL_TOKEN_FILE
 let child = null
 let retryTimer = null
 let retryDelay = 5000
+let restartAttempts = 0
+const MAX_RESTART_ATTEMPTS = 10
 let stopping = false
 let started = false
 
@@ -135,6 +137,11 @@ function prepareTokenFile() {
 
 function scheduleRetry() {
   if (stopping || retryTimer) return
+  if (restartAttempts >= MAX_RESTART_ATTEMPTS) {
+    log('Batas ' + MAX_RESTART_ATTEMPTS + ' percobaan restart tercapai. Periksa log/koneksi lalu restart bot secara manual.')
+    return
+  }
+  restartAttempts += 1
   const delay = retryDelay
   log('Mencoba kembali dalam ' + Math.round(delay / 1000) + ' detik.')
   retryTimer = setTimeout(() => {
@@ -152,6 +159,7 @@ async function launch() {
     if (stopping || child) return
 
     log('Menjalankan named tunnel ke origin http://127.0.0.1:' + (process.env.PORT || process.env.SERVER_PORT || 3000) + ' menggunakan konfigurasi Cloudflare.')
+    const tokenForRedaction = readFileSync(TOKEN_FILE, 'utf8').trim()
     const proc = spawn(binary, [
       'tunnel',
       '--no-autoupdate',
@@ -178,8 +186,9 @@ async function launch() {
           if (!connected) log('Koneksi Cloudflare aktif; hostname video.lightjurnal.my.id siap menerima trafik.')
           connected = true
           retryDelay = 5000
+          restartAttempts = 0
         }
-        const safeLine = line.replaceAll(readFileSync(TOKEN_FILE, 'utf8').trim(), '[REDACTED]')
+        const safeLine = tokenForRedaction ? line.replaceAll(tokenForRedaction, '[REDACTED]') : line
         log(safeLine)
       }
     }
