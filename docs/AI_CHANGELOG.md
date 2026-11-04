@@ -481,3 +481,10 @@ Format entri baru:
 - **Perubahan:** normalisasi routing, teks pesan dan fallback properti pesan ditambahkan pada handler.
 - **Verifikasi yang tercatat:** pengguna mengonfirmasi `.menu` bekerja setelah perbaikan.
 - **Pelajaran regresi:** jangan menghapus fallback normalisasi tanpa tes regresi untuk pesan teks, self-chat, dan respons tombol/list.
+
+
+## 2026-11-04 — Video Studio API key bootstrap and Pterodactyl port
+- **Gejala:** Pterodactyl Startup page tidak menyediakan `PORT` atau `CUSTOM_ENVIRONMENT_VARIABLES`, sehingga setup awal Video Studio tidak dapat mengikuti instruksi environment manual.
+- **Perubahan:** HTTP server mendukung `SERVER_PORT` bawaan Pterodactyl. API Video Studio membuat API key acak 256-bit dan menyimpannya di direktori data persisten dengan izin file 0600 bila environment key tidak diatur.
+- **Keamanan:** key tidak ditanam di source/repository; pengguna mengambil key dari file runtime privat dan memasukkannya ke session browser. CORS tetap membatasi origin LightJurnal.
+- **Belum diverifikasi:** instalasi dependency Remotion, reverse proxy/HTTPS publik, autentikasi live, dan render MP4 di server Pterodactyl.
