@@ -33,5 +33,7 @@ jobs:
           node --check video-studio/validate.js
           node --check video-studio/queue.js
           node --check video-studio/renderer.js
+      - name: Compile the Remotion JSX entrypoint
+        run: npx -y esbuild@0.25.0 video-studio/remotion/index.jsx --bundle --platform=browser --external:react --external:remotion --outfile=/tmp/video-studio-entry-check.js
       - name: Run Video Studio regression tests
         run: node --test tests/video-studio.test.js
