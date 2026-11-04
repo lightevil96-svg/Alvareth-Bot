@@ -1,7 +1,14 @@
+## 2026-11-04 — Remotion JSX compile and focused regression checks passed
+
+- **CI result:** Video Studio regression workflow passed JavaScript module syntax checks, compiled video-studio/remotion/index.jsx with esbuild (including Composition.jsx), and passed every test in tests/video-studio.test.js.
+- **Coverage:** validated prompt normalization, variable scene duration, explicit requested duration, safe compilation, unsupported enum/color rejection, legacy project compatibility, and renderer limits.
+- **Remaining verification:** esbuild proves JSX syntax and module graph compilation with Remotion/React treated as external packages. It is not a full Remotion webpack bundle or MP4 render. A real render still needs to run on the configured Pterodactyl/Chromium/FFmpeg environment.
+- **Skills:** all 13 official Remotion Agent Skills and the project-specific remotion-professional-editor skill are present under .agents/skills.
+
 ## 2026-11-04 — Remotion skills installed and regression checks green
 
 - **Skills installed:** the official remotion-dev/skills collection was installed by the GitHub Actions installer into .agents/skills. The repository contains 13 official skills plus the project-specific remotion-professional-editor skill (14 skill directories total).
-- **Regression tests:** the focused Video Studio workflow passed its JavaScript module checks and all tests in tests/video-studio.test.js after the JSON parser export fix. The same workflow passed again after the Remotion composition polish.
+- **Regression tests:** the focused Video Studio workflow passed its JavaScript module checks and all tests in tests/video-studio.test.js after the JSON parser export fix. The same workflow passed again after the Remotion composition polish. The latest workflow also compiles the Remotion JSX entrypoint with esbuild.
 - **Frontend checks:** LightJurnal quality checks and the Pages build/deployment completed successfully for the prompt-only Video Studio revision.
 - **Important verification boundary:** these checks do not prove that the live Pterodactyl instance has installed the latest dependencies, configured a working AI text-model credential, or successfully rendered a real MP4. The Remotion JSX bundle and an end-to-end render still need to be verified on the deployment runtime.
 
