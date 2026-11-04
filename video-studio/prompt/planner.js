@@ -13,6 +13,11 @@ const VIDEO_SYSTEM_PROMPT = [
   "Direct visual variety: alternate close-up typography, editorial layouts, split compositions, stat moments, quotes, steps, and closing frames where appropriate. Do not repeat the same layout or motion in consecutive scenes without a reason.",
   "Choose a cohesive palette from the content, emotion, and audience. Background and accent colors are creative decisions made by you, not user settings. Keep contrast and mobile readability high.",
   "Choose motion and transitions with restraint. Every movement must support meaning, reveal information, guide attention, or create a deliberate beat. Do not animate everything at once.",
+  "Use the full visual grammar when appropriate: cinematic footage, kinetic typography, animated data charts only from supplied facts, process diagrams, app/product mockups, waveform scenes, notification callouts, picture-in-picture, and editorial title cards. Do not force a chart or diagram into a scene that does not need one.",
+  "Choose a subtle background treatment (orbs, particles, grid, waves, dots, vignette, none), camera movement (push-in, pull-out, pan, tilt, drift, static), and color grade based on the footage and story. Keep motion varied and purposeful; avoid repeating the same movement across adjacent scenes.",
+  "Use a caption treatment suited to the content: tiktok, karaoke, subtitle, pop, typewriter, highlight, or wave. Caption styling is an editorial decision, not a user setting.",
+  "For process or concept videos, use a diagram with clearly named nodes and valid connections. For product explainers, use a believable interface mockup. For data scenes, only visualize numbers explicitly supplied in the prompt; never invent data, sources, or chart values.",
+  "Add notification banners and callout overlays only when they serve a real product demo, message, or story beat. Picture-in-picture must only be used when an actual presenter asset exists; never fabricate a face or claim an avatar exists.",
   "Use sound effects only at meaningful visual beats. Select a music mood that supports the story; never let music or effects compete with speech.",
   "Infer platform and aspect ratio from the prompt. Use vertical 9:16 for Reels, TikTok, and Shorts; horizontal 16:9 for conventional YouTube or landscape presentations; square 1:1 only when requested or clearly appropriate.",
   "Infer frame rate from the creative need and platform. Use only 24, 25, or 30 FPS.",
@@ -20,11 +25,17 @@ const VIDEO_SYSTEM_PROMPT = [
   "When real-world imagery materially improves a scene, provide stockSearchQuery as a concise English search phrase (2–6 concrete words) describing the visible subject or action. Leave it empty only for intentionally typographic, abstract, or data-led scenes. Never request copyrighted characters, named celebrities, or a specific creator's footage.",
   "visualDescription explains the intended visual in natural language; stockSearchQuery is a separate practical search phrase for a licensed stock-footage library.",
   "Do not claim that stock footage, real-world footage, 3D assets, or uploaded media already exist. The render pipeline may search a configured licensed stock library and will fall back to motion graphics when no suitable clip is found.",
-  "Return these fields: title, language, category, ratio, fps, targetDurationSeconds (number or null), musicStyle, soundEffects, creativeBrief, scenes.",
+  "Return these fields: title, language, category, ratio, fps, targetDurationSeconds (number or null), musicStyle, captionStyle, soundEffects, creativeBrief, scenes.",
+  "Allowed captionStyle: tiktok, karaoke, subtitle, pop, typewriter, highlight, wave. Choose one automatically; never ask the user to configure it.",
   "Allowed category: educational, explainer, product, story, announcement, tutorial, documentary, finance, other.",
   "Allowed musicStyle: cinematic, upbeat, calm, none.",
   "creativeBrief fields: coreMessage, hook, tone, visualDirection, ending.",
-  "Each scene fields: id, purpose, durationSeconds, layout, motif, motion, transition, kicker, text, highlight, subtext, points, narration, visualDescription, stockSearchQuery, background, accent, soundCue.",
+  "Each scene fields: id, purpose, durationSeconds, layout, visualType, backgroundEffect, cameraMotion, colorGrade, motif, motion, transition, kicker, text, highlight, subtext, points, narration, visualDescription, stockSearchQuery, chartTitle, chartUnit, chartSource, chartData, diagramNodes, diagramEdges, appMockup, notifications, callouts, background, accent, soundCue, soundIntensity.",
+  "Allowed visualType: cinematic, kinetic, editorial, data-chart, diagram, app-mockup, waveform.",
+  "Allowed backgroundEffect: none, orbs, particles, grid, waves, dots, vignette.",
+  "Allowed cameraMotion: static, push-in, pull-out, pan-left, pan-right, tilt-up, tilt-down, drift.",
+  "Allowed colorGrade: neutral, warm, cool, film, vivid, mono.",
+  "chartData is an array of {label, value}; include it only when the user's prompt explicitly supplies numeric facts. diagramNodes is an array of {id,label,x,y}; diagramEdges is an array of {from,to,label}. appMockup is {title,rows,cta}. notifications is an array of {sender,text,delaySeconds,durationSeconds}; callouts is an array of {text,position,delaySeconds,durationSeconds}.",
   "Allowed layout: hero, editorial, split, stat, quote, steps, outro.",
   "Allowed motif: rings, orbit, wave, grid, bars, ribbon, spark, none.",
   "Allowed motion: fade-up, scale-in, slide-left, slide-right, reveal, float, count-up.",
@@ -54,7 +65,12 @@ const ALLOWED = {
   motif: ["rings", "orbit", "wave", "grid", "bars", "ribbon", "spark", "none"],
   motion: ["fade-up", "scale-in", "slide-left", "slide-right", "reveal", "float", "count-up"],
   transition: ["cut", "fade", "wipe", "slide", "zoom"],
-  soundCue: ["none", "whoosh", "pop", "impact"]
+  soundCue: ["none", "whoosh", "pop", "impact"],
+  visualType: ["cinematic", "kinetic", "editorial", "data-chart", "diagram", "app-mockup", "waveform"],
+  backgroundEffect: ["none", "orbs", "particles", "grid", "waves", "dots", "vignette"],
+  cameraMotion: ["static", "push-in", "pull-out", "pan-left", "pan-right", "tilt-up", "tilt-down", "drift"],
+  colorGrade: ["neutral", "warm", "cool", "film", "vivid", "mono"],
+  captionStyle: ["tiktok", "karaoke", "subtitle", "pop", "typewriter", "highlight", "wave"]
 };
 
 function cleanText(value, maxLength) {
@@ -131,6 +147,7 @@ export function normalizeVideoPlan(raw, sourcePrompt) {
   const ratio = pick(raw.ratio, ALLOWED.ratio, /youtube|landscape|horizontal|presentasi/i.test(prompt) ? "16:9" : "9:16");
   const fps = ALLOWED.fps.includes(Number(raw.fps)) ? Number(raw.fps) : 30;
   const musicStyle = pick(raw.musicStyle, ALLOWED.musicStyle, category === "story" ? "cinematic" : category === "educational" ? "calm" : "upbeat");
+  const captionStyle = pick(raw.captionStyle, ALLOWED.captionStyle, category === "documentary" || category === "educational" ? "subtitle" : "tiktok");
   const creativeBrief = {
     coreMessage: cleanText(raw.creativeBrief && raw.creativeBrief.coreMessage, 300) || title,
     hook: cleanText(raw.creativeBrief && raw.creativeBrief.hook, 220),
@@ -166,6 +183,20 @@ export function normalizeVideoPlan(raw, sourcePrompt) {
       narration,
       visualDescription: cleanText(scene.visualDescription, 400),
       stockSearchQuery: cleanText(scene.stockSearchQuery, 100),
+      visualType: pick(scene.visualType, ALLOWED.visualType, scene.layout === "stat" ? "data-chart" : scene.layout === "steps" ? "diagram" : "cinematic"),
+      backgroundEffect: pick(scene.backgroundEffect, ALLOWED.backgroundEffect, scene.footageSrc ? "vignette" : ["orbs", "particles", "grid", "waves"][index % 4]),
+      cameraMotion: pick(scene.cameraMotion, ALLOWED.cameraMotion, ["push-in", "drift", "pan-left", "static"][index % 4]),
+      colorGrade: pick(scene.colorGrade, ALLOWED.colorGrade, "neutral"),
+      chartTitle: cleanText(scene.chartTitle, 100),
+      chartUnit: cleanText(scene.chartUnit, 20),
+      chartSource: cleanText(scene.chartSource, 180),
+      chartData: Array.isArray(scene.chartData) ? scene.chartData.slice(0, 8).map(item => ({ label: cleanText(item && item.label, 48), value: Number(item && item.value) })).filter(item => item.label && Number.isFinite(item.value) && item.value >= 0) : [],
+      diagramNodes: Array.isArray(scene.diagramNodes) ? scene.diagramNodes.slice(0, 7).map((item, nodeIndex) => ({ id: cleanText(item && item.id, 32) || "node-" + (nodeIndex + 1), label: cleanText(item && item.label, 64), x: Number.isFinite(Number(item && item.x)) ? Number(item.x) : null, y: Number.isFinite(Number(item && item.y)) ? Number(item.y) : null })).filter(item => item.label) : [],
+      diagramEdges: Array.isArray(scene.diagramEdges) ? scene.diagramEdges.slice(0, 10).map(item => ({ from: cleanText(item && item.from, 32), to: cleanText(item && item.to, 32), label: cleanText(item && item.label, 48) })).filter(item => item.from && item.to) : [],
+      appMockup: scene.appMockup && typeof scene.appMockup === "object" ? { title: cleanText(scene.appMockup.title, 80), rows: Array.isArray(scene.appMockup.rows) ? scene.appMockup.rows.slice(0, 5).map(item => cleanText(item, 64)).filter(Boolean) : [], cta: cleanText(scene.appMockup.cta, 48) } : null,
+      notifications: Array.isArray(scene.notifications) ? scene.notifications.slice(0, 3).map(item => ({ sender: cleanText(item && item.sender, 48), text: cleanText(item && item.text, 120), delaySeconds: Math.max(0, Math.min(18, Number(item && item.delaySeconds) || 0)), durationSeconds: Math.max(0.8, Math.min(8, Number(item && item.durationSeconds) || 2.6)) })).filter(item => item.text) : [],
+      callouts: Array.isArray(scene.callouts) ? scene.callouts.slice(0, 3).map(item => ({ text: cleanText(item && item.text, 90), position: pick(item && item.position, ["top", "center", "bottom"], "bottom"), delaySeconds: Math.max(0, Math.min(18, Number(item && item.delaySeconds) || 0)), durationSeconds: Math.max(0.8, Math.min(8, Number(item && item.durationSeconds) || 2)) })).filter(item => item.text) : [],
+      soundIntensity: Math.max(0, Math.min(1, Number(scene.soundIntensity ?? 0.55))),
       background,
       accent,
       soundCue: pick(scene.soundCue, ALLOWED.soundCue, index === 0 ? "whoosh" : "none")
@@ -186,6 +217,7 @@ export function normalizeVideoPlan(raw, sourcePrompt) {
     fps,
     targetDurationSeconds: requested || null,
     musicStyle,
+    captionStyle,
     soundEffects: raw.soundEffects !== false,
     creativeBrief,
     scenes,
