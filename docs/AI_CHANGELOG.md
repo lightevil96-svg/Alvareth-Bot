@@ -1,3 +1,11 @@
+## 2026-11-04 — Spesifikasi AI Prompt Understanding untuk Video Studio
+
+- **Permintaan:** dokumentasikan di repository bagaimana AI berikutnya harus memahami prompt pengguna dan menerjemahkannya menjadi storyboard serta proyek Remotion, agar AI coding agent lain dapat membaca GitHub dan melanjutkan implementasi.
+- **Perubahan:** menambahkan `video-studio/PROMPT_ENGINEERING.md` sebagai kontrak implementasi. Isinya mencakup pipeline prompt intake → intent extraction → creative brief → storyboard → audio direction → JSON planning envelope → safe Remotion compiler → validation → render; contoh JSON; aturan prompt; batas kompatibilitas renderer sekarang; struktur modul yang disarankan; acceptance criteria; dan instruksi untuk AI agent berikutnya. Memperbarui `AI_CONTEXT.md` agar panduan ini wajib dibaca.
+- **Status:** dokumentasi/specification only. Tidak menambahkan AI provider, prompt interpreter, storyboard generator, TTS, atau klaim fitur tersebut sudah berjalan.
+- **Tes:** memeriksa isi file terkait dan memastikan tautan dokumentasi masuk ke AI_CONTEXT. Belum ada runtime/test AI karena implementasi AI belum dibuat.
+- **Belum diverifikasi:** implementasi prompt engine end-to-end, integrasi provider AI, preview storyboard, dan render hasil prompt AI.
+
 ## 2026-11-04 — Penyempurnaan kontrol scene dan antrean Video Studio
 
 - **Permintaan/gejala:** tahap pertama perlu membedakan mode Simple dan Professional, menjaga polling antrean saat halaman dibuka ulang, serta membatasi riwayat dan file render parsial.
