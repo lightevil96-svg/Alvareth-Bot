@@ -9,6 +9,8 @@
 
 ## Pembaruan terbaru
 
+- 2026-11-04: Automatic self-update kini dijalankan setelah plugin dimuat (90 detik awal, lalu interval AUTO_UPDATE_INTERVAL_MINUTES); memakai ulang plugins/owner/update.js, menjaga .env/sesi/database/file konflik, memasang dependency berubah, lalu meminta supervisor index.js restart worker. Tidak memerlukan .update atau PM2.
+
 - 2026-11-04: LightJurnal Video Studio tetap prompt-only. Alvareth kini memiliki pipeline opsional ElevenLabs TTS dengan alignment karakter untuk subtitle per kata, Pexels stock-footage retrieval dan atribusi, music ducking, media validation, serta status tahap persiapan media. Fitur TTS memerlukan VIDEO_STUDIO_ELEVENLABS_API_KEY + VIDEO_STUDIO_ELEVENLABS_VOICE_ID; footage memerlukan VIDEO_STUDIO_PEXELS_API_KEY. CI/JSX compile/regression harus lulus; render MP4 live pada VPS dan validasi akun provider belum dilakukan.
 
 ## 1. Gambaran proyek
