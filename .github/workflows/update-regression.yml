@@ -5,6 +5,10 @@ on:
     branches: [main]
     paths:
       - 'plugins/owner/update.js'
+      - 'lib/auto-update.js'
+      - 'main.js'
+      - 'package.json'
+      - 'tests/auto-update.test.js'
       - 'tests/update-transport.test.js'
       - '.github/workflows/update-regression.yml'
   pull_request:
