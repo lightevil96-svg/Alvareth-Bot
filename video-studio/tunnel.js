@@ -1,7 +1,9 @@
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import {
+  accessSync,
   chmodSync,
+  constants as fsConstants,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -37,11 +39,21 @@ export function getCloudflaredAssetName(osName = platform(), archName = arch()) 
   return null
 }
 
+function isExecutableFile(path) {
+  try {
+    accessSync(path, fsConstants.X_OK)
+    return true
+  } catch {
+    return false
+  }
+}
+
 function findExistingBinary() {
   const configured = String(process.env.CLOUDFLARED_BIN || '').trim()
   if (configured) {
     const path = resolve(configured)
     if (!existsSync(path)) throw new Error('CLOUDFLARED_BIN menunjuk file yang tidak ditemukan: ' + path)
+    if (!isExecutableFile(path)) throw new Error('CLOUDFLARED_BIN tidak memiliki izin eksekusi: ' + path)
     return path
   }
 
@@ -50,7 +62,7 @@ function findExistingBinary() {
     join(DATA_DIR, 'bin', 'cloudflared'),
     ...String(process.env.PATH || '').split(delimiter).filter(Boolean).map(dir => join(dir, 'cloudflared'))
   ]
-  return candidates.find(path => existsSync(path)) || null
+  return candidates.find(path => existsSync(path) && isExecutableFile(path)) || null
 }
 
 async function downloadCloudflared() {
