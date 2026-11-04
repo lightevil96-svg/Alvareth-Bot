@@ -1,3 +1,13 @@
+## 2026-11-04 — Updater mendukung lebih dari 300 file berubah
+
+- **Permintaan/gejala:** perintah `.update` membatalkan sinkronisasi dengan pesan “Ada 300 atau lebih file berubah sejak baseline”, meskipun daftar perubahan lebih besar dari batas tersebut.
+- **Akar penyebab:** GitHub REST Compare API membatasi daftar file yang dikembalikan hingga 300. Updater juga menerapkan batas 300 yang sama pada parser `git diff` cadangan, sehingga jalur cadangan tidak dapat menyelesaikan kasus tersebut.
+- **Perubahan:** `plugins/owner/update.js` kini beralih otomatis ke `git diff --name-status -z` pada repository bare sementara ketika respons REST mencapai 300 file, sehingga daftar lengkap dapat diperoleh tanpa mengubah checkout bot. Parser Git mendukung hingga 20.000 entri; di atas batas pengaman itu proses tetap dibatalkan. Batas output Git dinaikkan menjadi 20 MiB dengan penghentian aman jika terlampaui. Pemeriksaan ancestor, validasi path, perlindungan file lokal/runtime, baseline hash, dan daftar perubahan tetap dipertahankan.
+- **Tes:** ditambahkan regresi untuk 301 file, batas 20.001 file, serta fallback dari respons REST 300 file ke diff lengkap 347 file. Hasil workflow dan `npm test` menunggu verifikasi setelah commit.
+- **Belum diverifikasi:** pembaruan live pada instalasi TokoPanel belum dijalankan; tes harus lulus dan owner perlu menjalankan `.update` ulang dari bot aktif.
+- **Referensi:** commit kode `40bdd4dfb9e45a5b8130cc7f400a916743f36536`; commit tes `7e7b13af25d24caa151ce8f9a895a1f18313448c`.
+- **Pelajaran regresi:** batas 300 milik GitHub REST bukan batas jumlah file proyek. Jangan menerima daftar REST yang mencapai batas itu sebagai lengkap; ambil diff penuh dari Git read-only sebelum menulis file apa pun.
+
 ## 2026-11-04 — Dedicated Cloudflare Tunnel for LightJurnal Video Studio
 
 - **Permintaan/gejala:** LightJurnal Video Studio tidak dapat terhubung langsung ke Alvareth; server log menunjukkan `cloudflared` binary tidak ditemukan. Quick Tunnel lama menghasilkan URL sementara, sedangkan hostname produksi belum memiliki route yang stabil.
