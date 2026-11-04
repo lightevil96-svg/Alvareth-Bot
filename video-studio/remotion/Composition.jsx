@@ -224,7 +224,7 @@ const Scene = ({ scene, index, total, durationFrames, transitionInFrames }) => {
       </div>
       <div style={{ color: foreground, opacity: 0.7, fontSize: 15 * fontScale, fontWeight: 700, letterSpacing: 1 }}>{String(index + 1).padStart(2, "0")} / {String(total).padStart(2, "0")}</div>
     </div>
-    {scene.footageCredit ? <div style={{ position: "absolute", left: "8%", bottom: "2.5%", zIndex: 14, color: foreground, opacity: 0.62, fontSize: 10 * fontScale, fontWeight: 600 }}>Footage via Pexels · {scene.footageCredit} · pexels.com</div> : null}
+    {scene.footageCredit ? <div style={{ position: "absolute", left: "8%", bottom: "2.5%", zIndex: 14, color: foreground, opacity: 0.62, fontSize: 10 * fontScale, fontWeight: 600 }}>{scene.footageCredit === "AI-generated with ComfyUI" ? "AI-generated via ComfyUI" : "Footage via Pexels · " + scene.footageCredit + " · pexels.com"}</div> : null}
     {scene.transition === "flash" && frame < transitionInFrames ? <AbsoluteFill style={{ background: "#fff", opacity: (1 - transitionProgress) * 0.5 }} /> : null}
     {scene.transition === "dip-to-black" && frame < transitionInFrames ? <AbsoluteFill style={{ background: "#000", opacity: 1 - transitionProgress }} /> : null}
   </AbsoluteFill>;

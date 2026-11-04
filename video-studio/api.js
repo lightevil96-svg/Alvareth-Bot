@@ -53,7 +53,9 @@ export function mountVideoStudioApi(app) {
     configured: apiKey.length >= 32,
     media: {
       voiceover: Boolean((process.env.VIDEO_STUDIO_ELEVENLABS_API_KEY || process.env.ELEVENLABS_API_KEY) && process.env.VIDEO_STUDIO_ELEVENLABS_VOICE_ID),
-      stockFootage: Boolean(process.env.VIDEO_STUDIO_PEXELS_API_KEY)
+      stockFootage: Boolean(process.env.VIDEO_STUDIO_PEXELS_API_KEY),
+      aiVideo: Boolean(process.env.VIDEO_STUDIO_COMFYUI_VIDEO_WORKFLOW_FILE),
+      aiMusic: Boolean(process.env.VIDEO_STUDIO_COMFYUI_MUSIC_WORKFLOW_FILE)
     }
   }))
   app.use("/api/video-studio", (req, res, next) => {
