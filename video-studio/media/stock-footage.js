@@ -28,45 +28,50 @@ export function chooseVideoFile(video, ratio = "9:16") {
   return candidates[0] || null;
 }
 
-async function fetchWithTimeout(url, options, timeoutMs) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(url, { ...options, signal: controller.signal });
-    if (!response.ok) {
-      const body = await response.text().catch(() => "");
-      throw new Error("Pexels HTTP " + response.status + ": " + body.slice(0, 200));
-    }
-    return response;
-  } catch (error) {
-    if (controller.signal.aborted || error?.name === "AbortError") throw new Error("Permintaan footage melewati batas waktu.");
-    throw error;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 async function searchPexels(query, key, orientation, timeoutMs) {
   const url = new URL("https://api.pexels.com/v1/videos/search");
   url.searchParams.set("query", query);
   url.searchParams.set("per_page", "6");
   url.searchParams.set("orientation", orientation);
   url.searchParams.set("size", "medium");
-  const response = await fetchWithTimeout(url.toString(), { headers: { Authorization: key, accept: "application/json" } }, timeoutMs);
-  return response.json();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url.toString(), { headers: { Authorization: key, accept: "application/json" }, signal: controller.signal });
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      throw new Error("Pexels HTTP " + response.status + ": " + body.slice(0, 200));
+    }
+    return await response.json();
+  } catch (error) {
+    if (controller.signal.aborted || error?.name === "AbortError") throw new Error("Pencarian footage melewati batas waktu.");
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function downloadVideo(file, destination, timeoutMs, remainingBytes = 18 * 1024 * 1024) {
-  const response = await fetchWithTimeout(file.link, { headers: { accept: "video/mp4" } }, timeoutMs);
-  const contentType = String(response.headers.get("content-type") || "");
-  const declared = Number(response.headers.get("content-length") || 0);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   const maxBytes = Math.min(18 * 1024 * 1024, Math.max(0, remainingBytes));
-  if (declared > maxBytes) throw new Error("Footage Pexels terlalu besar untuk batas render.");
-  if (contentType && !contentType.includes("video") && !contentType.includes("octet-stream")) throw new Error("Pexels mengembalikan file yang bukan video.");
-  const bytes = Buffer.from(await response.arrayBuffer());
-  if (!bytes.length || bytes.length > maxBytes) throw new Error("Ukuran file footage tidak valid.");
-  await writeFile(destination, bytes);
-  return bytes.length;
+  try {
+    const response = await fetch(file.link, { headers: { accept: "video/mp4" }, signal: controller.signal });
+    if (!response.ok) throw new Error("Unduhan footage Pexels gagal (HTTP " + response.status + ").");
+    const contentType = String(response.headers.get("content-type") || "");
+    const declared = Number(response.headers.get("content-length") || 0);
+    if (declared > maxBytes) throw new Error("Footage Pexels terlalu besar untuk batas render.");
+    if (contentType && !contentType.includes("video") && !contentType.includes("octet-stream")) throw new Error("Pexels mengembalikan file yang bukan video.");
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (!bytes.length || bytes.length > maxBytes) throw new Error("Ukuran file footage tidak valid.");
+    await writeFile(destination, bytes);
+    return bytes.length;
+  } catch (error) {
+    if (controller.signal.aborted || error?.name === "AbortError") throw new Error("Unduhan footage melewati batas waktu.");
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function prepareStockFootage(project, jobId) {
