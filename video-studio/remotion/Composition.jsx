@@ -22,6 +22,13 @@ const SFX_FILES = {
   impact: "audio/sfx-impact.wav"
 };
 
+const isLightColor = hex => {
+  const value = String(hex || "").replace("#", "");
+  if (!/^[0-9a-f]{6}$/i.test(value)) return false;
+  const channels = [0, 2, 4].map(index => parseInt(value.slice(index, index + 2), 16) / 255).map(channel => channel <= 0.04045 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4));
+  return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2] > 0.58;
+};
+
 const SceneMotif = ({ type, accent, index }) => {
   const frame = useCurrentFrame();
   const drift = interpolate(frame, [0, 120], [0, 28], { extrapolateRight: "extend" });
@@ -122,21 +129,25 @@ const Scene = ({ scene, index, total }) => {
   const transition = scene.transition || "fade";
   const clipProgress = interpolate(frame, [0, 14], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
   const clipPath = transition === "wipe" ? "inset(0 " + (100 - clipProgress * 100) + "% 0 0)" : "none";
+  const transitionX = transition === "slide" ? interpolate(frame, [0, 14], [90, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }) : 0;
+  const transitionScale = transition === "zoom" ? interpolate(frame, [0, 14], [1.09, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }) : 1;
+  const transitionOpacity = transition === "cut" || transition === "wipe" ? 1 : fade;
   const background = scene.background || "#111827";
   const accent = scene.accent || "#68DDB8";
-  const lightBackground = ["#F1EFE8", "#F7F4ED", "#F3F0E8", "#FFFFFF"].includes(background.toUpperCase());
+  const lightBackground = isLightColor(background);
   const foreground = lightBackground ? "#1B263B" : "#FFFFFF";
   const layout = scene.layout || "hero";
   const alignLeft = layout === "editorial" || layout === "split";
   const textLength = String(scene.text || "").length;
-  const baseFontSize = Math.max(42, Math.min(98, 98 - textLength * 0.42)) * (height / 1920);
+  const fontScale = height >= 1600 ? 1 : 0.82;
+  const baseFontSize = Math.max(42, Math.min(98, 98 - textLength * 0.42)) * fontScale;
   const contentWidth = layout === "split" ? "62%" : layout === "editorial" ? "86%" : "90%";
   const contentStyle = {
     width: contentWidth,
     maxWidth: layout === "split" ? "68%" : "100%",
     textAlign: alignLeft ? "left" : "center",
-    opacity: fade * exit,
-    transform: "translate3d(" + x + "px," + y + "px,0) scale(" + scale + ")",
+    opacity: transitionOpacity * exit,
+    transform: "translate3d(" + (x + transitionX) + "px," + y + "px,0) scale(" + (scale * transitionScale) + ")",
     clipPath,
     position: "relative",
     zIndex: 2
@@ -146,26 +157,26 @@ const Scene = ({ scene, index, total }) => {
     <SceneMotif type={scene.motif || "rings"} accent={accent} index={index} />
     <div style={{ position: "absolute", inset: "8%", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: alignLeft ? "flex-start" : "center" }}>
       <div style={contentStyle}>
-        {scene.kicker ? <div style={{ color: accent, fontSize: 18 * (height / 1920), fontWeight: 800, letterSpacing: 4, textTransform: "uppercase", marginBottom: 28 }}>{scene.kicker}</div> : null}
-        {layout === "quote" ? <div style={{ color: accent, fontSize: 110 * (height / 1920), fontWeight: 900, lineHeight: 0.65, marginBottom: 20 }}>“</div> : null}
-        {layout === "stat" && scene.highlight ? <div style={{ color: accent, fontSize: 118 * (height / 1920), fontWeight: 900, lineHeight: 0.98, marginBottom: 18, letterSpacing: -5 }}>{scene.highlight}</div> : null}
-        <div style={{ fontSize: baseFontSize, lineHeight: 1.04, fontWeight: 850, letterSpacing: -2.4 * (height / 1920), whiteSpace: "pre-wrap", overflowWrap: "anywhere", textShadow: lightBackground ? "none" : "0 8px 35px rgba(0,0,0,.22)" }}>{scene.text}</div>
-        {scene.highlight && layout !== "stat" ? <div style={{ display: "inline-block", marginTop: 18, padding: "8px 16px", borderRadius: 999, color: foreground, background: accent, fontSize: 22 * (height / 1920), fontWeight: 800 }}>{scene.highlight}</div> : null}
-        {scene.subtext ? <div style={{ marginTop: 26, maxWidth: 850, color: foreground, opacity: 0.82, fontSize: 27 * (height / 1920), lineHeight: 1.42, fontWeight: 450 }}>{scene.subtext}</div> : null}
+        {scene.kicker ? <div style={{ color: accent, fontSize: 18 * fontScale, fontWeight: 800, letterSpacing: 4, textTransform: "uppercase", marginBottom: 28 }}>{scene.kicker}</div> : null}
+        {layout === "quote" ? <div style={{ color: accent, fontSize: 110 * fontScale, fontWeight: 900, lineHeight: 0.65, marginBottom: 20 }}>“</div> : null}
+        {layout === "stat" && scene.highlight ? <div style={{ color: accent, fontSize: 118 * fontScale, fontWeight: 900, lineHeight: 0.98, marginBottom: 18, letterSpacing: -5 }}>{scene.highlight}</div> : null}
+        <div style={{ fontSize: baseFontSize, lineHeight: 1.04, fontWeight: 850, letterSpacing: -2.4 * fontScale, whiteSpace: "pre-wrap", overflowWrap: "anywhere", textShadow: lightBackground ? "none" : "0 8px 35px rgba(0,0,0,.22)" }}>{scene.text}</div>
+        {scene.highlight && layout !== "stat" ? <div style={{ display: "inline-block", marginTop: 18, padding: "8px 16px", borderRadius: 999, color: foreground, background: accent, fontSize: 22 * fontScale, fontWeight: 800 }}>{scene.highlight}</div> : null}
+        {scene.subtext ? <div style={{ marginTop: 26, maxWidth: 850, color: foreground, opacity: 0.82, fontSize: 27 * fontScale, lineHeight: 1.42, fontWeight: 450 }}>{scene.subtext}</div> : null}
         {scene.points && scene.points.length ? <div style={{ display: "grid", gap: 12, marginTop: 28, maxWidth: 820, textAlign: "left" }}>
-          {scene.points.map((point, pointIndex) => <div key={pointIndex} style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 22 * (height / 1920), fontWeight: 650 }}>
+          {scene.points.map((point, pointIndex) => <div key={pointIndex} style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 22 * fontScale, fontWeight: 650 }}>
             <span style={{ display: "grid", placeItems: "center", width: 34, height: 34, borderRadius: "50%", background: accent, color: lightBackground ? "#fff" : "#172033", fontSize: 15, flex: "0 0 auto" }}>{pointIndex + 1}</span>
             <span>{point}</span>
           </div>)}
         </div> : null}
-        {layout === "outro" ? <div style={{ marginTop: 34, display: "inline-flex", alignItems: "center", gap: 12, padding: "14px 22px", borderRadius: 999, background: accent, color: lightBackground ? "#fff" : "#172033", fontSize: 21 * (height / 1920), fontWeight: 850 }}>SELESAI <span>↗</span></div> : null}
+        {layout === "outro" && scene.highlight ? <div style={{ marginTop: 34, display: "inline-flex", alignItems: "center", gap: 12, padding: "14px 22px", borderRadius: 999, background: accent, color: lightBackground ? "#fff" : "#172033", fontSize: 21 * fontScale, fontWeight: 850 }}>{scene.highlight} <span>↗</span></div> : null}
       </div>
     </div>
     <div style={{ position: "absolute", left: "8%", right: "8%", bottom: "6%", zIndex: 3, display: "flex", alignItems: "center", gap: 14 }}>
       <div style={{ height: 4, flex: 1, borderRadius: 10, background: foreground + "35", overflow: "hidden" }}>
         <div style={{ height: "100%", width: ((frame + 1) / durationFrames * 100) + "%", background: accent, borderRadius: 10 }} />
       </div>
-      <div style={{ color: foreground, opacity: 0.7, fontSize: 15 * (height / 1920), fontWeight: 700, letterSpacing: 1 }}>{String(index + 1).padStart(2, "0")} / {String(total).padStart(2, "0")}</div>
+      <div style={{ color: foreground, opacity: 0.7, fontSize: 15 * fontScale, fontWeight: 700, letterSpacing: 1 }}>{String(index + 1).padStart(2, "0")} / {String(total).padStart(2, "0")}</div>
     </div>
     <SceneSound cue={scene.soundCue} />
   </AbsoluteFill>;

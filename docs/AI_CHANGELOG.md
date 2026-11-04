@@ -1,3 +1,10 @@
+## 2026-11-04 — Remotion composition polish
+
+- **Temuan review:** the new AI plan could choose fade, wipe, slide, zoom, or cut, but the renderer only implemented wipe; light-background detection also recognized only a few exact hex values, which could cause low-contrast text on other pale colors.
+- **Perbaikan:** Composition.jsx now implements slide and zoom entrances, respects cut/fade/wipe behavior, calculates light/dark text contrast from relative luminance, and uses more suitable type scaling for landscape/square output. The outro no longer forces a generic “SELESAI” label when no CTA was supplied.
+- **Tes:** targeted Node regression tests and JavaScript syntax checks passed on the prior code commit. This JSX composition change still requires a Remotion bundle/MP4 render check on the project runtime.
+- **Batasan:** no new footage or spoken TTS was added; current output remains motion graphics with procedural music and selected SFX.
+
 ## 2026-11-04 — Video Studio test fix: export JSON parser
 
 - **Temuan CI:** focused Video Studio regression workflow passed all JavaScript syntax checks but failed before test execution because tests imported parseJsonResponse while planner.js kept it private.
