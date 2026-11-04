@@ -32,7 +32,7 @@
 
 ## Remotion Agent Skills & prompt-only product rule
 
-- The Remotion renderer is pinned to version 4.0.540. Install the complete official Remotion Agent Skills pack locally with npm run skills:remotion; it installs the 13 skills from remotion-dev/skills into the project agent-skill directory.
+- The Remotion renderer is pinned to version 4.0.540. The 13 official skills from remotion-dev/skills are installed under .agents/skills; the project also includes a custom remotion-professional-editor skill. Run npm run skills:remotion to refresh the official pack.
 - Always load remotion-best-practices as the router. For composition work, load remotion-markup; additionally load remotion-captions, remotion-multimedia, remotion-render, remotion-studio, remotion-saas, remotion-maps, remotion-interactivity, remotion-license, or remotion-upgrade when the task calls for them.
 - LightJurnal Video Studio is prompt-only for creative decisions. Do not add user-facing controls for scene duration, background color, palette, FPS, aspect ratio, music mood, transitions, or individual scene construction. Infer these from the natural-language prompt and content. A generated storyboard may be shown as a read-only explanation of the AI's decisions.
 - The current renderer creates deterministic motion graphics with typography, layouts, geometric motifs, procedural music and selected sound cues. Do not describe it as stock footage, photorealistic video generation, 3D footage, or spoken voice-over unless those end-to-end capabilities are implemented and tested.

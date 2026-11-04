@@ -1,3 +1,10 @@
+## 2026-11-04 — Remotion skills installed and regression checks green
+
+- **Skills installed:** the official remotion-dev/skills collection was installed by the GitHub Actions installer into .agents/skills. The repository contains 13 official skills plus the project-specific remotion-professional-editor skill (14 skill directories total).
+- **Regression tests:** the focused Video Studio workflow passed its JavaScript module checks and all tests in tests/video-studio.test.js after the JSON parser export fix. The same workflow passed again after the Remotion composition polish.
+- **Frontend checks:** LightJurnal quality checks and the Pages build/deployment completed successfully for the prompt-only Video Studio revision.
+- **Important verification boundary:** these checks do not prove that the live Pterodactyl instance has installed the latest dependencies, configured a working AI text-model credential, or successfully rendered a real MP4. The Remotion JSX bundle and an end-to-end render still need to be verified on the deployment runtime.
+
 ## 2026-11-04 — Remotion composition polish
 
 - **Temuan review:** the new AI plan could choose fade, wipe, slide, zoom, or cut, but the renderer only implemented wipe; light-background detection also recognized only a few exact hex values, which could cause low-contrast text on other pale colors.

@@ -2,7 +2,7 @@
 
 The Remotion engine in this repository uses version 4.0.540. Install the full official Agent Skills collection from remotion-dev/skills with npm run skills:remotion.
 
-This installs the 13 official skills locally for compatible coding agents. Load the router first, then only the specialized skills needed for the task.
+The 13 official skills are installed locally under .agents/skills for compatible coding agents. The repository also contains a project-specific remotion-professional-editor skill for senior-level storytelling, editorial pacing, and motion direction. Load the router first, then only the specialized skills needed for the task.
 
 | Skill | When to load |
 | --- | --- |
@@ -19,6 +19,7 @@ This installs the 13 official skills locally for compatible coding agents. Load 
 | remotion-saas | Remotion Player, application integration, and server-side rendering architecture. |
 | remotion-studio | Opening and verifying the Remotion Studio preview. |
 | remotion-upgrade | Updating Remotion and keeping all @remotion/* packages aligned. |
+| remotion-professional-editor | Project-specific creative direction: storytelling, pacing, visual contrast, typography, restrained motion, and sound design. |
 
 ## Project-specific editing principles
 

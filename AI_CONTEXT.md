@@ -92,7 +92,7 @@ Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes n
 
 ## 6. Pembaruan terbaru
 
-- 2026-11-04 — Video Studio prompt-first pipeline implemented: structured AI planning, safe plan compiler, dynamic scene durations, richer motion-graphics layouts, and read-only storyboard output. Focused regression workflow added; initial helper-export test failure fixed. Official Remotion skills installer added; TTS/stock footage/AI-generated scene footage remain future capabilities.
+- 2026-11-04 — Video Studio prompt-first pipeline implemented: structured AI planning, safe plan compiler, dynamic scene durations, richer motion-graphics layouts, and read-only storyboard output. Focused regression workflow added; initial helper-export test failure fixed. 13 official Remotion skills plus the custom remotion-professional-editor skill are installed under .agents/skills; TTS/stock footage/AI-generated scene footage remain future capabilities.
 
 - 2026-11-04 — Added LightJurnal remote Video Studio API to the existing optional Alvareth HTTP server. API key auth, strict origin allowlist, JSON project validation, a disk-persisted single-worker queue with bounded history/partial-output cleanup, and Remotion text-motion rendering are implemented. The first LightJurnal UI supports Simple/Professional project modes, professional scene duration/background controls, job status, preview and download; media upload/audio/timeline editing and WhatsApp send are not yet implemented. GitHub Actions JavaScript syntax checks passed on commit d558398; local project validation tests passed 4/4. VPS deployment, dependency installation, HTTPS reverse proxy and live render remain unverified.
 

@@ -188,4 +188,4 @@ All routes except health require a Bearer VIDEO_STUDIO_API_KEY. Model credential
 
 ### Official Remotion Agent Skills
 
-Run npm run skills:remotion in the repository to install the full official Remotion Agent Skills collection. See video-studio/SKILLS.md for the 13 skills and when to load each one.
+The 13 official Remotion Agent Skills are installed under .agents/skills, together with the project-specific remotion-professional-editor skill. Run npm run skills:remotion to refresh the official collection. See video-studio/SKILLS.md for guidance on when to load each skill.
