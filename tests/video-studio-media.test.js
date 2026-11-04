@@ -23,7 +23,7 @@ test("splits voiceover into scene-aligned provider requests", () => {
     { narration: "Halo dunia." },
     { narration: "Ini scene kedua." },
     { narration: "Penutup video." }
-  ], 22);
+  ], 30);
   assert.equal(chunks.length, 2);
   assert.equal(chunks[0].ranges[0].sceneIndex, 0);
   assert.equal(chunks[0].ranges[1].sceneIndex, 1);
