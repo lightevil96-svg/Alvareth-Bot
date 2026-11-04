@@ -1,5 +1,6 @@
 import express from 'express'
 import { mountVideoStudioApi } from './video-studio/api.js'
+import { startVideoStudioTunnel } from './video-studio/tunnel.js'
 
 const app = global.app = express()
 
@@ -13,6 +14,9 @@ export default function connect(port = Number(process.env.PORT || process.env.SE
   app.get('/health', (_req, res) => res.status(200).json({ status: 'ok', bot: 'Alvareth Bot', uptime: Math.floor(process.uptime()) }))
   app.get('/ping', (_req, res) => res.status(200).send('pong'))
   mountVideoStudioApi(app)
-  const server = app.listen(port, () => console.log(`[Alvareth Bot] HTTP server listen on ${port}`))
+  const server = app.listen(port, () => {
+    console.log(`[Alvareth Bot] HTTP server listen on ${port}`)
+    startVideoStudioTunnel(port)
+  })
   return server
 }
