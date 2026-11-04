@@ -48,7 +48,7 @@ export function mountVideoStudioApi(app) {
   })
   app.get('/api/video-studio/health', (_req, res) => res.json({ service: 'Alvareth Video Studio', status: 'ok', configured: apiKey.length >= 32 }))
   app.use('/api/video-studio', (req, res, next) => {
-    const supplied = String(req.headers.authorization || '').replace(/^Bearer\\s+/i, '')
+    const supplied = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '')
     if (!safeEqual(supplied, apiKey)) return res.status(401).json({ error: 'API key tidak valid.' })
     next()
   })
