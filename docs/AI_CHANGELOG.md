@@ -1,3 +1,13 @@
+## 2026-11-04 — Automatic self-update tanpa perintah .update
+
+- **Permintaan:** Alvareth harus memeriksa dan menerapkan pembaruan GitHub sendiri tanpa owner mengetik `.update`.
+- **Akar masalah:** updater aman sudah tersedia di `plugins/owner/update.js`, tetapi hanya dipanggil oleh command owner. `lib/auto-update.js` yang lama memakai jalur PM2 terpisah dan tidak dihubungkan ke lifecycle worker; konfigurasi PM2 juga tidak sesuai dengan supervisor cluster internal `index.js`.
+- **Perubahan:** `lib/auto-update.js` kini menjadi scheduler yang memanggil handler updater yang sama dengan pesan log sintetis. `main.js` memulai scheduler setelah plugin dimuat. Pemeriksaan pertama berjalan 90 detik setelah startup, lalu setiap `AUTO_UPDATE_INTERVAL_MINUTES` (default 10). Jalur otomatis menghormati `AUTO_UPDATE_ENABLED=false`, mencegah overlap dengan command manual, dan memakai worker supervisor untuk restart setelah file/dependency berubah.
+- **Keamanan:** tidak membuat updater kedua; kebijakan baseline/hash/conflict, perlindungan .env, sesi, database, data runtime, dan file lokal tetap berasal dari updater owner yang sudah ada. Tidak memerlukan PM2. `.update` tetap tersedia sebagai fallback manual.
+- **Tes:** menambahkan tes untuk pemanggilan updater yang sama, log-only reply, lock command manual, pencegahan overlap, flag disable, dan updater plugin yang belum tersedia. GitHub Actions updater regression menjalankan tes transport + scheduler.
+- **Belum diverifikasi:** bot live di Pterodactyl/WhatsApp, akses GitHub dari jaringan hosting, instalasi dependency nyata, dan restart worker setelah update pada server pengguna. CI bukan bukti deployment VPS.
+- **Pelajaran regresi:** jangan membuat auto-updater kedua yang menulis file atau mengasumsikan PM2. Panggil mesin update yang sama dari worker setelah plugin dimuat; biarkan supervisor yang sudah ada mengelola restart.
+
 ## 2026-11-04 — Optional AI voice-over, word-timed captions, and Pexels footage
 
 - Added an optional ElevenLabs TTS pipeline using the `/with-timestamps` endpoint. Character alignment is converted to timed word groups; scene durations are aligned to speech when the alignment fits the renderer's limits.
