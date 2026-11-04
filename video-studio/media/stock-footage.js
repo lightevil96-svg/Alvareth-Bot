@@ -100,7 +100,7 @@ export async function prepareStockFootage(project, jobId) {
   const maxScenes = Math.max(1, Math.min(15, Number(process.env.VIDEO_STUDIO_PEXELS_MAX_SCENES) || 8));
   const timeoutMs = Math.max(10000, Math.min(120000, Number(process.env.VIDEO_STUDIO_MEDIA_TIMEOUT_MS) || 45000));
   const candidates = project.scenes.map((scene, index) => ({ scene, index }))
-    .filter(item => safeText(item.scene.stockSearchQuery !== undefined ? item.scene.stockSearchQuery : item.scene.visualDescription, 120));
+    .filter(item => !item.scene.footageSrc && safeText(item.scene.stockSearchQuery !== undefined ? item.scene.stockSearchQuery : item.scene.visualDescription, 120));
   const selected = candidates.length <= maxScenes
     ? candidates
     : Array.from({ length: maxScenes }, (_, index) => candidates[Math.round(index * (candidates.length - 1) / Math.max(1, maxScenes - 1))]);

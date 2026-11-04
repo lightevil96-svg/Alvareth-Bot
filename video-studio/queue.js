@@ -41,6 +41,8 @@ function publicJob(job) {
     voiceoverEnabled: Boolean(project.voiceoverTracks?.length),
     captionsEnabled: Boolean(project.captions?.length),
     footageCount: Number(project.footageCount || project.scenes.filter(scene => scene.footageSrc).length || 0),
+    aiFootageCount: Number(project.aiFootageCount || 0),
+    aiMusicEnabled: Boolean(project.musicTrackSrc),
     mediaWarnings: Array.isArray(project.mediaWarnings) ? project.mediaWarnings : [],
     mediaCredits: Array.isArray(project.mediaCredits) ? project.mediaCredits : [],
     error: job.error || null,
@@ -73,7 +75,13 @@ async function pump() {
   try {
     update(next, { status: "rendering", stage: "preparing-media", progress: 0, error: null, outputPath });
     const prepared = await prepareVideoMedia(next.project, next.id, stage => {
-      update(next, { stage: stage === "voiceover" ? "preparing-voiceover" : "searching-footage" });
+      const labels = {
+        voiceover: "preparing-voiceover",
+        "ai-video": "generating-ai-video",
+        footage: "searching-footage",
+        "ai-music": "generating-ai-music"
+      };
+      update(next, { stage: labels[stage] || "preparing-media" });
     });
     next.project = validateVideoProject(prepared);
     update(next, { project: next.project, stage: "rendering" });
