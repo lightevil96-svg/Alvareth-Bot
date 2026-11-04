@@ -661,10 +661,10 @@ watchPlugins()
 
 
 // HTTP health-check opsional untuk hosting.
-if (opts.server || process.env.PORT) {
+if (opts.server || process.env.PORT || process.env.SERVER_PORT) {
   try {
     const { default: connect } = await import('./server.js')
-    connect(Number(process.env.PORT || 3000))
+    connect(Number(process.env.PORT || process.env.SERVER_PORT || 3000))
   } catch (error) {
     console.error(chalk.red('Gagal menjalankan server.js:'), format(error))
   }
