@@ -3,7 +3,7 @@ import { mountVideoStudioApi } from './video-studio/api.js'
 
 const app = global.app = express()
 
-export default function connect(port = Number(process.env.PORT || 3000)) {
+export default function connect(port = Number(process.env.PORT || process.env.SERVER_PORT || 3000)) {
   app.disable('x-powered-by')
   app.use(express.json({ limit: '1mb', strict: true }))
   app.get('/', (_req, res) => res.type('html').send(`<!doctype html>
