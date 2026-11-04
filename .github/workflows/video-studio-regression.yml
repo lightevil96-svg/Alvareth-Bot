@@ -1,0 +1,37 @@
+name: Video Studio regression
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "video-studio/**"
+      - "tests/video-studio.test.js"
+      - ".github/workflows/video-studio-regression.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "video-studio/**"
+      - "tests/video-studio.test.js"
+      - ".github/workflows/video-studio-regression.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  video-studio:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check Video Studio JavaScript modules
+        run: |
+          node --check video-studio/api.js
+          node --check video-studio/prompt/planner.js
+          node --check video-studio/prompt/compile.js
+          node --check video-studio/validate.js
+          node --check video-studio/queue.js
+          node --check video-studio/renderer.js
+      - name: Run Video Studio regression tests
+        run: node --test tests/video-studio.test.js
