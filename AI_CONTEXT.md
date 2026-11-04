@@ -7,6 +7,10 @@
 >
 > Baca `AGENTS.md` terlebih dahulu, lalu file ini dan `docs/AI_CHANGELOG.md`. Catatan membantu orientasi, tetapi kode saat ini tetap menjadi sumber kebenaran.
 
+## Pembaruan terbaru
+
+- 2026-11-04: LightJurnal Video Studio memakai satu prompt sebagai input kreatif; Alvareth memiliki AI storyboard planner, compiler Remotion tervalidasi, komposisi motion-graphics yang lebih adaptif, serta 13 skill resmi Remotion dan skill editor profesional di `.agents/skills/`. CI Video Studio dan pemeriksaan kualitas/deployment Pages LightJurnal lulus; render MP4 langsung di VPS belum diverifikasi.
+
 ## 1. Gambaran proyek
 
 Alvareth Bot adalah bot WhatsApp Multi-Device berbasis Node.js, ES Modules, Baileys fork, dan sistem plugin.
