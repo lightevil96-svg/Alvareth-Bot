@@ -1,3 +1,12 @@
+## 2026-11-04 — Penyempurnaan kontrol scene dan antrean Video Studio
+
+- **Permintaan/gejala:** tahap pertama perlu membedakan mode Simple dan Professional, menjaga polling antrean saat halaman dibuka ulang, serta membatasi riwayat dan file render parsial.
+- **Akar penyebab:** UI awal hanya mengirim durasi default yang sama dan polling belum dimulai ulang untuk pekerjaan aktif yang sudah ada; antrean belum memangkas riwayat terminal.
+- **Perubahan:** mode Professional kini menyediakan pengaturan durasi dan warna latar scene; UI mempertahankan token sesi saat koneksi ulang dan melanjutkan polling antrean aktif. Worker membatasi riwayat ke 100 pekerjaan dan menghapus output parsial saat render gagal. Environment example juga mendokumentasikan PORT untuk alokasi Pterodactyl.
+- **Tes:** tes validasi proyek 4/4 sebelumnya lulus; perbaikan UI dan queue terbaru belum diuji pada browser atau VPS. Render Remotion sebenarnya tetap menunggu instalasi dependency dan runtime server.
+- **Belum diverifikasi:** koneksi HTTPS publik, browser Chromium pada container Pterodactyl, dan render MP4 live.
+- **Pelajaran regresi:** UI mode Professional harus menampilkan kontrol yang benar-benar memengaruhi payload, bukan hanya label mode; polling harus pulih setelah reload.
+
 ## 2026-11-04 — Fondasi remote Remotion Video Studio untuk LightJurnal
 
 - **Permintaan/gejala:** pengguna ingin LightJurnal menjadi panel kendali, sementara Alvareth-Bot yang sudah berjalan di Pterodactyl menerima perintah dan mengerjakan rendering video.
