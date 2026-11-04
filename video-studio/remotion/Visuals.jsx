@@ -138,7 +138,7 @@ export const WaveformScene = ({ accent = "#68DDB8" }) => {
   </div>;
 };
 
-export const FaceBubble = ({ src, position = "bottom-right" }) => {
+export const FaceBubble = ({ src, position = "bottom-right", durationInFrames = 90 }) => {
   if (!src) return null;
   const placements = {
     "bottom-right": { right: "7%", bottom: "15%" },
@@ -146,7 +146,6 @@ export const FaceBubble = ({ src, position = "bottom-right" }) => {
     "top-right": { right: "7%", top: "12%" },
     "top-left": { left: "7%", top: "12%" }
   };
-  const { durationInFrames } = useVideoConfig();
   return <div style={{ position: "absolute", ...(placements[position] || placements["bottom-right"]), width: "24%", aspectRatio: "1", borderRadius: "50%", overflow: "hidden", border: "5px solid rgba(255,255,255,.9)", boxShadow: "0 12px 36px rgba(0,0,0,.38)", zIndex: 8 }}>
     <Loop durationInFrames={Math.max(1, durationInFrames)}>
       <OffthreadVideo src={staticFile(src)} muted style={{ width: "100%", height: "100%", objectFit: "cover" }} />

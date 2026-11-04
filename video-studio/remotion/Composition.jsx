@@ -178,8 +178,7 @@ const Scene = ({ scene, index, total, durationFrames, transitionInFrames }) => {
     maxWidth: hasSideVisual ? "50%" : layout === "split" ? "68%" : "100%",
     textAlign: alignLeft ? "left" : "center",
     opacity: transitionOpacity,
-    transform: "translate3d(" + (x + transitionX * width / 100) + "px," + (y + transitionY * height / 100) + "px,0) scale(" + (scale * transitionScale) + ")",
-    clipPath,
+    transform: "translate3d(" + x + "px," + y + "px,0) scale(" + scale + ")",
     position: "relative",
     zIndex: 2
   };
@@ -187,7 +186,7 @@ const Scene = ({ scene, index, total, durationFrames, transitionInFrames }) => {
   const specialVisual = Renderer && visualType !== "kinetic" ? <Renderer scene={scene} accent={accent} foreground={foreground} /> : null;
   const kinetic = visualType === "kinetic";
   const grade = ({ warm: "saturate(1.08) sepia(.12) contrast(1.05)", cool: "saturate(.88) hue-rotate(8deg) contrast(1.05)", film: "saturate(.82) contrast(1.1) brightness(.96)", vivid: "saturate(1.25) contrast(1.06)", mono: "grayscale(1) contrast(1.08)", neutral: "saturate(.92) contrast(1.04)" })[scene.colorGrade] || "saturate(.92) contrast(1.04)";
-  return <AbsoluteFill style={{ background: scene.footageSrc ? "#111827" : "linear-gradient(135deg, " + background + ", " + accent + "24)", color: foreground, overflow: "hidden", fontFamily: "Inter, Arial, sans-serif" }}>
+  return <AbsoluteFill style={{ background: scene.footageSrc ? "#111827" : "linear-gradient(135deg, " + background + ", " + accent + "24)", color: foreground, overflow: "hidden", fontFamily: "Inter, Arial, sans-serif", opacity: transitionOpacity, clipPath, transform: "translate3d(" + (transitionX * width / 100) + "px," + (transitionY * height / 100) + "px,0) scale(" + transitionScale + ")" }}>
     {scene.footageSrc ? <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
       <Loop durationInFrames={Math.max(1, durationFrames)}>
         <OffthreadVideo src={staticFile(scene.footageSrc)} muted style={{ position: "absolute", width: "100%", height: "100%", objectFit: "cover", objectPosition: scene.footagePosition || "center", transform: getCameraTransform(scene.cameraMotion, frame, durationFrames), filter: grade }} />
@@ -216,7 +215,7 @@ const Scene = ({ scene, index, total, durationFrames, transitionInFrames }) => {
         {layout === "outro" && scene.highlight ? <div style={{ marginTop: 34, display: "inline-flex", alignItems: "center", gap: 12, padding: "14px 22px", borderRadius: 999, background: accent, color: "#172033", fontSize: 21 * fontScale, fontWeight: 850 }}>{scene.highlight} <span>↗</span></div> : null}
       </div>
     </div>
-    <FaceBubble src={scene.facecamSrc} position={scene.facecamPosition} />
+    <FaceBubble src={scene.facecamSrc} position={scene.facecamPosition} durationInFrames={durationFrames} />
     <NotificationOverlay notifications={scene.notifications || []} accent={accent} />
     <CalloutOverlay callouts={scene.callouts || []} accent={accent} />
     <div style={{ position: "absolute", left: "8%", right: "8%", bottom: "6%", zIndex: 13, display: "flex", alignItems: "center", gap: 14 }}>
@@ -227,6 +226,7 @@ const Scene = ({ scene, index, total, durationFrames, transitionInFrames }) => {
     </div>
     {scene.footageCredit ? <div style={{ position: "absolute", left: "8%", bottom: "2.5%", zIndex: 14, color: foreground, opacity: 0.62, fontSize: 10 * fontScale, fontWeight: 600 }}>Footage via Pexels · {scene.footageCredit} · pexels.com</div> : null}
     {scene.transition === "flash" && frame < transitionInFrames ? <AbsoluteFill style={{ background: "#fff", opacity: (1 - transitionProgress) * 0.5 }} /> : null}
+    {scene.transition === "dip-to-black" && frame < transitionInFrames ? <AbsoluteFill style={{ background: "#000", opacity: 1 - transitionProgress }} /> : null}
   </AbsoluteFill>;
 };
 
