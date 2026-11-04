@@ -84,6 +84,12 @@ export async function prepareStockFootage(project, jobId) {
   const selected = candidates.length <= maxScenes
     ? candidates
     : Array.from({ length: maxScenes }, (_, index) => candidates[Math.round(index * (candidates.length - 1) / Math.max(1, maxScenes - 1))]);
+  if (!selected.length) return {
+    scenes: project.scenes,
+    mediaCredits: [],
+    footageCount: 0,
+    warnings: ["Storyboard tidak memiliki scene dengan kata kunci footage yang relevan; motion graphics digunakan."]
+  };
   const folder = join(PUBLIC_DIR, "generated", jobId);
   await mkdir(folder, { recursive: true });
   const scenes = project.scenes.map(scene => ({ ...scene }));

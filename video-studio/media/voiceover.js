@@ -122,7 +122,7 @@ async function requestSpeech(chunk, voiceId, apiKey, modelId, previousText, next
   const payload = {
     text: chunk.text,
     model_id: modelId,
-    voice_settings: { stability: 0.48, similarity_boost: 0.78, style: 0.2, use_speaker_boost: true }
+    voice_settings: { stability: 0.48, similarity_boost: 0.78, style: 0.2, speed: 0.96, use_speaker_boost: true }
   };
   if (previousText) payload.previous_text = previousText.slice(-500);
   if (nextText) payload.next_text = nextText.slice(0, 500);
@@ -207,10 +207,10 @@ export async function prepareVoiceover(project, jobId) {
         scenes[index].duration = durations[index];
       }
     } else {
-      warnings.push("Narasi berhasil dibuat, tetapi durasi beberapa bagian melebihi batas scene. Timing visual dipertahankan dari storyboard.");
+      throw new Error("Durasi bicara tidak muat dalam batas scene. Voice-over dilewati agar audio dan visual tidak saling mendahului.");
     }
   } else {
-    warnings.push("Subtitle dibuat dari alignment audio, tetapi timing scene mengikuti storyboard karena data sinkronisasi karakter tidak lengkap.");
+    throw new Error("Timing karakter tidak lengkap untuk semua scene. Voice-over dilewati agar subtitle tidak meleset.");
   }
 
   return { voiceoverTracks, captions, scenes, warnings };

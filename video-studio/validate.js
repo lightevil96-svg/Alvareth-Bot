@@ -130,7 +130,7 @@ export function validateVideoProject(input) {
     const src = assetPath(track?.src);
     const startSeconds = Number(track?.startSeconds);
     const trackDuration = Number(track?.durationSeconds);
-    if (!src || !Number.isFinite(startSeconds) || startSeconds < 0 || !Number.isFinite(trackDuration) || trackDuration <= 0 || trackDuration > 300) return null;
+    if (!src || !Number.isFinite(startSeconds) || startSeconds < 0 || startSeconds > 300 || !Number.isFinite(trackDuration) || trackDuration <= 0 || trackDuration > 300 || startSeconds + trackDuration > 301) return null;
     return { src, startSeconds, durationSeconds: trackDuration };
   }).filter(Boolean) : [];
   const captions = normalizeCaptions(input.captions);
