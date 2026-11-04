@@ -76,8 +76,8 @@ export function resolveRenderSettings(project) {
     concurrency: resolveRenderConcurrency(resources),
     crf: 18,
     x264Preset: "medium",
-    videoBitrate: resolveH264Bitrate(project),
     timeoutInMilliseconds: resolveRenderTimeout(),
-    offthreadVideoThreads: resolveOffthreadVideoThreads(resources.cpuCount)
+    offthreadVideoThreads: resolveOffthreadVideoThreads(resources.cpuCount),
+    offthreadVideoCacheSizeInBytes: Math.max(128 * 1024 ** 2, Math.min(1024 * 1024 ** 2, Math.floor(resources.memoryBytes * 0.18)))
   };
 }
