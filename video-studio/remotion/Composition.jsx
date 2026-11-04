@@ -2,6 +2,7 @@ import React from "react";
 import {
   AbsoluteFill,
   Audio,
+  OffthreadVideo,
   Composition,
   Sequence,
   interpolate,
@@ -99,14 +100,14 @@ const SceneSound = ({ cue }) => {
   return <Audio src={staticFile(source)} volume={volume} />;
 };
 
-const MusicTrack = ({ musicStyle, totalFrames }) => {
+const MusicTrack = ({ musicStyle, totalFrames, hasVoiceover = false }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const source = MUSIC_FILES[musicStyle];
   if (!source) return null;
   const fadeIn = Math.min(1, frame / Math.max(1, fps * 1.8));
   const fadeOut = Math.min(1, Math.max(0, totalFrames - frame) / Math.max(1, fps * 2.2));
-  return <Audio src={staticFile(source)} loop volume={0.18 * Math.min(fadeIn, fadeOut)} />;
+  return <Audio src={staticFile(source)} loop volume={(hasVoiceover ? 0.085 : 0.18) * Math.min(fadeIn, fadeOut)} />;
 };
 
 const Scene = ({ scene, index, total }) => {
@@ -152,8 +153,9 @@ const Scene = ({ scene, index, total }) => {
     position: "relative",
     zIndex: 2
   };
-  return <AbsoluteFill style={{ background: "linear-gradient(135deg, " + background + ", " + accent + "24)", color: foreground, overflow: "hidden", fontFamily: "Inter, Arial, sans-serif" }}>
-    <AbsoluteFill style={{ background: "radial-gradient(ellipse at 78% 24%, " + accent + "30, transparent 54%), linear-gradient(160deg, transparent 55%, rgba(0,0,0,.16))" }} />
+  return <AbsoluteFill style={{ background: scene.footageSrc ? "#111827" : "linear-gradient(135deg, " + background + ", " + accent + "24)", color: foreground, overflow: "hidden", fontFamily: "Inter, Arial, sans-serif" }}>
+    {scene.footageSrc ? <OffthreadVideo src={staticFile(scene.footageSrc)} muted loop style={{ position: "absolute", width: "100%", height: "100%", objectFit: "cover", opacity: 0.78, filter: "saturate(.86) contrast(1.04)" }} /> : null}
+    <AbsoluteFill style={{ background: scene.footageSrc ? "linear-gradient(180deg, rgba(8,12,20,.40), rgba(8,12,20,.72))" : "radial-gradient(ellipse at 78% 24%, " + accent + "30, transparent 54%), linear-gradient(160deg, transparent 55%, rgba(0,0,0,.16))" }} />
     <SceneMotif type={scene.motif || "rings"} accent={accent} index={index} />
     <div style={{ position: "absolute", inset: "8%", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: alignLeft ? "flex-start" : "center" }}>
       <div style={contentStyle}>
@@ -178,25 +180,47 @@ const Scene = ({ scene, index, total }) => {
       </div>
       <div style={{ color: foreground, opacity: 0.7, fontSize: 15 * fontScale, fontWeight: 700, letterSpacing: 1 }}>{String(index + 1).padStart(2, "0")} / {String(total).padStart(2, "0")}</div>
     </div>
+    {scene.footageCredit ? <div style={{ position: "absolute", left: "8%", bottom: "2.5%", zIndex: 4, color: foreground, opacity: 0.62, fontSize: 10 * fontScale, fontWeight: 600 }}>Footage via Pexels · {scene.footageCredit} · pexels.com</div> : null}
     <SceneSound cue={scene.soundCue} />
   </AbsoluteFill>;
 };
 
-const VideoComposition = ({ scenes, musicStyle = "cinematic", soundEffects = true }) => {
+const CaptionOverlay = ({ captions = [] }) => {
+  const frame = useCurrentFrame();
+  const { fps, width, height } = useVideoConfig();
+  const time = frame / fps;
+  const activeGroup = captions.find(group => time >= group.startSeconds && time <= group.endSeconds);
+  if (!activeGroup || !Array.isArray(activeGroup.words)) return null;
+  const activeWord = activeGroup.words.findIndex(word => time >= word.startSeconds && time <= word.endSeconds);
+  const fontSize = width >= 1600 ? 42 : width >= 1000 ? 34 : 25;
+  return <AbsoluteFill style={{ justifyContent: "flex-end", alignItems: "center", paddingBottom: height * 0.145, pointerEvents: "none", zIndex: 20 }}>
+    <div style={{ maxWidth: width * 0.86, display: "flex", flexWrap: "wrap", justifyContent: "center", alignItems: "center", gap: "2px 8px", padding: "12px 20px", borderRadius: 16, background: "rgba(8,12,20,.82)", border: "1px solid rgba(255,255,255,.14)", boxShadow: "0 12px 34px rgba(0,0,0,.24)", textAlign: "center" }}>
+      {activeGroup.words.map((word, index) => <span key={index} style={{ color: index === activeWord ? "#FFE36E" : "#FFFFFF", fontSize, lineHeight: 1.22, fontWeight: 900, textShadow: "0 2px 12px rgba(0,0,0,.4)" }}>{word.text}</span>)}
+    </div>
+  </AbsoluteFill>;
+};
+
+const VideoComposition = ({ scenes, musicStyle = "cinematic", soundEffects = true, voiceoverTracks = [], captions = [] }) => {
   const { fps } = useVideoConfig();
   const safeScenes = Array.isArray(scenes) ? scenes : [];
-  const totalFrames = safeScenes.reduce((sum, scene) => sum + Math.max(1, Math.round(Number(scene.duration || 4) * fps)), 0);
-  let from = 0;
+  let cursor = 0;
+  const timeline = safeScenes.map((scene, index) => {
+    const durationInFrames = Math.max(1, Math.round(Number(scene.duration || 4) * fps));
+    const requestedStart = Number(scene.startSeconds);
+    const start = Number.isFinite(requestedStart) && requestedStart >= 0 ? Math.round(requestedStart * fps) : cursor;
+    cursor = Math.max(cursor, start + durationInFrames);
+    return { scene, index, start, durationInFrames };
+  });
+  const totalFrames = Math.max(cursor, ...voiceoverTracks.map(track => Math.round((Number(track.startSeconds || 0) + Number(track.durationSeconds || 0)) * fps)), 1);
   return <AbsoluteFill style={{ background: "#111827" }}>
-    <MusicTrack musicStyle={musicStyle} totalFrames={totalFrames} />
-    {safeScenes.map((scene, index) => {
-      const start = from;
-      const durationInFrames = Math.max(1, Math.round(Number(scene.duration || 4) * fps));
-      from += durationInFrames;
-      return <Sequence key={scene.id || index} from={start} durationInFrames={durationInFrames}>
-        <Scene scene={{ ...scene, soundCue: soundEffects ? scene.soundCue : "none" }} index={index} total={safeScenes.length} />
-      </Sequence>;
-    })}
+    <MusicTrack musicStyle={musicStyle} totalFrames={totalFrames} hasVoiceover={voiceoverTracks.length > 0} />
+    {timeline.map(({ scene, index, start, durationInFrames }) => <Sequence key={scene.id || index} from={start} durationInFrames={durationInFrames}>
+      <Scene scene={{ ...scene, soundCue: soundEffects ? scene.soundCue : "none" }} index={index} total={safeScenes.length} />
+    </Sequence>)}
+    {voiceoverTracks.map((track, index) => <Sequence key={"voice-" + index} from={Math.round(Number(track.startSeconds || 0) * fps)} durationInFrames={Math.max(1, Math.round(Number(track.durationSeconds || 1) * fps))}>
+      <Audio src={staticFile(track.src)} volume={1} />
+    </Sequence>)}
+    <CaptionOverlay captions={captions} />
   </AbsoluteFill>;
 };
 
@@ -210,14 +234,24 @@ export const RemotionRoot = () => <Composition
   defaultProps={{
     scenes: [{ id: "scene-01", text: "Mulai berkarya", duration: 4, background: "#111827", accent: "#68DDB8", layout: "hero", motif: "rings", motion: "fade-up", transition: "fade", soundCue: "none" }],
     musicStyle: "cinematic",
-    soundEffects: true
+    soundEffects: true,
+    voiceoverTracks: [],
+    captions: [],
+    mediaCredits: []
   }}
   calculateMetadata={({ props }) => {
     const fps = Number(props.fps || 30);
     const scenes = Array.isArray(props.scenes) ? props.scenes : [];
-    const durationInFrames = scenes.reduce((sum, scene) => sum + Math.max(1, Math.round(Number(scene.duration || 4) * fps)), 0);
+    let cursor = 0;
+    for (const scene of scenes) {
+      const duration = Math.max(1, Math.round(Number(scene.duration || 4) * fps));
+      const requestedStart = Number(scene.startSeconds);
+      const start = Number.isFinite(requestedStart) && requestedStart >= 0 ? Math.round(requestedStart * fps) : cursor;
+      cursor = Math.max(cursor, start + duration);
+    }
+    const voiceEnd = (Array.isArray(props.voiceoverTracks) ? props.voiceoverTracks : []).reduce((max, track) => Math.max(max, Math.round((Number(track.startSeconds || 0) + Number(track.durationSeconds || 0)) * fps)), 0);
     const ratios = { "9:16": [1080, 1920], "16:9": [1920, 1080], "1:1": [1080, 1080] };
     const dimensions = ratios[props.ratio || "9:16"] || ratios["9:16"];
-    return { width: Number(props.width || dimensions[0]), height: Number(props.height || dimensions[1]), fps, durationInFrames: Math.max(1, durationInFrames) };
+    return { width: Number(props.width || dimensions[0]), height: Number(props.height || dimensions[1]), fps, durationInFrames: Math.max(1, cursor, voiceEnd) };
   }}
 />;
