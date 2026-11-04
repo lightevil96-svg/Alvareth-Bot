@@ -16,7 +16,7 @@ function extract(startMarker, endMarker) {
 
 const parse = new Function('MAX_COMPARE_FILES',
   extract('function parseGitNameStatusZ(', 'async function compareCommitsViaGit(') +
-  '\nreturn parseGitNameStatusZ')(300)
+  '\nreturn parseGitNameStatusZ')(20000)
 
 test('Git --name-status -z handles modifications, additions, deletions and renames', () => {
   assert.deepEqual(parse('M\0src/a.js\0A\0src/new.js\0D\0removed.js\0R100\0old.js\0new.js\0'), [
@@ -27,6 +27,41 @@ test('Git --name-status -z handles modifications, additions, deletions and renam
   ])
   assert.throws(() => parse('R100\0no-target.js\0'), /rename/)
   assert.throws(() => parse('Z\0unsafe.js\0'), /tidak dikenal/)
+})
+
+
+test('Git diff parser accepts more than 300 changed files and enforces only the higher safety ceiling', () => {
+  const rows = Array.from({ length: 301 }, (_, index) => 'M\\0file-' + index + '.js\\0').join('')
+  assert.equal(parse(rows).length, 301)
+  const tooMany = Array.from({ length: 20001 }, (_, index) => 'M\\0file-' + index + '.js\\0').join('')
+  assert.throws(() => parse(tooMany), /20\.000 file berubah/)
+})
+
+test('REST compare response at the 300-file cap switches to a complete Git diff', async () => {
+  const files = Array.from({ length: 300 }, (_, index) => ({ status: 'modified', filename: 'rest-' + index + '.js' }))
+  const complete = Array.from({ length: 347 }, (_, index) => ({ status: 'modified', filename: 'full-' + index + '.js' }))
+  let fallbackCalls = 0
+  const compareCode = extract('async function compareCommits(', 'async function downloadArchiveAtCommit(')
+  const compare = new Function('deps', [
+    'const { fetchJson, shouldUseGitFallback, compareCommitsViaGit, log, API_ROOT, REST_COMPARE_FILE_LIMIT, MAX_COMPARE_FILES } = deps',
+    compareCode,
+    'return compareCommits'
+  ].join('\\n'))({
+    fetchJson: async () => ({ status: 'ahead', ahead_by: 2, files }),
+    shouldUseGitFallback: () => false,
+    compareCommitsViaGit: async () => {
+      fallbackCalls++
+      return { status: 'ahead', ahead_by: 2, files: complete }
+    },
+    log: () => {},
+    API_ROOT: 'https://api.github.com/repos/example/example',
+    REST_COMPARE_FILE_LIMIT: 300,
+    MAX_COMPARE_FILES: 20000
+  })
+  const result = await compare('a'.repeat(40), 'b'.repeat(40))
+  assert.equal(fallbackCalls, 1)
+  assert.equal(result.files.length, 347)
+  assert.equal(result.files[0].filename, 'full-0.js')
 })
 
 test('HTTP 403 and 429 switch to Git fallback without rewriting local files', async () => {
