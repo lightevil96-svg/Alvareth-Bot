@@ -31,9 +31,9 @@ test('Git --name-status -z handles modifications, additions, deletions and renam
 
 
 test('Git diff parser accepts more than 300 changed files and enforces only the higher safety ceiling', () => {
-  const rows = Array.from({ length: 301 }, (_, index) => 'M\\0file-' + index + '.js\\0').join('')
+  const rows = Array.from({ length: 301 }, (_, index) => 'M\0file-' + index + '.js\0').join('')
   assert.equal(parse(rows).length, 301)
-  const tooMany = Array.from({ length: 20001 }, (_, index) => 'M\\0file-' + index + '.js\\0').join('')
+  const tooMany = Array.from({ length: 20001 }, (_, index) => 'M\0file-' + index + '.js\0').join('')
   assert.throws(() => parse(tooMany), /20\.000 file berubah/)
 })
 
@@ -46,7 +46,7 @@ test('REST compare response at the 300-file cap switches to a complete Git diff'
     'const { fetchJson, shouldUseGitFallback, compareCommitsViaGit, log, API_ROOT, REST_COMPARE_FILE_LIMIT, MAX_COMPARE_FILES } = deps',
     compareCode,
     'return compareCommits'
-  ].join('\\n'))({
+  ].join('\n'))({
     fetchJson: async () => ({ status: 'ahead', ahead_by: 2, files }),
     shouldUseGitFallback: () => false,
     compareCommitsViaGit: async () => {
