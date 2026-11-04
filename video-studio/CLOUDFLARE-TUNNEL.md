@@ -17,8 +17,8 @@ A remotely-managed Cloudflare Tunnel requires its tunnel token to run. The token
 1. Open Cloudflare Zero Trust → Networks → Tunnels.
 2. Open `lightjurnal-video-studio` and choose **Add a replica**.
 3. Copy the installation command into a private text editor; do not run it as-is. Copy only the token value after `--token`.
-4. In Pterodactyl → Startup/Environment, set `VIDEO_STUDIO_TUNNEL_TOKEN` to that value, then restart Alvareth.
-5. Alternatively, create `~/.alvareth-bot-data/video-studio/tunnel-token` on the server, put only the token in the file, and set file permissions to `0600`.
+4. If you do not have Startup/Environment access, create the folder `/home/container/.alvareth-bot-data/video-studio/` in Pterodactyl Files and upload a file named `tunnel-token` containing only the token. The bot applies permissions `0600` when it starts. Alternatively, set `VIDEO_STUDIO_TUNNEL_TOKEN` in the private server environment.
+5. Restart Alvareth once so it reads the token file and starts the connector.
 
 On startup, Alvareth writes an environment token into the persistent token file with owner-only permissions. It finds an existing cloudflared binary or downloads the official Linux x64/ARM64 release and verifies the SHA-256 digest published by GitHub Releases. The tunnel starts after the HTTP server listens and retries with bounded exponential backoff if the connector exits.
 
