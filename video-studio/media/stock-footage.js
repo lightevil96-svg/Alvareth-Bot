@@ -62,10 +62,24 @@ async function downloadVideo(file, destination, timeoutMs, remainingBytes = 18 *
     const declared = Number(response.headers.get("content-length") || 0);
     if (declared > maxBytes) throw new Error("Footage Pexels terlalu besar untuk batas render.");
     if (contentType && !contentType.includes("video") && !contentType.includes("octet-stream")) throw new Error("Pexels mengembalikan file yang bukan video.");
-    const bytes = Buffer.from(await response.arrayBuffer());
-    if (!bytes.length || bytes.length > maxBytes) throw new Error("Ukuran file footage tidak valid.");
+    if (!response.body) throw new Error("Stream footage tidak tersedia.");
+    const reader = response.body.getReader();
+    const chunks = [];
+    let totalBytes = 0;
+    while (true) {
+      const part = await reader.read();
+      if (part.done) break;
+      totalBytes += part.value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel();
+        throw new Error("Footage Pexels melewati batas ukuran aset.");
+      }
+      chunks.push(Buffer.from(part.value));
+    }
+    if (!totalBytes) throw new Error("File footage kosong.");
+    const bytes = Buffer.concat(chunks, totalBytes);
     await writeFile(destination, bytes);
-    return bytes.length;
+    return totalBytes;
   } catch (error) {
     if (controller.signal.aborted || error?.name === "AbortError") throw new Error("Unduhan footage melewati batas waktu.");
     throw error;
