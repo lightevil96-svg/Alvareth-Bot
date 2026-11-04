@@ -10,7 +10,9 @@ const BRANCH = process.env.AUTO_UPDATE_BRANCH || 'main'
 const UPDATE_PLUGIN_PATH = 'plugins/owner/update.js'
 const MAX_ARCHIVE_BYTES = 100 * 1024 * 1024
 const MAX_FILE_BYTES = 50 * 1024 * 1024
-const MAX_COMPARE_FILES = 300
+const MAX_COMPARE_FILES = 20_000
+const REST_COMPARE_FILE_LIMIT = 300
+const MAX_GIT_OUTPUT_BYTES = 20 * 1024 * 1024
 const API_ROOT = 'https://api.github.com/repos/' + REPOSITORY
 const RAW_ROOT = 'https://raw.githubusercontent.com/' + REPOSITORY
 const STATE_DIRECTORY = process.env.ALVARETH_DATA_DIR
@@ -175,7 +177,7 @@ async function runReadOnlyGit(args, cwd = process.cwd()) {
       }
       child.stdout.on('data', chunk => {
         stdout += chunk.toString('utf8')
-        if (stdout.length > 5 * 1024 * 1024) {
+        if (stdout.length > MAX_GIT_OUTPUT_BYTES) {
           child.kill('SIGKILL')
           done(new Error('Output Git cadangan terlalu besar.'))
         }
@@ -222,8 +224,8 @@ function parseGitNameStatusZ(output) {
       }
       files.push({ status: status === 'D' ? 'removed' : status === 'A' ? 'added' : 'modified', filename })
     }
-    if (files.length >= MAX_COMPARE_FILES) {
-      throw new Error('Git cadangan mendeteksi 300 atau lebih file berubah; sinkronisasi dibatalkan.')
+    if (files.length > MAX_COMPARE_FILES) {
+      throw new Error('Git cadangan mendeteksi lebih dari ' + MAX_COMPARE_FILES.toLocaleString('id-ID') + ' file berubah; batas pengaman terlampaui dan sinkronisasi dibatalkan.')
     }
   }
   return files
@@ -345,6 +347,7 @@ async function inferInstalledBaseSha(root) {
 async function compareCommits(baseSha, headSha) {
   if (baseSha === headSha) return { status: 'identical', ahead_by: 0, files: [] }
   let data
+  let usedGitFallback = false
   try {
     data = await fetchJson(
       API_ROOT + '/compare/' + baseSha + '...' + headSha,
@@ -356,10 +359,25 @@ async function compareCommits(baseSha, headSha) {
       '). Memakai Git diff read-only sebagai cadangan.')
     try {
       data = await compareCommitsViaGit(baseSha, headSha)
+      usedGitFallback = true
     } catch (fallbackError) {
       throw new Error('API GitHub ditolak dan perbandingan Git cadangan gagal. ' +
         'Tidak ada file yang diubah. Periksa koneksi GitHub atau ALVARETH_GITHUB_TOKEN. ' +
         'Detail: ' + fallbackError.message)
+    }
+  }
+
+  // GitHub's compare endpoint truncates the file list at 300 entries. A full
+  // list is required before applying any writes, so transparently switch to
+  // an isolated read-only Git diff whenever the REST response reaches that cap.
+  if (!usedGitFallback && Array.isArray(data?.files) && data.files.length >= REST_COMPARE_FILE_LIMIT) {
+    log('Daftar file dari GitHub REST mencapai batas 300. Mengambil diff lengkap melalui Git read-only.')
+    try {
+      data = await compareCommitsViaGit(baseSha, headSha)
+      usedGitFallback = true
+    } catch (fallbackError) {
+      throw new Error('Daftar perubahan GitHub mungkin terpotong pada 300 file dan Git diff cadangan gagal. ' +
+        'Tidak ada file yang diubah. Detail: ' + fallbackError.message)
     }
   }
   if (data?.status === 'behind' || data?.status === 'diverged') {
@@ -368,8 +386,8 @@ async function compareCommits(baseSha, headSha) {
   if (!Array.isArray(data?.files)) {
     throw new Error('GitHub tidak mengembalikan daftar file yang berubah; update dibatalkan.')
   }
-  if (data.files.length >= MAX_COMPARE_FILES) {
-    throw new Error('Ada 300 atau lebih file berubah sejak baseline. Update otomatis dihentikan agar daftar file yang terpotong tidak menyebabkan sinkronisasi tidak lengkap.')
+  if (data.files.length > MAX_COMPARE_FILES) {
+    throw new Error('Ada lebih dari ' + MAX_COMPARE_FILES.toLocaleString('id-ID') + ' file berubah sejak baseline. Update otomatis dihentikan karena batas pengaman ' + MAX_COMPARE_FILES.toLocaleString('id-ID') + ' file terlampaui.')
   }
   if (Number(data.ahead_by) > 0 && data.files.length === 0) {
     // A valid commit can change only parent metadata or produce an empty tree diff.
