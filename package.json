@@ -11,11 +11,12 @@
   },
   "scripts": {
     "start": "node scripts/start-with-update.js",
-    "test": "node --check index.js && node --check main.js && node --check handler.js && node --check lib/simple.js && node --check lib/auto-update.js && node --check scripts/start-with-update.js && node --check lib/scrape/tikwm.js && node --check plugins/downloader/tiktok.js && node --check plugins/image/tohitam.js && node --check plugins/ai/aivideo.js && node --check lib/scrape/youtube.js && node --check plugins/downloader/clip.js && node --check plugins/owner/sw.js && node --check lib/auto-download.js && node --test tests/auto-download.test.js && node --check plugins/sticker/sticker.js && node --test tests/quoted-media.test.js && node --check plugins/sticker/sticker-engine.js && node --test tests/sticker-engine.test.js && npm run test:clip && npm run test:download && npm run test:media",
+    "test": "node --check index.js && node --check main.js && node --check handler.js && node --check lib/simple.js && node --check lib/auto-update.js && node --check scripts/start-with-update.js && node --check lib/scrape/tikwm.js && node --check plugins/downloader/tiktok.js && node --check plugins/image/tohitam.js && node --check plugins/ai/aivideo.js && node --check lib/scrape/youtube.js && node --check plugins/downloader/clip.js && node --check plugins/owner/sw.js && node --check lib/auto-download.js && node --test tests/auto-download.test.js && node --check plugins/sticker/sticker.js && node --test tests/quoted-media.test.js && node --check plugins/sticker/sticker-engine.js && node --test tests/sticker-engine.test.js && npm run test:clip && npm run test:download && npm run test:media && npm run test:video-studio",
     "dev": "node --watch index.js",
     "test:clip": "node --check lib/scrape/youtube.js && node --check plugins/downloader/clip-progress.js && node --check plugins/downloader/clip.js && node --test tests/clip-progress.test.js tests/clip-policy.test.js",
     "test:download": "node --check lib/download-browser.js && node --check plugins/downloader/download.js && node --test tests/download-browser.test.js",
-    "test:media": "node --check lib/whatsapp-file-sender.js && node --check lib/whatsapp-temp-dir.js && node --check lib/whatsapp-temp-bootstrap.js && node --check lib/interactive-command.js && node --check plugins/downloader/clip.js && node --check plugins/downloader/download.js && node --check handler.js && node --test tests/whatsapp-temp-dir.test.js tests/whatsapp-file-sender.test.js tests/interactive-command.test.js"
+    "test:media": "node --check lib/whatsapp-file-sender.js && node --check lib/whatsapp-temp-dir.js && node --check lib/whatsapp-temp-bootstrap.js && node --check lib/interactive-command.js && node --check plugins/downloader/clip.js && node --check plugins/downloader/download.js && node --check handler.js && node --test tests/whatsapp-temp-dir.test.js tests/whatsapp-file-sender.test.js tests/interactive-command.test.js",
+    "test:video-studio": "node --test tests/video-studio.test.js"
   },
   "keywords": [
     "alvareth-bot",
@@ -92,6 +93,11 @@
     "xmldom": "^0.6.0",
     "yargs": "^17.7.2",
     "yt-search": "^2.10.4",
-    "zs-extract": "^1.4.2"
+    "zs-extract": "^1.4.2",
+    "remotion": "4.0.540",
+    "@remotion/bundler": "4.0.540",
+    "@remotion/renderer": "4.0.540",
+    "react": "19.2.0",
+    "react-dom": "19.2.0"
   }
 }
