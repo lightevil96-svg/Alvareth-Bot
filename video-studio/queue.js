@@ -1,11 +1,14 @@
 import { randomUUID } from "crypto";
-import { existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "fs";
 import { homedir } from "os";
-import { join, resolve } from "path";
+import { dirname, join, resolve, sep } from "path";
+import { fileURLToPath } from "url";
 import { renderVideoProject } from "./renderer.js";
 import { validateVideoProject } from "./validate.js";
 import { prepareVideoMedia } from "./media/pipeline.js";
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const GENERATED_DIR = join(__dirname, "remotion", "public", "generated");
 const DATA_DIR = process.env.ALVARETH_DATA_DIR ? resolve(process.env.ALVARETH_DATA_DIR) : join(homedir(), ".alvareth-bot-data");
 const VIDEO_DIR = join(DATA_DIR, "video-studio");
 const JOBS_FILE = join(VIDEO_DIR, "jobs.json");
@@ -44,6 +47,19 @@ function publicJob(job) {
     hasOutput: job.status === "completed" && Boolean(job.outputPath)
   };
 }
+function cleanupGeneratedAssets(jobId) {
+  const folder = join(GENERATED_DIR, String(jobId || ""));
+  if (folder.startsWith(GENERATED_DIR + sep)) {
+    try { rmSync(folder, { recursive: true, force: true }); }
+    catch (error) { console.warn("[VIDEO STUDIO] Gagal membersihkan aset sementara:", error.message); }
+  }
+}
+function cleanupJobFiles(job) {
+  if (job?.outputPath && existsSync(job.outputPath)) {
+    try { unlinkSync(job.outputPath); } catch (error) { console.warn("[VIDEO STUDIO] Gagal membersihkan MP4 lama:", error.message); }
+  }
+  cleanupGeneratedAssets(job?.id);
+}
 function update(job, values) {
   Object.assign(job, values, { updatedAt: new Date().toISOString() });
   persist();
@@ -65,11 +81,13 @@ async function pump() {
       if (progress !== next.progress) update(next, { stage: "rendering", progress });
     });
     const sizeBytes = statSync(outputPath).size;
+    cleanupGeneratedAssets(next.id);
     update(next, { status: "completed", stage: "completed", progress: 100, sizeBytes, outputPath });
     console.log("[VIDEO STUDIO] Render selesai: " + next.id + " (" + sizeBytes + " bytes)");
   } catch (error) {
     try { if (existsSync(outputPath)) unlinkSync(outputPath); }
     catch (cleanupError) { console.warn("[VIDEO STUDIO] Gagal membersihkan render parsial:", cleanupError.message); }
+    cleanupGeneratedAssets(next.id);
     update(next, { status: "failed", stage: "failed", error: String(error?.message || error).slice(0, 500), outputPath: null });
     console.error("[VIDEO STUDIO] Render gagal " + next.id + ":", error);
   } finally {
@@ -91,6 +109,7 @@ export function startVideoQueue() {
           job.stage = "failed";
           job.error = "Proses bot berhenti ketika rendering berlangsung.";
           job.outputPath = null;
+          cleanupGeneratedAssets(job.id);
         }
         jobs.set(job.id, job);
       }
@@ -102,7 +121,11 @@ export function startVideoQueue() {
 function pruneHistory() {
   if (jobs.size < 100) return;
   const terminal = Array.from(jobs.values()).filter(job => ["completed", "failed"].includes(job.status)).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  while (jobs.size >= 100 && terminal.length) jobs.delete(terminal.shift().id);
+  while (jobs.size >= 100 && terminal.length) {
+    const old = terminal.shift();
+    cleanupJobFiles(old);
+    jobs.delete(old.id);
+  }
 }
 
 export function createVideoJob(input) {

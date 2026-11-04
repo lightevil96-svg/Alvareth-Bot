@@ -56,16 +56,17 @@ async function searchPexels(query, key, orientation, timeoutMs) {
   return response.json();
 }
 
-async function downloadVideo(file, destination, timeoutMs) {
+async function downloadVideo(file, destination, timeoutMs, remainingBytes = 18 * 1024 * 1024) {
   const response = await fetchWithTimeout(file.link, { headers: { accept: "video/mp4" } }, timeoutMs);
   const contentType = String(response.headers.get("content-type") || "");
   const declared = Number(response.headers.get("content-length") || 0);
-  const maxBytes = 32 * 1024 * 1024;
+  const maxBytes = Math.min(18 * 1024 * 1024, Math.max(0, remainingBytes));
   if (declared > maxBytes) throw new Error("Footage Pexels terlalu besar untuk batas render.");
   if (contentType && !contentType.includes("video") && !contentType.includes("octet-stream")) throw new Error("Pexels mengembalikan file yang bukan video.");
   const bytes = Buffer.from(await response.arrayBuffer());
   if (!bytes.length || bytes.length > maxBytes) throw new Error("Ukuran file footage tidak valid.");
   await writeFile(destination, bytes);
+  return bytes.length;
 }
 
 export async function prepareStockFootage(project, jobId) {
@@ -96,6 +97,8 @@ export async function prepareStockFootage(project, jobId) {
   const mediaCredits = [];
   const usedIds = new Set();
   const warnings = [];
+  const totalAssetLimit = 96 * 1024 * 1024;
+  let totalAssetBytes = 0;
   const orientation = project.ratio === "16:9" ? "landscape" : project.ratio === "1:1" ? "square" : "portrait";
 
   for (const item of selected) {
@@ -110,7 +113,8 @@ export async function prepareStockFootage(project, jobId) {
       }
       const file = chooseVideoFile(video, project.ratio);
       const filename = "footage-" + String(item.index + 1).padStart(2, "0") + ".mp4";
-      await downloadVideo(file, join(folder, filename), timeoutMs);
+      const downloadedBytes = await downloadVideo(file, join(folder, filename), timeoutMs, totalAssetLimit - totalAssetBytes);
+      totalAssetBytes += downloadedBytes;
       usedIds.add(video.id);
       const photographer = safeText(video.user?.name || "Kontributor Pexels", 90);
       scenes[item.index].footageSrc = "generated/" + jobId + "/" + filename;
