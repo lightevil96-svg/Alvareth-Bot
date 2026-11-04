@@ -47,7 +47,15 @@ export function mountVideoStudioApi(app) {
     if (req.method === "OPTIONS") return res.sendStatus(204)
     next()
   })
-  app.get("/api/video-studio/health", (_req, res) => res.json({ service: "Alvareth Video Studio", status: "ok", configured: apiKey.length >= 32 }))
+  app.get("/api/video-studio/health", (_req, res) => res.json({
+    service: "Alvareth Video Studio",
+    status: "ok",
+    configured: apiKey.length >= 32,
+    media: {
+      voiceover: Boolean(process.env.VIDEO_STUDIO_ELEVENLABS_API_KEY && process.env.VIDEO_STUDIO_ELEVENLABS_VOICE_ID),
+      stockFootage: Boolean(process.env.VIDEO_STUDIO_PEXELS_API_KEY)
+    }
+  }))
   app.use("/api/video-studio", (req, res, next) => {
     const supplied = String(req.headers.authorization || "").replace(/^Bearer\s+/i, "")
     if (!safeEqual(supplied, apiKey)) return res.status(401).json({ error: "API key tidak valid." })
