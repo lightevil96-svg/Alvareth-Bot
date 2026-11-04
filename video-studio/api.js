@@ -1,7 +1,29 @@
-import { timingSafeEqual } from 'crypto'
-import { createReadStream } from 'fs'
+import { randomBytes, timingSafeEqual } from 'crypto'
+import { createReadStream, existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync } from 'fs'
+import { homedir } from 'os'
+import { join, resolve } from 'path'
 import { createVideoJob, getVideoJob, getVideoOutput, listVideoJobs, startVideoQueue } from './queue.js'
 import { getVideoStudioLimits } from './validate.js'
+
+const DATA_DIR = process.env.ALVARETH_DATA_DIR ? resolve(process.env.ALVARETH_DATA_DIR) : join(homedir(), '.alvareth-bot-data')
+const VIDEO_DIR = join(DATA_DIR, 'video-studio')
+const API_KEY_FILE = join(VIDEO_DIR, 'api-key')
+
+function loadApiKey() {
+  const configured = String(process.env.VIDEO_STUDIO_API_KEY || '').trim()
+  if (configured.length >= 32) return configured
+  mkdirSync(VIDEO_DIR, { recursive: true })
+  if (existsSync(API_KEY_FILE)) {
+    const saved = readFileSync(API_KEY_FILE, 'utf8').trim()
+    if (saved.length >= 32) return saved
+  }
+  const generated = randomBytes(32).toString('hex')
+  writeFileSync(API_KEY_FILE, generated + '\n', { mode: 0o600, flag: 'wx' })
+  try { chmodSync(API_KEY_FILE, 0o600) } catch {}
+  console.log('[VIDEO STUDIO] API key otomatis dibuat dan disimpan di ' + API_KEY_FILE)
+  console.log('[VIDEO STUDIO] Salin key dari file tersebut ke kolom API key di LightJurnal. Jangan bagikan key ini.')
+  return generated
+}
 
 function safeEqual(a, b) {
   const left = Buffer.from(String(a || ''))
@@ -10,6 +32,7 @@ function safeEqual(a, b) {
 }
 
 export function mountVideoStudioApi(app) {
+  const apiKey = loadApiKey()
   const allowedOrigins = new Set((process.env.VIDEO_STUDIO_ALLOWED_ORIGINS || 'https://lightjurnal.my.id').split(',').map(value => value.trim()).filter(Boolean))
   app.use('/api/video-studio', (req, res, next) => {
     const origin = req.headers.origin
@@ -23,12 +46,10 @@ export function mountVideoStudioApi(app) {
     if (req.method === 'OPTIONS') return res.sendStatus(204)
     next()
   })
-  app.get('/api/video-studio/health', (_req, res) => res.json({ service: 'Alvareth Video Studio', status: 'ok', configured: Boolean(process.env.VIDEO_STUDIO_API_KEY) }))
+  app.get('/api/video-studio/health', (_req, res) => res.json({ service: 'Alvareth Video Studio', status: 'ok', configured: apiKey.length >= 32 }))
   app.use('/api/video-studio', (req, res, next) => {
-    const expected = process.env.VIDEO_STUDIO_API_KEY
-    if (!expected || expected.length < 32) return res.status(503).json({ error: 'Video Studio API belum dikonfigurasi dengan API key minimal 32 karakter.' })
-    const supplied = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '')
-    if (!safeEqual(supplied, expected)) return res.status(401).json({ error: 'API key tidak valid.' })
+    const supplied = String(req.headers.authorization || '').replace(/^Bearer\\s+/i, '')
+    if (!safeEqual(supplied, apiKey)) return res.status(401).json({ error: 'API key tidak valid.' })
     next()
   })
   startVideoQueue()
