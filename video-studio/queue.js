@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto'
-import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'fs'
 import { homedir } from 'os'
 import { join, resolve } from 'path'
 import { renderVideoProject } from './renderer.js'
@@ -39,6 +39,7 @@ async function pump() {
     update(next, { status: 'completed', progress: 100, sizeBytes, outputPath })
     console.log(`[VIDEO STUDIO] Render selesai: ${next.id} (${sizeBytes} bytes)`)
   } catch (error) {
+    try { if (existsSync(outputPath)) unlinkSync(outputPath) } catch (cleanupError) { console.warn('[VIDEO STUDIO] Gagal membersihkan render parsial:', cleanupError.message) }
     update(next, { status: 'failed', error: String(error?.message || error).slice(0, 500), outputPath: null })
     console.error(`[VIDEO STUDIO] Render gagal ${next.id}:`, error)
   } finally {
@@ -63,7 +64,15 @@ export function startVideoQueue() {
   persist()
   setImmediate(pump)
 }
+function pruneHistory() {
+  if (jobs.size < 100) return
+  const terminal = Array.from(jobs.values()).filter(job => ['completed', 'failed'].includes(job.status)).sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+  while (jobs.size >= 100 && terminal.length) jobs.delete(terminal.shift().id)
+}
+
 export function createVideoJob(input) {
+  pruneHistory()
+  if (jobs.size >= 100) throw new Error('Riwayat render penuh. Hapus riwayat lama sebelum membuat pekerjaan baru.')
   const active = Array.from(jobs.values()).filter(job => ['queued', 'rendering'].includes(job.status)).length
   if (active >= 5) throw new Error('Antrean penuh. Tunggu pekerjaan sebelumnya selesai.')
   const project = validateVideoProject(input)
