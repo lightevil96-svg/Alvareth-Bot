@@ -159,10 +159,10 @@ LightJurnal can submit text-motion video projects to the existing Alvareth-Bot H
 ### Setup
 
 1. Install dependencies after updating the bot: `npm install`.
-2. Set `VIDEO_STUDIO_API_KEY` in the Pterodactyl server Environment to a unique random secret of at least 32 characters. Do not put this secret in GitHub or WhatsApp.
-3. Set `VIDEO_STUDIO_ALLOWED_ORIGINS=https://lightjurnal.my.id`.
-4. Ensure the Pterodactyl server has a public allocation and expose its HTTP port through an HTTPS reverse proxy. Do not expose the raw API over plain HTTP to browsers.
-5. Ensure the startup environment contains `PORT` so the existing optional `server.js` starts. The existing WhatsApp bot and this API run in the same Alvareth-Bot process.
+2. The API key is generated automatically on first startup and saved outside the Git checkout at `~/.alvareth-bot-data/video-studio/api-key` with owner-only file permissions. It is never committed to GitHub. Copy its contents from the Pterodactyl Files view into LightJurnal → Video Studio. An explicit `VIDEO_STUDIO_API_KEY` environment value (at least 32 characters) overrides the generated key.
+3. CORS defaults to `https://lightjurnal.my.id`; override with `VIDEO_STUDIO_ALLOWED_ORIGINS` only when needed.
+4. The HTTP server starts when Pterodactyl provides `SERVER_PORT` (or when `PORT` is explicitly set). The existing WhatsApp bot and this API run in the same Alvareth-Bot process.
+5. The API still requires an HTTPS reverse proxy or Cloudflare Tunnel in front of the Pterodactyl allocation. Do not expose the raw API over plain HTTP to browsers. The public HTTPS hostname must point to the server allocation.
 6. In LightJurnal → Video Studio, enter the HTTPS API URL and the API key. The key is kept in the current browser session only.
 
 ### API
