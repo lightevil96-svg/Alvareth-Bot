@@ -39,6 +39,7 @@ function publicJob(job) {
     captionsEnabled: Boolean(project.captions?.length),
     footageCount: Number(project.footageCount || project.scenes.filter(scene => scene.footageSrc).length || 0),
     mediaWarnings: Array.isArray(project.mediaWarnings) ? project.mediaWarnings : [],
+    mediaCredits: Array.isArray(project.mediaCredits) ? project.mediaCredits : [],
     error: job.error || null,
     hasOutput: job.status === "completed" && Boolean(job.outputPath)
   };
