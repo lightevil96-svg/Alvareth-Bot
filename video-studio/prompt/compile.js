@@ -25,6 +25,7 @@ export function compileVideoPlan(plan) {
       points: scene.points,
       narration: scene.narration,
       visualDescription: scene.visualDescription,
+      stockSearchQuery: scene.stockSearchQuery,
       layout: scene.layout,
       motif: scene.motif,
       motion: scene.motion,
