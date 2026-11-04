@@ -1,3 +1,12 @@
+## 2026-11-04 — Fondasi remote Remotion Video Studio untuk LightJurnal
+
+- **Permintaan/gejala:** pengguna ingin LightJurnal menjadi panel kendali, sementara Alvareth-Bot yang sudah berjalan di Pterodactyl menerima perintah dan mengerjakan rendering video.
+- **Akar penyebab:** belum ada API render pada server HTTP opsional Alvareth-Bot dan belum ada halaman Video Studio pada LightJurnal.
+- **Perubahan:** menambahkan API Bearer-token dengan allowlist CORS, validasi payload proyek, antrean render persisten satu worker, komposisi Remotion motion-typography, endpoint status/unduh, dan dokumentasi konfigurasi. LightJurnal mendapat navigasi dan UI Simple/Professional untuk membuat proyek teks, memantau antrean, preview, dan unduh.
+- **Tes:** pemeriksaan sintaks Node.js untuk modul backend/UI dan `node --test tests/video-studio.test.js` lulus 4/4 di lingkungan kerja. Belum menjalankan `npm install`, render MP4 sesungguhnya, workflow GitHub Actions, atau pengujian Pterodactyl/HTTPS.
+- **Belum diverifikasi:** dependency Remotion harus dipasang pada server; server HTTP harus berjalan dengan `PORT`; reverse proxy HTTPS, API key, CORS dari domain, browser Chromium, dan ruang disk VPS perlu dikonfigurasi. Upload gambar/video/audio, timeline drag-and-drop, serta kirim hasil melalui WhatsApp belum termasuk tahap pertama.
+- **Pelajaran regresi:** jangan memindahkan atau mengubah sesi/database bot. Data render harus tetap di direktori runtime di luar checkout; jangan pernah menaruh API key di frontend atau repository.
+
 ## 2026-11-03 — Fix candidate undefined pada finalisasi kualitas tertinggi
 
 - **Gejala:** uji .clip nyata menemukan format 720p melalui metadata, tetapi kedua kandidat (136+251 HTTPS dan 232+251 HLS) gagal pada tahap FFmpeg dengan candidate is not defined. Fallback Qbyte hanya menyediakan 360p dan benar dibatalkan karena lebih rendah dari 720p.
