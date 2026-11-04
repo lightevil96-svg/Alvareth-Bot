@@ -20,7 +20,21 @@ function persist() {
   renameSync(temp, JOBS_FILE)
 }
 function publicJob(job) {
-  return { id: job.id, title: job.project.title, mode: job.project.mode, status: job.status, progress: job.progress, createdAt: job.createdAt, updatedAt: job.updatedAt, durationSeconds: job.project.durationSeconds, error: job.error || null, hasOutput: job.status === 'completed' && Boolean(job.outputPath) }
+  return {
+    id: job.id,
+    title: job.project.title,
+    mode: job.project.mode,
+    status: job.status,
+    progress: job.progress,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+    durationSeconds: job.project.durationSeconds,
+    sceneCount: job.project.scenes.length,
+    ratio: job.project.ratio,
+    planSummary: job.project.planSummary || '',
+    error: job.error || null,
+    hasOutput: job.status === 'completed' && Boolean(job.outputPath)
+  }
 }
 function update(job, values) {
   Object.assign(job, values, { updatedAt: new Date().toISOString() })

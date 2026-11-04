@@ -242,7 +242,7 @@ async function requestExistingFallback(prompt) {
 }
 export async function planVideoPrompt(prompt) {
   const sourcePrompt = cleanText(prompt, 6000);
-  if (sourcePrompt.length < 8) throw new Error("Jelaskan video yang ingin dibuat dengan sedikit lebih lengkap.");
+  if (sourcePrompt.length < 8) { const error = new Error("Jelaskan video yang ingin dibuat dengan sedikit lebih lengkap."); error.statusCode = 400; throw error; }
   const apiKey = String(process.env.VIDEO_STUDIO_AI_API_KEY || process.env.OPENAI_API_KEY || "").trim();
   const content = apiKey ? await requestOpenAICompatible(sourcePrompt, apiKey) : await requestExistingFallback(sourcePrompt);
   return normalizeVideoPlan(parseJsonResponse(content), sourcePrompt);
