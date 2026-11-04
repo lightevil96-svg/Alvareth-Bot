@@ -1,14 +1,16 @@
 import { mkdir } from 'fs/promises'
 import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
+import { ensureVideoAudioAssets } from './audio-assets.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 let serveUrlPromise
 
 async function getServeUrl() {
   if (!serveUrlPromise) {
-    serveUrlPromise = import('@remotion/bundler').then(({ bundle }) => bundle({
+    serveUrlPromise = ensureVideoAudioAssets().then(() => import('@remotion/bundler')).then(({ bundle }) => bundle({
       entryPoint: join(__dirname, 'remotion', 'index.jsx'),
+      publicDir: join(__dirname, 'remotion', 'public'),
       webpackOverride: config => config
     })).catch(error => { serveUrlPromise = null; throw error })
   }
@@ -18,7 +20,7 @@ async function getServeUrl() {
 export async function renderVideoProject(project, outputPath, onProgress = () => {}) {
   const [{ renderMedia, selectComposition }, serveUrl] = await Promise.all([import('@remotion/renderer'), getServeUrl()])
   await mkdir(dirname(outputPath), { recursive: true })
-  const inputProps = { title: project.title, scenes: project.scenes, fps: project.fps, width: project.width, height: project.height }
+  const inputProps = { title: project.title, scenes: project.scenes, fps: project.fps, width: project.width, height: project.height, musicStyle: project.musicStyle, soundEffects: project.soundEffects }
   const composition = await selectComposition({ serveUrl, id: 'LightJurnalVideo', inputProps })
   await renderMedia({
     composition, serveUrl, codec: 'h264', outputLocation: outputPath, inputProps,

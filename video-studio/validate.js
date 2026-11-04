@@ -1,9 +1,6 @@
-const RATIOS = Object.freeze({
-  '9:16': { width: 1080, height: 1920 },
-  '16:9': { width: 1920, height: 1080 },
-  '1:1': { width: 1080, height: 1080 }
-})
+const RATIOS = Object.freeze({ '9:16': { width: 1080, height: 1920 }, '16:9': { width: 1920, height: 1080 }, '1:1': { width: 1080, height: 1080 } })
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/
+const MUSIC_STYLES = ['cinematic', 'upbeat', 'calm', 'none']
 
 export function validateVideoProject(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Data proyek harus berupa objek.')
@@ -12,6 +9,8 @@ export function validateVideoProject(input) {
   const ratio = Object.hasOwn(RATIOS, input.ratio) ? input.ratio : '9:16'
   const fps = Number(input.fps || 30)
   if (![24, 25, 30].includes(fps)) throw new Error('FPS yang didukung: 24, 25, atau 30.')
+  const musicStyle = MUSIC_STYLES.includes(input.musicStyle) ? input.musicStyle : 'cinematic'
+  const soundEffects = input.soundEffects !== false
   const rawScenes = Array.isArray(input.scenes) ? input.scenes : []
   if (rawScenes.length < 1 || rawScenes.length > 30) throw new Error('Proyek harus memiliki 1 sampai 30 scene.')
   const scenes = rawScenes.map((scene, index) => {
@@ -26,9 +25,6 @@ export function validateVideoProject(input) {
   const durationSeconds = scenes.reduce((sum, scene) => sum + scene.duration, 0)
   if (durationSeconds > 90) throw new Error('Durasi total proyek maksimal 90 detik untuk tahap awal.')
   const dimensions = RATIOS[ratio]
-  return { title, mode, ratio, width: dimensions.width, height: dimensions.height, fps, scenes, durationSeconds, durationInFrames: Math.ceil(durationSeconds * fps) }
+  return { title, mode, ratio, width: dimensions.width, height: dimensions.height, fps, scenes, musicStyle, soundEffects, durationSeconds, durationInFrames: Math.ceil(durationSeconds * fps) }
 }
-
-export function getVideoStudioLimits() {
-  return { ratios: Object.keys(RATIOS), fps: [24, 25, 30], maxScenes: 30, maxSceneSeconds: 15, maxDurationSeconds: 90 }
-}
+export function getVideoStudioLimits() { return { ratios: Object.keys(RATIOS), fps: [24, 25, 30], maxScenes: 30, maxSceneSeconds: 15, maxDurationSeconds: 90, musicStyles: MUSIC_STYLES } }
