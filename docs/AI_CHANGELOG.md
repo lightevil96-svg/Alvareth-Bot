@@ -1,3 +1,12 @@
+## 2026-11-04 — Dedicated Cloudflare Tunnel for LightJurnal Video Studio
+
+- **Permintaan/gejala:** LightJurnal Video Studio tidak dapat terhubung langsung ke Alvareth; server log menunjukkan `cloudflared` binary tidak ditemukan. Quick Tunnel lama menghasilkan URL sementara, sedangkan hostname produksi belum memiliki route yang stabil.
+- **Akar masalah:** `video-studio/tunnel.js` hanya mencari `./bin/cloudflared`, tidak mendeteksi binary dari PATH atau memasang binary otomatis, dan hanya menjalankan Quick Tunnel. Tidak ada named tunnel token flow yang persisten untuk hostname produksi.
+- **Cloudflare:** membuat remotely-managed tunnel `lightjurnal-video-studio`, mengatur ingress `video.lightjurnal.my.id` → `http://127.0.0.1:2132` dengan fallback 404, dan membuat DNS CNAME proxied `video.lightjurnal.my.id` → tunnel UUID. Tunnel SSH lama `chromebook-lightjurnal`, domain utama, dan DNS record yang sudah ada tidak diubah.
+- **Perubahan kode:** `video-studio/tunnel.js` sekarang membaca token dari `VIDEO_STUDIO_TUNNEL_TOKEN` atau file privat di data directory, mendeteksi binary dari konfigurasi/lokasi lokal/PATH, serta mengunduh rilis resmi cloudflared untuk Linux x64/ARM64 dengan verifikasi SHA-256 dari GitHub Releases. Named tunnel dijalankan memakai `--token-file` agar token tidak muncul pada argumen proses, dan reconnect memakai exponential backoff terbatas. Menambahkan regression test untuk pemetaan platform, konfigurasi environment, dan dokumentasi setup.
+- **Frontend:** LightJurnal akan memakai default API URL `https://video.lightjurnal.my.id` sehingga URL tidak perlu diisi manual; API key tetap hanya dimasukkan satu kali pada sesi browser.
+- **Belum diverifikasi:** konektor Cloudflare belum bisa menjadi Healthy sampai pemilik menambahkan token tunnel ke environment Pterodactyl (atau mengunggah token file privat) dan me-restart bot. Akses shell/Pterodactyl tidak tersedia dari koneksi ini; tidak mengklaim binary telah terpasang di host atau render MP4 live telah diuji.
+
 ## 2026-11-04 — Automatic self-update tanpa perintah .update
 
 - **Permintaan:** Alvareth harus memeriksa dan menerapkan pembaruan GitHub sendiri tanpa owner mengetik `.update`.
