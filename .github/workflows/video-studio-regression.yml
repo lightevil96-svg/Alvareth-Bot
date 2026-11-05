@@ -38,6 +38,8 @@ jobs:
           node --check video-studio/renderer.js
           node --check video-studio/media/voiceover.js
           node --check video-studio/media/stock-footage.js
+          node --check video-studio/media/comfyui.js
+          node --check video-studio/media/ai-video.js
           node --check video-studio/media/pipeline.js
           node --check video-studio/whatsapp.js
           node --check plugins/owner/remotion.js
