@@ -169,3 +169,15 @@ test("keeps soundtrack optional and compiles timed sound events", () => {
   assert.deepEqual(project.scenes[0].soundEvents.map(event => event.cue), ["whoosh", "impact"]);
   assert.equal(project.scenes[0].soundEvents[1].delaySeconds, 2.1);
 });
+
+test("infers Foley events from visible action words when the planner omits soundEvents", () => {
+  const plan = normalizeVideoPlan({
+    title: "Aksi karakter",
+    scenes: [
+      { text: "Karakter berlari", narration: "Karakter berlari melewati lorong lalu mendarat dengan keras." },
+      { text: "Informasi penting", narration: "Informasi ini perlu dibaca dengan teliti.", motion: "static", transition: "cut" }
+    ]
+  }, "Buat animasi karakter berlari dan mendarat");
+  assert.deepEqual(plan.scenes[0].soundEvents.map(event => event.cue), ["footstep", "footstep", "impact"]);
+  assert.equal(plan.scenes[1].soundEvents.length, 0);
+});
