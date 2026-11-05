@@ -1,0 +1,86 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {
+  parseRemotionCommand,
+  remotionStageLabel,
+  formatRemotionJob,
+  getRemotionProviderReadiness
+} from "../video-studio/whatsapp.js";
+
+test("opens the menu when no Remotion action is supplied", () => {
+  assert.deepEqual(parseRemotionCommand(""), { action: "menu" });
+});
+
+test("accepts generate aliases and keeps the full natural-language prompt", () => {
+  assert.deepEqual(parseRemotionCommand("generate Buat video cinematic tentang laut"), {
+    action: "generate",
+    prompt: "Buat video cinematic tentang laut"
+  });
+  assert.deepEqual(parseRemotionCommand("buat seekor kucing menjelajahi kota"), {
+    action: "generate",
+    prompt: "seekor kucing menjelajahi kota"
+  });
+});
+
+test("treats an unrecognized first word as the beginning of a prompt", () => {
+  assert.deepEqual(parseRemotionCommand("Film pendek tentang seorang penjelajah"), {
+    action: "generate",
+    prompt: "Film pendek tentang seorang penjelajah"
+  });
+});
+
+test("routes status, history, guide, services, cancel and resend actions", () => {
+  assert.equal(parseRemotionCommand("status").action, "status");
+  assert.equal(parseRemotionCommand("riwayat").action, "history");
+  assert.equal(parseRemotionCommand("panduan").action, "guide");
+  assert.equal(parseRemotionCommand("services").action, "services");
+  assert.equal(parseRemotionCommand("batal").action, "cancel");
+  assert.deepEqual(parseRemotionCommand("send job-123"), { action: "send", jobId: "job-123" });
+});
+
+test("maps pipeline stages to readable Indonesian labels", () => {
+  assert.equal(remotionStageLabel("generating-ai-video"), "Membuat footage AI");
+  assert.equal(remotionStageLabel("rendering"), "Merender komposisi MP4");
+});
+
+test("formats job details without exposing file paths", () => {
+  const formatted = formatRemotionJob({
+    id: "job-123",
+    title: "Video Demo",
+    status: "rendering",
+    stage: "rendering",
+    progress: 40,
+    durationSeconds: 30,
+    ratio: "9:16",
+    sceneCount: 6,
+    outputPath: "/private/server/path/video.mp4"
+  });
+  assert.match(formatted, /Video Demo/);
+  assert.match(formatted, /40%/);
+  assert.doesNotMatch(formatted, /private\/server\/path/);
+});
+
+test("reports optional media providers as unconfigured without secrets", () => {
+  const status = getRemotionProviderReadiness({}, () => false, {
+    remotionInstalled: true,
+    ffmpegInstalled: true
+  });
+  assert.equal(status.find(item => item.name === "Remotion + FFmpeg").configured, true);
+  assert.equal(status.find(item => item.name === "Voice-over + subtitle sinkron").configured, false);
+  assert.equal(status.find(item => item.name === "AI video footage").configured, false);
+});
+
+test("recognizes configured voice and ComfyUI workflow files", () => {
+  const status = getRemotionProviderReadiness({
+    VIDEO_STUDIO_ELEVENLABS_API_KEY: "test-key",
+    VIDEO_STUDIO_ELEVENLABS_VOICE_ID: "voice-id",
+    VIDEO_STUDIO_COMFYUI_VIDEO_WORKFLOW_FILE: "/srv/workflows/video.json",
+    VIDEO_STUDIO_COMFYUI_MUSIC_WORKFLOW_FILE: "/srv/workflows/music.json"
+  }, path => path === "/srv/workflows/video.json" || path === "/srv/workflows/music.json", {
+    remotionInstalled: true,
+    ffmpegInstalled: true
+  });
+  assert.equal(status.find(item => item.name === "Voice-over + subtitle sinkron").configured, true);
+  assert.equal(status.find(item => item.name === "AI video footage").configured, true);
+  assert.equal(status.find(item => item.name === "AI background music").configured, true);
+});
