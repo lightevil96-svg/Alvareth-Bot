@@ -39,7 +39,10 @@ function positiveInt(value, fallback, min, max) {
 function sendText(chat, text, fallbackConn) {
   const socket = global.conn || fallbackConn;
   if (!socket || typeof socket.sendMessage !== "function" || !chat) return Promise.resolve(null);
-  return socket.sendMessage(chat, { text: String(text || "") });
+  return socket.sendMessage(chat, { text: String(text || "") }).catch(error => {
+    console.warn("[REMOTION:WA] Gagal mengirim notifikasi WhatsApp:", error?.message || error);
+    return null;
+  });
 }
 
 function hasCommandPrefix(value, prefix) {
