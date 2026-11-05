@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { isComfyConfigured, generateComfyAsset } from "./comfyui.js";
 
 function clean(value, max = 500) {
@@ -20,8 +21,15 @@ export async function prepareAiFootage(project, jobId) {
     ? project.visualBible
     : {};
   let characterReferencePath = "";
+  let videoWorkflowSupportsReference = false;
+  try {
+    const workflowPath = String(process.env.VIDEO_STUDIO_COMFYUI_VIDEO_WORKFLOW_FILE || "").trim();
+    if (workflowPath) {
+      videoWorkflowSupportsReference = (await readFile(workflowPath, "utf8")).includes("{{REFERENCE_IMAGE}}");
+    }
+  } catch {}
 
-  if (character && selected.length && isComfyConfigured("image")) {
+  if (character && selected.length && isComfyConfigured("image") && videoWorkflowSupportsReference) {
     try {
       const referencePrompt = clean([
         "Create one polished, production-ready character reference image for a recurring animated film character.",
@@ -54,6 +62,8 @@ export async function prepareAiFootage(project, jobId) {
     } catch (error) {
       warnings.push("Character reference image tidak berhasil dibuat; AI footage memakai text prompt saja: " + clean(error.message, 160));
     }
+  } else if (character && selected.length && isComfyConfigured("image") && !videoWorkflowSupportsReference) {
+    warnings.push("Workflow video belum memakai placeholder {{REFERENCE_IMAGE}}; character reference tidak dapat diterapkan.");
   }
 
   for (const item of selected) {
