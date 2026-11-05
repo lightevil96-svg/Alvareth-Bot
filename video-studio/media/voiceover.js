@@ -186,7 +186,6 @@ export async function prepareVoiceover(project, jobId) {
   const command = clean(process.env.VIDEO_STUDIO_VOXCPM_BIN || "voxcpm", 500);
   const modelPath = clean(process.env.VIDEO_STUDIO_VOXCPM_MODEL_PATH, 1000);
   const modelId = clean(process.env.VIDEO_STUDIO_VOXCPM_MODEL_ID || "openbmb/VoxCPM2", 160);
-  const control = clean(process.env.VIDEO_STUDIO_VOXCPM_CONTROL || "Warm, natural, expressive Indonesian narrator; clear articulation, confident and conversational delivery, medium pace, subtle emotion, never robotic.", 500);
   const language = clean(process.env.VIDEO_STUDIO_VOXCPM_TIMESTAMP_LANGUAGE || project.language || "id", 12);
   const device = clean(process.env.VIDEO_STUDIO_VOXCPM_DEVICE || "auto", 40);
   const timestampDevice = clean(process.env.VIDEO_STUDIO_VOXCPM_TIMESTAMP_DEVICE, 40);
@@ -210,7 +209,6 @@ export async function prepareVoiceover(project, jobId) {
     "--no-denoiser"
   ];
   if (timestampDevice) args.push("--timestamp-device", timestampDevice);
-  if (control) args.push("--control", control);
   if (modelPath) args.push("--model-path", modelPath);
   else args.push("--hf-model-id", modelId);
 
