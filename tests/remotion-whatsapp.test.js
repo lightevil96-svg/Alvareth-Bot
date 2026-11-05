@@ -60,30 +60,38 @@ test("formats job details without exposing file paths", () => {
   assert.doesNotMatch(formatted, /private\/server\/path/);
 });
 
-test("reports optional media providers as unconfigured without secrets", () => {
+test("reports local providers as unconfigured until Ollama and VoxCPM2 are installed", () => {
   const status = getRemotionProviderReadiness({}, () => false, {
     remotionInstalled: true,
-    ffmpegInstalled: true
+    ffmpegInstalled: true,
+    ollamaModelReady: false,
+    voxcpmInstalled: false
   });
   assert.equal(status.find(item => item.name === "Remotion + FFmpeg").configured, true);
-  assert.equal(status.find(item => item.name === "Voice-over + subtitle sinkron").configured, false);
-  assert.equal(status.find(item => item.name === "AI video footage").configured, false);
+  assert.equal(status.find(item => item.name === "Local storyboard LLM (Ollama)").configured, false);
+  assert.equal(status.find(item => item.name === "VoxCPM2 + word timestamps").configured, false);
+  assert.equal(status.find(item => item.name === "ComfyUI video workflow").configured, false);
   assert.equal(status.find(item => item.name === "Character reference image").configured, false);
+  assert.equal(status.find(item => item.name === "Background music").configured, false);
+  assert.equal(status.find(item => item.name === "Event-based sound effects").configured, true);
 });
 
-test("recognizes configured voice and ComfyUI workflow files", () => {
+test("recognizes local Ollama, VoxCPM2 and ComfyUI workflows without paid API credentials", () => {
   const status = getRemotionProviderReadiness({
-    VIDEO_STUDIO_ELEVENLABS_API_KEY: "test-key",
-    VIDEO_STUDIO_ELEVENLABS_VOICE_ID: "voice-id",
-    VIDEO_STUDIO_COMFYUI_VIDEO_WORKFLOW_FILE: "/srv/workflows/video.json",
-    VIDEO_STUDIO_COMFYUI_IMAGE_WORKFLOW_FILE: "/srv/workflows/image.json",
-    VIDEO_STUDIO_COMFYUI_MUSIC_WORKFLOW_FILE: "/srv/workflows/music.json"
-  }, path => ["/srv/workflows/video.json", "/srv/workflows/image.json", "/srv/workflows/music.json"].includes(path), {
+    VIDEO_STUDIO_AI_BASE_URL: "http://127.0.0.1:11434/v1",
+    VIDEO_STUDIO_AI_MODEL: "qwen3:8b",
+    VIDEO_STUDIO_VOXCPM_BIN: "voxcpm",
+    VIDEO_STUDIO_COMFYUI_VIDEO_WORKFLOW_FILE: "/srv/workflows/cogvideox.json",
+    VIDEO_STUDIO_COMFYUI_IMAGE_WORKFLOW_FILE: "/srv/workflows/image.json"
+  }, path => ["/srv/workflows/cogvideox.json", "/srv/workflows/image.json"].includes(path), {
     remotionInstalled: true,
-    ffmpegInstalled: true
+    ffmpegInstalled: true,
+    ollamaModelReady: true,
+    voxcpmInstalled: true
   });
-  assert.equal(status.find(item => item.name === "Voice-over + subtitle sinkron").configured, true);
-  assert.equal(status.find(item => item.name === "AI video footage").configured, true);
+  assert.equal(status.find(item => item.name === "Local storyboard LLM (Ollama)").configured, true);
+  assert.equal(status.find(item => item.name === "VoxCPM2 + word timestamps").configured, true);
+  assert.equal(status.find(item => item.name === "ComfyUI video workflow").configured, true);
   assert.equal(status.find(item => item.name === "Character reference image").configured, true);
-  assert.equal(status.find(item => item.name === "AI background music").configured, true);
+  assert.equal(status.find(item => item.name === "Background music").configured, false);
 });
