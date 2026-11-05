@@ -170,6 +170,18 @@ Sebelum mengubah kode, AI/developer wajib membaca [`AGENTS.md`](AGENTS.md), [`AI
 
 LightJurnal sends one natural-language prompt to Alvareth-Bot. The AI planner turns the brief into a creative direction and storyboard, then compiles it into a validated Remotion project. Scene count, per-scene pacing, aspect ratio, FPS, palette, layout, motion, transitions, music mood and sound cues are inferred from the prompt; users do not configure them manually.
 
+### WhatsApp owner command
+
+The same Video Studio engine is also available directly inside Alvareth Bot through the owner-only `.remotion` command:
+
+- `.remotion` opens the interactive WhatsApp menu.
+- `.remotion generate` asks for a natural-language video brief in the next message.
+- `.remotion <prompt>` starts a video job immediately.
+- `.remotion status`, `.remotion history`, `.remotion send`, `.remotion guide`, `.remotion services`, and `.remotion cancel` manage the workflow.
+- Rendered MP4 files are sent back to WhatsApp and retained in the persistent Video Studio render directory.
+
+See [Linux deployment and provider setup](docs/REMOTION_WHATSAPP_LINUX.md). Android/Termux tutorial steps are not used by this implementation.
+
 ### Setup
 
 1. Install dependencies after updating the bot: npm install.
@@ -202,7 +214,7 @@ All routes except health require a Bearer VIDEO_STUDIO_API_KEY. Model credential
 - Voice-over uses the ElevenLabs text-to-speech-with-timestamps endpoint. Its character alignment is converted into timed subtitle phrases and scene timing; music is automatically ducked under narration.
 - Stock footage uses Pexels video search, downloads selected MP4 assets to the server, places them behind the motion design, and burns photographer/Pexels credits into the relevant scenes. Scenes without a useful stock search phrase remain motion graphics.
 - Renderer safety limits: maximum 60 scenes, 20 seconds per scene, and 300 seconds total. These are server safeguards, not user-facing controls.
-- Still not implemented: AI-generated scene footage, uploaded-media editing, photorealistic/3D assets, and a drag-and-drop editing timeline. Voice-over and Pexels footage are optional and stay inactive until their server API keys are configured.
+- AI-generated scene footage and AI background music are optional through configured ComfyUI API workflows; voice-over and word-timed captions use ElevenLabs; licensed stock footage uses Pexels. The prompt planner now creates a visual bible and recurring character bible, which are repeated in selected AI footage prompts. A configured ComfyUI image workflow can generate one character reference image per job and pass it to an image-to-video workflow through {{REFERENCE_IMAGE}}; visual identity continuity is improved but not guaranteed. Uploaded-media editing, photorealistic/3D asset generation, and a drag-and-drop editing timeline are not implemented.
 - A VPS deployment, dependency installation, HTTPS reverse proxy, configured AI provider, browser Chromium and real MP4 render test must be verified on the live Pterodactyl instance before claiming production readiness.
 
 ### Official Remotion Agent Skills

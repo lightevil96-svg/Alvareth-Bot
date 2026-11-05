@@ -3,11 +3,19 @@
 > **Tujuan:** orientasi singkat untuk AI/developer yang melanjutkan proyek.
 > **Repository:** https://github.com/lightevil96-svg/Alvareth-Bot
 > **Branch produksi:** `main`
-> **Ditinjau:** 2026-10-29
+> **Ditinjau:** 2026-11-05
 >
 > Baca `AGENTS.md` terlebih dahulu, lalu file ini dan `docs/AI_CHANGELOG.md`. Catatan membantu orientasi, tetapi kode saat ini tetap menjadi sumber kebenaran.
 
 ## Pembaruan terbaru
+
+- 2026-11-05: Branch `feat/remotion-whatsapp-linux` menambahkan fitur owner-only `.remotion` pada WhatsApp. Plugin `plugins/owner/remotion.js` memakai Video Studio planner/compiler/queue/renderer yang sudah ada, menu native-flow dengan fallback teks, prompt session, status/progres, riwayat, resend, provider readiness, dan uploader MP4 disk-streaming. Prompt session di-route sebelum plugin normal hanya untuk owner yang memulai sesi.
+
+- 2026-11-05: Generator lama FreeTheAI `plugins/ai/aivideo.js` dihapus dan variabel FREETHEAI dibuang dari `.env.example`. Remotion tetap memakai Node.js, Chromium/Remotion, FFmpeg/FFprobe, dan Linux native; Android/Termux tutorial steps tidak dipakai.
+
+- 2026-11-05: Prompt planner/compiler/validator sekarang membawa visual bible dan recurring character bible sampai ke ComfyUI AI footage prompt. ComfyUI kini dapat membuat satu character reference image per job melalui image workflow dan mengunggahnya ke image-to-video workflow lewat {{REFERENCE_IMAGE}}; konsistensi karakter meningkat tetapi tetap perlu diverifikasi. ComfyUI video/music, ElevenLabs voice-over, dan Pexels footage opsional sesuai credentials/workflows.
+
+- 2026-11-05: Skill `alvareth-ai-video-production` dan dokumen `docs/REMOTION_WHATSAPP_LINUX.md` ditambahkan. Tes command helper dan continuity bible dibuat; jalankan npm test, install dependency, serta live WhatsApp/ComfyUI/ElevenLabs/render checks sebelum merge/deploy.
 
 - 2026-11-04: Updater `.update` tidak lagi menganggap batas 300 file dari GitHub REST sebagai daftar lengkap; otomatis memakai Git diff read-only pada repository bare sementara untuk diff penuh, dengan batas pengaman 20.000 file dan output 20 MiB.
 

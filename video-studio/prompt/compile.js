@@ -16,6 +16,8 @@ export function compileVideoPlan(plan) {
     sourcePrompt: plan.sourcePrompt,
     planSummary: plan.creativeBrief && plan.creativeBrief.coreMessage || plan.title,
     creativeBrief: plan.creativeBrief || {},
+    visualBible: plan.visualBible || {},
+    characterBible: plan.characterBible || null,
     scenes: plan.scenes.map(scene => ({
       id: scene.id,
       purpose: scene.purpose,

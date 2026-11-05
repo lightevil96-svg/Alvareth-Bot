@@ -109,3 +109,43 @@ test("preserves the user's prompt as metadata and ignores unsupported creative e
   assert.equal(plan.scenes[0].motion, "fade-up");
   assert.match(plan.scenes[0].background, /^#[0-9a-f]{6}$/i);
 });
+
+test("preserves visual and recurring character bibles through Remotion compilation", () => {
+  const plan = normalizeVideoPlan({
+    title: "Petualangan rubah",
+    visualBible: {
+      artStyle: "stylized cinematic 3D animation",
+      palette: "warm amber and deep teal",
+      lighting: "soft moonlight with warm rim light",
+      cameraLanguage: "slow dolly and deliberate close-ups",
+      texture: "detailed soft fur",
+      compositionRules: "keep the fox centered in mobile-safe framing"
+    },
+    characterBible: {
+      name: "Rumi",
+      type: "small red fox",
+      silhouette: "small body, oversized ears, fluffy tail with white tip",
+      face: "amber eyes and white muzzle",
+      hairOrFur: "short rust-red fur with cream chest",
+      outfit: "small navy scarf",
+      colors: "rust red, cream, navy",
+      accessories: "navy scarf",
+      personality: "curious and brave",
+      continuityRules: ["same scarf and fur markings in every scene"]
+    },
+    scenes: [
+      {
+        text: "Rumi menemukan cahaya",
+        narration: "Rumi melihat cahaya kecil di antara pepohonan.",
+        generateAiFootage: true,
+        aiVideoPrompt: "The fox slowly approaches a glowing firefly."
+      }
+    ]
+  }, "Buat video animasi 3D tentang rubah kecil bernama Rumi.");
+
+  const project = compileVideoPlan(plan);
+  assert.equal(project.characterBible.name, "Rumi");
+  assert.equal(project.characterBible.continuityRules[0], "same scarf and fur markings in every scene");
+  assert.equal(project.visualBible.artStyle, "stylized cinematic 3D animation");
+  assert.equal(project.scenes[0].aiVideoPrompt, "The fox slowly approaches a glowing firefly.");
+});

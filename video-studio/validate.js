@@ -194,6 +194,30 @@ export function validateVideoProject(input) {
     visualDirection: text(input.creativeBrief.visualDirection, 300),
     ending: text(input.creativeBrief.ending, 220)
   } : {};
+  const visualSource = input.visualBible && typeof input.visualBible === "object" ? input.visualBible : {};
+  const visualBible = {
+    artStyle: text(visualSource.artStyle, 180),
+    palette: text(visualSource.palette, 180),
+    lighting: text(visualSource.lighting, 180),
+    cameraLanguage: text(visualSource.cameraLanguage, 180),
+    texture: text(visualSource.texture, 180),
+    compositionRules: text(visualSource.compositionRules, 240)
+  };
+  const characterSource = input.characterBible && typeof input.characterBible === "object" ? input.characterBible : null;
+  const characterBible = characterSource ? {
+    name: text(characterSource.name, 80),
+    type: text(characterSource.type, 100),
+    silhouette: text(characterSource.silhouette, 180),
+    face: text(characterSource.face, 180),
+    hairOrFur: text(characterSource.hairOrFur, 180),
+    outfit: text(characterSource.outfit, 180),
+    colors: text(characterSource.colors, 140),
+    accessories: text(characterSource.accessories, 140),
+    personality: text(characterSource.personality, 140),
+    continuityRules: Array.isArray(characterSource.continuityRules)
+      ? characterSource.continuityRules.slice(0, 8).map(item => text(item, 160)).filter(Boolean)
+      : []
+  } : null;
   const voiceoverTracks = Array.isArray(input.voiceoverTracks) ? input.voiceoverTracks.slice(0, 30).map(track => {
     const src = assetPath(track?.src);
     const startSeconds = Number(track?.startSeconds);
@@ -215,6 +239,8 @@ export function validateVideoProject(input) {
     sourcePrompt: text(input.sourcePrompt, 6000),
     planSummary: text(input.planSummary, 300),
     creativeBrief,
+    visualBible,
+    characterBible,
     voiceoverTracks,
     captions,
     mediaCredits,

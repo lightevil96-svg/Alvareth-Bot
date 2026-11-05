@@ -14,6 +14,11 @@ const VIDEO_SYSTEM_PROMPT = [
   "Choose a cohesive palette from the content, emotion, and audience. Background and accent colors are creative decisions made by you, not user settings. Keep contrast and mobile readability high.",
   "Choose motion and transitions with restraint. Every movement must support meaning, reveal information, guide attention, or create a deliberate beat. Do not animate everything at once.",
   "Use the full visual grammar when appropriate: cinematic footage, kinetic typography, animated data charts only from supplied facts, process diagrams, app/product mockups, waveform scenes, notification callouts, picture-in-picture, and editorial title cards. Do not force a chart or diagram into a scene that does not need one.",
+  "Create a compact visualBible that locks art direction across the whole video: art style, palette, lighting, camera language, texture, and composition rules.",
+  "If the story has a recurring character, return a structured characterBible with stable identity traits: name, species/type, silhouette, face, hair/fur, outfit, colors, accessories, personality, and continuityRules. Keep these traits unchanged in every scene.",
+  "Repeat relevant character identity and visualBible details inside each selected aiVideoPrompt so separately generated clips have the strongest possible text-level continuity. Describe action and camera motion separately from immutable identity traits.",
+  "Prefer a reference-image/image-to-video workflow when a character reference asset is actually supplied and the configured ComfyUI workflow supports that input. Do not claim identity locking from text prompts or a shared seed alone.",
+  "Audio direction must distinguish voice-over, background music, ambience, and event-driven sound effects. Keep the voice intelligible, music below speech, and avoid random effects on every cut.",
   "Choose a subtle background treatment (orbs, particles, grid, waves, dots, vignette, none), camera movement (push-in, pull-out, pan, tilt, drift, static), and color grade based on the footage and story. Keep motion varied and purposeful; avoid repeating the same movement across adjacent scenes.",
   "Use a caption treatment suited to the content: tiktok, karaoke, subtitle, pop, typewriter, highlight, or wave. Caption styling is an editorial decision, not a user setting.",
   "For process or concept videos, use a diagram with clearly named nodes and valid connections. For product explainers, use a believable interface mockup. For data scenes, only visualize numbers explicitly supplied in the prompt; never invent data, sources, or chart values.",
@@ -26,11 +31,11 @@ const VIDEO_SYSTEM_PROMPT = [
   "For only the most important hero or establishing scenes, you may set generateAiFootage=true and write a detailed aiVideoPrompt for a locally configured open-source text-to-video workflow. Do not set it on every scene. If no local model is configured, the renderer will fall back to stock footage or motion graphics.",
   "visualDescription explains the intended visual in natural language; stockSearchQuery is a separate practical search phrase for a licensed stock-footage library.",
   "Do not claim that stock footage, real-world footage, 3D assets, or uploaded media already exist. The render pipeline may search a configured licensed stock library and will fall back to motion graphics when no suitable clip is found.",
-  "Return these fields: title, language, category, ratio, fps, targetDurationSeconds (number or null), musicStyle, musicDirection, captionStyle, soundEffects, creativeBrief, scenes.",
+  "Return these fields: title, language, category, ratio, fps, targetDurationSeconds (number or null), musicStyle, musicDirection, captionStyle, soundEffects, creativeBrief, visualBible, characterBible, scenes.",
   "Allowed captionStyle: tiktok, karaoke, subtitle, pop, typewriter, highlight, wave. Choose one automatically; never ask the user to configure it.",
   "Allowed category: educational, explainer, product, story, announcement, tutorial, documentary, finance, other.",
   "Allowed musicStyle: cinematic, upbeat, calm, none.",
-  "creativeBrief fields: coreMessage, hook, tone, visualDirection, ending.",
+  "creativeBrief fields: coreMessage, hook, tone, visualDirection, ending. visualBible fields: artStyle, palette, lighting, cameraLanguage, texture, compositionRules. characterBible fields: name, type, silhouette, face, hairOrFur, outfit, colors, accessories, personality, continuityRules (array). Use null for characterBible when no recurring character is needed.",
   "Each scene fields: id, purpose, durationSeconds, layout, visualType, backgroundEffect, cameraMotion, colorGrade, motif, motion, transition, kicker, text, highlight, subtext, points, narration, visualDescription, stockSearchQuery, generateAiFootage, aiVideoPrompt, chartTitle, chartUnit, chartSource, chartData, diagramNodes, diagramEdges, appMockup, notifications, callouts, background, accent, soundCue, soundIntensity.",
   "Allowed visualType: cinematic, kinetic, editorial, data-chart, diagram, app-mockup, waveform.",
   "Allowed backgroundEffect: none, orbs, particles, grid, waves, dots, vignette.",
@@ -156,6 +161,30 @@ export function normalizeVideoPlan(raw, sourcePrompt) {
     visualDirection: cleanText(raw.creativeBrief && raw.creativeBrief.visualDirection, 300),
     ending: cleanText(raw.creativeBrief && raw.creativeBrief.ending, 220)
   };
+  const visualSource = raw.visualBible && typeof raw.visualBible === "object" ? raw.visualBible : {};
+  const visualBible = {
+    artStyle: cleanText(visualSource.artStyle, 180),
+    palette: cleanText(visualSource.palette, 180),
+    lighting: cleanText(visualSource.lighting, 180),
+    cameraLanguage: cleanText(visualSource.cameraLanguage, 180),
+    texture: cleanText(visualSource.texture, 180),
+    compositionRules: cleanText(visualSource.compositionRules, 240)
+  };
+  const characterSource = raw.characterBible && typeof raw.characterBible === "object" ? raw.characterBible : null;
+  const characterBible = characterSource ? {
+    name: cleanText(characterSource.name, 80),
+    type: cleanText(characterSource.type, 100),
+    silhouette: cleanText(characterSource.silhouette, 180),
+    face: cleanText(characterSource.face, 180),
+    hairOrFur: cleanText(characterSource.hairOrFur, 180),
+    outfit: cleanText(characterSource.outfit, 180),
+    colors: cleanText(characterSource.colors, 140),
+    accessories: cleanText(characterSource.accessories, 140),
+    personality: cleanText(characterSource.personality, 140),
+    continuityRules: Array.isArray(characterSource.continuityRules)
+      ? characterSource.continuityRules.slice(0, 8).map(item => cleanText(item, 160)).filter(Boolean)
+      : []
+  } : null;
   let scenes = rawScenes.map((source, index) => {
     const scene = source && typeof source === "object" ? source : {};
     const text = cleanText(scene.text || scene.onScreenText, 180);
@@ -224,6 +253,8 @@ export function normalizeVideoPlan(raw, sourcePrompt) {
     musicDirection: cleanText(raw.musicDirection, 240),
     soundEffects: raw.soundEffects !== false,
     creativeBrief,
+    visualBible,
+    characterBible,
     scenes,
     totalDurationSeconds
   };

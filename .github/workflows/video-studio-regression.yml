@@ -38,8 +38,12 @@ jobs:
           node --check video-studio/renderer.js
           node --check video-studio/media/voiceover.js
           node --check video-studio/media/stock-footage.js
+          node --check video-studio/media/comfyui.js
+          node --check video-studio/media/ai-video.js
           node --check video-studio/media/pipeline.js
+          node --check video-studio/whatsapp.js
+          node --check plugins/owner/remotion.js
       - name: Compile the Remotion JSX entrypoint
         run: npx -y esbuild@0.25.0 video-studio/remotion/index.jsx --bundle --platform=browser --external:react --external:remotion --outfile=/tmp/video-studio-entry-check.js
       - name: Run Video Studio regression tests
-        run: node --test tests/video-studio.test.js tests/video-studio-media.test.js tests/video-studio-tunnel.test.js
+        run: node --test tests/video-studio.test.js tests/video-studio-media.test.js tests/video-studio-tunnel.test.js tests/remotion-whatsapp.test.js
