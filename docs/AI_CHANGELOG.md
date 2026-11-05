@@ -1,3 +1,14 @@
+## 2026-11-05 — Remotion WhatsApp owner-only prompt-to-video
+
+- **Permintaan:** mengganti generator video lama dengan workflow Remotion native Linux yang dapat dijalankan dari WhatsApp melalui `.remotion`, dilengkapi menu interaktif dan pembatasan owner.
+- **Perubahan:** membuat plugin `plugins/owner/remotion.js` dengan menu native-flow dan fallback teks, prompt session, storyboard planner, antrean render, notifikasi tahap/progres, riwayat, status, pemeriksaan provider, pengiriman ulang, dan pengiriman MP4 memakai uploader disk-streaming yang sudah ada. Prompt session dihubungkan sebelum loop plugin normal dan hanya menerima pesan teks dari owner yang memulai sesi.
+- **Penghapusan sistem lama:** `plugins/ai/aivideo.js` (FreeTheAI) dihapus; variabel FREETHEAI di `.env.example` dan pemeriksaan sintaks lama di `package.json` dibuang.
+- **Kualitas kreatif:** planner sekarang menyusun visual bible dan character bible; validator/compiler mempertahankan data tersebut dan ComfyUI AI footage memasukkannya ke prompt scene. Identitas karakter lintas klip tetap best-effort karena adapter belum mengirim reference image per job.
+- **Skills dan dokumentasi:** menambahkan `alvareth-ai-video-production`, panduan deployment Linux, dan dokumentasi perintah WhatsApp; mempertahankan LightJurnal Video Studio API.
+- **Tes:** ditambahkan `tests/remotion-whatsapp.test.js` dan regresi character/visual bible di `tests/video-studio.test.js`. Tes pada branch ini belum dijalankan di Linux/VPS; status CI, dependency install, tombol WhatsApp live, provider API, dan render MP4 produksi masih harus diverifikasi.
+- **Pelajaran regresi:** jangan mengklaim karakter konsisten, voice-over AI, footage AI, atau musik AI aktif hanya karena ada skill atau workflow file. Periksa konfigurasi provider dan hasil render nyata; ComfyUI, ElevenLabs, dan Pexels bersifat opsional.
+- **Referensi:** branch `feat/remotion-whatsapp-linux`.
+
 ## 2026-11-04 — Updater mendukung lebih dari 300 file berubah
 
 - **Permintaan/gejala:** perintah `.update` membatalkan sinkronisasi dengan pesan “Ada 300 atau lebih file berubah sejak baseline”, meskipun daftar perubahan lebih besar dari batas tersebut.
