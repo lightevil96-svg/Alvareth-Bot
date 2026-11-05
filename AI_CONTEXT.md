@@ -13,7 +13,7 @@
 
 - 2026-11-05: Generator lama FreeTheAI `plugins/ai/aivideo.js` dihapus dan variabel FREETHEAI dibuang dari `.env.example`. Remotion tetap memakai Node.js, Chromium/Remotion, FFmpeg/FFprobe, dan Linux native; Android/Termux tutorial steps tidak dipakai.
 
-- 2026-11-05: Prompt planner/compiler/validator sekarang membawa visual bible dan recurring character bible sampai ke ComfyUI AI footage prompt. Text-level identity repetition meningkatkan continuity tetapi tidak menjamin karakter identik antar-klip; adapter reference-image per job belum tersedia. ComfyUI video/music, ElevenLabs voice-over, dan Pexels footage opsional sesuai credentials/workflows.
+- 2026-11-05: Prompt planner/compiler/validator sekarang membawa visual bible dan recurring character bible sampai ke ComfyUI AI footage prompt. ComfyUI kini dapat membuat satu character reference image per job melalui image workflow dan mengunggahnya ke image-to-video workflow lewat {{REFERENCE_IMAGE}}; konsistensi karakter meningkat tetapi tetap perlu diverifikasi. ComfyUI video/music, ElevenLabs voice-over, dan Pexels footage opsional sesuai credentials/workflows.
 
 - 2026-11-05: Skill `alvareth-ai-video-production` dan dokumen `docs/REMOTION_WHATSAPP_LINUX.md` ditambahkan. Tes command helper dan continuity bible dibuat; jalankan npm test, install dependency, serta live WhatsApp/ComfyUI/ElevenLabs/render checks sebelum merge/deploy.
 
