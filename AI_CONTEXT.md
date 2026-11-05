@@ -202,3 +202,5 @@ Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes n
 - Do not claim deployment is complete until dependency installation, health check, authenticated limits request, and a real short MP4 render have succeeded on the user's Pterodactyl instance.
 
 Current media invariant: local numerical loopback URLs, redirects rejected, no hosted AI fallback. VoxCPM2 Python source pinned; model must be local. Single bot worker only. SFX time uses Scene startFrame (including transition handle), not speechStartFrame. Validator must retain music/caption metadata and up to 60 voice tracks.
+
+- 2026-11-06: Added a rootless Pterodactyl/Linux bootstrap using uv-managed Python 3.11 and a user-local Ollama binary; setup details are in docs/REMOTION_WHATSAPP_LINUX.md.

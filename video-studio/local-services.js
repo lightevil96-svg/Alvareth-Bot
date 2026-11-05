@@ -17,8 +17,11 @@ export function getLocalVideoServiceConfig(env = process.env) {
   const voxUrl = String(env.VIDEO_STUDIO_VOXCPM_URL || DEFAULT_VOXCPM_URL).trim();
   const modelPath = resolve(String(env.VOXCPM_MODEL_PATH || join(homedir(), "alvareth-models", "VoxCPM2")));
   const pythonPath = resolve(String(env.VIDEO_STUDIO_VOXCPM_PYTHON || join(ROOT, ".venv-voxcpm", "bin", "python")));
+  const userLocalOllama = join(homedir(), ".local", "bin", "ollama");
+  const ollamaBin = String(env.VIDEO_STUDIO_OLLAMA_BIN || (existsSync(userLocalOllama) ? userLocalOllama : "ollama")).trim();
   return {
     ollamaUrl,
+    ollamaBin,
     ollamaModel: String(env.VIDEO_STUDIO_OLLAMA_MODEL || DEFAULT_OLLAMA_MODEL).trim(),
     voxUrl,
     modelPath,
@@ -161,14 +164,14 @@ async function inspectOllama(config, env, waitMs) {
   let probe = await requestJson(endpoint);
   let launch = null;
   if (!probe.reachable && config.autoStart) {
-    if (!commandWorks("ollama", ["--version"])) {
+    if (!commandWorks(config.ollamaBin, ["--version"])) {
       return {
         ready: false, reachable: false, model: config.ollamaModel,
         detail: "Ollama tidak merespons dan binary ollama tidak ditemukan. Instal Ollama di Linux, lalu jalankan: ollama pull " + config.ollamaModel + "."
       };
     }
     const url = new URL(config.ollamaUrl);
-    launch = launchManaged("Ollama", "ollama", ["serve"], buildLocalServiceEnvironment("ollama", env, {
+    launch = launchManaged("Ollama", config.ollamaBin, ["serve"], buildLocalServiceEnvironment("ollama", env, {
       OLLAMA_HOST: url.host,
       OLLAMA_NO_CLOUD: "1"
     }));

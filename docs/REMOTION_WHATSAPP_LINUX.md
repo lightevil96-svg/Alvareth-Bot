@@ -80,6 +80,37 @@ If infrastructure cannot run speech, an operator may explicitly set `VIDEO_STUDI
 
 The repository updater defaults to main. On a staging checkout, set `AUTO_UPDATE_ENABLED=false` before starting so development testing is not replaced by production branch updates. Do not change a live VPS updater without an explicit deployment decision.
 
+## Pterodactyl / container tanpa akses root
+
+Jika console hosting menunjukkan path seperti `/home/container` dan `apt install` tidak bisa dijalankan, jangan gunakan instruksi `sudo apt` atau `python3 -m venv` biasa. Jalankan bootstrap user-space dari root repository:
+
+```bash
+bash scripts/setup-video-studio-linux.sh
+```
+
+Script ini:
+- memasang binary resmi Ollama di `$HOME/.local` tanpa sudo/systemd;
+- memasang `uv` sebagai binary mandiri, lalu mengunduh Python 3.11 terkelola;
+- membuat ulang hanya folder virtualenv proyek `.venv-voxcpm`, tanpa bergantung pada Debian `ensurepip`;
+- memasang PyTorch dan dependensi VoxCPM2 yang dipin di `requirements.txt`;
+- mendeteksi GPU NVIDIA yang terlihat dari container dan menampilkan status CUDA.
+
+Untuk sekaligus mengunduh bobot model (unduhan besar dan memakai disk), jalankan:
+
+```bash
+bash scripts/setup-video-studio-linux.sh --with-models
+```
+
+Jika memilih build PyTorch CUDA, tentukan index yang cocok dengan driver host dari selector resmi PyTorch sebelum menjalankan script, misalnya:
+
+```bash
+VOXCPM_TORCH_INDEX_URL='https://download.pytorch.org/whl/<build-yang-cocok>' bash scripts/setup-video-studio-linux.sh
+```
+
+Jangan menyalin placeholder `<build-yang-cocok>` secara literal. Pilih perintah yang sesuai dengan driver/GPU di [PyTorch Start Locally](https://pytorch.org/get-started/locally/). Jika tidak ada GPU NVIDIA yang terlihat, script memilih PyTorch CPU; VoxCPM2 2B pada CPU bisa sangat lambat dan tidak direkomendasikan untuk produksi. Container harus mengizinkan binary execution, koneksi HTTPS keluar, proses background, serta menyediakan RAM dan disk yang cukup. Instalasi user-space tidak dapat menambahkan GPU ke container jika provider tidak melakukan GPU passthrough.
+
+Setelah bootstrap selesai, restart bot dan jalankan `.remotion services`. Ollama otomatis ditemukan di `$HOME/.local/bin/ollama`; bila panel membutuhkan environment path eksplisit, salin nilai `VIDEO_STUDIO_OLLAMA_BIN` yang dicetak script ke Startup Variables. Folder `.venv-voxcpm` dan model harus berada di storage persisten container.
+
 ## Automatic local service startup
 
 The bot now attempts to start the local services when you run `.remotion services` or generate a video. It starts `ollama serve` only when the Ollama binary is installed and the loopback endpoint is not responding. It starts the VoxCPM2 adapter only when the Python virtualenv, adapter file and local VoxCPM2 model are present. It does not install packages, download model weights, or call a hosted provider.

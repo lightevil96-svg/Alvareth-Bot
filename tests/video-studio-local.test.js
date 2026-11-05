@@ -32,6 +32,7 @@ test('local services have usable loopback defaults and validate model health pay
   const config = getLocalVideoServiceConfig({});
   assert.equal(config.ollamaUrl, 'http://127.0.0.1:11434');
   assert.equal(config.ollamaModel, 'qwen2.5:7b');
+  assert.equal(getLocalVideoServiceConfig({ VIDEO_STUDIO_OLLAMA_BIN: '/home/container/.local/bin/ollama' }).ollamaBin, '/home/container/.local/bin/ollama');
   assert.equal(config.voxUrl, 'http://127.0.0.1:7861');
   assert.match(config.modelPath, /alvareth-models[\\/]VoxCPM2$/);
   assert.equal(config.autoStart, true);
