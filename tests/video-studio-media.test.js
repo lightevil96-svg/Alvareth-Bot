@@ -126,3 +126,20 @@ test("rejects WAN model nodes from ComfyUI workflows", () => {
     "1": { class_type: "CogVideoXLoader", inputs: { model: "cogvideox-2b.safetensors" } }
   }));
 });
+
+test("parses the official VoxCPM2 TimestampResult items schema", () => {
+  const words = extractVoxCpmWords({
+    audio_path: "output_001.wav",
+    sample_rate: 48000,
+    backend: "stable-ts",
+    level: "word",
+    text: "Halo dunia.",
+    items: [
+      { text: "Halo", start: 0.12, end: 0.48, level: "word" },
+      { text: "dunia.", start: 0.55, end: 1.08, level: "word" }
+    ]
+  });
+  assert.deepEqual(words.map(item => item.text), ["Halo", "dunia."]);
+  assert.equal(words[0].startSeconds, 0.12);
+  assert.equal(words[1].endSeconds, 1.08);
+});
