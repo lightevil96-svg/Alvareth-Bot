@@ -18,7 +18,9 @@ const VIDEO_SYSTEM_PROMPT = [
   "If the story has a recurring character, return a structured characterBible with stable identity traits: name, species/type, silhouette, face, hair/fur, outfit, colors, accessories, personality, and continuityRules. Keep these traits unchanged in every scene.",
   "Repeat relevant character identity and visualBible details inside each selected aiVideoPrompt so separately generated clips have the strongest possible text-level continuity. Describe action and camera motion separately from immutable identity traits.",
   "Prefer a reference-image/image-to-video workflow when a character reference asset is actually supplied and the configured ComfyUI workflow supports that input. Do not claim identity locking from text prompts or a shared seed alone.",
-  "Audio direction must distinguish voice-over, background music, ambience, and event-driven sound effects. Keep the voice intelligible, music below speech, and avoid random effects on every cut.",
+  "Audio direction must distinguish VoxCPM2 voice-over from event-driven sound effects. Background music is OPTIONAL: set musicStyle to none unless the user explicitly supplies a music asset or specifically requests music; never invent a default soundtrack.",
+  "Sound design is event-based, not one generic effect per scene. Return a soundEvents array per scene with up to 5 objects {cue, delaySeconds, intensity}. Anchor each delaySeconds to the exact visible action within that scene. Use a fitting cue for a button press, card reveal, swipe, footsteps, object landing, impact, water splash, typing, camera shutter, or magical reveal. Do not add sound to static scenes or every transition just to fill silence.",
+  "Use a deliberate sound vocabulary: whoosh for a fast spatial move, swipe for a wipe/slide, click for a UI action, pop for a small reveal, impact/thud for a collision or landing, footstep for walking, sparkle for a magical reveal, riser for anticipation, typing for keyboard activity, water for a splash, drop for a falling droplet, and camera for a shutter. Keep effects short, varied, and mixed below narration.",
   "Choose a subtle background treatment (orbs, particles, grid, waves, dots, vignette, none), camera movement (push-in, pull-out, pan, tilt, drift, static), and color grade based on the footage and story. Keep motion varied and purposeful; avoid repeating the same movement across adjacent scenes.",
   "Use a caption treatment suited to the content: tiktok, karaoke, subtitle, pop, typewriter, highlight, or wave. Caption styling is an editorial decision, not a user setting.",
   "For process or concept videos, use a diagram with clearly named nodes and valid connections. For product explainers, use a believable interface mockup. For data scenes, only visualize numbers explicitly supplied in the prompt; never invent data, sources, or chart values.",
@@ -27,16 +29,16 @@ const VIDEO_SYSTEM_PROMPT = [
   "Infer platform and aspect ratio from the prompt. Use vertical 9:16 for Reels, TikTok, and Shorts; horizontal 16:9 for conventional YouTube or landscape presentations; square 1:1 only when requested or clearly appropriate.",
   "Infer frame rate from the creative need and platform. Use only 24, 25, or 30 FPS.",
   "For a short-form video without an explicit duration, choose a natural length based on the story rather than padding it. For a longer explainer, use only as many scenes as needed.",
-  "When real-world imagery materially improves a scene, provide stockSearchQuery as a concise English search phrase (2–6 concrete words) describing the visible subject or action. Leave it empty only for intentionally typographic, abstract, or data-led scenes. Never request copyrighted characters, named celebrities, or a specific creator's footage.",
-  "For only the most important hero or establishing scenes, you may set generateAiFootage=true and write a detailed aiVideoPrompt for a locally configured open-source text-to-video workflow. Do not set it on every scene. If no local model is configured, the renderer will fall back to stock footage or motion graphics.",
+  "When real-world imagery materially improves a scene, describe the needed shot in visualDescription and aiVideoPrompt. Do not depend on external stock-footage APIs. Never request copyrighted characters, named celebrities, or a specific creator's footage.",
+  "For only the most important hero or establishing scenes, you may set generateAiFootage=true and write a detailed aiVideoPrompt for a locally configured open-source ComfyUI video workflow. Never specify WAN. Prefer a model whose code and weights have a clearly compatible open license, such as CogVideoX-2B (Apache-2.0 weights); if no local model is configured, use designed motion graphics and character reference imagery rather than a paid stock API.",
   "visualDescription explains the intended visual in natural language; stockSearchQuery is a separate practical search phrase for a licensed stock-footage library.",
   "Do not claim that stock footage, real-world footage, 3D assets, or uploaded media already exist. The render pipeline may search a configured licensed stock library and will fall back to motion graphics when no suitable clip is found.",
   "Return these fields: title, language, category, ratio, fps, targetDurationSeconds (number or null), musicStyle, musicDirection, captionStyle, soundEffects, creativeBrief, visualBible, characterBible, scenes.",
   "Allowed captionStyle: tiktok, karaoke, subtitle, pop, typewriter, highlight, wave. Choose one automatically; never ask the user to configure it.",
   "Allowed category: educational, explainer, product, story, announcement, tutorial, documentary, finance, other.",
-  "Allowed musicStyle: cinematic, upbeat, calm, none.",
+  "Allowed musicStyle: cinematic, upbeat, calm, none. Default to none; music is never required.",
   "creativeBrief fields: coreMessage, hook, tone, visualDirection, ending. visualBible fields: artStyle, palette, lighting, cameraLanguage, texture, compositionRules. characterBible fields: name, type, silhouette, face, hairOrFur, outfit, colors, accessories, personality, continuityRules (array). Use null for characterBible when no recurring character is needed.",
-  "Each scene fields: id, purpose, durationSeconds, layout, visualType, backgroundEffect, cameraMotion, colorGrade, motif, motion, transition, kicker, text, highlight, subtext, points, narration, visualDescription, stockSearchQuery, generateAiFootage, aiVideoPrompt, chartTitle, chartUnit, chartSource, chartData, diagramNodes, diagramEdges, appMockup, notifications, callouts, background, accent, soundCue, soundIntensity.",
+  "Each scene fields: id, purpose, durationSeconds, layout, visualType, backgroundEffect, cameraMotion, colorGrade, motif, motion, transition, kicker, text, highlight, subtext, points, narration, visualDescription, generateAiFootage, aiVideoPrompt, chartTitle, chartUnit, chartSource, chartData, diagramNodes, diagramEdges, appMockup, notifications, callouts, background, accent, soundCue, soundEvents, soundIntensity.",
   "Allowed visualType: cinematic, kinetic, editorial, data-chart, diagram, app-mockup, waveform.",
   "Allowed backgroundEffect: none, orbs, particles, grid, waves, dots, vignette.",
   "Allowed cameraMotion: static, push-in, pull-out, pan-left, pan-right, tilt-up, tilt-down, drift.",
@@ -46,7 +48,8 @@ const VIDEO_SYSTEM_PROMPT = [
   "Allowed motif: rings, orbit, wave, grid, bars, ribbon, spark, none.",
   "Allowed motion: fade-up, scale-in, slide-left, slide-right, reveal, float, count-up.",
   "Allowed transition: cut, fade, crossfade, wipe, wipe-left, wipe-right, wipe-up, wipe-down, slide, slide-left, slide-right, slide-up, slide-down, zoom, glitch, dissolve, flash, dip-to-black.",
-  "Allowed soundCue: none, whoosh, pop, impact.",
+  "Allowed soundCue: none, whoosh, swipe, pop, impact, click, footstep, thud, sparkle, riser, typing, water, drop, camera.",
+  "soundEvents is an array of {cue, delaySeconds, intensity}; use 0–5 meaningful events per scene and an empty array when silence is more appropriate. Do not use soundCue as a substitute for a timed event list.",
   "Use 1 to 4 short points only for a genuine list or sequence. Use an empty array otherwise.",
   "Use valid six-digit hexadecimal colors for background and accent. Make them cohesive, legible, and appropriate to the subject.",
   "Keep each on-screen text short, each subtext concise, and narration natural. Return no more than 60 scenes and no more than 300 seconds total.",
@@ -152,7 +155,7 @@ export function normalizeVideoPlan(raw, sourcePrompt) {
   const language = cleanText(raw.language, 12) || "id";
   const ratio = pick(raw.ratio, ALLOWED.ratio, /youtube|landscape|horizontal|presentasi/i.test(prompt) ? "16:9" : "9:16");
   const fps = ALLOWED.fps.includes(Number(raw.fps)) ? Number(raw.fps) : 30;
-  const musicStyle = pick(raw.musicStyle, ALLOWED.musicStyle, category === "story" ? "cinematic" : category === "educational" ? "calm" : "upbeat");
+  const musicStyle = pick(raw.musicStyle, ALLOWED.musicStyle, "none");
   const captionStyle = pick(raw.captionStyle, ALLOWED.captionStyle, category === "documentary" || category === "educational" ? "subtitle" : "tiktok");
   const creativeBrief = {
     coreMessage: cleanText(raw.creativeBrief && raw.creativeBrief.coreMessage, 300) || title,
@@ -212,7 +215,7 @@ export function normalizeVideoPlan(raw, sourcePrompt) {
       points,
       narration,
       visualDescription: cleanText(scene.visualDescription, 400),
-      stockSearchQuery: cleanText(scene.stockSearchQuery, 100),
+      stockSearchQuery: "",
       generateAiFootage: scene.generateAiFootage === true,
       aiVideoPrompt: cleanText(scene.aiVideoPrompt, 1800),
       visualType: pick(scene.visualType, ALLOWED.visualType, scene.layout === "stat" ? "data-chart" : scene.layout === "steps" ? "diagram" : "cinematic"),
@@ -231,7 +234,12 @@ export function normalizeVideoPlan(raw, sourcePrompt) {
       soundIntensity: Math.max(0, Math.min(1, Number(scene.soundIntensity ?? 0.55))),
       background,
       accent,
-      soundCue: pick(scene.soundCue, ALLOWED.soundCue, index === 0 ? "whoosh" : "none")
+      soundCue: pick(scene.soundCue, ALLOWED.soundCue, "none"),
+      soundEvents: Array.isArray(scene.soundEvents) ? scene.soundEvents.slice(0, 5).map(event => ({
+        cue: pick(event && event.cue, ALLOWED.soundCue.filter(cue => cue !== "none"), "whoosh"),
+        delaySeconds: Math.max(0, Math.min(Math.max(0, durationSeconds - 0.05), Number(event && event.delaySeconds) || 0)),
+        intensity: Math.max(0.05, Math.min(1, Number(event && event.intensity ?? scene.soundIntensity ?? 0.55)))
+      })) : []
     };
   });
   const requested = Number(raw.targetDurationSeconds) > 0 ? Number(raw.targetDurationSeconds) : inferRequestedDuration(prompt);
@@ -280,40 +288,35 @@ async function fetchJson(url, options, timeoutMs) {
   }
 }
 async function requestOpenAICompatible(prompt, apiKey) {
-  const base = String(process.env.VIDEO_STUDIO_AI_BASE_URL || "https://api.openai.com/v1").trim().replace(/\/+$/, "");
+  const base = String(process.env.VIDEO_STUDIO_AI_BASE_URL || "http://127.0.0.1:11434/v1").trim().replace(/\/+$/, "");
   const endpoint = /\/chat\/completions$/i.test(base) ? base : base + "/chat/completions";
-  const model = String(process.env.VIDEO_STUDIO_AI_MODEL || "gpt-4.1-mini").trim();
+  const model = String(process.env.VIDEO_STUDIO_AI_MODEL || "qwen3:8b").trim();
   const payload = {
     model,
-    temperature: 0.75,
+    temperature: 0.7,
     response_format: { type: "json_object" },
+    think: false,
+    stream: false,
     messages: [
       { role: "system", content: VIDEO_SYSTEM_PROMPT },
       { role: "user", content: prompt }
     ]
   };
+  const headers = { "content-type": "application/json", accept: "application/json" };
+  if (apiKey) headers.authorization = "Bearer " + apiKey;
   const json = await fetchJson(endpoint, {
     method: "POST",
-    headers: { authorization: "Bearer " + apiKey, "content-type": "application/json", accept: "application/json" },
+    headers,
     body: JSON.stringify(payload)
   }, Number(process.env.VIDEO_STUDIO_AI_TIMEOUT_MS) || 90000);
   const content = json && json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.content;
-  if (!content) throw new Error("AI provider tidak mengembalikan isi storyboard.");
+  if (!content) throw new Error("Local Ollama model tidak mengembalikan storyboard. Periksa model dan endpoint Ollama.");
   return content;
-}
-async function requestExistingFallback(prompt) {
-  const endpoint = String(process.env.VIDEO_STUDIO_AI_FALLBACK_URL || "https://api-faa.my.id/faa/gpt-promt").trim();
-  const url = new URL(endpoint);
-  url.searchParams.set("prompt", VIDEO_SYSTEM_PROMPT);
-  url.searchParams.set("text", prompt);
-  const json = await fetchJson(url.toString(), { method: "GET", headers: { accept: "application/json" } }, Number(process.env.VIDEO_STUDIO_AI_TIMEOUT_MS) || 90000);
-  if (!json || !json.status || !json.result) throw new Error("Layanan AI fallback tidak memberikan hasil.");
-  return json.result;
 }
 export async function planVideoPrompt(prompt) {
   const sourcePrompt = cleanText(prompt, 6000);
   if (sourcePrompt.length < 8) { const error = new Error("Jelaskan video yang ingin dibuat dengan sedikit lebih lengkap."); error.statusCode = 400; throw error; }
-  const apiKey = String(process.env.VIDEO_STUDIO_AI_API_KEY || process.env.OPENAI_API_KEY || "").trim();
-  const content = apiKey ? await requestOpenAICompatible(sourcePrompt, apiKey) : await requestExistingFallback(sourcePrompt);
+  const apiKey = String(process.env.VIDEO_STUDIO_AI_API_KEY || "").trim();
+  const content = await requestOpenAICompatible(sourcePrompt, apiKey);
   return normalizeVideoPlan(parseJsonResponse(content), sourcePrompt);
 }
