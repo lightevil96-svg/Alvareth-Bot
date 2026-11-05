@@ -1,3 +1,4 @@
+import { buildSoundClips } from "./sound-design.js";
 const MUSIC_BPM = Object.freeze({ cinematic: 82, upbeat: 112, calm: 76, none: 0 });
 const TRANSITION_BEATS = Object.freeze({
   cut: 0,
@@ -94,16 +95,7 @@ export function buildTimelineTracks(project, fps = project?.fps || 30) {
     caption
   }));
 
-  const sfxClips = videoClips.filter(clip => clip.scene.soundCue && clip.scene.soundCue !== "none").map(clip => ({
-    id: "sfx-" + clip.id,
-    trackId: "audio-sfx",
-    type: "audio",
-    role: "sound-effect",
-    cue: clip.scene.soundCue,
-    startFrame: clip.speechStartFrame,
-    durationInFrames: Math.max(1, Math.round(safeFps * 0.8)),
-    volume: clamp(Number(clip.scene.soundIntensity ?? 0.55), 0, 1)
-  }));
+  const sfxClips = project.soundEffects === false ? [] : buildSoundClips(videoClips, safeFps, voiceClips);
 
   const musicClips = project?.musicTrackSrc ? [{
     id: "music-generated",
@@ -114,17 +106,7 @@ export function buildTimelineTracks(project, fps = project?.fps || 30) {
     startFrame: 0,
     durationInFrames: cursor,
     volume: clamp(Number(project.musicVolume ?? 0.16), 0, 0.5)
-  }] : [{
-    id: "music-bed",
-    trackId: "audio-music",
-    type: "audio",
-    role: "music",
-    src: project?.musicStyle || "cinematic",
-    startFrame: 0,
-    durationInFrames: cursor,
-    volume: clamp(Number(project.musicVolume ?? 0.16), 0, 0.5)
-  }];
-
+  }] : [];
   const overlayClips = videoClips.flatMap(clip => {
     const notifications = Array.isArray(clip.scene.notifications) ? clip.scene.notifications : [];
     const callouts = Array.isArray(clip.scene.callouts) ? clip.scene.callouts : [];
@@ -134,7 +116,7 @@ export function buildTimelineTracks(project, fps = project?.fps || 30) {
         trackId: "overlay-ui",
         type: "overlay",
         role: "notification",
-        startFrame: clip.speechStartFrame + Math.round(Number(item.delaySeconds || 0) * safeFps),
+        startFrame: clip.startFrame + Math.round(Number(item.delaySeconds || 0) * safeFps),
         durationInFrames: Math.max(1, Math.round(Number(item.durationSeconds || 2.6) * safeFps)),
         data: item
       })),
@@ -143,7 +125,7 @@ export function buildTimelineTracks(project, fps = project?.fps || 30) {
         trackId: "overlay-ui",
         type: "overlay",
         role: "callout",
-        startFrame: clip.speechStartFrame + Math.round(Number(item.delaySeconds || 0) * safeFps),
+        startFrame: clip.startFrame + Math.round(Number(item.delaySeconds || 0) * safeFps),
         durationInFrames: Math.max(1, Math.round(Number(item.durationSeconds || 2) * safeFps)),
         data: item
       }))
@@ -155,7 +137,7 @@ export function buildTimelineTracks(project, fps = project?.fps || 30) {
     cursor,
     ...videoClips.map(clip => clip.endFrame),
     ...voiceClips.map(clip => clip.startFrame + clip.durationInFrames),
-    ...overlayClips.map(clip => clip.startFrame + clip.durationInFrames)
+    ...captionClips.map(clip => clip.endFrame)
   );
 
   return {

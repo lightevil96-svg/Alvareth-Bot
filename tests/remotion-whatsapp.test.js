@@ -73,8 +73,7 @@ test("reports optional media providers as unconfigured without secrets", () => {
 
 test("recognizes configured voice and ComfyUI workflow files", () => {
   const status = getRemotionProviderReadiness({
-    VIDEO_STUDIO_ELEVENLABS_API_KEY: "test-key",
-    VIDEO_STUDIO_ELEVENLABS_VOICE_ID: "voice-id",
+    VIDEO_STUDIO_VOXCPM_URL: "http://127.0.0.1:7861",
     VIDEO_STUDIO_COMFYUI_VIDEO_WORKFLOW_FILE: "/srv/workflows/video.json",
     VIDEO_STUDIO_COMFYUI_IMAGE_WORKFLOW_FILE: "/srv/workflows/image.json",
     VIDEO_STUDIO_COMFYUI_MUSIC_WORKFLOW_FILE: "/srv/workflows/music.json"
@@ -86,4 +85,36 @@ test("recognizes configured voice and ComfyUI workflow files", () => {
   assert.equal(status.find(item => item.name === "AI video footage").configured, true);
   assert.equal(status.find(item => item.name === "Character reference image").configured, true);
   assert.equal(status.find(item => item.name === "AI background music").configured, true);
+});
+
+// Actual plugin invocation with a fake transport: not a live WhatsApp test.
+test("plugin rejects every non-owner action and binds prompt sessions to their initiator", async t => {
+  const { mkdtemp, rm } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const dir = await mkdtemp(tmpdir() + '/remotion-wa-');
+  const old = process.env.ALVARETH_DATA_DIR;
+  process.env.ALVARETH_DATA_DIR = dir;
+  t.after(async () => { await rm(dir, {recursive:true,force:true}); old === undefined ? delete process.env.ALVARETH_DATA_DIR : process.env.ALVARETH_DATA_DIR = old; });
+  const {default: handler} = await import('../plugins/owner/remotion.js');
+  const replies=[], sent=[];
+  const m={chat:'test-chat',sender:'owner-a',reply:async text=>replies.push(text)};
+  const conn={sendMessage:async (...args)=>sent.push(args)};
+  for (const text of ['', 'generate', 'status', 'history', 'send id', 'services', 'guide', 'cancel', 'buatkan video kopi']) {
+    await handler(m,{conn,text,isROwner:false});
+    assert.match(replies.at(-1),/hanya untuk owner/);
+  }
+  assert.equal(sent.length,0);
+  await handler(m,{conn,text:'',isROwner:true,usedPrefix:'!'});
+  assert.equal(sent[0][1].nativeFlow[0].sections[0].rows.length,7);
+  assert.equal(sent[0][1].nativeFlow[0].sections[0].rows[0].id,'!remotion generate');
+  await handler(m,{conn,text:'generate',isROwner:true});
+  assert.equal(global.__alvarethRemotionSessions.get(m.chat).sender,'owner-a');
+  assert.equal(await global.__alvarethRemotionPromptHandler({...m,sender:'intruder',text:'Buatkan video kopi'},{conn,isROwner:false}),false);
+  assert.equal(await global.__alvarethRemotionPromptHandler({...m,sender:'owner-b',text:'Buatkan video kopi'},{conn,isROwner:true}),false);
+  await handler({...m,sender:'owner-b'},{conn,text:'cancel',isROwner:true});
+  assert.equal(global.__alvarethRemotionSessions.has(m.chat),true);
+  await handler(m,{conn,text:'cancel',isROwner:true});
+  assert.equal(global.__alvarethRemotionSessions.has(m.chat),false);
+  for (const text of ['status','history','send','guide']) await handler(m,{conn,text,isROwner:true});
+  assert.ok(replies.some(text=>/Riwayat video masih kosong/.test(text)));
 });

@@ -9,11 +9,12 @@
 
 ## Pembaruan terbaru
 
+- 2026-11-06: Branch feat/remotion-whatsapp-linux migrates media to loopback Ollama + VoxCPM2, fixes audio serialization/timing, adds event SFX and authorization regression tests. See docs/REMOTION_AUDIT_2026-11-06.md for actual verification; earlier hosted-provider entries below are historical and superseded.
+
 - 2026-11-05: Branch `feat/remotion-whatsapp-linux` menambahkan fitur owner-only `.remotion` pada WhatsApp. Plugin `plugins/owner/remotion.js` memakai Video Studio planner/compiler/queue/renderer yang sudah ada, menu native-flow dengan fallback teks, prompt session, status/progres, riwayat, resend, provider readiness, dan uploader MP4 disk-streaming. Prompt session di-route sebelum plugin normal hanya untuk owner yang memulai sesi.
 
 - 2026-11-05: Generator lama FreeTheAI `plugins/ai/aivideo.js` dihapus dan variabel FREETHEAI dibuang dari `.env.example`. Remotion tetap memakai Node.js, Chromium/Remotion, FFmpeg/FFprobe, dan Linux native; Android/Termux tutorial steps tidak dipakai.
 
-- 2026-11-05: Prompt planner/compiler/validator sekarang membawa visual bible dan recurring character bible sampai ke ComfyUI AI footage prompt. ComfyUI kini dapat membuat satu character reference image per job melalui image workflow dan mengunggahnya ke image-to-video workflow lewat {{REFERENCE_IMAGE}}; konsistensi karakter meningkat tetapi tetap perlu diverifikasi. ComfyUI video/music, ElevenLabs voice-over, dan Pexels footage opsional sesuai credentials/workflows.
 
 - 2026-11-05: Skill `alvareth-ai-video-production` dan dokumen `docs/REMOTION_WHATSAPP_LINUX.md` ditambahkan. Tes command helper dan continuity bible dibuat; jalankan npm test, install dependency, serta live WhatsApp/ComfyUI/ElevenLabs/render checks sebelum merge/deploy.
 
@@ -102,10 +103,8 @@ Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes n
 
 - LightJurnal now submits one natural-language prompt. The AI planner in video-studio/prompt/planner.js creates a structured creative brief and storyboard; video-studio/prompt/compile.js safely compiles it to the validated Remotion schema.
 - Authenticated POST /api/video-studio/plan returns the plan. POST /api/video-studio/jobs accepts the validated plan (legacy manual payloads remain supported for compatibility).
-- The planner prefers an OpenAI-compatible text model configured through VIDEO_STUDIO_AI_API_KEY, VIDEO_STUDIO_AI_BASE_URL, and VIDEO_STUDIO_AI_MODEL. If no key is configured, it tries the existing API-Faa GPT-prompt service as a best-effort fallback. The LightJurnal browser never receives model credentials.
 - Creative decisions are inferred: scene count and timing, aspect ratio, FPS, palette, layout, motion, transitions, music mood, and sound cues. Current render limits are 60 scenes, 20 seconds per scene, and 300 seconds total.
 - video-studio/remotion/Composition.jsx supports varied hero/editorial/split/stat/quote/steps/outro layouts, animated geometric motifs, motion presets, a scene progress indicator, music fades, and allowlisted sound cues.
-- Honest capability boundary: narration is planned as script metadata but is not yet synthesized into spoken audio. The renderer does not yet fetch stock footage, create AI-generated video assets, or render photorealistic/3D footage. Current output is designed motion graphics with procedural music and selected SFX.
 - Do not reintroduce manual creative settings in the LightJurnal UI. Keep only the single prompt field; API connection credentials are infrastructure settings, not creative controls.
 
 
@@ -196,3 +195,5 @@ Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes n
 - Video Studio API creates a 256-bit random API key on first startup when `VIDEO_STUDIO_API_KEY` is not set. It persists at `~/.alvareth-bot-data/video-studio/api-key` (or under `ALVARETH_DATA_DIR`) with mode 0600. Do not commit this file or disclose its contents in logs/chat.
 - LightJurnal still requires a public HTTPS URL and the generated key in the browser session. A raw Pterodactyl TCP allocation is not automatically HTTPS; configure a reverse proxy or Cloudflare Tunnel before calling the deployment live.
 - Do not claim deployment is complete until dependency installation, health check, authenticated limits request, and a real short MP4 render have succeeded on the user's Pterodactyl instance.
+
+Current media invariant: local numerical loopback URLs, redirects rejected, no hosted AI fallback. VoxCPM2 Python source pinned; model must be local. Single bot worker only. SFX time uses Scene startFrame (including transition handle), not speechStartFrame. Validator must retain music/caption metadata and up to 60 voice tracks.

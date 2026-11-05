@@ -6,6 +6,7 @@ export function compileVideoPlan(plan) {
   }
   const project = {
     title: plan.title,
+    language: plan.language,
     mode: "professional",
     ratio: plan.ratio,
     fps: plan.fps,

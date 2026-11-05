@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildCaptionGroups, splitVoiceoverChunks } from "../video-studio/media/voiceover.js";
-import { chooseVideoFile } from "../video-studio/media/stock-footage.js";
 import { validateVideoProject } from "../video-studio/validate.js";
 import { applyComfyWorkflowVariables } from "../video-studio/media/comfyui.js";
 
@@ -30,17 +29,6 @@ test("splits voiceover into scene-aligned provider requests", () => {
   assert.equal(chunks[0].ranges[1].sceneIndex, 1);
   assert.equal(chunks[1].ranges[0].sceneIndex, 2);
   assert.equal(chunks[1].text, "Penutup video.");
-});
-
-test("selects a stock-video file whose aspect ratio matches the composition", () => {
-  const video = {
-    video_files: [
-      { file_type: "video/mp4", width: 1920, height: 1080, link: "https://videos.pexels.com/video-files/1/hd.mp4" },
-      { file_type: "video/mp4", width: 720, height: 1280, link: "https://videos.pexels.com/video-files/1/portrait.mp4" }
-    ]
-  };
-  assert.match(chooseVideoFile(video, "9:16").link, /portrait\.mp4$/);
-  assert.match(chooseVideoFile(video, "16:9").link, /hd\.mp4$/);
 });
 
 test("keeps generated media paths and synchronized captions in a validated project", () => {

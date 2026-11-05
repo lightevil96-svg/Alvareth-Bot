@@ -1,3 +1,4 @@
+import { localServiceUrl, localJson } from "../../video-studio/local-service.js";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -30,6 +31,8 @@ const sessions = global.__alvarethRemotionSessions || (global.__alvarethRemotion
 const watchers = global.__alvarethRemotionWatchers || (global.__alvarethRemotionWatchers = new Set());
 
 startVideoQueue();
+
+const planning = global.__alvarethRemotionPlanning || (global.__alvarethRemotionPlanning = new Set());
 
 function positiveInt(value, fallback, min, max) {
   const parsed = Number(value);
@@ -82,7 +85,7 @@ function providerReadiness() {
   );
 }
 
-async function showMenu(m, conn, usedPrefix) {
+async function showMenu(m, conn, usedPrefix = ".") {
   const rows = [
     {
       header: "",
@@ -182,6 +185,7 @@ async function startPromptJob(prompt, chat, fallbackConn) {
   }
 
   const maxActive = positiveInt(process.env.VIDEO_STUDIO_WA_MAX_ACTIVE_JOBS, 2, 1, 5);
+  if (planning.size) return sendText(chat, "Planner sedang menyusun storyboard. Tunggu proses sebelumnya selesai.", fallbackConn);
   const currentJobs = activeJobs();
   if (currentJobs.length >= maxActive) {
     await sendText(
@@ -193,6 +197,7 @@ async function startPromptJob(prompt, chat, fallbackConn) {
     return;
   }
 
+  planning.add(chat);
   await sendText(
     chat,
     "🧠 *AI Director mulai bekerja*\n" +
@@ -228,6 +233,8 @@ async function startPromptJob(prompt, chat, fallbackConn) {
       "\n\nPeriksa .remotion services untuk melihat provider yang belum siap.",
       fallbackConn
     );
+  } finally {
+    planning.delete(chat);
   }
 }
 
@@ -283,7 +290,7 @@ async function watchJob(jobId, chat, fallbackConn) {
         "Durasi: " + job.durationSeconds + " detik",
         "AI footage: " + (Number(job.aiFootageCount) || 0) + " scene",
         "Voice-over: " + (job.voiceoverEnabled ? "aktif" : "tidak aktif"),
-        "Musik AI: " + (job.aiMusicEnabled ? "aktif" : "soundtrack bawaan"),
+        "Musik AI: " + (job.aiMusicEnabled ? "aktif" : "tidak aktif"),
         "ID: " + jobId,
         warnings.length ? "Catatan: " + warnings.join(" | ").slice(0, 500) : ""
       ].filter(Boolean).join("\n");
@@ -386,12 +393,22 @@ async function showHistory(m) {
 
 async function showServices(m) {
   const statuses = providerReadiness();
+  for (const [name, base, path] of [
+    ["Ollama", process.env.VIDEO_STUDIO_OLLAMA_URL || "http://127.0.0.1:11434", "api/tags"],
+    ["VoxCPM2", process.env.VIDEO_STUDIO_VOXCPM_URL || "http://127.0.0.1:7861", "health"]
+  ]) {
+    try {
+      const health = await localJson(localServiceUrl(base, path), {}, 3000);
+      const ready = name === "Ollama" ? health.models?.some(item => item.name === (process.env.VIDEO_STUDIO_OLLAMA_MODEL || "qwen2.5:7b")) : health.ready === true && health.provider === "VoxCPM2";
+      statuses.push({ name: name + " pemeriksaan langsung", configured: Boolean(ready), detail: ready ? "Service merespons dan model siap." : "Service merespons tetapi model belum siap." });
+    } catch { statuses.push({ name: name + " pemeriksaan langsung", configured: false, detail: "Service lokal tidak dapat dihubungi." }); }
+  }
   const lines = statuses.map(item =>
     (item.configured ? "✅ " : "⚠️ ") + "*" + item.name + "*\n" + item.detail
   );
   lines.push(
     "",
-    "Musik/SFX bawaan tersedia sebagai fallback. Status di atas memeriksa konfigurasi lokal, bukan memastikan API/provider sedang online.",
+    "SFX dibuat lokal. Musik tidak dipaksakan. Konfigurasi dan pemeriksaan langsung dibedakan; kesehatan service belum membuktikan hasil video.",
     "Reference image dapat meningkatkan konsistensi karakter, tetapi tidak menjamin identitas identik pada semua scene."
   );
   return m.reply("⚙️ *KESIAPAN REMOTION DI SERVER LINUX*\n\n" + lines.join("\n\n"));
@@ -430,7 +447,8 @@ async function handleCommand(m, { conn, usedPrefix, text }) {
   if (parsed.action === "guide") return showGuide(m);
   if (parsed.action === "services") return showServices(m);
   if (parsed.action === "cancel") {
-    const removed = sessions.delete(m.chat);
+    const ownSession = sessions.get(m.chat)?.sender === m.sender;
+    const removed = ownSession && sessions.delete(m.chat);
     return m.reply(removed
       ? "✅ Sesi input prompt dibatalkan. Render yang sudah berjalan tidak terpengaruh."
       : "Tidak ada sesi input prompt yang sedang menunggu.");
@@ -440,10 +458,15 @@ async function handleCommand(m, { conn, usedPrefix, text }) {
   return showMenu(m, conn, usedPrefix);
 }
 
-const handler = async (m, context) => handleCommand(m, context);
+const handler = async (m, context = {}) => {
+  // Check again here: callbacks and direct invocation must not bypass the router.
+  if (context.isROwner !== true) return m.reply("Fitur Remotion hanya untuk owner.");
+  startVideoQueue();
+  return handleCommand(m, context);
+};
 
 global.__alvarethRemotionPromptHandler = async (m, context = {}) => {
-  if (!context.isROwner || wasBotSentMessage(m)) return false;
+  if (context.isROwner !== true || wasBotSentMessage(m)) return false;
 
   const session = sessions.get(m.chat);
   if (!session || session.sender !== m.sender) return false;
