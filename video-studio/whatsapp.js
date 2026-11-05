@@ -27,12 +27,10 @@ export function parseRemotionCommand(value) {
 
 const STAGE_LABELS = Object.freeze({
   queued: "Menunggu antrean",
-  "preparing-media": "Menyiapkan aset video",
-  "preparing-voiceover": "Membuat voice-over dan timing subtitle",
-  "generating-ai-video": "Membuat footage AI",
-  "searching-footage": "Mencari footage stok",
-  "generating-ai-music": "Membuat musik AI",
-  rendering: "Merender komposisi MP4",
+  "preparing-media": "Menyiapkan aset lokal",
+  "preparing-voiceover": "Membuat narasi VoxCPM2 dan subtitle",
+  "generating-ai-video": "Membuat footage AI lokal",
+  rendering: "Merender komposisi MP4 dengan sound design",
   completed: "Selesai",
   failed: "Gagal"
 });
@@ -64,16 +62,11 @@ export function formatRemotionJob(job) {
 }
 
 export function getRemotionProviderReadiness(env = {}, fileExists = () => false, runtime = {}) {
-  const plannerKey = Boolean(String(env.VIDEO_STUDIO_AI_API_KEY || env.OPENAI_API_KEY || "").trim());
-  const fallbackUrl = String(env.VIDEO_STUDIO_AI_FALLBACK_URL || "https://api-faa.my.id/faa/gpt-promt").trim();
-  const voiceover = Boolean(
-    String(env.VIDEO_STUDIO_ELEVENLABS_API_KEY || env.ELEVENLABS_API_KEY || "").trim() &&
-    String(env.VIDEO_STUDIO_ELEVENLABS_VOICE_ID || "").trim()
-  );
-  const pexels = Boolean(String(env.VIDEO_STUDIO_PEXELS_API_KEY || env.PEXELS_API_KEY || "").trim());
+  const plannerUrl = String(env.VIDEO_STUDIO_AI_BASE_URL || "http://127.0.0.1:11434/v1").trim();
+  const plannerModel = String(env.VIDEO_STUDIO_AI_MODEL || "qwen3:8b").trim();
+  const voxcpmBin = String(env.VIDEO_STUDIO_VOXCPM_BIN || "voxcpm").trim();
   const videoWorkflow = String(env.VIDEO_STUDIO_COMFYUI_VIDEO_WORKFLOW_FILE || "").trim();
   const imageWorkflow = String(env.VIDEO_STUDIO_COMFYUI_IMAGE_WORKFLOW_FILE || "").trim();
-  const musicWorkflow = String(env.VIDEO_STUDIO_COMFYUI_MUSIC_WORKFLOW_FILE || "").trim();
   const exists = value => {
     if (!value) return false;
     try { return Boolean(fileExists(resolve(value))); }
@@ -82,9 +75,11 @@ export function getRemotionProviderReadiness(env = {}, fileExists = () => false,
 
   return [
     {
-      name: "AI prompt planner",
-      configured: plannerKey || Boolean(fallbackUrl),
-      detail: plannerKey ? "API key OpenAI-compatible tersedia." : "Fallback endpoint tersedia; konektivitas belum diuji."
+      name: "Local storyboard LLM (Ollama)",
+      configured: Boolean(plannerUrl && plannerModel && runtime.ollamaModelReady),
+      detail: runtime.ollamaModelReady
+        ? "Ollama dan model " + plannerModel + " terdeteksi secara lokal."
+        : "Instal Ollama, unduh " + plannerModel + ", lalu pastikan endpoint lokal " + plannerUrl + " aktif."
     },
     {
       name: "Remotion + FFmpeg",
@@ -94,29 +89,35 @@ export function getRemotionProviderReadiness(env = {}, fileExists = () => false,
         : "Periksa node_modules Remotion serta instalasi ffmpeg dan ffprobe di Linux."
     },
     {
-      name: "Voice-over + subtitle sinkron",
-      configured: voiceover,
-      detail: voiceover ? "ElevenLabs API key dan Voice ID tersedia." : "Opsional: isi VIDEO_STUDIO_ELEVENLABS_API_KEY dan VIDEO_STUDIO_ELEVENLABS_VOICE_ID."
+      name: "VoxCPM2 + word timestamps",
+      configured: Boolean(runtime.voxcpmInstalled),
+      detail: runtime.voxcpmInstalled
+        ? "VoxCPM2 CLI terdeteksi (" + voxcpmBin + "); TTS dan Stable-ts berjalan lokal."
+        : "Instal pip install 'voxcpm[timestamps]' pada Python 3.10–3.12, lalu pastikan perintah voxcpm tersedia."
     },
     {
-      name: "Stock footage",
-      configured: pexels,
-      detail: pexels ? "Pexels API key tersedia." : "Opsional: isi VIDEO_STUDIO_PEXELS_API_KEY."
-    },
-    {
-      name: "AI video footage",
+      name: "ComfyUI video workflow",
       configured: exists(videoWorkflow),
-      detail: exists(videoWorkflow) ? "Workflow ComfyUI video ditemukan." : "Opsional: pasang workflow API-format ComfyUI dan isi VIDEO_STUDIO_COMFYUI_VIDEO_WORKFLOW_FILE."
+      detail: exists(videoWorkflow)
+        ? "Workflow video lokal ditemukan. Gunakan model dan weights open-license; WAN tidak digunakan."
+        : "Opsional: pasang workflow API-format CogVideoX-2B atau model lokal lain yang lisensinya sesuai."
     },
     {
       name: "Character reference image",
       configured: exists(imageWorkflow),
-      detail: exists(imageWorkflow) ? "Workflow ComfyUI image ditemukan; workflow video juga harus memakai placeholder {{REFERENCE_IMAGE}}." : "Opsional: pasang workflow image generation untuk membuat referensi karakter sebelum image-to-video."
+      detail: exists(imageWorkflow)
+        ? "Workflow ComfyUI image ditemukan; workflow video juga harus memakai placeholder {{REFERENCE_IMAGE}}."
+        : "Opsional: pasang workflow image generation untuk membuat referensi karakter sebelum image-to-video."
     },
     {
-      name: "AI background music",
-      configured: exists(musicWorkflow),
-      detail: exists(musicWorkflow) ? "Workflow ComfyUI audio ditemukan." : "Opsional: pasang workflow API-format ComfyUI audio dan isi VIDEO_STUDIO_COMFYUI_MUSIC_WORKFLOW_FILE."
+      name: "Event-based sound effects",
+      configured: Boolean(runtime.remotionInstalled),
+      detail: "13 efek suara procedural lokal; dipicu oleh soundEvents pada timeline. Tidak membutuhkan API atau kuota."
+    },
+    {
+      name: "Background music",
+      configured: false,
+      detail: "Nonaktif secara default. Video tetap dirender dengan narasi dan sound effects; musik hanya ditambahkan jika nanti ada track yang dipilih."
     }
   ];
 }
