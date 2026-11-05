@@ -105,6 +105,9 @@ function groupTimedWords(words, maxWords = 4) {
 
 export function extractVoxCpmWords(timestampResult) {
   const source = timestampResult && typeof timestampResult === "object" ? timestampResult : {};
+  // Official OpenBMB VoxCPM2 CLI writes TimestampResult.to_dict():
+  // { audio_path, sample_rate, backend, level, text, items: [{text,start,end,level}] }.
+  const items = Array.isArray(source.items) ? source.items : [];
   const segments = Array.isArray(source.segments) ? source.segments : Array.isArray(source) ? source : [];
   const sourceWords = Array.isArray(source.words) ? source.words : [];
   const output = [];
@@ -116,6 +119,7 @@ export function extractVoxCpmWords(timestampResult) {
       output.push({ text, startSeconds: start, endSeconds: end });
     }
   };
+  for (const item of items) append(item);
   for (const item of sourceWords) append(item);
   for (const segment of segments) {
     const nested = Array.isArray(segment?.words) ? segment.words : Array.isArray(segment?.word_segments) ? segment.word_segments : [];
