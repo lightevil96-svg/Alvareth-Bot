@@ -79,8 +79,6 @@ async function pump() {
       const labels = {
         voiceover: "preparing-voiceover",
         "ai-video": "generating-ai-video",
-        footage: "searching-footage",
-        "ai-music": "generating-ai-music"
       };
       update(next, { stage: labels[stage] || "preparing-media" });
     });
