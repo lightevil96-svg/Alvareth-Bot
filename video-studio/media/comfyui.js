@@ -1,3 +1,5 @@
+import { localServiceUrl } from "../local-service.js";
+import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "fs/promises";
 import { basename, dirname, join } from "path";
 import { fileURLToPath } from "url";
@@ -18,7 +20,7 @@ function getConfig(kind) {
     : kind === "image"
       ? safeText(process.env.VIDEO_STUDIO_COMFYUI_IMAGE_WORKFLOW_FILE, 500)
       : safeText(process.env.VIDEO_STUDIO_COMFYUI_MUSIC_WORKFLOW_FILE, 500);
-  return { baseUrl, workflowFile, apiKey: safeText(process.env.VIDEO_STUDIO_COMFYUI_API_KEY, 300) };
+  return { baseUrl, workflowFile };
 }
 export function isComfyConfigured(kind) {
   const config = getConfig(kind);
@@ -37,9 +39,7 @@ export function applyComfyWorkflowVariables(value, variables) {
 }
 
 function comfyUrl(baseUrl, path) {
-  const base = new URL(baseUrl);
-  if (!["http:", "https:"].includes(base.protocol) || base.username || base.password) throw new Error("URL ComfyUI harus menggunakan HTTP/HTTPS tanpa kredensial tertanam.");
-  return new URL(path.replace(/^\/+/, ""), base.toString() + "/").toString();
+  return localServiceUrl(baseUrl, path);
 }
 async function requestJson(url, options, timeoutMs, apiKey) {
   const controller = new AbortController();
@@ -47,7 +47,7 @@ async function requestJson(url, options, timeoutMs, apiKey) {
   try {
     const headers = { accept: "application/json", ...(options.headers || {}) };
     if (apiKey) headers["X-API-Key"] = apiKey;
-    const response = await fetch(url, { ...options, headers, signal: controller.signal });
+    const response = await fetch(url, { ...options, headers, redirect: "error", signal: controller.signal });
     const body = await response.text();
     if (!response.ok) throw new Error("ComfyUI HTTP " + response.status + ": " + body.slice(0, 220));
     try { return JSON.parse(body); }
@@ -84,7 +84,7 @@ async function downloadOutput(config, file, destination, kind, timeoutMs) {
   try {
     const headers = {};
     if (config.apiKey) headers["X-API-Key"] = config.apiKey;
-    const response = await fetch(url.toString(), { headers, signal: controller.signal });
+    const response = await fetch(url.toString(), { headers, redirect: "error", signal: controller.signal });
     if (!response.ok) throw new Error("Unduhan hasil ComfyUI gagal (HTTP " + response.status + ").");
     const contentType = String(response.headers.get("content-type") || "");
     const maxBytes = kind === "video" ? 48 * 1024 * 1024 : kind === "image" ? 20 * 1024 * 1024 : 32 * 1024 * 1024;
@@ -137,6 +137,7 @@ export async function generateComfyAsset({ kind, prompt, negativePrompt = "", jo
   if (!config.workflowFile) throw new Error("Workflow ComfyUI untuk " + kind + " belum dikonfigurasi.");
   const timeoutMs = clamp(Number(process.env.VIDEO_STUDIO_COMFYUI_TIMEOUT_MS) || 900000, 60000, 1800000);
   const workflowText = await readFile(config.workflowFile, "utf8");
+  validateReviewedWorkflow(workflowText, process.env.VIDEO_STUDIO_COMFYUI_REVIEWED_SHA256 || "");
   const parsed = JSON.parse(workflowText);
   const graph = parsed && parsed.prompt && typeof parsed.prompt === "object" ? parsed.prompt : parsed;
   if (!graph || typeof graph !== "object" || Array.isArray(graph) || !Object.keys(graph).length) throw new Error("Workflow ComfyUI harus berupa API prompt graph JSON yang tidak kosong.");
@@ -196,4 +197,13 @@ export async function generateComfyAsset({ kind, prompt, negativePrompt = "", jo
     durationSeconds: variables.DURATION,
     provider: "ComfyUI"
   };
+}
+
+export function validateReviewedWorkflow(text, approvedHashes) {
+  const digest = createHash('sha256').update(text).digest('hex');
+  if (!approvedHashes.split(',').map(x => x.trim()).includes(digest)) throw new Error('Workflow ComfyUI belum diaudit: verifikasi lisensi model dan custom node, lalu tetapkan SHA-256.');
+  const graph = JSON.parse(text);
+  // This detects known banned nodes/model filenames; custom-node code still requires manual audit.
+  if (/wan(?:2|video|image|model|[_\-. ])/i.test(text) || /elevenlabs|api-faa|freetheai/i.test(text)) throw new Error('Workflow memakai provider/model yang dilarang.');
+  return graph;
 }

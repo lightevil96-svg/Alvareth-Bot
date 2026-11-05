@@ -1,8 +1,9 @@
+> Current implementation (2026-11-06): local Ollama and VoxCPM2, optional local alignment, event SFX. See ../docs/REMOTION_WHATSAPP_LINUX.md. Historical aspirational sections below are not capability guarantees.
+
 # Video Studio — AI Prompt Understanding & Remotion Planning Contract
 
 > **Purpose:** This document tells an AI coding agent how to design and implement the prompt-understanding layer for LightJurnal Video Studio. Read this before changing Video Studio prompt, storyboard, scene schema, or Remotion rendering code.
 >
-> **Status (2026-11-04):** Prompt-to-storyboard planning, safe compilation, variable scene timing, optional ElevenLabs voice-over with character-level timing, word-highlighted captions, optional Pexels stock-footage retrieval, and a richer motion-graphics composition are implemented. AI-generated scene footage, uploaded-media editing, and a drag-and-drop timeline are not implemented. Provider credentials and a live VPS MP4 render still need verification.
 >
 > **Current implementation:** `video-studio/api.js`, `validate.js`, `queue.js`, `renderer.js`, `audio-assets.js`, and `remotion/Composition.jsx`. The current UI is in the separate repository `lightevil96-svg/lightjurnal-site`, file `video-studio.js`.
 
@@ -224,7 +225,6 @@ When asked to implement this feature:
 
 The current end-to-end planning path is:
 1. LightJurnal sends only the user's natural-language prompt to POST /api/video-studio/plan.
-2. video-studio/prompt/planner.js calls the configured OpenAI-compatible text model, or the existing API-Faa GPT-prompt service as a best-effort fallback, then normalizes the JSON and derives variable scene durations.
 3. video-studio/prompt/compile.js maps the plan to the allowlisted render schema and calls validateVideoProject().
 4. LightJurnal shows the generated storyboard as read-only information and submits it to POST /api/video-studio/jobs.
 5. The existing single-worker queue renders the MP4 with the updated motion-graphics composition.

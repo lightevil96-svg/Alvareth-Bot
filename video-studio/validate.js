@@ -14,7 +14,7 @@ const BACKGROUND_EFFECTS = ["none", "orbs", "particles", "grid", "waves", "dots"
 const CAMERA_MOTIONS = ["static", "push-in", "pull-out", "pan-left", "pan-right", "tilt-up", "tilt-down", "drift"];
 const COLOR_GRADES = ["neutral", "warm", "cool", "film", "vivid", "mono"];
 const CAPTION_STYLES = ["tiktok", "karaoke", "subtitle", "pop", "typewriter", "highlight", "wave"];
-const SOUND_CUES = ["none", "whoosh", "pop", "impact"];
+const SOUND_CUES = ["none", "whoosh", "pop", "impact", "swish", "click", "chime", "thump", "sparkle", "riser"];
 const PALETTES = [
   { background: "#111827", accent: "#68DDB8" },
   { background: "#20152F", accent: "#F0B86B" },
@@ -71,7 +71,7 @@ export function validateVideoProject(input) {
   const ratio = Object.hasOwn(RATIOS, input.ratio) ? input.ratio : "9:16";
   const fps = Number(input.fps || 30);
   if (![24, 25, 30].includes(fps)) throw new Error("FPS yang didukung: 24, 25, atau 30.");
-  const musicStyle = MUSIC_STYLES.includes(input.musicStyle) ? input.musicStyle : "cinematic";
+  const musicStyle = MUSIC_STYLES.includes(input.musicStyle) ? input.musicStyle : "none";
   const captionStyle = CAPTION_STYLES.includes(input.captionStyle) ? input.captionStyle : "tiktok";
   const captionPosition = ["top", "center", "bottom"].includes(input.captionPosition) ? input.captionPosition : "bottom";
   const musicTrackSrc = assetPath(input.musicTrackSrc);
@@ -218,7 +218,7 @@ export function validateVideoProject(input) {
       ? characterSource.continuityRules.slice(0, 8).map(item => text(item, 160)).filter(Boolean)
       : []
   } : null;
-  const voiceoverTracks = Array.isArray(input.voiceoverTracks) ? input.voiceoverTracks.slice(0, 30).map(track => {
+  const voiceoverTracks = Array.isArray(input.voiceoverTracks) ? input.voiceoverTracks.slice(0, 60).map(track => {
     const src = assetPath(track?.src);
     const startSeconds = Number(track?.startSeconds);
     const trackDuration = Number(track?.durationSeconds);
@@ -235,6 +235,9 @@ export function validateVideoProject(input) {
   const mediaWarnings = Array.isArray(input.mediaWarnings) ? input.mediaWarnings.slice(0, 12).map(item => text(item, 200)).filter(Boolean) : [];
   return {
     title, mode, ratio, width: dimensions.width, height: dimensions.height, fps,
+    language: text(input.language, 12) || "id",
+    musicTrackSrc, musicBpm, musicVolume, captionStyle, captionPosition,
+    aiFootageCount: Number(input.aiFootageCount) || 0,
     scenes, musicStyle, soundEffects, durationSeconds, durationInFrames,
     sourcePrompt: text(input.sourcePrompt, 6000),
     planSummary: text(input.planSummary, 300),

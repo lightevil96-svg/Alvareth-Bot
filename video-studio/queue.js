@@ -1,3 +1,4 @@
+import { verifyVideoOutput } from "./media/verify-output.js";
 import { randomUUID } from "crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "fs";
 import { homedir } from "os";
@@ -88,6 +89,8 @@ async function pump() {
     await renderVideoProject(next.project, outputPath, progress => {
       if (progress !== next.progress) update(next, { stage: "rendering", progress });
     });
+    update(next, { stage: "verifying-output" });
+    await verifyVideoOutput(outputPath, next.project);
     const sizeBytes = statSync(outputPath).size;
     cleanupGeneratedAssets(next.id);
     update(next, { status: "completed", stage: "completed", progress: 100, sizeBytes, outputPath });

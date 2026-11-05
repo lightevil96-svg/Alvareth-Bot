@@ -1,6 +1,5 @@
 ---
 name: alvareth-ai-video-production
-description: End-to-end prompt-led AI video production for Alvareth Video Studio using Remotion, ComfyUI, ElevenLabs, captions, licensed footage, and professional editorial direction.
 ---
 
 # Alvareth AI Video Production
@@ -35,17 +34,12 @@ Always load `remotion-best-practices` and `remotion-professional-editor`. Then l
 ## Visual-generation guidance
 
 - Use ComfyUI API-format workflows for local open-source image/video generation.
-- Wan 2.2 TI2V 5B is a practical hybrid text/image-to-video option; 14B T2V/I2V workflows offer a higher-capacity path when GPU memory and offloading permit.
-- Wan 2.2 I2V is preferable when a real starting-frame image is available.
-- Wan 2.2 Animate/reference-conditioning workflows are more appropriate when character identity and motion transfer are central.
 - A workflow must expose the inputs expected by the Alvareth ComfyUI adapter. Do not claim that a model is active merely because its workflow file exists.
 - For character continuity, configure an image-generation workflow in `VIDEO_STUDIO_COMFYUI_IMAGE_WORKFLOW_FILE` and an image-to-video workflow in `VIDEO_STUDIO_COMFYUI_VIDEO_WORKFLOW_FILE`. The latter must use `{{REFERENCE_IMAGE}}` in its LoadImage node. The adapter generates one character reference image from the character bible, uploads it to ComfyUI, and passes the uploaded image name into each selected scene workflow.
 - Reference conditioning improves identity consistency but is not a mathematical guarantee. Verify the actual model, workflow, and rendered clips before promising identical identity across scenes.
-- If AI footage is unavailable, use Pexels footage with attribution or the supported motion-graphics fallback. Never label motion graphics or stock clips as AI-generated footage.
 
 ## Audio guidance
 
-- Use ElevenLabs voice-over with timestamp alignment when the API key and voice ID are configured.
 - Use an AI music workflow such as ACE-Step through ComfyUI only when configured and verified.
 - The built-in procedural soundtrack and SFX are fallbacks, not equivalent to a custom soundtrack composed for every prompt.
 - Never use unlicensed commercial songs or reproduce copyrighted lyrics. Prefer original, licensed, user-provided, or public-domain audio.
@@ -66,6 +60,5 @@ Before calling a video professional or complete, verify:
 ## Upstream references
 
 - [Official Remotion Agent Skills](https://github.com/remotion-dev/skills) — the installed Remotion skill collection and project guidance.
-- [ComfyUI Wan 2.2 documentation](https://docs.comfy.org/tutorials/video/wan/wan2_2) — text-to-video, image-to-video, and hybrid workflow setup.
-- [ComfyUI Wan 2.2 Animate workflow](https://comfy.org/hub/workflows/wan2-2-animate-character-animation-and-replacement-c2c4b45b7df5/) — character animation/replacement, pose guidance, segmentation, and optional reference conditioning.
-- [ComfyUI Wan image-to-video workflow](https://comfy.org/hub/workflows/image-to-video-new-598da2637dc8/) — a starting-image workflow for motion generation.
+
+Use only local Ollama and VoxCPM2 for planning and narration. Follow docs/REMOTION_WHATSAPP_LINUX.md and .agents/skills/alvareth-editorial-quality/SKILL.md for current audio and verification policy. No hosted AI fallback; no unreviewed media downloads.

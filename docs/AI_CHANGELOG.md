@@ -1,3 +1,13 @@
+## 2026-11-06 — Local Remotion pipeline and verified integration contracts
+
+- Request: continue feat/remotion-whatsapp-linux without hosted AI, implement VoxCPM2 and synchronized SFX.
+- Root causes: hosted planner/TTS fallbacks remained; SFX used speech time instead of actual scene start; validator dropped media configuration and capped voice tracks at 30; plugin relied only on outer permission gate.
+- Fix: loopback Ollama, pinned local Python VoxCPM2 wrapper with optional local alignment, fail-clear narration policy, event SFX, audio metadata preservation, explicit owner check/session isolation, output probe/full-decode gate, local workflow review hashes. Removed quota-based stock module and obsolete media configuration; preserved unrelated bot features.
+- Files: video-studio/{prompt,media,engine,services,remotion}, plugins/owner/remotion.js, tests, scripts/remotion-smoke.js, CI, .env.example, project skills and Linux/license/audit docs.
+- Tests: full npm test passed after dependency installation, JSX bundle passed, Python syntax and three mock HTTP tests passed. Actual WAV/FFmpeg contract and output-gate tests run; no simulated inference is described as real VoxCPM2 speech.
+- Limits: local render blocked by environment os.networkInterfaces error; real Ollama/VoxCPM2/WhatsApp services absent. CI fixture render added; see REMOTION_AUDIT_2026-11-06.md for updated evidence. No VPS deployed.
+- Regression lessons: never infer runtime features from skill presence; retain all media metadata through validation; never replace missing narration provider silently; separate model inference, transport mocks, renderer fixture and production acceptance.
+
 ## 2026-11-05 — Remotion WhatsApp owner-only prompt-to-video
 
 - **Permintaan:** mengganti generator video lama dengan workflow Remotion native Linux yang dapat dijalankan dari WhatsApp melalui `.remotion`, dilengkapi menu interaktif dan pembatasan owner.

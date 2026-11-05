@@ -33,6 +33,7 @@ const STAGE_LABELS = Object.freeze({
   "searching-footage": "Mencari footage stok",
   "generating-ai-music": "Membuat musik AI",
   rendering: "Merender komposisi MP4",
+  "verifying-output": "Memeriksa MP4 dan audio",
   completed: "Selesai",
   failed: "Gagal"
 });
@@ -47,7 +48,8 @@ export function formatRemotionJob(job) {
   const statusLabels = {
     queued: "Dalam antrean",
     rendering: "Sedang diproses",
-    completed: "Selesai",
+    "verifying-output": "Memeriksa MP4 dan audio",
+  completed: "Selesai",
     failed: "Gagal"
   };
   const progress = Math.max(0, Math.min(100, Number(job.progress) || 0));
@@ -64,13 +66,8 @@ export function formatRemotionJob(job) {
 }
 
 export function getRemotionProviderReadiness(env = {}, fileExists = () => false, runtime = {}) {
-  const plannerKey = Boolean(String(env.VIDEO_STUDIO_AI_API_KEY || env.OPENAI_API_KEY || "").trim());
-  const fallbackUrl = String(env.VIDEO_STUDIO_AI_FALLBACK_URL || "https://api-faa.my.id/faa/gpt-promt").trim();
-  const voiceover = Boolean(
-    String(env.VIDEO_STUDIO_ELEVENLABS_API_KEY || env.ELEVENLABS_API_KEY || "").trim() &&
-    String(env.VIDEO_STUDIO_ELEVENLABS_VOICE_ID || "").trim()
-  );
-  const pexels = Boolean(String(env.VIDEO_STUDIO_PEXELS_API_KEY || env.PEXELS_API_KEY || "").trim());
+  const plannerKey = Boolean(env.VIDEO_STUDIO_OLLAMA_MODEL);
+  const voiceover = Boolean(env.VIDEO_STUDIO_VOXCPM_URL);
   const videoWorkflow = String(env.VIDEO_STUDIO_COMFYUI_VIDEO_WORKFLOW_FILE || "").trim();
   const imageWorkflow = String(env.VIDEO_STUDIO_COMFYUI_IMAGE_WORKFLOW_FILE || "").trim();
   const musicWorkflow = String(env.VIDEO_STUDIO_COMFYUI_MUSIC_WORKFLOW_FILE || "").trim();
@@ -83,8 +80,8 @@ export function getRemotionProviderReadiness(env = {}, fileExists = () => false,
   return [
     {
       name: "AI prompt planner",
-      configured: plannerKey || Boolean(fallbackUrl),
-      detail: plannerKey ? "API key OpenAI-compatible tersedia." : "Fallback endpoint tersedia; konektivitas belum diuji."
+      configured: plannerKey,
+      detail: plannerKey ? "Model Ollama lokal dikonfigurasi." : "Default Ollama qwen2.5:7b; jalankan service lokal terlebih dahulu."
     },
     {
       name: "Remotion + FFmpeg",
@@ -96,12 +93,7 @@ export function getRemotionProviderReadiness(env = {}, fileExists = () => false,
     {
       name: "Voice-over + subtitle sinkron",
       configured: voiceover,
-      detail: voiceover ? "ElevenLabs API key dan Voice ID tersedia." : "Opsional: isi VIDEO_STUDIO_ELEVENLABS_API_KEY dan VIDEO_STUDIO_ELEVENLABS_VOICE_ID."
-    },
-    {
-      name: "Stock footage",
-      configured: pexels,
-      detail: pexels ? "Pexels API key tersedia." : "Opsional: isi VIDEO_STUDIO_PEXELS_API_KEY."
+      detail: voiceover ? "Service VoxCPM2 lokal dikonfigurasi; alignment opsional." : "Atur VIDEO_STUDIO_VOXCPM_URL setelah service Python siap."
     },
     {
       name: "AI video footage",

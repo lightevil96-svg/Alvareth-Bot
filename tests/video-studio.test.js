@@ -20,7 +20,7 @@ test("normalizes a legacy manual project and keeps its dimensions", () => {
   assert.equal(project.durationSeconds, 7);
   assert.equal(project.durationInFrames, 210);
   assert.equal(project.mode, "professional");
-  assert.equal(project.musicStyle, "cinematic");
+  assert.equal(project.musicStyle, "none");
 });
 
 test("rejects empty scenes, invalid duration, and unsupported fps", () => {
