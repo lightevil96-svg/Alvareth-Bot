@@ -13,14 +13,51 @@ export async function prepareAiFootage(project, jobId) {
   const scenes = project.scenes.map(scene => ({ ...scene }));
   const warnings = [];
   let generatedCount = 0;
+  const character = project.characterBible && typeof project.characterBible === "object"
+    ? project.characterBible
+    : null;
+  const visual = project.visualBible && typeof project.visualBible === "object"
+    ? project.visualBible
+    : {};
+  let characterReferencePath = "";
+
+  if (character && selected.length && isComfyConfigured("image")) {
+    try {
+      const referencePrompt = clean([
+        "Create one polished, production-ready character reference image for a recurring animated film character.",
+        "Show exactly one character, full body, clearly visible silhouette, face, outfit, colors, and accessories.",
+        "Neutral uncluttered background, even studio lighting, centered composition, consistent proportions, high detail.",
+        character.name ? "Character name: " + clean(character.name, 60) : "",
+        character.type ? "Character type: " + clean(character.type, 80) : "",
+        character.silhouette ? "Silhouette: " + clean(character.silhouette, 100) : "",
+        character.face ? "Face: " + clean(character.face, 100) : "",
+        character.hairOrFur ? "Hair or fur: " + clean(character.hairOrFur, 90) : "",
+        character.outfit ? "Outfit: " + clean(character.outfit, 90) : "",
+        character.colors ? "Colors: " + clean(character.colors, 80) : "",
+        character.accessories ? "Accessories: " + clean(character.accessories, 80) : "",
+        visual.artStyle ? "Art style: " + clean(visual.artStyle, 100) : "",
+        visual.palette ? "Palette: " + clean(visual.palette, 80) : "",
+        visual.texture ? "Texture: " + clean(visual.texture, 80) : ""
+      ].filter(Boolean).join(". "), 1600);
+      const reference = await generateComfyAsset({
+        kind: "image",
+        prompt: referencePrompt,
+        negativePrompt: "multiple characters, multiple views, text, labels, watermark, logo, cropped body, cluttered background, deformed anatomy",
+        jobId,
+        filename: "character-reference",
+        ratio: "1:1",
+        width: 1024,
+        height: 1024
+      });
+      characterReferencePath = reference.path;
+      console.log("[VIDEO STUDIO] Character reference image created:", jobId);
+    } catch (error) {
+      warnings.push("Character reference image tidak berhasil dibuat; AI footage memakai text prompt saja: " + clean(error.message, 160));
+    }
+  }
+
   for (const item of selected) {
     try {
-      const character = project.characterBible && typeof project.characterBible === "object"
-        ? project.characterBible
-        : null;
-      const visual = project.visualBible && typeof project.visualBible === "object"
-        ? project.visualBible
-        : {};
       const identity = character ? [
         character.name ? "name " + clean(character.name, 60) : "",
         character.type ? "type " + clean(character.type, 70) : "",
@@ -56,7 +93,8 @@ export async function prepareAiFootage(project, jobId) {
         filename: "ai-video-" + String(item.index + 1).padStart(2, "0"),
         ratio: project.ratio,
         durationSeconds: Math.min(8, Math.max(3, Number(item.scene.duration) || 5)),
-        fps: Math.min(24, Number(project.fps) || 24)
+        fps: Math.min(24, Number(project.fps) || 24),
+        referenceImagePath: characterReferencePath
       });
       scenes[item.index].footageSrc = result.src;
       scenes[item.index].footageCredit = "AI-generated with ComfyUI";
