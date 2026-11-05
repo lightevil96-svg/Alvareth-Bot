@@ -39,7 +39,8 @@ Always load `remotion-best-practices` and `remotion-professional-editor`. Then l
 - Wan 2.2 I2V is preferable when a real starting-frame image is available.
 - Wan 2.2 Animate/reference-conditioning workflows are more appropriate when character identity and motion transfer are central.
 - A workflow must expose the inputs expected by the Alvareth ComfyUI adapter. Do not claim that a model is active merely because its workflow file exists.
-- The current Alvareth adapter does not yet upload a per-job character-reference image. Character continuity across separate clips must therefore be described as best-effort until that adapter is extended and tested.
+- For character continuity, configure an image-generation workflow in `VIDEO_STUDIO_COMFYUI_IMAGE_WORKFLOW_FILE` and an image-to-video workflow in `VIDEO_STUDIO_COMFYUI_VIDEO_WORKFLOW_FILE`. The latter must use `{{REFERENCE_IMAGE}}` in its LoadImage node. The adapter generates one character reference image from the character bible, uploads it to ComfyUI, and passes the uploaded image name into each selected scene workflow.
+- Reference conditioning improves identity consistency but is not a mathematical guarantee. Verify the actual model, workflow, and rendered clips before promising identical identity across scenes.
 - If AI footage is unavailable, use Pexels footage with attribution or the supported motion-graphics fallback. Never label motion graphics or stock clips as AI-generated footage.
 
 ## Audio guidance
