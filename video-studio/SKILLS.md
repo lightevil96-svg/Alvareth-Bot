@@ -20,6 +20,7 @@ The 13 official skills are installed locally under .agents/skills for compatible
 | remotion-studio | Opening and verifying the Remotion Studio preview. |
 | remotion-upgrade | Updating Remotion and keeping all @remotion/* packages aligned. |
 | remotion-professional-editor | Project-specific creative direction: storytelling, pacing, visual contrast, typography, restrained motion, and sound design. |
+| alvareth-ai-video-production | End-to-end prompt-led production: visual bible, recurring character bible, ComfyUI footage, ElevenLabs voice, music, captions, and quality gates. |
 
 ## Project-specific editing principles
 
@@ -27,8 +28,8 @@ The 13 official skills are installed locally under .agents/skills for compatible
 - Let the planner choose scene pacing from narration length, reading time, visual action, and story beats.
 - Keep the composition deterministic: all movement must derive from useCurrentFrame() and useVideoConfig(), not CSS animation timers.
 - Use Sequence boundaries for scene timing. Keep voice-over tracks, word-timed caption phrases, footage layers, and scene boundaries synchronized.
-- Voice-over is optional and uses ElevenLabs with timestamp alignment; stock footage is optional and uses Pexels. Missing provider keys must produce clear warnings and a clean motion-graphics fallback.
+- Voice-over is optional and uses ElevenLabs with timestamp alignment; stock footage is optional and uses Pexels. ComfyUI video/music workflows are optional. Missing provider keys must produce clear warnings and a clean motion-graphics fallback.
 - Pexels footage must be downloaded to the Remotion public asset directory, validated as a local safe path, and credited on-screen with the photographer and Pexels.
 - Music must be quieter when voice-over exists. Avoid repetitive motion, overused transitions, constant zooms, excessive SFX, and dense on-screen paragraphs.
-- Do not claim AI-generated footage, uploaded-media editing, or 3D assets; those paths are not implemented. A real MP4 render on the production VPS still needs verification.
+- AI-generated footage and AI music are optional ComfyUI paths when API-format workflows are configured. Uploaded-media editing and automatic per-job character-reference image injection are not implemented; identity consistency across independently generated clips remains best-effort. A real MP4 render on the production VPS still needs verification.
 - Preserve Remotion version alignment. Current core packages are pinned to 4.0.540.
