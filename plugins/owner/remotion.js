@@ -391,7 +391,7 @@ async function showServices(m) {
   lines.push(
     "",
     "Musik/SFX bawaan tersedia sebagai fallback. Status di atas memeriksa konfigurasi lokal, bukan memastikan API/provider sedang online.",
-    "Karakter yang konsisten antar-scene belum dijamin tanpa workflow reference-image khusus."
+    "Reference image dapat meningkatkan konsistensi karakter, tetapi tidak menjamin identitas identik pada semua scene."
   );
   return m.reply("⚙️ *KESIAPAN REMOTION DI SERVER LINUX*\n\n" + lines.join("\n\n"));
 }
