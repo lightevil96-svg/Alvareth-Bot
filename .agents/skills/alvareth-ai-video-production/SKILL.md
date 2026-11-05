@@ -61,3 +61,10 @@ Before calling a video professional or complete, verify:
 - Voice-over timing and captions match.
 - Music sits below speech; SFX do not mask dialogue.
 - The rendered MP4 is playable and has the requested aspect ratio and expected audio/video streams.
+
+## Upstream references
+
+- [Official Remotion Agent Skills](https://github.com/remotion-dev/skills) — the installed Remotion skill collection and project guidance.
+- [ComfyUI Wan 2.2 documentation](https://docs.comfy.org/tutorials/video/wan/wan2_2) — text-to-video, image-to-video, and hybrid workflow setup.
+- [ComfyUI Wan 2.2 Animate workflow](https://comfy.org/hub/workflows/wan2-2-animate-character-animation-and-replacement-c2c4b45b7df5/) — character animation/replacement, pose guidance, segmentation, and optional reference conditioning.
+- [ComfyUI Wan image-to-video workflow](https://comfy.org/hub/workflows/image-to-video-new-598da2637dc8/) — a starting-image workflow for motion generation.
