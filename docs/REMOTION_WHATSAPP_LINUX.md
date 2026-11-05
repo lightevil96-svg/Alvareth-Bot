@@ -56,13 +56,14 @@ The prompt-only experience chooses creative and technical settings automatically
 | Prompt planning | `VIDEO_STUDIO_AI_API_KEY`, `VIDEO_STUDIO_AI_BASE_URL`, `VIDEO_STUDIO_AI_MODEL` | Uses the configured fallback endpoint if available; planning errors are reported. |
 | Voice-over and aligned captions | `VIDEO_STUDIO_ELEVENLABS_API_KEY`, `VIDEO_STUDIO_ELEVENLABS_VOICE_ID` | Video can render without generated narration; a warning is recorded. |
 | Licensed stock footage | `VIDEO_STUDIO_PEXELS_API_KEY` | Motion graphics remain available. |
+| Character reference image | `VIDEO_STUDIO_COMFYUI_URL`, `VIDEO_STUDIO_COMFYUI_IMAGE_WORKFLOW_FILE` | Text-only character prompts are used. |
 | AI video footage | `VIDEO_STUDIO_COMFYUI_URL`, `VIDEO_STUDIO_COMFYUI_VIDEO_WORKFLOW_FILE` | AI footage is skipped; stock footage or motion graphics are used. |
 | AI background music | `VIDEO_STUDIO_COMFYUI_URL`, `VIDEO_STUDIO_COMFYUI_MUSIC_WORKFLOW_FILE` | Built-in procedural soundtrack is used. |
 | WhatsApp upload | `ALVARETH_WA_UPLOAD_TIMEOUT_MS`, `ALVARETH_WA_TMPDIR` | Existing disk-streaming upload validation reports storage, permission, timeout, or connection failures. |
 
-Keep ComfyUI on localhost or a private network/VPN. Do not expose its API directly to the public internet. Workflow files must be ComfyUI API-format JSON and use the supported placeholders: `{{PROMPT}}`, `{{NEGATIVE_PROMPT}}`, `{{WIDTH}}`, `{{HEIGHT}}`, `{{DURATION}}`, `{{FPS}}`, `{{SEED}}`, and `{{SCENE_ID}}`. Video workflows must save MP4/WebM/MOV; music workflows must save WAV/MP3/FLAC/OGG.
+Keep ComfyUI on localhost or a private network/VPN. Do not expose its API directly to the public internet. Workflow files must be ComfyUI API-format JSON and use the supported placeholders: `{{PROMPT}}`, `{{NEGATIVE_PROMPT}}`, `{{WIDTH}}`, `{{HEIGHT}}`, `{{DURATION}}`, `{{FPS}}`, `{{SEED}}`, `{{SCENE_ID}}`, and (for image-to-video) `{{REFERENCE_IMAGE}}`. Image workflows must save PNG/JPG/WebP; video workflows must save MP4/WebM/MOV; music workflows must save WAV/MP3/FLAC/OGG.
 
-The current ComfyUI adapter can create selected short AI footage clips and AI music when those workflows are configured. It also passes the storyboard's visual bible and recurring character bible into scene prompts. It does not yet upload a per-job character reference image into the workflow. Therefore, character appearance across separate generated scenes is best-effort, not guaranteed. A reference-image workflow (for example, Wan image-to-video or Wan Animate with reference conditioning) needs an explicit image-upload/reference-input adapter before it can guarantee identity continuity.
+The current ComfyUI adapter can create a reusable character reference image, selected short AI footage clips, and AI music when those workflows are configured. If both image and video workflows are configured, the adapter generates one reference image from the character bible, uploads it to ComfyUI, and passes the returned image name into the video workflow. The video workflow must be an image-to-video workflow whose LoadImage node uses `{{REFERENCE_IMAGE}}`. This improves visual continuity, but does not guarantee pixel-identical character identity across separate clips; verify the chosen model/workflow with real renders.
 
 ## Production skills
 
