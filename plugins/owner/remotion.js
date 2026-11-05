@@ -442,7 +442,7 @@ global.__alvarethRemotionPromptHandler = async (m, context = {}) => {
   if (!context.isROwner || wasBotSentMessage(m)) return false;
 
   const session = sessions.get(m.chat);
-  if (!session) return false;
+  if (!session || session.sender !== m.sender) return false;
 
   const prompt = String(m.text || "").trim();
   if (!prompt) return false;
