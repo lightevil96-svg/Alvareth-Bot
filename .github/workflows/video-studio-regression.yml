@@ -44,6 +44,7 @@ jobs:
       - name: Check Video Studio JavaScript modules
         run: |
           node --check video-studio/api.js
+          node --check video-studio/local-services.js
           node --check video-studio/tunnel.js
           node --check video-studio/prompt/planner.js
           node --check video-studio/prompt/compile.js

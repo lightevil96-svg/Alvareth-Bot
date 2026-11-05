@@ -1,4 +1,5 @@
 import { localServiceUrl, localJson } from "../local-service.js";
+import { startLocalVideoServices } from "../local-services.js";
 import { execFileSync } from "node:child_process";
 import { mkdir, writeFile } from "fs/promises";
 import { dirname, join } from "path";
@@ -103,9 +104,11 @@ export function buildCaptionGroups(alignment, offsetSeconds = 0, maxWords = 4) {
 // The /speech contract belongs to our Python wrapper, not to upstream VoxCPM.
 export async function prepareVoiceover(project, jobId) {
   if (!/^[a-zA-Z0-9_-]+$/.test(jobId)) throw new Error("ID job tidak valid.");
-  const base = process.env.VIDEO_STUDIO_VOXCPM_URL;
-  if (!base) return { scenes: project.scenes, voiceoverTracks: [], captions: [],
-    warnings: ["VoxCPM2 belum dikonfigurasi; video tanpa narasi. Atur VIDEO_STUDIO_VOXCPM_URL. Tidak ada provider pengganti."] };
+  const base = process.env.VIDEO_STUDIO_VOXCPM_URL || "http://127.0.0.1:7861";
+  if (new URL(base).origin === "http://127.0.0.1:7861") {
+    const services = await startLocalVideoServices({ services: ["voxcpm"], waitMs: 3000 });
+    if (!services.voxcpm?.ready) throw new Error(services.voxcpm?.detail || "Service VoxCPM2 lokal belum siap.");
+  }
   const endpoint = localServiceUrl(base, "speech");
   const folder = join(PUBLIC_DIR, "generated", jobId);
   await mkdir(folder, { recursive: true });

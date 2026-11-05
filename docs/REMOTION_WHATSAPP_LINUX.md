@@ -80,6 +80,34 @@ If infrastructure cannot run speech, an operator may explicitly set `VIDEO_STUDI
 
 The repository updater defaults to main. On a staging checkout, set `AUTO_UPDATE_ENABLED=false` before starting so development testing is not replaced by production branch updates. Do not change a live VPS updater without an explicit deployment decision.
 
+## Automatic local service startup
+
+The bot now attempts to start the local services when you run `.remotion services` or generate a video. It starts `ollama serve` only when the Ollama binary is installed and the loopback endpoint is not responding. It starts the VoxCPM2 adapter only when the Python virtualenv, adapter file and local VoxCPM2 model are present. It does not install packages, download model weights, or call a hosted provider.
+
+Defaults:
+- Ollama: `http://127.0.0.1:11434`, model `qwen2.5:7b`.
+- VoxCPM2: `http://127.0.0.1:7861`, Python `.venv-voxcpm/bin/python`, model directory `$HOME/alvareth-models/VoxCPM2`.
+- `VIDEO_STUDIO_LOCAL_SERVICES_AUTOSTART=true`; set it to `false` to disable process startup.
+- `VOXCPM_DEVICE` may be `cuda` or `cpu`; leave it blank to detect CUDA through the installed PyTorch.
+
+Install/pull the Ollama model once:
+```bash
+ollama pull qwen2.5:7b
+```
+
+Prepare VoxCPM2 once (install a PyTorch build matching the VPS GPU/driver before installing the pinned adapter requirements):
+```bash
+python3 -m venv .venv-voxcpm
+.venv-voxcpm/bin/pip install --upgrade pip
+.venv-voxcpm/bin/pip install -r video-studio/services/voxcpm/requirements.txt
+mkdir -p "$HOME/alvareth-models/VoxCPM2"
+.venv-voxcpm/bin/hf download openbmb/VoxCPM2 --local-dir "$HOME/alvareth-models/VoxCPM2"
+```
+
+If the model is stored elsewhere, set `VOXCPM_MODEL_PATH` in the private server environment. If the Python executable is elsewhere, set `VIDEO_STUDIO_VOXCPM_PYTHON`. The adapter process is detached from the bot worker and bound to loopback. Its private startup/error logs are written under $ALVARETH_DATA_DIR/video-studio/logs/ (default ~/.alvareth-bot-data/video-studio/logs/); inspect ollama.log or voxcpm2.log if a process exits. The bot reports a missing binary, virtualenv, model, unloaded model, or missing Ollama model separately. Run `.remotion services` again after setup and wait until both direct checks are green.
+
+This is process autostart, not provisioning: the server still needs enough RAM/VRAM, disk, compatible PyTorch/CUDA and model weights. A green health check is not a substitute for a real narration and MP4 test.
+
 ## Optional ComfyUI
 
 No default visual/music model is silently chosen. Audit model license, node source, all network-capable nodes and memory requirements. Use only non-WAN local workflows. Put approved API-format graphs outside Git secrets/data, calculate `sha256sum /path/to/workflow.json`, and add the exact digest to comma-separated `VIDEO_STUDIO_COMFYUI_REVIEWED_SHA256`. Set the relevant VIDEO_STUDIO_COMFYUI_*_WORKFLOW_FILE and loopback URL. Hash checks pin reviewed bytes; they cannot prove custom-node behavior or detect a renamed banned model. The operator review is necessary.

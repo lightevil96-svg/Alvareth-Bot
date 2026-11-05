@@ -66,8 +66,11 @@ export function formatRemotionJob(job) {
 }
 
 export function getRemotionProviderReadiness(env = {}, fileExists = () => false, runtime = {}) {
-  const plannerKey = Boolean(env.VIDEO_STUDIO_OLLAMA_MODEL);
-  const voiceover = Boolean(env.VIDEO_STUDIO_VOXCPM_URL);
+  const plannerModel = String(env.VIDEO_STUDIO_OLLAMA_MODEL || "qwen2.5:7b").trim();
+  const plannerUrl = String(env.VIDEO_STUDIO_OLLAMA_URL || "http://127.0.0.1:11434").trim();
+  const voiceUrl = String(env.VIDEO_STUDIO_VOXCPM_URL || "http://127.0.0.1:7861").trim();
+  const plannerKey = Boolean(plannerModel);
+  const voiceover = Boolean(voiceUrl);
   const videoWorkflow = String(env.VIDEO_STUDIO_COMFYUI_VIDEO_WORKFLOW_FILE || "").trim();
   const imageWorkflow = String(env.VIDEO_STUDIO_COMFYUI_IMAGE_WORKFLOW_FILE || "").trim();
   const musicWorkflow = String(env.VIDEO_STUDIO_COMFYUI_MUSIC_WORKFLOW_FILE || "").trim();
@@ -81,7 +84,7 @@ export function getRemotionProviderReadiness(env = {}, fileExists = () => false,
     {
       name: "AI prompt planner",
       configured: plannerKey,
-      detail: plannerKey ? "Model Ollama lokal dikonfigurasi." : "Default Ollama qwen2.5:7b; jalankan service lokal terlebih dahulu."
+      detail: "Target model " + plannerModel + (env.VIDEO_STUDIO_OLLAMA_MODEL ? "" : " (default)") + " pada " + plannerUrl + ". Kesehatan service diperiksa terpisah."
     },
     {
       name: "Remotion + FFmpeg",
@@ -93,7 +96,7 @@ export function getRemotionProviderReadiness(env = {}, fileExists = () => false,
     {
       name: "Voice-over + subtitle sinkron",
       configured: voiceover,
-      detail: voiceover ? "Service VoxCPM2 lokal dikonfigurasi; alignment opsional." : "Atur VIDEO_STUDIO_VOXCPM_URL setelah service Python siap."
+      detail: "Endpoint " + voiceUrl + (env.VIDEO_STUDIO_VOXCPM_URL ? "" : " (default)") + "; bot dapat menjalankan adapter lokal otomatis jika virtualenv dan model tersedia."
     },
     {
       name: "AI video footage",

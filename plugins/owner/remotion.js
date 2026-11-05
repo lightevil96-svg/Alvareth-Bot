@@ -1,4 +1,4 @@
-import { localServiceUrl, localJson } from "../../video-studio/local-service.js";
+import { startLocalVideoServices } from "../../video-studio/local-services.js";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -207,6 +207,11 @@ async function startPromptJob(prompt, chat, fallbackConn) {
   );
 
   try {
+    const local = await startLocalVideoServices({ waitMs: 2500 });
+    if (!local.ollama?.ready) throw new Error("Ollama belum siap: " + (local.ollama?.detail || "service/model belum tersedia."));
+    if (process.env.VIDEO_STUDIO_VOICE_REQUIRED !== "false" && !local.voxcpm?.ready) {
+      throw new Error("VoxCPM2 belum siap: " + (local.voxcpm?.detail || "service/model belum tersedia."));
+    }
     const plan = await planVideoPrompt(cleanPrompt);
     const project = compileVideoPlan(plan);
     const job = createVideoJob(project);
@@ -393,16 +398,11 @@ async function showHistory(m) {
 
 async function showServices(m) {
   const statuses = providerReadiness();
-  for (const [name, base, path] of [
-    ["Ollama", process.env.VIDEO_STUDIO_OLLAMA_URL || "http://127.0.0.1:11434", "api/tags"],
-    ["VoxCPM2", process.env.VIDEO_STUDIO_VOXCPM_URL || "http://127.0.0.1:7861", "health"]
-  ]) {
-    try {
-      const health = await localJson(localServiceUrl(base, path), {}, 3000);
-      const ready = name === "Ollama" ? health.models?.some(item => item.name === (process.env.VIDEO_STUDIO_OLLAMA_MODEL || "qwen2.5:7b")) : health.ready === true && health.provider === "VoxCPM2";
-      statuses.push({ name: name + " pemeriksaan langsung", configured: Boolean(ready), detail: ready ? "Service merespons dan model siap." : "Service merespons tetapi model belum siap." });
-    } catch { statuses.push({ name: name + " pemeriksaan langsung", configured: false, detail: "Service lokal tidak dapat dihubungi." }); }
-  }
+  const live = await startLocalVideoServices({ waitMs: 2000 });
+  statuses.push(
+    { name: "Ollama pemeriksaan langsung", configured: Boolean(live.ollama?.ready), detail: live.ollama?.detail || "Status Ollama tidak tersedia." },
+    { name: "VoxCPM2 pemeriksaan langsung", configured: Boolean(live.voxcpm?.ready), detail: live.voxcpm?.detail || "Status VoxCPM2 tidak tersedia." }
+  );
   const lines = statuses.map(item =>
     (item.configured ? "✅ " : "⚠️ ") + "*" + item.name + "*\n" + item.detail
   );

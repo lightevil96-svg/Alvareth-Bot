@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { localServiceUrl } from '../video-studio/local-service.js';
+import { getLocalVideoServiceConfig, isOllamaModelReady, isVoxCPMReady } from '../video-studio/local-services.js';
 import { planVideoPrompt } from '../video-studio/prompt/planner.js';
 import { prepareVoiceover } from '../video-studio/media/voiceover.js';
 import { prepareVideoMedia } from '../video-studio/media/pipeline.js';
@@ -27,6 +28,18 @@ function env(t, key, value) {
   if (value === undefined) delete process.env[key]; else process.env[key] = value;
   t.after(() => old === undefined ? delete process.env[key] : process.env[key] = old);
 }
+test('local services have usable loopback defaults and validate model health payloads', () => {
+  const config = getLocalVideoServiceConfig({});
+  assert.equal(config.ollamaUrl, 'http://127.0.0.1:11434');
+  assert.equal(config.ollamaModel, 'qwen2.5:7b');
+  assert.equal(config.voxUrl, 'http://127.0.0.1:7861');
+  assert.match(config.modelPath, /alvareth-models[\\/]VoxCPM2$/);
+  assert.equal(config.autoStart, true);
+  assert.equal(isOllamaModelReady({ models: [{ name: 'qwen2.5:7b' }] }), true);
+  assert.equal(isOllamaModelReady({ models: [{ name: 'qwen2.5:3b' }] }), false);
+  assert.equal(isVoxCPMReady({ provider: 'VoxCPM2', ready: true }), true);
+  assert.equal(isVoxCPMReady({ provider: 'VoxCPM2', ready: false }), false);
+});
 test('local policy rejects hosted endpoints, credentials and redirect destinations', () => {
   for (const url of ['https://api.openai.com', 'http://localhost', 'http://127.0.0.1.evil.test', 'http://user:pass@127.0.0.1', 'file:///tmp/x']) assert.throws(() => localServiceUrl(url));
   assert.equal(localServiceUrl('http://127.0.0.1:11434', '/api/chat'), 'http://127.0.0.1:11434/api/chat');
@@ -61,7 +74,7 @@ test('voice adapter probes and decodes actual WAV fixture; aligns scenes to inte
   assert.equal(result.voiceoverTracks[0].durationSeconds, 1);
 });
 test('required narration fails clearly when VoxCPM2 is missing; explicit silent mode works', async t => {
-  env(t, 'VIDEO_STUDIO_VOXCPM_URL', undefined); env(t, 'VIDEO_STUDIO_VOICE_REQUIRED', 'true');
+  env(t, 'VIDEO_STUDIO_VOXCPM_URL', 'http://127.0.0.1:9'); env(t, 'VIDEO_STUDIO_VOICE_REQUIRED', 'true');
   const project = validateVideoProject({ scenes: [{ text: 'Halo', narration: 'Halo dunia', duration: 3 }] });
   await assert.rejects(prepareVideoMedia(project, 'missing-test'), /VoxCPM2/);
   env(t, 'VIDEO_STUDIO_VOICE_REQUIRED', 'false');

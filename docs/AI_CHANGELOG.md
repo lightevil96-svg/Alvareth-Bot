@@ -596,3 +596,12 @@ Format entri baru:
 - **Perubahan:** HTTP server mendukung `SERVER_PORT` bawaan Pterodactyl. API Video Studio membuat API key acak 256-bit dan menyimpannya di direktori data persisten dengan izin file 0600 bila environment key tidak diatur.
 - **Keamanan:** key tidak ditanam di source/repository; pengguna mengambil key dari file runtime privat dan memasukkannya ke session browser. CORS tetap membatasi origin LightJurnal.
 - **Belum diverifikasi:** instalasi dependency Remotion, reverse proxy/HTTPS publik, autentikasi live, dan render MP4 di server Pterodactyl.
+
+## 2026-11-06 — Remotion local service autostart and truthful readiness
+
+- **Symptom:** `.remotion services` showed the default Ollama planner and VoxCPM2 endpoint as unconfigured, then reported both loopback services unreachable. The planner/voice adapters only attempted HTTP requests; they did not start an installed local service.
+- **Root causes:** readiness treated explicit environment variables as the only configuration source even though the code already had defaults; no guarded process launcher existed for `ollama serve` or the VoxCPM2 Python adapter.
+- **Fix:** add `video-studio/local-services.js` with loopback-only health probes, guarded autostart, duplicate-process protection, Ollama model-tag verification, VoxCPM2 model/venv checks, CUDA detection and actionable setup messages. Planner and voice-over start their default local service on demand. `.remotion services` now attempts startup and distinguishes unreachable service, missing model, missing virtualenv, and model loading.
+- **Safety:** autostart does not install packages, download weights, pull models, expose ports, or use hosted AI. It is enabled by default only when the local executable, Python environment and model files already exist; set `VIDEO_STUDIO_LOCAL_SERVICES_AUTOSTART=false` to disable it. VoxCPM2 remains bound to 127.0.0.1.
+- **Tests:** added pure config/health contract tests and updated readiness expectations; Video Studio CI syntax and regression workflow must be checked after this commit.
+- **Not verified:** this GitHub environment cannot inspect or provision the user's VPS. Ollama binary/model, VoxCPM2 venv/weights, CUDA compatibility, service startup, WhatsApp delivery and a real narrated MP4 must still be verified on the target Linux server.

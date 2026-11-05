@@ -9,6 +9,8 @@
 
 ## Pembaruan terbaru
 
+- 2026-11-06: Remotion readiness now treats Ollama/VoxCPM2 defaults as configured, auto-starts local services only when their installed binaries, virtualenv and model weights exist, and reports exact setup actions when prerequisites are missing. No automatic package/model downloads; VPS provisioning and live MP4 verification remain separate.
+
 - 2026-11-06: Branch feat/remotion-whatsapp-linux migrates media to loopback Ollama + VoxCPM2, fixes audio serialization/timing, adds event SFX and authorization regression tests. See docs/REMOTION_AUDIT_2026-11-06.md for actual verification; earlier hosted-provider entries below are historical and superseded.
 
 - 2026-11-05: Branch `feat/remotion-whatsapp-linux` menambahkan fitur owner-only `.remotion` pada WhatsApp. Plugin `plugins/owner/remotion.js` memakai Video Studio planner/compiler/queue/renderer yang sudah ada, menu native-flow dengan fallback teks, prompt session, status/progres, riwayat, resend, provider readiness, dan uploader MP4 disk-streaming. Prompt session di-route sebelum plugin normal hanya untuk owner yang memulai sesi.

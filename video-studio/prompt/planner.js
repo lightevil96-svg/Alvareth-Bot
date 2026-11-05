@@ -1,4 +1,5 @@
 import { localServiceUrl, localJson } from "../local-service.js";
+import { startLocalVideoServices } from "../local-services.js";
 const VIDEO_SYSTEM_PROMPT = [
   "You are a senior film editor, motion-design director, documentary storyteller, and short-form creative producer.",
   "Turn the user's complete brief into a coherent, watchable video production plan. Do not make a slideshow of paragraphs.",
@@ -268,6 +269,10 @@ export async function planVideoPrompt(prompt) {
   const model = process.env.VIDEO_STUDIO_OLLAMA_MODEL || "qwen2.5:7b";
   if (/cloud/i.test(model)) throw new Error("Model Ollama cloud tidak diizinkan.");
   try {
+    if (new URL(base).origin === "http://127.0.0.1:11434") {
+      const services = await startLocalVideoServices({ services: ["ollama"], waitMs: 3000 });
+      if (!services.ollama?.ready) throw new Error(services.ollama?.detail || "Ollama lokal belum siap.");
+    }
     const json = await localJson(endpoint, {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ model, stream: false, format: "json", keep_alive: 0,

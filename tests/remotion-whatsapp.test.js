@@ -66,7 +66,10 @@ test("reports optional media providers as unconfigured without secrets", () => {
     ffmpegInstalled: true
   });
   assert.equal(status.find(item => item.name === "Remotion + FFmpeg").configured, true);
-  assert.equal(status.find(item => item.name === "Voice-over + subtitle sinkron").configured, false);
+  assert.equal(status.find(item => item.name === "AI prompt planner").configured, true);
+  assert.match(status.find(item => item.name === "AI prompt planner").detail, /qwen2.5:7b/);
+  assert.equal(status.find(item => item.name === "Voice-over + subtitle sinkron").configured, true);
+  assert.match(status.find(item => item.name === "Voice-over + subtitle sinkron").detail, /127.0.0.1:7861/);
   assert.equal(status.find(item => item.name === "AI video footage").configured, false);
   assert.equal(status.find(item => item.name === "Character reference image").configured, false);
 });
