@@ -687,6 +687,24 @@ if (typeof m.sender === 'string' && m.sender.endsWith('@lid')) {
 const isROwner = [conn.decodeJid(global.conn.user.id), ...global.owner.map(([number]) => number)].map(v => v.replace(/[^0-9]/g, '') + '@s.whatsapp.net').includes(resolvedSender)
 const isOwner = isROwner || m.fromMe
 
+// An active owner-only Remotion prompt session consumes the owner's next plain-text
+// message before normal plugins/AI auto-replies can process it. Prefixed commands
+// are deliberately passed through so the owner can still use .remotion cancel/status.
+if (typeof global.__alvarethRemotionPromptHandler === 'function') {
+  try {
+    const consumedByRemotion = await global.__alvarethRemotionPromptHandler(m, {
+      conn: this,
+      isROwner,
+      isOwner
+    })
+    if (consumedByRemotion) return
+  } catch (remotionError) {
+    console.error('[REMOTION:WA] Prompt session error:', remotionError?.stack || remotionError)
+    await sendErrorReport(this, m, remotionError, 'owner/remotion.js', 'prompt-session')
+    return
+  }
+}
+
         // Group allowlist gate: when enabled, silently ignore every message from
         // groups that are not explicitly approved. Private chats remain available
         // so the owner can manage the list even when no group is approved.
