@@ -21,35 +21,33 @@ export async function prepareAiFootage(project, jobId) {
       const visual = project.visualBible && typeof project.visualBible === "object"
         ? project.visualBible
         : {};
-      const identityLines = character ? [
-        "RECURRING CHARACTER IDENTITY — keep these traits unchanged:",
-        character.name ? "Name: " + clean(character.name, 80) : "",
-        character.type ? "Type: " + clean(character.type, 100) : "",
-        character.silhouette ? "Silhouette: " + clean(character.silhouette, 180) : "",
-        character.face ? "Face: " + clean(character.face, 180) : "",
-        character.hairOrFur ? "Hair/fur: " + clean(character.hairOrFur, 180) : "",
-        character.outfit ? "Outfit: " + clean(character.outfit, 180) : "",
-        character.colors ? "Colors: " + clean(character.colors, 140) : "",
-        character.accessories ? "Accessories: " + clean(character.accessories, 140) : "",
-        character.personality ? "Personality: " + clean(character.personality, 140) : "",
-        ...(Array.isArray(character.continuityRules) ? character.continuityRules.slice(0, 8).map(rule => "Continuity: " + clean(rule, 160)) : [])
-      ].filter(Boolean) : [];
-      const visualLines = [
-        visual.artStyle ? "Art style: " + clean(visual.artStyle, 180) : "",
-        visual.palette ? "Palette: " + clean(visual.palette, 180) : "",
-        visual.lighting ? "Lighting: " + clean(visual.lighting, 180) : "",
-        visual.cameraLanguage ? "Camera language: " + clean(visual.cameraLanguage, 180) : "",
-        visual.texture ? "Texture: " + clean(visual.texture, 180) : "",
-        visual.compositionRules ? "Composition: " + clean(visual.compositionRules, 240) : ""
-      ].filter(Boolean);
-      const scenePrompt = clean(item.scene.aiVideoPrompt || item.scene.visualDescription || item.scene.text, 1800);
+      const identity = character ? [
+        character.name ? "name " + clean(character.name, 60) : "",
+        character.type ? "type " + clean(character.type, 70) : "",
+        character.silhouette ? "silhouette " + clean(character.silhouette, 90) : "",
+        character.face ? "face " + clean(character.face, 90) : "",
+        character.hairOrFur ? "hair/fur " + clean(character.hairOrFur, 80) : "",
+        character.outfit ? "outfit " + clean(character.outfit, 80) : "",
+        character.colors ? "colors " + clean(character.colors, 70) : "",
+        character.accessories ? "accessories " + clean(character.accessories, 70) : "",
+        character.personality ? "personality " + clean(character.personality, 70) : "",
+        ...(Array.isArray(character.continuityRules) ? character.continuityRules.slice(0, 2).map(rule => clean(rule, 80)) : [])
+      ].filter(Boolean).join("; ").slice(0, 450) : "";
+      const visualDirection = [
+        visual.artStyle ? "style " + clean(visual.artStyle, 90) : "",
+        visual.palette ? "palette " + clean(visual.palette, 70) : "",
+        visual.lighting ? "lighting " + clean(visual.lighting, 70) : "",
+        visual.cameraLanguage ? "camera " + clean(visual.cameraLanguage, 70) : "",
+        visual.texture ? "texture " + clean(visual.texture, 60) : "",
+        visual.compositionRules ? "composition " + clean(visual.compositionRules, 90) : ""
+      ].filter(Boolean).join("; ").slice(0, 300);
+      const scenePrompt = clean(item.scene.aiVideoPrompt || item.scene.visualDescription || item.scene.text, 800);
       const prompt = clean([
-        ...identityLines,
-        ...visualLines,
-        "SCENE ACTION AND SHOT DIRECTION:",
-        scenePrompt,
-        "Keep the recurring character's identity and art direction consistent. Do not add subtitles, logos, watermarks, or unrelated characters."
-      ].join("\n"), 3000);
+        identity ? "FIXED CHARACTER IDENTITY (do not alter): " + identity : "",
+        visualDirection ? "VISUAL STYLE: " + visualDirection : "",
+        "SCENE ACTION AND SHOT: " + scenePrompt,
+        "Preserve the same character design and visual style. No subtitles, logos, or watermarks."
+      ].filter(Boolean).join("\n"), 1800);
       const result = await generateComfyAsset({
         kind: "video",
         prompt,
