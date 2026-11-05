@@ -42,7 +42,8 @@ function publicJob(job) {
     captionsEnabled: Boolean(project.captions?.length),
     footageCount: Number(project.footageCount || project.scenes.filter(scene => scene.footageSrc).length || 0),
     aiFootageCount: Number(project.aiFootageCount || 0),
-    aiMusicEnabled: Boolean(project.musicTrackSrc),
+    soundEffectsEnabled: project.soundEffects !== false,
+    musicEnabled: Boolean(project.musicTrackSrc),
     mediaWarnings: Array.isArray(project.mediaWarnings) ? project.mediaWarnings : [],
     mediaCredits: Array.isArray(project.mediaCredits) ? project.mediaCredits : [],
     error: job.error || null,
@@ -78,8 +79,6 @@ async function pump() {
       const labels = {
         voiceover: "preparing-voiceover",
         "ai-video": "generating-ai-video",
-        footage: "searching-footage",
-        "ai-music": "generating-ai-music"
       };
       update(next, { stage: labels[stage] || "preparing-media" });
     });

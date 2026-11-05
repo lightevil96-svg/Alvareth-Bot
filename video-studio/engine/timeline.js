@@ -94,16 +94,29 @@ export function buildTimelineTracks(project, fps = project?.fps || 30) {
     caption
   }));
 
-  const sfxClips = videoClips.filter(clip => clip.scene.soundCue && clip.scene.soundCue !== "none").map(clip => ({
-    id: "sfx-" + clip.id,
-    trackId: "audio-sfx",
-    type: "audio",
-    role: "sound-effect",
-    cue: clip.scene.soundCue,
-    startFrame: clip.speechStartFrame,
-    durationInFrames: Math.max(1, Math.round(safeFps * 0.8)),
-    volume: clamp(Number(clip.scene.soundIntensity ?? 0.55), 0, 1)
-  }));
+  const sfxDurations = {
+    whoosh: 0.72, swipe: 0.42, click: 0.12, pop: 0.34, impact: 0.62,
+    footstep: 0.48, thud: 0.42, sparkle: 0.78, riser: 1.05,
+    typing: 0.78, water: 0.85, drop: 0.28, camera: 0.3
+  };
+  const sfxClips = videoClips.flatMap(clip => {
+    const declared = Array.isArray(clip.scene.soundEvents) ? clip.scene.soundEvents : [];
+    const events = declared.length
+      ? declared
+      : clip.scene.soundCue && clip.scene.soundCue !== "none"
+        ? [{ cue: clip.scene.soundCue, delaySeconds: 0, intensity: clip.scene.soundIntensity }]
+        : [];
+    return events.slice(0, 5).filter(event => event && sfxDurations[event.cue]).map((event, index) => ({
+      id: "sfx-" + clip.id + "-" + index,
+      trackId: "audio-sfx",
+      type: "audio",
+      role: "sound-effect",
+      cue: event.cue,
+      startFrame: clip.speechStartFrame + Math.round(clamp(Number(event.delaySeconds) || 0, 0, Math.max(0, clip.durationInFrames / safeFps - 0.05)) * safeFps),
+      durationInFrames: Math.max(1, Math.round(clamp(Number(event.durationSeconds) || sfxDurations[event.cue], 0.08, 3) * safeFps)),
+      volume: clamp(Number(event.intensity ?? clip.scene.soundIntensity ?? 0.55), 0, 1)
+    }));
+  });
 
   const musicClips = project?.musicTrackSrc ? [{
     id: "music-generated",
@@ -114,16 +127,7 @@ export function buildTimelineTracks(project, fps = project?.fps || 30) {
     startFrame: 0,
     durationInFrames: cursor,
     volume: clamp(Number(project.musicVolume ?? 0.16), 0, 0.5)
-  }] : [{
-    id: "music-bed",
-    trackId: "audio-music",
-    type: "audio",
-    role: "music",
-    src: project?.musicStyle || "cinematic",
-    startFrame: 0,
-    durationInFrames: cursor,
-    volume: clamp(Number(project.musicVolume ?? 0.16), 0, 0.5)
-  }];
+  }] : [];
 
   const overlayClips = videoClips.flatMap(clip => {
     const notifications = Array.isArray(clip.scene.notifications) ? clip.scene.notifications : [];

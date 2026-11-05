@@ -20,7 +20,7 @@ test("normalizes a legacy manual project and keeps its dimensions", () => {
   assert.equal(project.durationSeconds, 7);
   assert.equal(project.durationInFrames, 210);
   assert.equal(project.mode, "professional");
-  assert.equal(project.musicStyle, "cinematic");
+  assert.equal(project.musicStyle, "none");
 });
 
 test("rejects empty scenes, invalid duration, and unsupported fps", () => {
@@ -41,7 +41,7 @@ test("publishes dynamic renderer limits without exposing user-facing scene setti
     maxScenes: 60,
     maxSceneSeconds: 20,
     maxDurationSeconds: 300,
-    musicStyles: ["cinematic", "upbeat", "calm", "none"]
+    musicStyles: ["none"]
   });
 });
 
@@ -148,4 +148,36 @@ test("preserves visual and recurring character bibles through Remotion compilati
   assert.equal(project.characterBible.continuityRules[0], "same scarf and fur markings in every scene");
   assert.equal(project.visualBible.artStyle, "stylized cinematic 3D animation");
   assert.equal(project.scenes[0].aiVideoPrompt, "The fox slowly approaches a glowing firefly.");
+});
+
+test("keeps soundtrack optional and compiles timed sound events", () => {
+  const plan = normalizeVideoPlan({
+    title: "Animasi aksi",
+    musicStyle: "upbeat",
+    scenes: [{
+      text: "Lompatan",
+      narration: "Karakter melompat melewati rintangan.",
+      motion: "scale-in",
+      soundEvents: [
+        { cue: "whoosh", delaySeconds: 0.4, intensity: 0.6 },
+        { cue: "impact", delaySeconds: 2.1, intensity: 0.8 }
+      ]
+    }]
+  }, "Buat video animasi aksi dengan efek suara gerakan");
+  const project = compileVideoPlan(plan);
+  assert.equal(project.musicStyle, "none");
+  assert.deepEqual(project.scenes[0].soundEvents.map(event => event.cue), ["whoosh", "impact"]);
+  assert.equal(project.scenes[0].soundEvents[1].delaySeconds, 2.1);
+});
+
+test("infers Foley events from visible action words when the planner omits soundEvents", () => {
+  const plan = normalizeVideoPlan({
+    title: "Aksi karakter",
+    scenes: [
+      { text: "Karakter berlari", narration: "Karakter berlari melewati lorong lalu mendarat dengan keras." },
+      { text: "Informasi penting", narration: "Informasi ini perlu dibaca dengan teliti.", motion: "static", transition: "cut" }
+    ]
+  }, "Buat animasi karakter berlari dan mendarat");
+  assert.deepEqual(plan.scenes[0].soundEvents.map(event => event.cue), ["footstep", "footstep", "impact"]);
+  assert.equal(plan.scenes[1].soundEvents.length, 0);
 });

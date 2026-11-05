@@ -70,15 +70,34 @@ function hasBinary(name) {
   }
 }
 
+function commandResult(command, args = []) {
+  try {
+    const result = spawnSync(command, args, {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 12000,
+      windowsHide: true
+    });
+    return { ok: result.status === 0, output: String(result.stdout || "") };
+  } catch {
+    return { ok: false, output: "" };
+  }
+}
+
 function providerReadiness() {
   const rendererInstalled =
     existsSync(join(process.cwd(), "node_modules", "@remotion", "renderer", "package.json")) &&
     existsSync(join(process.cwd(), "node_modules", "remotion", "package.json"));
   const ffmpegInstalled = hasBinary("ffmpeg") && hasBinary("ffprobe");
+  const ollamaModel = String(process.env.VIDEO_STUDIO_AI_MODEL || "qwen3:8b").trim();
+  const ollama = commandResult("ollama", ["list"]);
+  const ollamaModelReady = ollama.ok && ollama.output.split(/\r?\n/).some(line => line.trim().split(/\s+/)[0] === ollamaModel);
+  const voxcpmCommand = String(process.env.VIDEO_STUDIO_VOXCPM_BIN || "voxcpm").trim();
+  const voxcpmInstalled = commandResult(voxcpmCommand, ["--help"]).ok;
   return getRemotionProviderReadiness(
     process.env,
     path => existsSync(path),
-    { remotionInstalled: rendererInstalled, ffmpegInstalled }
+    { remotionInstalled: rendererInstalled, ffmpegInstalled, ollamaModelReady, voxcpmInstalled }
   );
 }
 
@@ -117,7 +136,7 @@ async function showMenu(m, conn, usedPrefix) {
     {
       header: "",
       title: "⚙️ Cek layanan",
-      description: "Periksa Remotion, audio, footage, dan ComfyUI.",
+      description: "Periksa Ollama, VoxCPM2, ComfyUI, dan sound effects lokal.",
       id: usedPrefix + "remotion services"
     },
     {
@@ -282,8 +301,9 @@ async function watchJob(jobId, chat, fallbackConn) {
         "Judul: " + job.title,
         "Durasi: " + job.durationSeconds + " detik",
         "AI footage: " + (Number(job.aiFootageCount) || 0) + " scene",
-        "Voice-over: " + (job.voiceoverEnabled ? "aktif" : "tidak aktif"),
-        "Musik AI: " + (job.aiMusicEnabled ? "aktif" : "soundtrack bawaan"),
+        "Voice-over VoxCPM2: " + (job.voiceoverEnabled ? "aktif" : "tidak aktif"),
+        "Sound effects: " + (job.soundEffectsEnabled === false ? "nonaktif" : "event-based lokal"),
+        "Musik latar: " + (job.musicEnabled ? "aktif" : "tidak digunakan"),
         "ID: " + jobId,
         warnings.length ? "Catatan: " + warnings.join(" | ").slice(0, 500) : ""
       ].filter(Boolean).join("\n");

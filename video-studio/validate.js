@@ -4,7 +4,7 @@ const RATIOS = Object.freeze({
   "1:1": { width: 1080, height: 1080 }
 });
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
-const MUSIC_STYLES = ["cinematic", "upbeat", "calm", "none"];
+const MUSIC_STYLES = ["none"];
 const LAYOUTS = ["hero", "editorial", "split", "stat", "quote", "steps", "outro"];
 const MOTIFS = ["rings", "orbit", "wave", "grid", "bars", "ribbon", "spark", "none"];
 const MOTIONS = ["fade-up", "scale-in", "slide-left", "slide-right", "reveal", "float", "count-up"];
@@ -14,7 +14,7 @@ const BACKGROUND_EFFECTS = ["none", "orbs", "particles", "grid", "waves", "dots"
 const CAMERA_MOTIONS = ["static", "push-in", "pull-out", "pan-left", "pan-right", "tilt-up", "tilt-down", "drift"];
 const COLOR_GRADES = ["neutral", "warm", "cool", "film", "vivid", "mono"];
 const CAPTION_STYLES = ["tiktok", "karaoke", "subtitle", "pop", "typewriter", "highlight", "wave"];
-const SOUND_CUES = ["none", "whoosh", "pop", "impact"];
+const SOUND_CUES = ["none", "whoosh", "swipe", "click", "pop", "impact", "footstep", "thud", "sparkle", "riser", "typing", "water", "drop", "camera"];
 const PALETTES = [
   { background: "#111827", accent: "#68DDB8" },
   { background: "#20152F", accent: "#F0B86B" },
@@ -31,12 +31,6 @@ function assetPath(value) {
   const candidate = text(value, 220);
   if (!candidate || candidate.startsWith("/") || candidate.includes("..") || candidate.includes("\\") || !/^[a-zA-Z0-9._/-]+$/.test(candidate)) return "";
   return candidate;
-}
-function pexelsUrl(value) {
-  try {
-    const url = new URL(String(value || ""));
-    return url.protocol === "https:" && (url.hostname === "pexels.com" || url.hostname.endsWith(".pexels.com")) ? url.toString().slice(0, 240) : "";
-  } catch { return ""; }
 }
 function estimateDuration(scene) {
   const narration = text(scene.narration, 1200);
@@ -71,7 +65,7 @@ export function validateVideoProject(input) {
   const ratio = Object.hasOwn(RATIOS, input.ratio) ? input.ratio : "9:16";
   const fps = Number(input.fps || 30);
   if (![24, 25, 30].includes(fps)) throw new Error("FPS yang didukung: 24, 25, atau 30.");
-  const musicStyle = MUSIC_STYLES.includes(input.musicStyle) ? input.musicStyle : "cinematic";
+  const musicStyle = MUSIC_STYLES.includes(input.musicStyle) ? input.musicStyle : "none";
   const captionStyle = CAPTION_STYLES.includes(input.captionStyle) ? input.captionStyle : "tiktok";
   const captionPosition = ["top", "center", "bottom"].includes(input.captionPosition) ? input.captionPosition : "bottom";
   const musicTrackSrc = assetPath(input.musicTrackSrc);
@@ -101,7 +95,7 @@ export function validateVideoProject(input) {
     const points = Array.isArray(scene.points) ? scene.points.slice(0, 4).map(item => text(item, 90)).filter(Boolean) : [];
     const footageSrc = assetPath(scene.footageSrc);
     const footageCredit = footageSrc ? text(scene.footageCredit, 90) : "";
-    const footageUrl = footageSrc ? pexelsUrl(scene.footageUrl) : "";
+    const footageUrl = "";
     const chartData = Array.isArray(scene.chartData) ? scene.chartData.slice(0, 8).map(item => ({
       label: text(item?.label, 48),
       value: Number(item?.value)
@@ -130,6 +124,18 @@ export function validateVideoProject(input) {
       delaySeconds: Math.max(0, Math.min(18, Number(item?.delaySeconds) || 0)),
       durationSeconds: Math.max(0.8, Math.min(8, Number(item?.durationSeconds) || 2))
     })).filter(item => item.text) : [];
+    const soundEvents = Array.isArray(scene.soundEvents) ? scene.soundEvents.slice(0, 5).map(event => {
+      const cue = SOUND_CUES.includes(event?.cue) && event.cue !== "none" ? event.cue : "";
+      if (!cue) return null;
+      return {
+        cue,
+        delaySeconds: Math.max(0, Math.min(Math.max(0, duration - 0.05), Number(event?.delaySeconds) || 0)),
+        durationSeconds: Number.isFinite(Number(event?.durationSeconds)) && Number(event.durationSeconds) > 0
+          ? Math.max(0.08, Math.min(3, Number(event.durationSeconds)))
+          : 0,
+        intensity: Number.isFinite(Number(event?.intensity)) ? Math.max(0.05, Math.min(1, Number(event.intensity))) : 0.55
+      };
+    }).filter(Boolean) : [];
     const appMockup = scene.appMockup && typeof scene.appMockup === "object" ? {
       title: text(scene.appMockup.title, 80),
       rows: Array.isArray(scene.appMockup.rows) ? scene.appMockup.rows.slice(0, 5).map(item => text(item, 64)).filter(Boolean) : [],
@@ -178,6 +184,7 @@ export function validateVideoProject(input) {
       motion: MOTIONS.includes(scene.motion) ? scene.motion : ["fade-up", "scale-in", "slide-left", "reveal"][index % 4],
       transition: TRANSITIONS.includes(scene.transition) ? scene.transition : index === 0 ? "fade" : "wipe",
       soundCue: SOUND_CUES.includes(scene.soundCue) ? scene.soundCue : "none",
+      soundEvents,
       background,
       accent,
       ...(footageSrc ? { footageSrc, footageCredit, footageUrl } : {})
@@ -226,12 +233,7 @@ export function validateVideoProject(input) {
     return { src, startSeconds, durationSeconds: trackDuration };
   }).filter(Boolean) : [];
   const captions = normalizeCaptions(input.captions);
-  const mediaCredits = Array.isArray(input.mediaCredits) ? input.mediaCredits.slice(0, 20).map(item => ({
-    provider: item?.provider === "Pexels" ? "Pexels" : "",
-    photographer: text(item?.photographer, 90),
-    photographerUrl: pexelsUrl(item?.photographerUrl),
-    videoUrl: pexelsUrl(item?.videoUrl)
-  })).filter(item => item.provider && item.photographer) : [];
+  const mediaCredits = [];
   const mediaWarnings = Array.isArray(input.mediaWarnings) ? input.mediaWarnings.slice(0, 12).map(item => text(item, 200)).filter(Boolean) : [];
   return {
     title, mode, ratio, width: dimensions.width, height: dimensions.height, fps,
