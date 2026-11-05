@@ -32,6 +32,8 @@ Optional:
       Select the exact PyTorch CUDA wheel index compatible with the host driver.
   VOXCPM_TORCH_INDEX_URL=https://download.pytorch.org/whl/cpu
       Force CPU-only PyTorch.
+  VOXCPM_ALLOW_CPU=1
+      Explicitly choose slower CPU inference when no NVIDIA GPU is visible.
   VOXCPM_MODEL_PATH=/absolute/path
       Override the VoxCPM2 model directory.
   VOXCPM_ALLOW_CPU=1
@@ -129,9 +131,9 @@ elif have nvidia-smi && nvidia-smi >/dev/null 2>&1; then
   UV_TORCH_BACKEND="${VOXCPM_TORCH_BACKEND:-auto}" "$UV_BIN" pip install --python "$PYTHON" torch torchaudio
 else
   if [ "${VOXCPM_ALLOW_CPU:-0}" != "1" ]; then
-    fail "GPU NVIDIA tidak terlihat di container. VoxCPM2 upstream menargetkan CUDA >=12.0. Pindahkan service ke container dengan GPU passthrough, atau ulangi secara eksperimental dengan VOXCPM_ALLOW_CPU=1."
+    fail "GPU NVIDIA tidak terlihat di container. CPU inference VoxCPM2 bisa digunakan tetapi dapat sangat lambat. Untuk memilih CPU secara sadar, ulangi dengan VOXCPM_ALLOW_CPU=1; akselerasi NVIDIA memerlukan CUDA >=12.0 dan GPU passthrough."
   fi
-  info "CPU-only dipilih secara eksplisit. Inference VoxCPM2 dapat sangat lambat dan tidak direkomendasikan untuk produksi."
+  info "CPU-only dipilih secara eksplisit. CPU inference didukung, tetapi dapat sangat lambat; benchmark sebelum dipakai produksi."
   UV_TORCH_BACKEND=cpu "$UV_BIN" pip install --python "$PYTHON" torch torchaudio
 fi
 
