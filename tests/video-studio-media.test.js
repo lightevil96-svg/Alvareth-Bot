@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { buildCaptionGroups, splitVoiceoverChunks, extractVoxCpmWords } from "../video-studio/media/voiceover.js";
 import { validateVideoProject } from "../video-studio/validate.js";
-import { applyComfyWorkflowVariables } from "../video-studio/media/comfyui.js";
+import { applyComfyWorkflowVariables, assertNoWanWorkflow } from "../video-studio/media/comfyui.js";
 import { buildTimelineTracks } from "../video-studio/engine/timeline.js";
 
 test("groups character-level TTS alignment into timed subtitle phrases", () => {
@@ -116,4 +116,13 @@ test("schedules multiple sound effects at their visual event offsets and leaves 
   assert.equal(timeline.sfxClips[0].startFrame, 12);
   assert.equal(timeline.sfxClips[1].startFrame, 63);
   assert.equal(timeline.musicClips.length, 0);
+});
+
+test("rejects WAN model nodes from ComfyUI workflows", () => {
+  assert.throws(() => assertNoWanWorkflow({
+    "1": { class_type: "WanVideoModelLoader", inputs: { model: "wan2.2_t2v.safetensors" } }
+  }), /WAN ditolak/);
+  assert.doesNotThrow(() => assertNoWanWorkflow({
+    "1": { class_type: "CogVideoXLoader", inputs: { model: "cogvideox-2b.safetensors" } }
+  }));
 });
