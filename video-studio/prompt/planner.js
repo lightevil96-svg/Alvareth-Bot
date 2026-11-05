@@ -265,7 +265,8 @@ export function normalizeVideoPlan(raw, sourcePrompt) {
 export async function planVideoPrompt(prompt) {
   const sourcePrompt = cleanText(prompt, 6000);
   if (sourcePrompt.length < 8) { const error = new Error("Jelaskan video dengan lebih lengkap."); error.statusCode = 400; throw error; }
-  const endpoint = localServiceUrl(process.env.VIDEO_STUDIO_OLLAMA_URL || "http://127.0.0.1:11434", "api/chat");
+  const base = process.env.VIDEO_STUDIO_OLLAMA_URL || "http://127.0.0.1:11434";
+  const endpoint = localServiceUrl(base, "api/chat");
   const model = process.env.VIDEO_STUDIO_OLLAMA_MODEL || "qwen2.5:7b";
   if (/cloud/i.test(model)) throw new Error("Model Ollama cloud tidak diizinkan.");
   try {

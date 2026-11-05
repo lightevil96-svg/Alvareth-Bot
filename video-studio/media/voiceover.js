@@ -120,10 +120,15 @@ export async function prepareVoiceover(project, jobId) {
     let durationFrames = Math.round(scene.duration * fps);
     const startSeconds = cursorFrames / fps;
     if (text) {
-      const response = await localJson(endpoint, {
-        method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ text, language: project.language || "id" })
-      }, Math.max(30000, Math.min(1800000, Number(process.env.VIDEO_STUDIO_VOXCPM_TIMEOUT_MS) || 600000)));
+      let response;
+      try {
+        response = await localJson(endpoint, {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ text, language: project.language || "id" })
+        }, Math.max(30000, Math.min(1800000, Number(process.env.VIDEO_STUDIO_VOXCPM_TIMEOUT_MS) || 600000)));
+      } catch (error) {
+        throw new Error("VoxCPM2 lokal tidak dapat dihubungi atau gagal menyintesis audio: " + String(error?.message || error).slice(0, 220));
+      }
       if (response.provider !== "VoxCPM2" || typeof response.audio_base64 !== "string") throw new Error("Respons bukan audio VoxCPM2.");
       const audio = Buffer.from(response.audio_base64, "base64");
       if (audio.length < 44 || audio.length > 8 * 1024 * 1024 || audio.toString('ascii', 0, 4) !== 'RIFF' || audio.toString('ascii', 8, 12) !== 'WAVE') throw new Error("Audio VoxCPM2 bukan WAV yang valid.");
