@@ -75,12 +75,14 @@ test("recognizes configured voice and ComfyUI workflow files", () => {
     VIDEO_STUDIO_ELEVENLABS_API_KEY: "test-key",
     VIDEO_STUDIO_ELEVENLABS_VOICE_ID: "voice-id",
     VIDEO_STUDIO_COMFYUI_VIDEO_WORKFLOW_FILE: "/srv/workflows/video.json",
+    VIDEO_STUDIO_COMFYUI_IMAGE_WORKFLOW_FILE: "/srv/workflows/image.json",
     VIDEO_STUDIO_COMFYUI_MUSIC_WORKFLOW_FILE: "/srv/workflows/music.json"
-  }, path => path === "/srv/workflows/video.json" || path === "/srv/workflows/music.json", {
+  }, path => ["/srv/workflows/video.json", "/srv/workflows/image.json", "/srv/workflows/music.json"].includes(path), {
     remotionInstalled: true,
     ffmpegInstalled: true
   });
   assert.equal(status.find(item => item.name === "Voice-over + subtitle sinkron").configured, true);
   assert.equal(status.find(item => item.name === "AI video footage").configured, true);
+  assert.equal(status.find(item => item.name === "Character reference image").configured, true);
   assert.equal(status.find(item => item.name === "AI background music").configured, true);
 });
