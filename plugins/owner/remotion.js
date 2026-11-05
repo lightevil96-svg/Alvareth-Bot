@@ -151,16 +151,17 @@ async function showMenu(m, conn, usedPrefix) {
     }, { quoted: m });
   } catch (error) {
     console.warn("[REMOTION] Menu interaktif gagal; memakai fallback teks:", error?.message || error);
+    const prefix = usedPrefix || ".";
     await m.reply(
       "🎬 *REMOTION VIDEO STUDIO*\n\n" +
       "Ketik salah satu perintah:\n" +
-      "• .remotion generate\n" +
-      "• .remotion status\n" +
-      "• .remotion history\n" +
-      "• .remotion send\n" +
-      "• .remotion guide\n" +
-      "• .remotion services\n" +
-      "• .remotion cancel"
+      "• " + prefix + "remotion generate\n" +
+      "• " + prefix + "remotion status\n" +
+      "• " + prefix + "remotion history\n" +
+      "• " + prefix + "remotion send\n" +
+      "• " + prefix + "remotion guide\n" +
+      "• " + prefix + "remotion services\n" +
+      "• " + prefix + "remotion cancel"
     );
   }
 }
