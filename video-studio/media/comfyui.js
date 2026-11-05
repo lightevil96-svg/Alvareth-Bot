@@ -23,6 +23,14 @@ export function isComfyConfigured(kind) {
   return Boolean(config.workflowFile);
 }
 
+export function assertNoWanWorkflow(graph) {
+  const nodeTypes = Object.values(graph || {}).map(node => safeText(node?.class_type, 160).toLowerCase());
+  const workflowFingerprint = JSON.stringify(graph || {}).toLowerCase();
+  const usesWan = nodeTypes.some(type => type.includes("wanvideo") || type.includes("wanimage") || type.includes("wananimate") || type.includes("wan2"))
+    || /(^|[\\/_\\-\s])wan(?:2[._-]?\d|video|image|animate)/i.test(workflowFingerprint);
+  if (usesWan) throw new Error("Workflow WAN ditolak. Gunakan workflow model video open-source lain, misalnya CogVideoX-2B.");
+}
+
 export function applyComfyWorkflowVariables(value, variables) {
   if (Array.isArray(value)) return value.map(item => applyComfyWorkflowVariables(item, variables));
   if (value && typeof value === "object") {
@@ -138,11 +146,7 @@ export async function generateComfyAsset({ kind, prompt, negativePrompt = "", jo
   const parsed = JSON.parse(workflowText);
   const graph = parsed && parsed.prompt && typeof parsed.prompt === "object" ? parsed.prompt : parsed;
   if (!graph || typeof graph !== "object" || Array.isArray(graph) || !Object.keys(graph).length) throw new Error("Workflow ComfyUI harus berupa API prompt graph JSON yang tidak kosong.");
-  const nodeTypes = Object.values(graph).map(node => safeText(node?.class_type, 160).toLowerCase());
-  const workflowFingerprint = JSON.stringify(graph).toLowerCase();
-  const usesWan = nodeTypes.some(type => type.includes("wanvideo") || type.includes("wanimage") || type.includes("wananimate") || type.includes("wan2"))
-    || /(^|[\\/_\\-\s])wan(?:2[._-]?\d|video|image|animate)/i.test(workflowFingerprint);
-  if (usesWan) throw new Error("Workflow WAN ditolak. Gunakan workflow model video open-source lain, misalnya CogVideoX-2B.");
+  assertNoWanWorkflow(graph);
 
   if (referenceImagePath && !workflowText.includes("{{REFERENCE_IMAGE}}")) {
     throw new Error("Workflow video harus menggunakan placeholder {{REFERENCE_IMAGE}} pada node LoadImage agar character reference dipakai.");
