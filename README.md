@@ -187,3 +187,19 @@ See [Linux deployment and provider setup](docs/REMOTION_WHATSAPP_LINUX.md). Andr
 Follow [Linux local-service setup](docs/REMOTION_WHATSAPP_LINUX.md) and [license/skill audit](docs/REMOTION_LOCAL_LICENSES.md). Planning uses local Ollama; narration uses the included VoxCPM2 Python adapter. No hosted AI or stock-media fallback is used. Music is absent unless a suitable local track exists. Motion graphics remain available without an optional reviewed ComfyUI workflow.
 
 Existing authenticated LightJurnal API routes and the tunnel are preserved. The WhatsApp owner check applies to the WhatsApp entrypoint; the separate HTTP API retains Bearer authentication. Native voice generation, subtitles, hardware performance and WhatsApp delivery must be validated on the actual VPS.
+
+### Existing authenticated LightJurnal HTTP API
+
+The existing HTTP API and optional Cloudflare Tunnel remain available alongside the WhatsApp owner command. The API is mounted under `/api/video-studio`.
+
+- `GET /api/video-studio/health` — public service readiness check.
+- `GET /api/video-studio/limits` — renderer limits; requires Bearer authentication.
+- `POST /api/video-studio/plan` — turns a prompt into a normalized storyboard; requires Bearer authentication.
+- `POST /api/video-studio/jobs` — validates and queues a video project; requires Bearer authentication.
+- `GET /api/video-studio/jobs` — lists recent jobs; requires Bearer authentication.
+- `GET /api/video-studio/jobs/:id` — reads job status; requires Bearer authentication.
+- `GET /api/video-studio/jobs/:id/download` — downloads a completed MP4; requires Bearer authentication.
+
+On first startup, the API key is generated automatically and stored outside the Git checkout at `~/.alvareth-bot-data/video-studio/api-key` with owner-only file permissions. Set `VIDEO_STUDIO_API_KEY` to a private value of at least 32 characters to override it. All protected routes require `Authorization: Bearer <API_KEY>`; never commit or expose this key to the browser or GitHub. The default allowed browser origin is `https://lightjurnal.my.id`; configure `VIDEO_STUDIO_ALLOWED_ORIGINS` only when necessary.
+
+The optional named Cloudflare Tunnel publishes the local API when `VIDEO_STUDIO_TUNNEL_TOKEN` or its private token file is configured. Tunnel setup and local-service requirements are documented in [Linux deployment and provider setup](docs/REMOTION_WHATSAPP_LINUX.md). Pushing code to GitHub does not itself deploy or restart the VPS.
