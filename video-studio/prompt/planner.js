@@ -1,3 +1,4 @@
+import { localServiceUrl, localJson } from "../local-service.js";
 const VIDEO_SYSTEM_PROMPT = [
   "You are a senior film editor, motion-design director, documentary storyteller, and short-form creative producer.",
   "Turn the user's complete brief into a coherent, watchable video production plan. Do not make a slideshow of paragraphs.",
@@ -23,14 +24,14 @@ const VIDEO_SYSTEM_PROMPT = [
   "Use a caption treatment suited to the content: tiktok, karaoke, subtitle, pop, typewriter, highlight, or wave. Caption styling is an editorial decision, not a user setting.",
   "For process or concept videos, use a diagram with clearly named nodes and valid connections. For product explainers, use a believable interface mockup. For data scenes, only visualize numbers explicitly supplied in the prompt; never invent data, sources, or chart values.",
   "Add notification banners and callout overlays only when they serve a real product demo, message, or story beat. Picture-in-picture must only be used when an actual presenter asset exists; never fabricate a face or claim an avatar exists.",
-  "Use sound effects only at meaningful visual beats. Select a music mood that supports the story; never let music or effects compete with speech.",
+  "Use sound effects only at meaningful visual beats. Default musicStyle to none unless music is explicitly requested; never let music or effects compete with speech.",
   "Infer platform and aspect ratio from the prompt. Use vertical 9:16 for Reels, TikTok, and Shorts; horizontal 16:9 for conventional YouTube or landscape presentations; square 1:1 only when requested or clearly appropriate.",
   "Infer frame rate from the creative need and platform. Use only 24, 25, or 30 FPS.",
   "For a short-form video without an explicit duration, choose a natural length based on the story rather than padding it. For a longer explainer, use only as many scenes as needed.",
   "When real-world imagery materially improves a scene, provide stockSearchQuery as a concise English search phrase (2–6 concrete words) describing the visible subject or action. Leave it empty only for intentionally typographic, abstract, or data-led scenes. Never request copyrighted characters, named celebrities, or a specific creator's footage.",
-  "For only the most important hero or establishing scenes, you may set generateAiFootage=true and write a detailed aiVideoPrompt for a locally configured open-source text-to-video workflow. Do not set it on every scene. If no local model is configured, the renderer will fall back to stock footage or motion graphics.",
+  "For only the most important hero or establishing scenes, you may set generateAiFootage=true and write a detailed aiVideoPrompt for a locally configured open-source text-to-video workflow. Do not set it on every scene. If no local model is configured, the renderer will fall back to motion graphics.",
   "visualDescription explains the intended visual in natural language; stockSearchQuery is a separate practical search phrase for a licensed stock-footage library.",
-  "Do not claim that stock footage, real-world footage, 3D assets, or uploaded media already exist. The render pipeline may search a configured licensed stock library and will fall back to motion graphics when no suitable clip is found.",
+  "Do not claim that stock footage, real-world footage, 3D assets, or uploaded media already exist. The render pipeline may search local assets and will fall back to motion graphics when no suitable clip is found.",
   "Return these fields: title, language, category, ratio, fps, targetDurationSeconds (number or null), musicStyle, musicDirection, captionStyle, soundEffects, creativeBrief, visualBible, characterBible, scenes.",
   "Allowed captionStyle: tiktok, karaoke, subtitle, pop, typewriter, highlight, wave. Choose one automatically; never ask the user to configure it.",
   "Allowed category: educational, explainer, product, story, announcement, tutorial, documentary, finance, other.",
@@ -46,7 +47,7 @@ const VIDEO_SYSTEM_PROMPT = [
   "Allowed motif: rings, orbit, wave, grid, bars, ribbon, spark, none.",
   "Allowed motion: fade-up, scale-in, slide-left, slide-right, reveal, float, count-up.",
   "Allowed transition: cut, fade, crossfade, wipe, wipe-left, wipe-right, wipe-up, wipe-down, slide, slide-left, slide-right, slide-up, slide-down, zoom, glitch, dissolve, flash, dip-to-black.",
-  "Allowed soundCue: none, whoosh, pop, impact.",
+  "Allowed soundCue: none, whoosh, pop, impact, swish, click, chime, thump, sparkle, riser. Select cues for actual transition or title entry; notification and callout audio is derived from their visual timing.",
   "Use 1 to 4 short points only for a genuine list or sequence. Use an empty array otherwise.",
   "Use valid six-digit hexadecimal colors for background and accent. Make them cohesive, legible, and appropriate to the subject.",
   "Keep each on-screen text short, each subtext concise, and narration natural. Return no more than 60 scenes and no more than 300 seconds total.",
@@ -71,7 +72,7 @@ const ALLOWED = {
   motif: ["rings", "orbit", "wave", "grid", "bars", "ribbon", "spark", "none"],
   motion: ["fade-up", "scale-in", "slide-left", "slide-right", "reveal", "float", "count-up"],
   transition: ["cut", "fade", "crossfade", "wipe", "wipe-left", "wipe-right", "wipe-up", "wipe-down", "slide", "slide-left", "slide-right", "slide-up", "slide-down", "zoom", "glitch", "dissolve", "flash", "dip-to-black"],
-  soundCue: ["none", "whoosh", "pop", "impact"],
+  soundCue: ["none", "whoosh", "pop", "impact", "swish", "click", "chime", "thump", "sparkle", "riser"],
   visualType: ["cinematic", "kinetic", "editorial", "data-chart", "diagram", "app-mockup", "waveform"],
   backgroundEffect: ["none", "orbs", "particles", "grid", "waves", "dots", "vignette"],
   cameraMotion: ["static", "push-in", "pull-out", "pan-left", "pan-right", "tilt-up", "tilt-down", "drift"],
@@ -152,7 +153,7 @@ export function normalizeVideoPlan(raw, sourcePrompt) {
   const language = cleanText(raw.language, 12) || "id";
   const ratio = pick(raw.ratio, ALLOWED.ratio, /youtube|landscape|horizontal|presentasi/i.test(prompt) ? "16:9" : "9:16");
   const fps = ALLOWED.fps.includes(Number(raw.fps)) ? Number(raw.fps) : 30;
-  const musicStyle = pick(raw.musicStyle, ALLOWED.musicStyle, category === "story" ? "cinematic" : category === "educational" ? "calm" : "upbeat");
+  const musicStyle = pick(raw.musicStyle, ALLOWED.musicStyle, "none");
   const captionStyle = pick(raw.captionStyle, ALLOWED.captionStyle, category === "documentary" || category === "educational" ? "subtitle" : "tiktok");
   const creativeBrief = {
     coreMessage: cleanText(raw.creativeBrief && raw.creativeBrief.coreMessage, 300) || title,
@@ -190,8 +191,8 @@ export function normalizeVideoPlan(raw, sourcePrompt) {
     const text = cleanText(scene.text || scene.onScreenText, 180);
     if (!text) throw new Error("Teks utama scene " + (index + 1) + " kosong.");
     const scenePalette = PALETTES[(index + (category === "product" ? 2 : 0)) % PALETTES.length];
-    const background = /^#[0-9a-f]{6}$/i.test(String(scene.background || "")) ? scene.background : (raw.palette && /^#[0-9a-f]{6}$/i.test(String(raw.palette.background || "")) ? raw.palette.background : scenePalette.background || palette.background);
-    const accent = /^#[0-9a-f]{6}$/i.test(String(scene.accent || "")) ? scene.accent : (raw.palette && /^#[0-9a-f]{6}$/i.test(String(raw.palette.accent || "")) ? raw.palette.accent : scenePalette.accent || palette.accent);
+    const background = /^#[0-9a-f]{6}$/i.test(String(scene.background || "")) ? scene.background : (raw.palette && /^#[0-9a-f]{6}$/i.test(String(raw.palette.background || "")) ? raw.palette.background : palette.background);
+    const accent = /^#[0-9a-f]{6}$/i.test(String(scene.accent || "")) ? scene.accent : (raw.palette && /^#[0-9a-f]{6}$/i.test(String(raw.palette.accent || "")) ? raw.palette.accent : palette.accent);
     const narration = cleanText(scene.narration, 1200);
     const estimate = estimateDuration({ ...scene, text, narration });
     const modelDuration = Number(scene.durationSeconds || scene.duration);
@@ -260,60 +261,21 @@ export function normalizeVideoPlan(raw, sourcePrompt) {
   };
 }
 
-async function fetchJson(url, options, timeoutMs) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs || 90000);
-  try {
-    const response = await fetch(url, { ...options, signal: controller.signal });
-    const body = await response.text();
-    if (!response.ok) throw new Error("AI provider HTTP " + response.status + ": " + body.slice(0, 300));
-    try {
-      return JSON.parse(body);
-    } catch {
-      throw new Error("AI provider mengirim respons JSON yang tidak valid.");
-    }
-  } catch (error) {
-    if (controller.signal.aborted || error && error.name === "AbortError") throw new Error("AI planner melewati batas waktu. Coba lagi.");
-    throw error;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-async function requestOpenAICompatible(prompt, apiKey) {
-  const base = String(process.env.VIDEO_STUDIO_AI_BASE_URL || "https://api.openai.com/v1").trim().replace(/\/+$/, "");
-  const endpoint = /\/chat\/completions$/i.test(base) ? base : base + "/chat/completions";
-  const model = String(process.env.VIDEO_STUDIO_AI_MODEL || "gpt-4.1-mini").trim();
-  const payload = {
-    model,
-    temperature: 0.75,
-    response_format: { type: "json_object" },
-    messages: [
-      { role: "system", content: VIDEO_SYSTEM_PROMPT },
-      { role: "user", content: prompt }
-    ]
-  };
-  const json = await fetchJson(endpoint, {
-    method: "POST",
-    headers: { authorization: "Bearer " + apiKey, "content-type": "application/json", accept: "application/json" },
-    body: JSON.stringify(payload)
-  }, Number(process.env.VIDEO_STUDIO_AI_TIMEOUT_MS) || 90000);
-  const content = json && json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.content;
-  if (!content) throw new Error("AI provider tidak mengembalikan isi storyboard.");
-  return content;
-}
-async function requestExistingFallback(prompt) {
-  const endpoint = String(process.env.VIDEO_STUDIO_AI_FALLBACK_URL || "https://api-faa.my.id/faa/gpt-promt").trim();
-  const url = new URL(endpoint);
-  url.searchParams.set("prompt", VIDEO_SYSTEM_PROMPT);
-  url.searchParams.set("text", prompt);
-  const json = await fetchJson(url.toString(), { method: "GET", headers: { accept: "application/json" } }, Number(process.env.VIDEO_STUDIO_AI_TIMEOUT_MS) || 90000);
-  if (!json || !json.status || !json.result) throw new Error("Layanan AI fallback tidak memberikan hasil.");
-  return json.result;
-}
 export async function planVideoPrompt(prompt) {
   const sourcePrompt = cleanText(prompt, 6000);
-  if (sourcePrompt.length < 8) { const error = new Error("Jelaskan video yang ingin dibuat dengan sedikit lebih lengkap."); error.statusCode = 400; throw error; }
-  const apiKey = String(process.env.VIDEO_STUDIO_AI_API_KEY || process.env.OPENAI_API_KEY || "").trim();
-  const content = apiKey ? await requestOpenAICompatible(sourcePrompt, apiKey) : await requestExistingFallback(sourcePrompt);
-  return normalizeVideoPlan(parseJsonResponse(content), sourcePrompt);
+  if (sourcePrompt.length < 8) { const error = new Error("Jelaskan video dengan lebih lengkap."); error.statusCode = 400; throw error; }
+  const endpoint = localServiceUrl(process.env.VIDEO_STUDIO_OLLAMA_URL || "http://127.0.0.1:11434", "api/chat");
+  const model = process.env.VIDEO_STUDIO_OLLAMA_MODEL || "qwen2.5:7b";
+  if (/cloud/i.test(model)) throw new Error("Model Ollama cloud tidak diizinkan.");
+  try {
+    const json = await localJson(endpoint, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model, stream: false, format: "json", keep_alive: 0,
+        options: { temperature: 0.6, num_ctx: 16384 },
+        messages: [{ role: "system", content: VIDEO_SYSTEM_PROMPT }, { role: "user", content: sourcePrompt }] })
+    }, Math.min(600000, Math.max(10000, Number(process.env.VIDEO_STUDIO_AI_TIMEOUT_MS) || 180000)));
+    return normalizeVideoPlan(parseJsonResponse(json?.message?.content), sourcePrompt);
+  } catch (error) {
+    throw new Error("Planner Ollama lokal gagal. Periksa service/model dengan .remotion services. " + error.message);
+  }
 }

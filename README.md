@@ -182,41 +182,8 @@ The same Video Studio engine is also available directly inside Alvareth Bot thro
 
 See [Linux deployment and provider setup](docs/REMOTION_WHATSAPP_LINUX.md). Android/Termux tutorial steps are not used by this implementation.
 
-### Setup
+### Local setup and verification
 
-1. Install dependencies after updating the bot: npm install.
-2. Optional but recommended: configure a text-model provider using VIDEO_STUDIO_AI_API_KEY, VIDEO_STUDIO_AI_BASE_URL, and VIDEO_STUDIO_AI_MODEL in the private server environment. The default base URL is OpenAI-compatible (https://api.openai.com/v1). If no key is supplied, the planner tries the existing API-Faa GPT-prompt endpoint as a best-effort fallback.
-3. The API key for LightJurnal is generated automatically on first startup and saved outside the Git checkout at ~/.alvareth-bot-data/video-studio/api-key with owner-only file permissions. It is never committed to GitHub. An explicit VIDEO_STUDIO_API_KEY environment value (at least 32 characters) overrides the generated key.
-4. CORS defaults to https://lightjurnal.my.id; override with VIDEO_STUDIO_ALLOWED_ORIGINS only when needed.
-5. The HTTP server starts when Pterodactyl provides SERVER_PORT (or when PORT is explicitly set). The existing WhatsApp bot and this API run in the same Alvareth-Bot process.
-6. The dedicated remotely-managed Cloudflare Tunnel publishes `https://video.lightjurnal.my.id` to the local HTTP server on port 2132. Its hostname route and DNS record are provisioned in Cloudflare; the existing `chromebook-lightjurnal` SSH tunnel is not modified.
-7. The simplest setup for a server account without Startup/Environment access is to upload the token as `/home/container/.alvareth-bot-data/video-studio/tunnel-token` through Pterodactyl Files. Create the folders if needed and upload a file containing only the tunnel token. On startup, Alvareth applies owner-only permissions (`0600`). Alternatively, set `VIDEO_STUDIO_TUNNEL_TOKEN` in the private Pterodactyl environment. Never commit or log the token.
-8. On startup, the bot detects `cloudflared` in its configured/local/PATH locations; if absent on Linux x64/ARM64, it downloads the official release and verifies the published SHA-256 before execution. The named tunnel reconnects automatically with bounded exponential backoff. Do not use a Quick Tunnel for the stable production hostname.
-9. Optional but recommended for full media production: set VIDEO_STUDIO_ELEVENLABS_API_KEY and VIDEO_STUDIO_ELEVENLABS_VOICE_ID for AI narration with character-level timing; set VIDEO_STUDIO_PEXELS_API_KEY for relevant licensed stock footage. Keep all three values in the private Pterodactyl environment, never in GitHub or the browser.
-10. In LightJurnal → Video Studio, the HTTPS API URL is prefilled as `https://video.lightjurnal.my.id`; enter the API key once. These are connection credentials, not creative settings; the prompt is the only video brief input.
+Follow [Linux local-service setup](docs/REMOTION_WHATSAPP_LINUX.md) and [license/skill audit](docs/REMOTION_LOCAL_LICENSES.md). Planning uses local Ollama; narration uses the included VoxCPM2 Python adapter. No hosted AI or stock-media fallback is used. Music is absent unless a suitable local track exists. Motion graphics remain available without an optional reviewed ComfyUI workflow.
 
-### API
-
-- GET /api/video-studio/health — public readiness check (does not reveal the key).
-- GET /api/video-studio/limits — supported renderer limits; requires Bearer authentication.
-- POST /api/video-studio/plan — accepts a prompt and returns a normalized creative brief/storyboard.
-- POST /api/video-studio/jobs — accepts a validated plan and enqueues the compiled Remotion project. Legacy manual payloads remain supported for compatibility.
-- GET /api/video-studio/jobs — recent render jobs.
-- GET /api/video-studio/jobs/:id — inspect job status.
-- GET /api/video-studio/jobs/:id/download — download completed MP4.
-
-All routes except health require a Bearer VIDEO_STUDIO_API_KEY. Model credentials stay on the server and are never sent to the browser.
-
-### Creative and rendering behavior
-
-- The AI chooses narrative structure, scene count, variable scene durations, visual hierarchy, palette, composition, motion, transitions, music mood and selected sound cues.
-- The renderer supports typography and designed motion graphics (hero, editorial, split, stat, quote, steps and outro), animated geometric motifs, optional generated voice-over, word-timed captions, and optional downloaded stock video.
-- Voice-over uses the ElevenLabs text-to-speech-with-timestamps endpoint. Its character alignment is converted into timed subtitle phrases and scene timing; music is automatically ducked under narration.
-- Stock footage uses Pexels video search, downloads selected MP4 assets to the server, places them behind the motion design, and burns photographer/Pexels credits into the relevant scenes. Scenes without a useful stock search phrase remain motion graphics.
-- Renderer safety limits: maximum 60 scenes, 20 seconds per scene, and 300 seconds total. These are server safeguards, not user-facing controls.
-- AI-generated scene footage and AI background music are optional through configured ComfyUI API workflows; voice-over and word-timed captions use ElevenLabs; licensed stock footage uses Pexels. The prompt planner now creates a visual bible and recurring character bible, which are repeated in selected AI footage prompts. A configured ComfyUI image workflow can generate one character reference image per job and pass it to an image-to-video workflow through {{REFERENCE_IMAGE}}; visual identity continuity is improved but not guaranteed. Uploaded-media editing, photorealistic/3D asset generation, and a drag-and-drop editing timeline are not implemented.
-- A VPS deployment, dependency installation, HTTPS reverse proxy, configured AI provider, browser Chromium and real MP4 render test must be verified on the live Pterodactyl instance before claiming production readiness.
-
-### Official Remotion Agent Skills
-
-The 13 official Remotion Agent Skills are installed under .agents/skills, together with the project-specific remotion-professional-editor skill. Run npm run skills:remotion to refresh the official collection. See video-studio/SKILLS.md for guidance on when to load each skill.
+Existing authenticated LightJurnal API routes and the tunnel are preserved. The WhatsApp owner check applies to the WhatsApp entrypoint; the separate HTTP API retains Bearer authentication. Native voice generation, subtitles, hardware performance and WhatsApp delivery must be validated on the actual VPS.

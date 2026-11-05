@@ -36,7 +36,6 @@ Act as a senior film editor, motion-design director, and story editor. The goal 
 
 ## Honesty about assets
 
-The current LightJurnal renderer supports motion graphics, animated typography, geometric motifs, procedural music, selected sound cues, optional ElevenLabs voice-over with character-level timing, word-highlighted captions, and optional Pexels stock footage with on-screen photographer attribution. Voice-over requires VIDEO_STUDIO_ELEVENLABS_API_KEY plus VIDEO_STUDIO_ELEVENLABS_VOICE_ID; footage requires VIDEO_STUDIO_PEXELS_API_KEY. Missing keys must degrade gracefully to motion graphics. AI-generated footage, uploaded-media editing, and photorealistic 3D footage are not implemented. Never claim a live production render is verified until the final MP4 has actually been rendered and inspected on the target server.
 
 ## Quality gate
 
@@ -51,3 +50,5 @@ Before finishing, check:
 - Music and effects are balanced and do not mask speech.
 - The ending has a clear visual payoff.
 - The rendered file has the expected duration, dimensions, and playable audio/video streams.
+
+Use only local Ollama and VoxCPM2 for planning and narration. Follow docs/REMOTION_WHATSAPP_LINUX.md and .agents/skills/alvareth-editorial-quality/SKILL.md for current audio and verification policy. No hosted AI fallback; no unreviewed media downloads.

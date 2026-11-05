@@ -5,7 +5,7 @@ function clean(value, max = 500) {
 }
 
 export async function prepareAiMusic(project, jobId) {
-  if (!isComfyConfigured("music")) return { musicTrackSrc: project.musicTrackSrc || "", musicBpm: project.musicBpm || 0, warnings: [] };
+  if (project.musicStyle === "none" || !isComfyConfigured("music")) return { musicTrackSrc: project.musicTrackSrc || "", musicBpm: project.musicBpm || 0, warnings: [] };
   try {
     const brief = project.creativeBrief || {};
     const prompt = [
@@ -30,7 +30,7 @@ export async function prepareAiMusic(project, jobId) {
     return {
       musicTrackSrc: project.musicTrackSrc || "",
       musicBpm: project.musicBpm || 0,
-      warnings: ["Musik AI tidak tersedia; soundtrack bawaan digunakan: " + clean(error.message, 160)]
+      warnings: ["Musik AI tidak tersedia; video tanpa musik: " + clean(error.message, 160)]
     };
   }
 }

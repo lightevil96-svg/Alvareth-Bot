@@ -1,3 +1,4 @@
+import { SFX_SECONDS } from "../engine/sound-design.js";
 import React from "react";
 import {
   AbsoluteFill,
@@ -31,11 +32,7 @@ const MUSIC_FILES = {
   upbeat: "audio/music-upbeat.wav",
   calm: "audio/music-calm.wav"
 };
-const SFX_FILES = {
-  whoosh: "audio/sfx-whoosh.wav",
-  pop: "audio/sfx-pop.wav",
-  impact: "audio/sfx-impact.wav"
-};
+const SFX_FILES = Object.fromEntries(Object.keys(SFX_SECONDS).map(cue => [cue, 'audio/sfx-' + cue + '.wav']));
 
 const isLightColor = hex => {
   const value = String(hex || "").replace("#", "");
@@ -86,14 +83,16 @@ const SceneSound = ({ cue, volume = 0.55 }) => {
   const frame = useCurrentFrame();
   const source = SFX_FILES[cue];
   if (!source) return null;
-  const envelope = interpolate(frame, [0, 3, 18], [0, 1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const { fps } = useVideoConfig();
+  const end = Math.ceil((SFX_SECONDS[cue] || .8) * fps);
+  const envelope = interpolate(frame, [0, 1, Math.max(2, end - 2), end], [0, 1, 1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
   return <Audio src={staticFile(source)} volume={Math.max(0, Math.min(1, volume)) * envelope} />;
 };
 
 const MusicTrack = ({ musicStyle, musicTrackSrc, totalFrames, captions, voiceoverTracks, musicVolume = 0.16 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const source = musicTrackSrc || MUSIC_FILES[musicStyle];
+  const source = musicTrackSrc;
   if (!source) return null;
   const fadeIn = interpolate(frame, [0, Math.max(1, fps * 1.8)], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
   const fadeOut = interpolate(frame, [Math.max(0, totalFrames - fps * 2.2), totalFrames], [1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
@@ -104,9 +103,10 @@ const MusicTrack = ({ musicStyle, musicTrackSrc, totalFrames, captions, voiceove
 
 const VoiceTrack = ({ track }) => {
   const frame = useCurrentFrame();
-  const { fps, durationInFrames } = useVideoConfig();
-  const fadeIn = Math.max(0, Math.round(Number(track.fadeInSeconds || 0.04) * fps));
-  const fadeOut = Math.max(0, Math.round(Number(track.fadeOutSeconds || 0.12) * fps));
+  const { fps } = useVideoConfig();
+  const durationInFrames = track.durationInFrames;
+  const fadeIn = Math.max(0, Number(track.fadeInFrames ?? Math.round(.04 * fps)));
+  const fadeOut = Math.max(0, Number(track.fadeOutFrames ?? Math.round(.12 * fps)));
   const inGain = fadeIn ? interpolate(frame, [0, fadeIn], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }) : 1;
   const outGain = fadeOut ? interpolate(frame, [Math.max(0, durationInFrames - fadeOut), durationInFrames], [1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }) : 1;
   return <Audio src={staticFile(track.src)} volume={Math.max(0, Math.min(2, Number(track.volume ?? 1))) * Math.min(inGain, outGain)} />;
@@ -274,7 +274,7 @@ registerVideoPlugin({
 
 const VideoComposition = ({
   scenes,
-  musicStyle = "cinematic",
+  musicStyle = "none",
   musicTrackSrc = "",
   musicVolume = 0.16,
   musicBpm = 0,
@@ -285,7 +285,7 @@ const VideoComposition = ({
   captionPosition = "bottom"
 }) => {
   const { fps } = useVideoConfig();
-  const timeline = buildTimelineTracks({ scenes, musicStyle, musicBpm, voiceoverTracks, captions, musicTrackSrc, musicVolume }, fps);
+  const timeline = buildTimelineTracks({ scenes, soundEffects, musicStyle, musicBpm, voiceoverTracks, captions, musicTrackSrc, musicVolume }, fps);
   const safeScenes = Array.isArray(scenes) ? scenes : [];
   const music = timeline.musicClips[0];
   return <AbsoluteFill style={{ background: "#111827" }}>
@@ -312,7 +312,7 @@ export const RemotionRoot = () => <Composition
   durationInFrames={300}
   defaultProps={{
     scenes: [{ id: "scene-01", text: "Mulai berkarya", duration: 4, background: "#111827", accent: "#68DDB8", layout: "hero", motif: "rings", motion: "fade-up", transition: "fade", soundCue: "none" }],
-    musicStyle: "cinematic",
+    musicStyle: "none",
     musicTrackSrc: "",
     musicVolume: 0.16,
     musicBpm: 0,

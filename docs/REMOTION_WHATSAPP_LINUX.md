@@ -1,88 +1,112 @@
-# Remotion WhatsApp — Linux Deployment
+# Alvareth Remotion — local Linux setup
 
-## What changes
+Current pipeline: owner WhatsApp → local Ollama JSON storyboard → schema/compiler → single-worker queue → local VoxCPM2 → optional reviewed local ComfyUI → deterministic Remotion → MP4 upload. No hosted planner/TTS/stock fallback. No deployment is performed by this change.
 
-The legacy FreeTheAI text/image-to-video command is removed. The owner-only WhatsApp command is now `.remotion`, which calls the existing Alvareth Video Studio prompt planner, safe storyboard compiler, media pipeline, Remotion renderer, and disk-backed WhatsApp uploader.
+## Requirements
 
-The Android/Termux steps in the reference tutorial are intentionally not used. This deployment runs natively on Linux.
+Node.js 22+, Python 3.10+ (3.11 recommended), FFmpeg/FFprobe, Chromium dependencies, disk space for model weights and renders. A CUDA-capable GPU is strongly preferable for VoxCPM2 and any visual generation. CPU is selectable but throughput/RAM must be measured; no minimum VRAM or real-time claim is made. Ollama unloads after planning (keep_alive=0); the TTS service serializes synthesis. Run one bot process for this filesystem-backed queue, not multiple replicas sharing jobs.json.
+
+## Install in an existing checkout
+
+Preserve .env, sessions and database. If the checkout has local edits, resolve them before switching branches. Do not overwrite .env with the example.
+
+```bash
+git status --short
+git fetch origin
+git switch feat/remotion-whatsapp-linux
+git pull --ff-only origin feat/remotion-whatsapp-linux
+sudo apt-get update
+sudo apt-get install -y ffmpeg python3-venv libnss3 libatk-bridge2.0-0 libgbm1 libasound2t64
+npm install
+npm test
+python3 -m venv .venv-voxcpm
+.venv-voxcpm/bin/pip install -r video-studio/services/voxcpm/requirements.txt
+```
+
+Package names differ across distributions (older Ubuntu uses libasound2). Upstream VoxCPM dependencies are substantial; select the matching PyTorch CUDA build for the VPS and lock the resolved environment after a real synthesis test.
+
+Install Ollama using its official Linux instructions: https://docs.ollama.com/linux. Then download an explicitly licensed model once:
+
+```bash
+ollama pull qwen2.5:7b
+```
+
+Set `OLLAMA_NO_CLOUD=1` on the Ollama service and bind to `127.0.0.1:11434`. The application rejects non-loopback URLs and cloud-tagged model names. Do not expose Ollama, ComfyUI or the TTS port publicly.
+
+Download VoxCPM2 once (model download is not inference/API credit usage):
+
+```bash
+mkdir -p "$HOME/alvareth-models/VoxCPM2"
+.venv-voxcpm/bin/hf download openbmb/VoxCPM2 --local-dir "$HOME/alvareth-models/VoxCPM2"
+VOXCPM_MODEL_PATH="$HOME/alvareth-models/VoxCPM2" VOXCPM_DEVICE=cuda   .venv-voxcpm/bin/python video-studio/services/voxcpm/server.py
+```
+
+Use `VOXCPM_DEVICE=cpu` only when GPU is unavailable and memory/latency are acceptable. The wrapper validates architecture=voxcpm2, loads local files only, disables denoiser downloads and synthesis-time normalization dependencies, uses the documented voice-description prefix, and retains a single loaded model. `/speech` is OUR HTTP wrapper contract, not an alleged official OpenBMB REST endpoint.
+
+The process must remain running via your existing supervisor/systemd. No production supervisor configuration is changed automatically. Successful health means loaded model, not proven voice quality:
+
+```bash
+curl --fail http://127.0.0.1:7861/health
+```
+
+## Optional word alignment
+
+Upstream supports local stable-ts forced alignment. Install the optional dependency and download a Whisper checkpoint once:
+
+```bash
+.venv-voxcpm/bin/pip install stable-ts==2.19.1
+.venv-voxcpm/bin/python -c 'import whisper; whisper.load_model("base", download_root="/tmp/alvareth-whisper-download")'
+mkdir -p "$HOME/alvareth-models/whisper"
+cp /tmp/alvareth-whisper-download/base.pt "$HOME/alvareth-models/whisper/base.pt"
+```
+
+Restart the TTS service with `VOXCPM_ALIGNMENT_MODEL_PATH=$HOME/alvareth-models/whisper/base.pt`. The adapter uses upstream StableTSAligner with language `id` by default. Without valid alignment, speech remains scene-synchronized and word-highlight captions are disabled with a warning. No evenly-spaced fake timestamps. Each scene is synthesized separately; speaker/prosody continuity must still be evaluated by listening.
+
+## Bot environment
+
+Add/update these values in the existing private .env:
+
+```dotenv
+VIDEO_STUDIO_OLLAMA_URL=http://127.0.0.1:11434
+VIDEO_STUDIO_OLLAMA_MODEL=qwen2.5:7b
+VIDEO_STUDIO_AI_TIMEOUT_MS=180000
+VIDEO_STUDIO_VOXCPM_URL=http://127.0.0.1:7861
+VIDEO_STUDIO_VOXCPM_TIMEOUT_MS=600000
+VIDEO_STUDIO_VOICE_REQUIRED=true
+VIDEO_STUDIO_RENDER_CONCURRENCY=1
+```
+
+If infrastructure cannot run speech, an operator may explicitly set `VIDEO_STUDIO_VOICE_REQUIRED=false`; the result includes a no-narration warning. There is no alternate TTS provider. Remove obsolete VIDEO_STUDIO_AI_API_KEY/BASE_URL/FALLBACK_URL, VIDEO_STUDIO_ELEVENLABS_*, VIDEO_STUDIO_PEXELS_* and VIDEO_STUDIO_COMFYUI_API_KEY settings after checking no external custom script uses them. Other bot features' API keys are unrelated and must be preserved.
+
+The repository updater defaults to main. On a staging checkout, set `AUTO_UPDATE_ENABLED=false` before starting so development testing is not replaced by production branch updates. Do not change a live VPS updater without an explicit deployment decision.
+
+## Optional ComfyUI
+
+No default visual/music model is silently chosen. Audit model license, node source, all network-capable nodes and memory requirements. Use only non-WAN local workflows. Put approved API-format graphs outside Git secrets/data, calculate `sha256sum /path/to/workflow.json`, and add the exact digest to comma-separated `VIDEO_STUDIO_COMFYUI_REVIEWED_SHA256`. Set the relevant VIDEO_STUDIO_COMFYUI_*_WORKFLOW_FILE and loopback URL. Hash checks pin reviewed bytes; they cannot prove custom-node behavior or detect a renamed banned model. The operator review is necessary.
+
+Without suitable visual workflows the output is designed motion graphics, not generated character animation/photorealistic footage. Without suitable music, there is no music. SFX are generated locally and require no model.
 
 ## WhatsApp commands
 
-- `.remotion` — open the interactive menu.
-- `.remotion generate` — start a prompt session; send the creative brief as the next plain-text message.
-- `.remotion <prompt>` — start generation immediately.
-- `.remotion status` — inspect active jobs and reattach delivery monitoring.
-- `.remotion history` — list recent jobs and their IDs.
-- `.remotion send` — resend the newest completed MP4.
-- `.remotion send <job-id>` — resend a specific completed MP4.
-- `.remotion guide` — show a prompt example.
-- `.remotion services` — inspect local provider configuration.
-- `.remotion cancel` — cancel only a pending prompt-input session; it does not stop an active render.
+`.remotion` provides seven menu actions: generate, status, history, resend, services, guide, cancel. `.remotion <natural prompt>` also works. Every plugin invocation requires `isROwner === true`; the router retains its own owner check. Prompt sessions require matching sender and chat; another owner cannot cancel that session. Cancellation only cancels input, not a queued render. Job history/output can be accessed by authorized owners. `/services` is configuration plus live Ollama/VoxCPM2 health, not an end-to-end guarantee.
 
-Access is restricted with the configured root-owner identity (`OWNER_NUMBER`). Menu action IDs are routed through the normal command handler and pass the same owner permission check.
+## Sound and timing
 
-## Linux requirements
+The planner selects a scene cue and overlay delays. `engine/sound-design.js` converts visible entry/transition/notification/callout events to frame positions shared with the scene. Nine procedural effects have bounded peaks, short fades and speech attenuation. Cues too close together are deduplicated and effects that cannot finish before scene end are omitted. Each motion does not automatically deserve a noise. Optional music uses only a supplied/generated local track.
 
-- Node.js 22+ and npm, matching the Alvareth Bot runtime.
-- Linux with glibc 2.35 or newer. Alpine Linux and NixOS are not supported by Remotion.
-- FFmpeg and FFprobe available on `PATH`.
-- Remotion's Chromium runtime libraries and fonts.
-- Enough CPU, RAM, and writable disk for Chromium rendering, generated assets, and WhatsApp upload temp files.
+Narration WAV is probed and fully decoded before use. Scene durations expand to complete speech plus breathing space, quantized to project FPS. Longer than 19.7 seconds spoken per scene or 300 seconds total fails clearly rather than truncating narration.
 
-For Debian/Ubuntu, install the common runtime dependencies:
+## Acceptance tests
 
-    sudo apt-get update
-    sudo apt-get install -y ffmpeg libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libx11-xcb1 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libasound2 fonts-liberation libpango-1.0-0 libcairo2 libglib2.0-0 libxss1 libxtst6 xdg-utils
+```bash
+npm test
+python3 -m unittest discover -s tests -p '*_test.py'
+# Real services required; this must produce actual VoxCPM2 narration:
+npm run test:remotion-live
+# Renderer-only fixed storyboard, explicitly NOT an AI or speech test:
+node scripts/remotion-smoke.js --fixture
+```
 
-On distributions that package ALSA as `libasound2t64`, install that package instead of `libasound2`.
+Smoke output defaults to /tmp/alvareth-remotion-smoke; override REMOTION_SMOKE_DIR to retain it. A successful smoke includes H.264 video, audio, correct dimensions, full FFmpeg decode and JSON probe evidence. Listen to voice/SFX, inspect transitions/subtitles, then test all seven actions plus a non-owner account on real WhatsApp. CI fixture rendering never establishes that VoxCPM2 or WhatsApp works on the VPS.
 
-From the repository directory:
-
-    node --version
-    ffmpeg -version
-    ffprobe -version
-    npm install
-    npm run test:video-studio
-    npm start
-
-Do not run two bot instances with the same WhatsApp session. The normal Alvareth startup updater remains responsible for fetching the selected Git branch.
-
-## Provider configuration
-
-The prompt-only experience chooses creative and technical settings automatically. These are server-side providers, not extra WhatsApp controls.
-
-| Capability | Environment variables | Behavior when unavailable |
-| --- | --- | --- |
-| Prompt planning | `VIDEO_STUDIO_AI_API_KEY`, `VIDEO_STUDIO_AI_BASE_URL`, `VIDEO_STUDIO_AI_MODEL` | Uses the configured fallback endpoint if available; planning errors are reported. |
-| Voice-over and aligned captions | `VIDEO_STUDIO_ELEVENLABS_API_KEY`, `VIDEO_STUDIO_ELEVENLABS_VOICE_ID` | Video can render without generated narration; a warning is recorded. |
-| Licensed stock footage | `VIDEO_STUDIO_PEXELS_API_KEY` | Motion graphics remain available. |
-| Character reference image | `VIDEO_STUDIO_COMFYUI_URL`, `VIDEO_STUDIO_COMFYUI_IMAGE_WORKFLOW_FILE` | Text-only character prompts are used. |
-| AI video footage | `VIDEO_STUDIO_COMFYUI_URL`, `VIDEO_STUDIO_COMFYUI_VIDEO_WORKFLOW_FILE` | AI footage is skipped; stock footage or motion graphics are used. |
-| AI background music | `VIDEO_STUDIO_COMFYUI_URL`, `VIDEO_STUDIO_COMFYUI_MUSIC_WORKFLOW_FILE` | Built-in procedural soundtrack is used. |
-| WhatsApp upload | `ALVARETH_WA_UPLOAD_TIMEOUT_MS`, `ALVARETH_WA_TMPDIR` | Existing disk-streaming upload validation reports storage, permission, timeout, or connection failures. |
-
-Keep ComfyUI on localhost or a private network/VPN. Do not expose its API directly to the public internet. Workflow files must be ComfyUI API-format JSON and use the supported placeholders: `{{PROMPT}}`, `{{NEGATIVE_PROMPT}}`, `{{WIDTH}}`, `{{HEIGHT}}`, `{{DURATION}}`, `{{FPS}}`, `{{SEED}}`, `{{SCENE_ID}}`, and (for image-to-video) `{{REFERENCE_IMAGE}}`. Image workflows must save PNG/JPG/WebP; video workflows must save MP4/WebM/MOV; music workflows must save WAV/MP3/FLAC/OGG.
-
-The current ComfyUI adapter can create a reusable character reference image, selected short AI footage clips, and AI music when those workflows are configured. If both image and video workflows are configured, the adapter generates one reference image from the character bible, uploads it to ComfyUI, and passes the returned image name into the video workflow. The video workflow must be an image-to-video workflow whose LoadImage node uses `{{REFERENCE_IMAGE}}`. This improves visual continuity, but does not guarantee pixel-identical character identity across separate clips; verify the chosen model/workflow with real renders.
-
-## Production skills
-
-The repository includes the official Remotion Agent Skills and the custom `remotion-professional-editor` skill. The new `alvareth-ai-video-production` skill defines the complete prompt-led production workflow. Use this sequence when developing the video engine:
-
-1. `remotion-best-practices` — routing and overall Remotion rules.
-2. `alvareth-ai-video-production` and `remotion-professional-editor` — creative brief, visual bible, character bible, story beats, editorial pacing, and audio direction.
-3. `remotion-markup` — composition JSX, animation, typography, transitions, and sound.
-4. `remotion-captions` and `remotion-multimedia` — speech timing, captions, and media metadata.
-5. `remotion-render` and `remotion-studio` — rendering and preview verification.
-6. `remotion-saas` and `remotion-docs` — integration and current API references.
-7. `remotion-license` — licensing checks before commercial distribution.
-
-Remotion Agent Skills are coding-agent instructions, not runtime video models. Actual AI footage, narration, and music still require their configured providers and model workflows.
-
-## Output and runtime data
-
-- MP4 output: `~/.alvareth-bot-data/video-studio/renders/` by default.
-- Queue history: `~/.alvareth-bot-data/video-studio/jobs.json`.
-- Override the base directory with `ALVARETH_DATA_DIR`.
-- Completed renders are retained so `.remotion send <job-id>` can resend them.
-- A failed WhatsApp upload does not delete the MP4.
+See REMOTION_LOCAL_LICENSES.md for licensing and REMOTION_AUDIT_2026-11-06.md for this session's evidence and limitations.

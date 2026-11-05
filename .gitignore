@@ -25,3 +25,10 @@ assets/pingcanvas/
 .alvareth-bot-data/
 youtube-cookies.txt
 *.cookies.txt
+
+# Generated media, test renders and Python runtime
+video-studio/remotion/public/
+__pycache__/
+.venv*/
+
+/node_modules
