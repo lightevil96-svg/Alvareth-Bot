@@ -130,7 +130,9 @@ export function validateVideoProject(input) {
       return {
         cue,
         delaySeconds: Math.max(0, Math.min(Math.max(0, duration - 0.05), Number(event?.delaySeconds) || 0)),
-        durationSeconds: Math.max(0.08, Math.min(3, Number(event?.durationSeconds) || 0)),
+        durationSeconds: Number.isFinite(Number(event?.durationSeconds)) && Number(event.durationSeconds) > 0
+          ? Math.max(0.08, Math.min(3, Number(event.durationSeconds)))
+          : 0,
         intensity: Number.isFinite(Number(event?.intensity)) ? Math.max(0.05, Math.min(1, Number(event.intensity))) : 0.55
       };
     }).filter(Boolean) : [];
