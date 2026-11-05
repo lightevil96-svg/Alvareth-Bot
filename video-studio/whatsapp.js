@@ -72,6 +72,7 @@ export function getRemotionProviderReadiness(env = {}, fileExists = () => false,
   );
   const pexels = Boolean(String(env.VIDEO_STUDIO_PEXELS_API_KEY || env.PEXELS_API_KEY || "").trim());
   const videoWorkflow = String(env.VIDEO_STUDIO_COMFYUI_VIDEO_WORKFLOW_FILE || "").trim();
+  const imageWorkflow = String(env.VIDEO_STUDIO_COMFYUI_IMAGE_WORKFLOW_FILE || "").trim();
   const musicWorkflow = String(env.VIDEO_STUDIO_COMFYUI_MUSIC_WORKFLOW_FILE || "").trim();
   const exists = value => {
     if (!value) return false;
@@ -106,6 +107,11 @@ export function getRemotionProviderReadiness(env = {}, fileExists = () => false,
       name: "AI video footage",
       configured: exists(videoWorkflow),
       detail: exists(videoWorkflow) ? "Workflow ComfyUI video ditemukan." : "Opsional: pasang workflow API-format ComfyUI dan isi VIDEO_STUDIO_COMFYUI_VIDEO_WORKFLOW_FILE."
+    },
+    {
+      name: "Character reference image",
+      configured: exists(imageWorkflow),
+      detail: exists(imageWorkflow) ? "Workflow ComfyUI image ditemukan; workflow video juga harus memakai placeholder {{REFERENCE_IMAGE}}." : "Opsional: pasang workflow image generation untuk membuat referensi karakter sebelum image-to-video."
     },
     {
       name: "AI background music",
