@@ -3,7 +3,7 @@
 > **Tujuan:** orientasi singkat untuk AI/developer yang melanjutkan proyek.
 > **Repository:** https://github.com/lightevil96-svg/Alvareth-Bot
 > **Branch produksi:** `main`
-> **Ditinjau:** 2026-10-29
+> **Ditinjau:** 2026-11-05
 >
 > Baca `AGENTS.md` terlebih dahulu, lalu file ini dan `docs/AI_CHANGELOG.md`. Catatan membantu orientasi, tetapi kode saat ini tetap menjadi sumber kebenaran.
 
