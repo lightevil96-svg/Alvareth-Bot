@@ -34,6 +34,8 @@ Optional:
       Force CPU-only PyTorch.
   VOXCPM_MODEL_PATH=/absolute/path
       Override the VoxCPM2 model directory.
+  VOXCPM_ALLOW_CPU=1
+      Explicitly opt into experimental/slow CPU-only VoxCPM2; CUDA is the upstream target.
 HELP
       exit 0
       ;;
@@ -123,11 +125,14 @@ if [ -n "${VOXCPM_TORCH_INDEX_URL:-}" ]; then
   info "Memasang PyTorch dari index yang dipilih: ${VOXCPM_TORCH_INDEX_URL}"
   "$UV_BIN" pip install --python "$PYTHON" torch torchaudio --index-url "$VOXCPM_TORCH_INDEX_URL"
 elif have nvidia-smi && nvidia-smi >/dev/null 2>&1; then
-  info "GPU NVIDIA terdeteksi. Memasang PyTorch dari PyPI; verifikasi CUDA akan dilakukan sesudah instalasi."
-  "$UV_BIN" pip install --python "$PYTHON" torch torchaudio
+  info "GPU NVIDIA terdeteksi. Memasang PyTorch dengan backend CUDA otomatis; verifikasi CUDA dilakukan sesudah instalasi."
+  UV_TORCH_BACKEND="${VOXCPM_TORCH_BACKEND:-auto}" "$UV_BIN" pip install --python "$PYTHON" torch torchaudio
 else
-  info "Tidak ada GPU NVIDIA yang terlihat. Memasang PyTorch CPU; inference VoxCPM2 dapat sangat lambat."
-  "$UV_BIN" pip install --python "$PYTHON" torch torchaudio --index-url "https://download.pytorch.org/whl/cpu"
+  if [ "${VOXCPM_ALLOW_CPU:-0}" != "1" ]; then
+    fail "GPU NVIDIA tidak terlihat di container. VoxCPM2 upstream menargetkan CUDA >=12.0. Pindahkan service ke container dengan GPU passthrough, atau ulangi secara eksperimental dengan VOXCPM_ALLOW_CPU=1."
+  fi
+  info "CPU-only dipilih secara eksplisit. Inference VoxCPM2 dapat sangat lambat dan tidak direkomendasikan untuk produksi."
+  UV_TORCH_BACKEND=cpu "$UV_BIN" pip install --python "$PYTHON" torch torchaudio
 fi
 
 info "Memasang adapter VoxCPM2 pada commit yang dipin di requirements.txt..."
