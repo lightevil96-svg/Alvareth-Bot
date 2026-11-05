@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { localServiceUrl } from '../video-studio/local-service.js';
-import { getLocalVideoServiceConfig, isOllamaModelReady, isVoxCPMReady } from '../video-studio/local-services.js';
+import { buildLocalServiceEnvironment, getLocalVideoServiceConfig, isOllamaModelReady, isVoxCPMReady } from '../video-studio/local-services.js';
 import { planVideoPrompt } from '../video-studio/prompt/planner.js';
 import { prepareVoiceover } from '../video-studio/media/voiceover.js';
 import { prepareVideoMedia } from '../video-studio/media/pipeline.js';
@@ -39,6 +39,29 @@ test('local services have usable loopback defaults and validate model health pay
   assert.equal(isOllamaModelReady({ models: [{ name: 'qwen2.5:3b' }] }), false);
   assert.equal(isVoxCPMReady({ provider: 'VoxCPM2', ready: true }), true);
   assert.equal(isVoxCPMReady({ provider: 'VoxCPM2', ready: false }), false);
+});
+test('local service children receive only an allowlisted environment, never bot credentials', () => {
+  const source = {
+    PATH: '/usr/bin',
+    HOME: '/home/alvareth',
+    CUDA_VISIBLE_DEVICES: '0',
+    OLLAMA_MODELS: '/data/ollama',
+    OWNER_NUMBER: '628000000000',
+    VIDEO_STUDIO_API_KEY: 'must-not-leak',
+    BOT_TOKEN: 'must-not-leak'
+  };
+  const vox = buildLocalServiceEnvironment('voxcpm', source, { VOXCPM_PORT: '7861' });
+  assert.equal(vox.HOME, '/home/alvareth');
+  assert.equal(vox.CUDA_VISIBLE_DEVICES, '0');
+  assert.equal(vox.VOXCPM_PORT, '7861');
+  assert.equal(vox.VIDEO_STUDIO_API_KEY, undefined);
+  assert.equal(vox.OWNER_NUMBER, undefined);
+  assert.equal(vox.BOT_TOKEN, undefined);
+  assert.equal(vox.OLLAMA_MODELS, undefined);
+  const ollama = buildLocalServiceEnvironment('ollama', source, { OLLAMA_NO_CLOUD: '1' });
+  assert.equal(ollama.OLLAMA_MODELS, '/data/ollama');
+  assert.equal(ollama.OLLAMA_NO_CLOUD, '1');
+  assert.equal(ollama.VIDEO_STUDIO_API_KEY, undefined);
 });
 test('local policy rejects hosted endpoints, credentials and redirect destinations', () => {
   for (const url of ['https://api.openai.com', 'http://localhost', 'http://127.0.0.1.evil.test', 'http://user:pass@127.0.0.1', 'file:///tmp/x']) assert.throws(() => localServiceUrl(url));

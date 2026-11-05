@@ -28,6 +28,26 @@ export function getLocalVideoServiceConfig(env = process.env) {
   };
 }
 
+const COMMON_SERVICE_ENV = [
+  "PATH", "HOME", "USER", "LOGNAME", "TMPDIR", "TEMP", "TMP", "LANG", "LC_ALL",
+  "LD_LIBRARY_PATH", "CUDA_HOME", "CUDA_PATH", "CUDA_VISIBLE_DEVICES",
+  "NVIDIA_VISIBLE_DEVICES", "NVIDIA_DRIVER_CAPABILITIES", "OMP_NUM_THREADS",
+  "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"
+];
+
+export function buildLocalServiceEnvironment(kind, env = process.env, overrides = {}) {
+  const specific = kind === "ollama"
+    ? ["OLLAMA_MODELS", "OLLAMA_KEEP_ALIVE", "OLLAMA_NUM_PARALLEL", "OLLAMA_MAX_LOADED_MODELS", "OLLAMA_FLASH_ATTENTION", "OLLAMA_KV_CACHE_TYPE", "OLLAMA_CONTEXT_LENGTH"]
+    : ["TORCH_HOME", "HF_HOME", "HUGGINGFACE_HUB_CACHE", "TRANSFORMERS_CACHE", "VOXCPM_VOICE_DESCRIPTION", "VOXCPM_ALIGNMENT_MODEL_PATH", "VOXCPM_ALIGNMENT_DEVICE"];
+  const result = {};
+  for (const key of [...COMMON_SERVICE_ENV, ...specific]) {
+    if (env[key] !== undefined && env[key] !== "") result[key] = env[key];
+  }
+  if (!result.PATH && process.env.PATH) result.PATH = process.env.PATH;
+  if (!result.HOME) result.HOME = homedir();
+  return { ...result, ...overrides };
+}
+
 export function isOllamaModelReady(payload, model = DEFAULT_OLLAMA_MODEL) {
   const models = Array.isArray(payload?.models) ? payload.models : [];
   return models.some(item => [item?.name, item?.model].some(name => String(name || "").trim() === model));
@@ -148,11 +168,10 @@ async function inspectOllama(config, env, waitMs) {
       };
     }
     const url = new URL(config.ollamaUrl);
-    launch = launchManaged("Ollama", "ollama", ["serve"], {
-      ...env,
+    launch = launchManaged("Ollama", "ollama", ["serve"], buildLocalServiceEnvironment("ollama", env, {
       OLLAMA_HOST: url.host,
-      OLLAMA_NO_CLOUD: env.OLLAMA_NO_CLOUD || "1"
-    });
+      OLLAMA_NO_CLOUD: "1"
+    }));
     if (launch.started || launch.alreadyManaged) {
       probe = await waitForService(endpoint, data => Boolean(data), waitMs);
     }
@@ -238,15 +257,14 @@ async function inspectVoxCPM(config, env, waitMs) {
       return { ready: false, reachable: false, detail: "Autostart adapter VoxCPM2 hanya mendukung 127.0.0.1. Atur VIDEO_STUDIO_VOXCPM_URL=http://127.0.0.1:7861." };
     }
     const device = detectPythonDevice(config.pythonPath, env);
-    launch = launchManaged("VoxCPM2", config.pythonPath, [config.pythonServer], {
-      ...env,
+    launch = launchManaged("VoxCPM2", config.pythonPath, [config.pythonServer], buildLocalServiceEnvironment("voxcpm", env, {
       VOXCPM_MODEL_PATH: config.modelPath,
       VOXCPM_PORT: url.port || "7861",
       VOXCPM_DEVICE: device,
       HF_HUB_OFFLINE: "1",
       HF_HUB_DISABLE_TELEMETRY: "1",
       PYTHONUNBUFFERED: "1"
-    });
+    }));
     if (launch.started || launch.alreadyManaged) {
       probe = await waitForService(endpoint, isVoxCPMReady, waitMs);
     }

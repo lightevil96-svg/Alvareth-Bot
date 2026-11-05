@@ -10,6 +10,7 @@
 ## Pembaruan terbaru
 
 - 2026-11-06: Follow-up CI fixes the planner base URL and VoxCPM2 transport diagnostics; see the latest changelog entry.
+- 2026-11-06: Local Ollama/VoxCPM2 child processes now inherit only allowlisted runtime/model/CUDA variables; bot credentials are excluded. Regression test added.
 
 - 2026-11-06: Remotion readiness now treats Ollama/VoxCPM2 defaults as configured, auto-starts local services only when their installed binaries, virtualenv and model weights exist, and reports exact setup actions when prerequisites are missing. No automatic package/model downloads; VPS provisioning and live MP4 verification remain separate.
 
