@@ -1,5 +1,5 @@
 import { mkdir, readFile, writeFile } from "fs/promises";
-import { dirname, join } from "path";
+import { basename, dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { randomInt } from "crypto";
 
@@ -15,7 +15,9 @@ function getConfig(kind) {
   const baseUrl = safeText(process.env.VIDEO_STUDIO_COMFYUI_URL || "http://127.0.0.1:8188", 300).replace(/\/+$/, "");
   const workflowFile = kind === "video"
     ? safeText(process.env.VIDEO_STUDIO_COMFYUI_VIDEO_WORKFLOW_FILE, 500)
-    : safeText(process.env.VIDEO_STUDIO_COMFYUI_MUSIC_WORKFLOW_FILE, 500);
+    : kind === "image"
+      ? safeText(process.env.VIDEO_STUDIO_COMFYUI_IMAGE_WORKFLOW_FILE, 500)
+      : safeText(process.env.VIDEO_STUDIO_COMFYUI_MUSIC_WORKFLOW_FILE, 500);
   return { baseUrl, workflowFile, apiKey: safeText(process.env.VIDEO_STUDIO_COMFYUI_API_KEY, 300) };
 }
 export function isComfyConfigured(kind) {
@@ -60,8 +62,8 @@ async function requestJson(url, options, timeoutMs, apiKey) {
 
 function findOutputFile(history, kind) {
   const entries = Object.values(history?.outputs || {});
-  const keys = kind === "video" ? ["videos", "gifs"] : ["audio", "audios", "gifs"];
-  const extensions = kind === "video" ? /\.(mp4|webm|mov)$/i : /\.(wav|mp3|flac|ogg|m4a)$/i;
+  const keys = kind === "video" ? ["videos", "gifs"] : kind === "image" ? ["images"] : ["audio", "audios", "gifs"];
+  const extensions = kind === "video" ? /\.(mp4|webm|mov)$/i : kind === "image" ? /\.(png|jpg|jpeg|webp)$/i : /\.(wav|mp3|flac|ogg|m4a)$/i;
   for (const output of entries) {
     for (const key of keys) {
       const files = Array.isArray(output?.[key]) ? output[key] : [];
@@ -85,7 +87,7 @@ async function downloadOutput(config, file, destination, kind, timeoutMs) {
     const response = await fetch(url.toString(), { headers, signal: controller.signal });
     if (!response.ok) throw new Error("Unduhan hasil ComfyUI gagal (HTTP " + response.status + ").");
     const contentType = String(response.headers.get("content-type") || "");
-    const maxBytes = kind === "video" ? 48 * 1024 * 1024 : 32 * 1024 * 1024;
+    const maxBytes = kind === "video" ? 48 * 1024 * 1024 : kind === "image" ? 20 * 1024 * 1024 : 32 * 1024 * 1024;
     const declared = Number(response.headers.get("content-length") || 0);
     if (declared > maxBytes) throw new Error("Hasil ComfyUI melebihi batas ukuran file.");
     if (contentType.includes("text/html") || contentType.includes("application/json")) throw new Error("ComfyUI mengembalikan respons non-media.");
@@ -113,8 +115,24 @@ async function downloadOutput(config, file, destination, kind, timeoutMs) {
   }
 }
 
-export async function generateComfyAsset({ kind, prompt, negativePrompt = "", jobId, filename, ratio = "9:16", durationSeconds = 5, fps = 24, width, height }) {
-  if (!["video", "music"].includes(kind)) throw new Error("Jenis generasi ComfyUI tidak didukung.");
+async function uploadReferenceImage(config, filePath, timeoutMs) {
+  const bytes = await readFile(filePath);
+  if (!bytes.length || bytes.length > 20 * 1024 * 1024) throw new Error("Character reference image kosong atau melebihi 20 MB.");
+  const form = new FormData();
+  form.append("image", new Blob([bytes]), basename(filePath));
+  form.append("overwrite", "true");
+  const uploaded = await requestJson(comfyUrl(config.baseUrl, "/upload/image"), {
+    method: "POST",
+    body: form
+  }, Math.min(timeoutMs, 60000), config.apiKey);
+  const name = safeText(uploaded?.name, 220);
+  const subfolder = safeText(uploaded?.subfolder, 220);
+  if (!name) throw new Error("ComfyUI tidak mengembalikan nama image reference yang valid.");
+  return subfolder ? subfolder + "/" + name : name;
+}
+
+export async function generateComfyAsset({ kind, prompt, negativePrompt = "", jobId, filename, ratio = "9:16", durationSeconds = 5, fps = 24, width, height, referenceImagePath = "" }) {
+  if (!["video", "image", "music"].includes(kind)) throw new Error("Jenis generasi ComfyUI tidak didukung.");
   const config = getConfig(kind);
   if (!config.workflowFile) throw new Error("Workflow ComfyUI untuk " + kind + " belum dikonfigurasi.");
   const timeoutMs = clamp(Number(process.env.VIDEO_STUDIO_COMFYUI_TIMEOUT_MS) || 900000, 60000, 1800000);
@@ -122,7 +140,13 @@ export async function generateComfyAsset({ kind, prompt, negativePrompt = "", jo
   const parsed = JSON.parse(workflowText);
   const graph = parsed && parsed.prompt && typeof parsed.prompt === "object" ? parsed.prompt : parsed;
   if (!graph || typeof graph !== "object" || Array.isArray(graph) || !Object.keys(graph).length) throw new Error("Workflow ComfyUI harus berupa API prompt graph JSON yang tidak kosong.");
-  const dimensions = ratio === "16:9" ? { width: 1920, height: 1080 } : ratio === "1:1" ? { width: 1080, height: 1080 } : { width: 1080, height: 1920 };
+  if (referenceImagePath && !workflowText.includes("{{REFERENCE_IMAGE}}")) {
+    throw new Error("Workflow video harus menggunakan placeholder {{REFERENCE_IMAGE}} pada node LoadImage agar character reference dipakai.");
+  }
+  const uploadedReference = referenceImagePath ? await uploadReferenceImage(config, referenceImagePath, timeoutMs) : "";
+  const dimensions = kind === "image"
+    ? { width: 1024, height: 1024 }
+    : ratio === "16:9" ? { width: 1920, height: 1080 } : ratio === "1:1" ? { width: 1080, height: 1080 } : { width: 1080, height: 1920 };
   const variables = {
     PROMPT: safeText(prompt, 1800),
     NEGATIVE_PROMPT: safeText(negativePrompt, 1000),
@@ -131,7 +155,8 @@ export async function generateComfyAsset({ kind, prompt, negativePrompt = "", jo
     DURATION: clamp(Number(durationSeconds) || 5, 2, 10),
     FPS: clamp(Number(fps) || 24, 12, 30),
     SEED: randomInt(1, 2147483646),
-    SCENE_ID: safeText(filename, 80)
+    SCENE_ID: safeText(filename, 80),
+    REFERENCE_IMAGE: uploadedReference
   };
   const workflow = applyComfyWorkflowVariables(graph, variables);
   const submitted = await requestJson(comfyUrl(config.baseUrl, "/prompt"), {
@@ -154,14 +179,16 @@ export async function generateComfyAsset({ kind, prompt, negativePrompt = "", jo
   }
   if (!output) throw new Error("ComfyUI tidak menghasilkan file " + kind + " sebelum batas waktu.");
 
-  const extension = String(output.filename).match(/\.(mp4|webm|mov|wav|mp3|flac|ogg|m4a)$/i)?.[0]?.toLowerCase();
+  const extension = String(output.filename).match(/\.(mp4|webm|mov|png|jpg|jpeg|webp|wav|mp3|flac|ogg|m4a)$/i)?.[0]?.toLowerCase();
   const folder = join(PUBLIC_DIR, "generated", safeText(jobId, 80));
   await mkdir(folder, { recursive: true });
-  const outputName = safeText(filename, 100) + (extension || (kind === "video" ? ".mp4" : ".wav"));
+  const fallbackExtension = kind === "video" ? ".mp4" : kind === "image" ? ".png" : ".wav";
+  const outputName = safeText(filename, 100) + (extension || fallbackExtension);
   const destination = join(folder, outputName);
   await downloadOutput(config, output, destination, kind, Math.min(timeoutMs, 120000));
   return {
     src: "generated/" + safeText(jobId, 80) + "/" + outputName,
+    path: destination,
     filename: outputName,
     prompt: variables.PROMPT,
     width: variables.WIDTH,
