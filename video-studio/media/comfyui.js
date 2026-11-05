@@ -15,9 +15,7 @@ function getConfig(kind) {
   const baseUrl = safeText(process.env.VIDEO_STUDIO_COMFYUI_URL || "http://127.0.0.1:8188", 300).replace(/\/+$/, "");
   const workflowFile = kind === "video"
     ? safeText(process.env.VIDEO_STUDIO_COMFYUI_VIDEO_WORKFLOW_FILE, 500)
-    : kind === "image"
-      ? safeText(process.env.VIDEO_STUDIO_COMFYUI_IMAGE_WORKFLOW_FILE, 500)
-      : safeText(process.env.VIDEO_STUDIO_COMFYUI_MUSIC_WORKFLOW_FILE, 500);
+    : safeText(process.env.VIDEO_STUDIO_COMFYUI_IMAGE_WORKFLOW_FILE, 500);
   return { baseUrl, workflowFile, apiKey: safeText(process.env.VIDEO_STUDIO_COMFYUI_API_KEY, 300) };
 }
 export function isComfyConfigured(kind) {
@@ -62,8 +60,8 @@ async function requestJson(url, options, timeoutMs, apiKey) {
 
 function findOutputFile(history, kind) {
   const entries = Object.values(history?.outputs || {});
-  const keys = kind === "video" ? ["videos", "gifs"] : kind === "image" ? ["images"] : ["audio", "audios", "gifs"];
-  const extensions = kind === "video" ? /\.(mp4|webm|mov)$/i : kind === "image" ? /\.(png|jpg|jpeg|webp)$/i : /\.(wav|mp3|flac|ogg|m4a)$/i;
+  const keys = kind === "video" ? ["videos", "gifs"] : ["images"];
+  const extensions = kind === "video" ? /\.(mp4|webm|mov)$/i : /\.(png|jpg|jpeg|webp)$/i;
   for (const output of entries) {
     for (const key of keys) {
       const files = Array.isArray(output?.[key]) ? output[key] : [];
@@ -132,7 +130,7 @@ async function uploadReferenceImage(config, filePath, timeoutMs) {
 }
 
 export async function generateComfyAsset({ kind, prompt, negativePrompt = "", jobId, filename, ratio = "9:16", durationSeconds = 5, fps = 24, width, height, referenceImagePath = "" }) {
-  if (!["video", "image", "music"].includes(kind)) throw new Error("Jenis generasi ComfyUI tidak didukung.");
+  if (!["video", "image"].includes(kind)) throw new Error("ComfyUI hanya digunakan untuk generasi visual lokal.");
   const config = getConfig(kind);
   if (!config.workflowFile) throw new Error("Workflow ComfyUI untuk " + kind + " belum dikonfigurasi.");
   const timeoutMs = clamp(Number(process.env.VIDEO_STUDIO_COMFYUI_TIMEOUT_MS) || 900000, 60000, 1800000);
@@ -140,6 +138,12 @@ export async function generateComfyAsset({ kind, prompt, negativePrompt = "", jo
   const parsed = JSON.parse(workflowText);
   const graph = parsed && parsed.prompt && typeof parsed.prompt === "object" ? parsed.prompt : parsed;
   if (!graph || typeof graph !== "object" || Array.isArray(graph) || !Object.keys(graph).length) throw new Error("Workflow ComfyUI harus berupa API prompt graph JSON yang tidak kosong.");
+  const nodeTypes = Object.values(graph).map(node => safeText(node?.class_type, 160).toLowerCase());
+  const workflowFingerprint = JSON.stringify(graph).toLowerCase();
+  const usesWan = nodeTypes.some(type => type.includes("wanvideo") || type.includes("wanimage") || type.includes("wananimate") || type.includes("wan2"))
+    || /(^|[\\/_\\-\s])wan(?:2[._-]?\d|video|image|animate)/i.test(workflowFingerprint);
+  if (usesWan) throw new Error("Workflow WAN ditolak. Gunakan workflow model video open-source lain, misalnya CogVideoX-2B.");
+
   if (referenceImagePath && !workflowText.includes("{{REFERENCE_IMAGE}}")) {
     throw new Error("Workflow video harus menggunakan placeholder {{REFERENCE_IMAGE}} pada node LoadImage agar character reference dipakai.");
   }
@@ -182,7 +186,7 @@ export async function generateComfyAsset({ kind, prompt, negativePrompt = "", jo
   const extension = String(output.filename).match(/\.(mp4|webm|mov|png|jpg|jpeg|webp|wav|mp3|flac|ogg|m4a)$/i)?.[0]?.toLowerCase();
   const folder = join(PUBLIC_DIR, "generated", safeText(jobId, 80));
   await mkdir(folder, { recursive: true });
-  const fallbackExtension = kind === "video" ? ".mp4" : kind === "image" ? ".png" : ".wav";
+  const fallbackExtension = kind === "video" ? ".mp4" : ".png";
   const outputName = safeText(filename, 100) + (extension || fallbackExtension);
   const destination = join(folder, outputName);
   await downloadOutput(config, output, destination, kind, Math.min(timeoutMs, 120000));
