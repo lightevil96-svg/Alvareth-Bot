@@ -26,15 +26,21 @@ import {
   WaveformScene
 } from "./Visuals.jsx";
 
-const MUSIC_FILES = {
-  cinematic: "audio/music-cinematic.wav",
-  upbeat: "audio/music-upbeat.wav",
-  calm: "audio/music-calm.wav"
-};
+const MUSIC_FILES = {};
 const SFX_FILES = {
   whoosh: "audio/sfx-whoosh.wav",
+  swipe: "audio/sfx-swipe.wav",
+  click: "audio/sfx-click.wav",
   pop: "audio/sfx-pop.wav",
-  impact: "audio/sfx-impact.wav"
+  impact: "audio/sfx-impact.wav",
+  footstep: "audio/sfx-footstep.wav",
+  thud: "audio/sfx-thud.wav",
+  sparkle: "audio/sfx-sparkle.wav",
+  riser: "audio/sfx-riser.wav",
+  typing: "audio/sfx-typing.wav",
+  water: "audio/sfx-water.wav",
+  drop: "audio/sfx-drop.wav",
+  camera: "audio/sfx-camera.wav"
 };
 
 const isLightColor = hex => {
@@ -82,11 +88,12 @@ const SceneMotif = ({ type, accent, index }) => {
   </svg>;
 };
 
-const SceneSound = ({ cue, volume = 0.55 }) => {
+const SceneSound = ({ cue, volume = 0.55, durationFrames = 24 }) => {
   const frame = useCurrentFrame();
   const source = SFX_FILES[cue];
   if (!source) return null;
-  const envelope = interpolate(frame, [0, 3, 18], [0, 1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const attack = Math.max(1, Math.min(3, Math.round(durationFrames * 0.12)));
+  const envelope = interpolate(frame, [0, attack, Math.max(attack + 1, durationFrames)], [0, 1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
   return <Audio src={staticFile(source)} volume={Math.max(0, Math.min(1, volume)) * envelope} />;
 };
 
@@ -274,7 +281,7 @@ registerVideoPlugin({
 
 const VideoComposition = ({
   scenes,
-  musicStyle = "cinematic",
+  musicStyle = "none",
   musicTrackSrc = "",
   musicVolume = 0.16,
   musicBpm = 0,
@@ -297,7 +304,7 @@ const VideoComposition = ({
       <VoiceTrack track={clip} />
     </Sequence>)}
     {soundEffects ? timeline.sfxClips.map(clip => <Sequence key={clip.id} from={clip.startFrame} durationInFrames={clip.durationInFrames} name={clip.id}>
-      <SceneSound cue={clip.cue} volume={clip.volume} />
+      <SceneSound cue={clip.cue} volume={clip.volume} durationFrames={clip.durationInFrames} />
     </Sequence>) : null}
     <CaptionOverlay captions={captions} style={captionStyle} position={captionPosition} />
   </AbsoluteFill>;
@@ -312,7 +319,7 @@ export const RemotionRoot = () => <Composition
   durationInFrames={300}
   defaultProps={{
     scenes: [{ id: "scene-01", text: "Mulai berkarya", duration: 4, background: "#111827", accent: "#68DDB8", layout: "hero", motif: "rings", motion: "fade-up", transition: "fade", soundCue: "none" }],
-    musicStyle: "cinematic",
+    musicStyle: "none",
     musicTrackSrc: "",
     musicVolume: 0.16,
     musicBpm: 0,
