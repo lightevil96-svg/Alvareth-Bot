@@ -51,6 +51,7 @@ export function compileVideoPlan(plan) {
       motion: scene.motion,
       transition: scene.transition,
       soundCue: scene.soundCue,
+      soundEvents: scene.soundEvents || [],
       background: scene.background,
       accent: scene.accent
     }))
