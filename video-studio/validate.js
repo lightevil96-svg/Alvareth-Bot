@@ -4,7 +4,7 @@ const RATIOS = Object.freeze({
   "1:1": { width: 1080, height: 1080 }
 });
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
-const MUSIC_STYLES = ["cinematic", "upbeat", "calm", "none"];
+const MUSIC_STYLES = ["none"];
 const LAYOUTS = ["hero", "editorial", "split", "stat", "quote", "steps", "outro"];
 const MOTIFS = ["rings", "orbit", "wave", "grid", "bars", "ribbon", "spark", "none"];
 const MOTIONS = ["fade-up", "scale-in", "slide-left", "slide-right", "reveal", "float", "count-up"];
@@ -31,12 +31,6 @@ function assetPath(value) {
   const candidate = text(value, 220);
   if (!candidate || candidate.startsWith("/") || candidate.includes("..") || candidate.includes("\\") || !/^[a-zA-Z0-9._/-]+$/.test(candidate)) return "";
   return candidate;
-}
-function pexelsUrl(value) {
-  try {
-    const url = new URL(String(value || ""));
-    return url.protocol === "https:" && (url.hostname === "pexels.com" || url.hostname.endsWith(".pexels.com")) ? url.toString().slice(0, 240) : "";
-  } catch { return ""; }
 }
 function estimateDuration(scene) {
   const narration = text(scene.narration, 1200);
@@ -101,7 +95,7 @@ export function validateVideoProject(input) {
     const points = Array.isArray(scene.points) ? scene.points.slice(0, 4).map(item => text(item, 90)).filter(Boolean) : [];
     const footageSrc = assetPath(scene.footageSrc);
     const footageCredit = footageSrc ? text(scene.footageCredit, 90) : "";
-    const footageUrl = footageSrc ? pexelsUrl(scene.footageUrl) : "";
+    const footageUrl = "";
     const chartData = Array.isArray(scene.chartData) ? scene.chartData.slice(0, 8).map(item => ({
       label: text(item?.label, 48),
       value: Number(item?.value)
@@ -237,12 +231,7 @@ export function validateVideoProject(input) {
     return { src, startSeconds, durationSeconds: trackDuration };
   }).filter(Boolean) : [];
   const captions = normalizeCaptions(input.captions);
-  const mediaCredits = Array.isArray(input.mediaCredits) ? input.mediaCredits.slice(0, 20).map(item => ({
-    provider: item?.provider === "Pexels" ? "Pexels" : "",
-    photographer: text(item?.photographer, 90),
-    photographerUrl: pexelsUrl(item?.photographerUrl),
-    videoUrl: pexelsUrl(item?.videoUrl)
-  })).filter(item => item.provider && item.photographer) : [];
+  const mediaCredits = [];
   const mediaWarnings = Array.isArray(input.mediaWarnings) ? input.mediaWarnings.slice(0, 12).map(item => text(item, 200)).filter(Boolean) : [];
   return {
     title, mode, ratio, width: dimensions.width, height: dimensions.height, fps,
