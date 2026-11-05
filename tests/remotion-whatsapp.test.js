@@ -68,6 +68,7 @@ test("reports optional media providers as unconfigured without secrets", () => {
   assert.equal(status.find(item => item.name === "Remotion + FFmpeg").configured, true);
   assert.equal(status.find(item => item.name === "Voice-over + subtitle sinkron").configured, false);
   assert.equal(status.find(item => item.name === "AI video footage").configured, false);
+  assert.equal(status.find(item => item.name === "Character reference image").configured, false);
 });
 
 test("recognizes configured voice and ComfyUI workflow files", () => {
