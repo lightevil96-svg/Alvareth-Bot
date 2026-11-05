@@ -238,7 +238,7 @@ export function normalizeVideoPlan(raw, sourcePrompt) {
       soundEvents: Array.isArray(scene.soundEvents) ? scene.soundEvents.slice(0, 5).map(event => ({
         cue: pick(event && event.cue, ALLOWED.soundCue.filter(cue => cue !== "none"), "whoosh"),
         delaySeconds: Math.max(0, Math.min(Math.max(0, durationSeconds - 0.05), Number(event && event.delaySeconds) || 0)),
-        intensity: Math.max(0.05, Math.min(1, Number(event && event.intensity ?? scene.soundIntensity ?? 0.55)))
+        intensity: Math.max(0.05, Math.min(1, Number((event && event.intensity) ?? scene.soundIntensity ?? 0.55)))
       })) : []
     };
   });
