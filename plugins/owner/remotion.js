@@ -86,25 +86,25 @@ async function showMenu(m, conn, usedPrefix) {
   const rows = [
     {
       header: "",
-      title: "🎬 Buat video dari prompt",
+      title: "🎬 Buat video",
       description: "Ceritakan ide; AI menyusun produksi otomatis.",
       id: usedPrefix + "remotion generate"
     },
     {
       header: "",
-      title: "📊 Status rendering",
+      title: "📊 Status render",
       description: "Lihat antrean dan progres pekerjaan.",
       id: usedPrefix + "remotion status"
     },
     {
       header: "",
-      title: "📁 Riwayat video",
+      title: "📁 Riwayat",
       description: "Lihat hasil dan ID pekerjaan sebelumnya.",
       id: usedPrefix + "remotion history"
     },
     {
       header: "",
-      title: "📤 Kirim ulang hasil terakhir",
+      title: "📤 Kirim ulang MP4",
       description: "Kirim kembali MP4 yang sudah selesai.",
       id: usedPrefix + "remotion send"
     },
@@ -116,13 +116,13 @@ async function showMenu(m, conn, usedPrefix) {
     },
     {
       header: "",
-      title: "⚙️ Cek kesiapan layanan",
+      title: "⚙️ Cek layanan",
       description: "Periksa Remotion, audio, footage, dan ComfyUI.",
       id: usedPrefix + "remotion services"
     },
     {
       header: "",
-      title: "✖️ Batalkan input prompt",
+      title: "✖️ Batalkan prompt",
       description: "Hapus sesi menunggu prompt, bukan render aktif.",
       id: usedPrefix + "remotion cancel"
     }
