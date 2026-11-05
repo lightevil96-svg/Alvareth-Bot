@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { buildCaptionGroups, splitVoiceoverChunks } from "../video-studio/media/voiceover.js";
 import { chooseVideoFile } from "../video-studio/media/stock-footage.js";
 import { validateVideoProject } from "../video-studio/validate.js";
+import { applyComfyWorkflowVariables } from "../video-studio/media/comfyui.js";
 
 test("groups character-level TTS alignment into timed subtitle phrases", () => {
   const characters = Array.from("Halo dunia.");
@@ -78,4 +79,17 @@ test("rejects unsafe local asset paths rather than passing them to Remotion", ()
   assert.equal(project.scenes[0].footageSrc, undefined);
   assert.equal(project.voiceoverTracks.length, 0);
   assert.equal(project.footageCount, 0);
+});
+
+test("injects a generated character reference image into an image-to-video workflow", () => {
+  const workflow = {
+    "10": { class_type: "LoadImage", inputs: { image: "{{REFERENCE_IMAGE}}" } },
+    "11": { class_type: "CLIPTextEncode", inputs: { text: "{{PROMPT}}" } }
+  };
+  const applied = applyComfyWorkflowVariables(workflow, {
+    REFERENCE_IMAGE: "characters/job-123/reference.png",
+    PROMPT: "A small fox walks through the forest."
+  });
+  assert.equal(applied["10"].inputs.image, "characters/job-123/reference.png");
+  assert.equal(applied["11"].inputs.text, "A small fox walks through the forest.");
 });
