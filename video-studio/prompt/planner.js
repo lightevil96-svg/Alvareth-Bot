@@ -100,6 +100,32 @@ function estimateDuration(scene) {
   const layoutFloor = scene.layout === "quote" ? 4.2 : scene.layout === "stat" ? 3.6 : 2.5;
   return Math.max(2.4, narrationTime, readingTime, layoutFloor);
 }
+
+function inferSoundEvents(scene, durationSeconds) {
+  const source = [
+    scene.text, scene.narration, scene.visualDescription, scene.aiVideoPrompt,
+    ...(Array.isArray(scene.points) ? scene.points : [])
+  ].join(" ").toLowerCase();
+  const events = [];
+  const add = (cue, delaySeconds, intensity = 0.5) => {
+    if (events.length < 5) events.push({ cue, delaySeconds: Math.max(0, Math.min(durationSeconds - 0.05, delaySeconds)), intensity });
+  };
+  if (/\b(walk|walking|run|running|footstep|berjalan|melangkah|berlari|langkah kaki)\b/i.test(source)) {
+    add("footstep", 0.2, 0.5);
+    add("footstep", Math.min(0.9, durationSeconds * 0.58), 0.42);
+  }
+  if (/\b(impact|collision|crash|hit|slam|land|landing|fall|jatuh|menabrak|membentur|benturan|mendarat)\b/i.test(source)) add("impact", durationSeconds * 0.55, 0.72);
+  if (/\b(splash|water|siram|tercebur|cipratan|percikan air)\b/i.test(source)) add("water", durationSeconds * 0.42, 0.55);
+  if (/\b(typing|keyboard|mengetik|ketikan)\b/i.test(source)) add("typing", 0.18, 0.42);
+  if (/\b(magic|magical|sparkle|glitter|berkilau|ajaib|sihir)\b/i.test(source)) add("sparkle", durationSeconds * 0.35, 0.48);
+  if (/\b(button|click|tap|press|menekan tombol|klik)\b/i.test(source)) add("click", durationSeconds * 0.32, 0.5);
+  if (/\b(shutter|photograph|camera flash|memotret|rana kamera)\b/i.test(source)) add("camera", durationSeconds * 0.45, 0.5);
+  if (!events.length && ["slide-left", "slide-right"].includes(scene.motion)) add("whoosh", 0.08, 0.38);
+  if (!events.length && ["scale-in", "reveal"].includes(scene.motion)) add("pop", 0.08, 0.34);
+  if (!events.length && ["wipe", "wipe-left", "wipe-right", "wipe-up", "wipe-down", "slide", "slide-left", "slide-right", "slide-up", "slide-down", "zoom"].includes(scene.transition)) add("swipe", 0, 0.32);
+  if (!events.length && ["pan-left", "pan-right", "push-in", "pull-out"].includes(scene.cameraMotion)) add("whoosh", 0.18, 0.3);
+  return events;
+}
 function inferRequestedDuration(prompt) {
   const text = String(prompt || "").toLowerCase().replace(",", ".");
   const minutes = text.match(/(\d+(?:\.\d+)?)\s*(?:menit|minutes?|mins?)\b/i);
@@ -235,11 +261,11 @@ export function normalizeVideoPlan(raw, sourcePrompt) {
       background,
       accent,
       soundCue: pick(scene.soundCue, ALLOWED.soundCue, "none"),
-      soundEvents: Array.isArray(scene.soundEvents) ? scene.soundEvents.slice(0, 5).map(event => ({
+      soundEvents: (Array.isArray(scene.soundEvents) && scene.soundEvents.length ? scene.soundEvents : inferSoundEvents(scene, durationSeconds)).slice(0, 5).map(event => ({
         cue: pick(event && event.cue, ALLOWED.soundCue.filter(cue => cue !== "none"), "whoosh"),
         delaySeconds: Math.max(0, Math.min(Math.max(0, durationSeconds - 0.05), Number(event && event.delaySeconds) || 0)),
         intensity: Math.max(0.05, Math.min(1, Number((event && event.intensity) ?? scene.soundIntensity ?? 0.55)))
-      })) : []
+      }))
     };
   });
   const requested = Number(raw.targetDurationSeconds) > 0 ? Number(raw.targetDurationSeconds) : inferRequestedDuration(prompt);
