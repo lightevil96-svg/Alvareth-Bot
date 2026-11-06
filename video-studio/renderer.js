@@ -56,7 +56,7 @@ export async function renderVideoProject(project, outputPath, onProgress = () =>
     outputLocation: outputPath,
     inputProps,
     chromiumOptions,
-    concurrency: renderSettings.concurrency,
+    concurrency: uses3D ? 1 : renderSettings.concurrency,
     crf: renderSettings.crf,
     x264Preset: renderSettings.x264Preset,
     timeoutInMilliseconds: renderSettings.timeoutInMilliseconds,
