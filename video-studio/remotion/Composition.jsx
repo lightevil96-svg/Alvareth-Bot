@@ -179,7 +179,7 @@ const Scene = ({ scene, index, total, durationFrames, transitionInFrames }) => {
     minFontSize: 28,
     maxLines: hasSideVisual ? 6 : layout === "stat" ? 3 : 5,
     fontWeight: 850,
-    letterSpacing: -1.4
+    letterSpacing: 0
   }), [scene.text, contentWidthPx, fontScale, hasSideVisual, layout]);
   const kickerLayout = React.useMemo(() => fitTextBlock(scene.kicker, contentWidthPx, {
     maxFontSize: 18 * fontScale,
