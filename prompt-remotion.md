@@ -228,7 +228,7 @@ Properti wajib: `schemaVersion`, `sourcePrompt`, `title`, dan `scenes`. Properti
 - `aiVideoPrompt`: maksimal 1.800 karakter pada schema, tetapi gunakan maksimal sekitar 700 karakter karena tahap ComfyUI mengambil bagian awal hingga 800 karakter setelah identitas karakter/style ditambahkan.
 - `visualType`, `layout`, `motif`, `motion`, `transition`, `backgroundEffect`, `cameraMotion`, `colorGrade`, `soundCue`: wajib mengikuti enum.
 - `threeDStyle`: gunakan `glass` untuk translucent/glass, `chrome` untuk metal reflektif, `clay` untuk claymation look, `neon` untuk emissive futuristic, atau `soft` untuk material matte premium. Berlaku saat `visualType: "3d"`.
-- `threeDObject`: pilih `orb`, `cube`, `torus`, `rings`, `crystal`, atau `cluster`. Berlaku saat `visualType: "3d"`.
+- `threeDObject`: pilih `orb`, `cube`, `torus`, `rings`, `crystal`, `cluster`, atau `isometric` (miniature diorama). Berlaku saat `visualType: "3d"`.
 - `chartTitle`, `chartUnit`, `chartSource`, `chartData`: gunakan hanya untuk visualisasi data yang benar-benar didukung sumber.
 - `chartData`: maksimal 8 item `{ "label": "...", "value": 0 }`.
 - `diagramNodes`: maksimal 7 item; setiap node memiliki `id`, `label`, dan koordinat opsional `x` 8–92, `y` 15–85.
