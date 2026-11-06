@@ -6,7 +6,6 @@ import {
 } from "../../lib/disk-cleaner.js";
 
 const previews = global.__alvarethDiskCleanupPreviews || (global.__alvarethDiskCleanupPreviews = new Map());
-const PREVIEW_TTL_MS = 5 * 60 * 1000;
 
 function diskMenu(prefix = ".") {
   return [
