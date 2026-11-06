@@ -11,6 +11,7 @@ on:
       - "tests/voxcpm_service_test.py"
       - "scripts/remotion-smoke.js"
       - "scripts/setup-video-studio-linux.sh"
+      - "scripts/setup-edge-tts-linux.sh"
       - "plugins/owner/remotion.js"
       - "tests/video-studio-media.test.js"
       - ".github/workflows/video-studio-regression.yml"
@@ -47,6 +48,7 @@ jobs:
       - name: Check Video Studio JavaScript modules
         run: |
           bash -n scripts/setup-video-studio-linux.sh
+          bash -n scripts/setup-edge-tts-linux.sh
           node --check video-studio/local-services.js
           node --check video-studio/installer.js
           node --check video-studio/prompt/storyboard.js
