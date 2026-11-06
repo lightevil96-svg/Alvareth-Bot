@@ -128,21 +128,30 @@ export const DiagramScene = ({ scene = {}, accent = "#68DDB8", foreground = "#ff
 
 export const AppMockupScene = ({ scene = {}, accent = "#68DDB8" }) => {
   const frame = useCurrentFrame();
-  const { width } = useVideoConfig();
+  const { width, fps } = useVideoConfig();
   const mockup = scene.appMockup || {};
   const rows = Array.isArray(mockup.rows) ? mockup.rows.slice(0, 5) : [];
-  const { fps } = useVideoConfig();
+  const innerWidth = Math.max(180, Math.min(width * 0.4, 470) - 58);
+  const titleLayout = React.useMemo(() => fitTextBlock(mockup.title || scene.text, innerWidth, {
+    maxFontSize: 22, minFontSize: 14, maxLines: 3, fontWeight: 900, letterSpacing: 0
+  }), [mockup.title, scene.text, innerWidth]);
+  const rowLayouts = React.useMemo(() => rows.map(row => fitTextBlock(row, innerWidth - 42, {
+    maxFontSize: 12, minFontSize: 10, maxLines: 2, fontWeight: 650, letterSpacing: 0
+  })), [rows, innerWidth]);
+  const ctaLayout = React.useMemo(() => fitTextBlock(mockup.cta, innerWidth - 28, {
+    maxFontSize: 12, minFontSize: 10, maxLines: 2, fontWeight: 850, letterSpacing: 0
+  }), [mockup.cta, innerWidth]);
   const progress = spring({ frame, fps, config: { damping: 18, stiffness: 80 } });
   return <div style={{ position: "absolute", right: "8%", bottom: "10%", width: "40%", maxWidth: 470, padding: 12, borderRadius: 30, background: "linear-gradient(145deg,#f7f9fc,#d9e0e9)", boxShadow: "0 32px 90px rgba(0,0,0,.38)", color: "#152236", transform: "translateY(" + (1 - progress) * 50 + "px) rotate(-2deg)" }}>
     <div style={{ height: 18, display: "flex", justifyContent: "center", alignItems: "center" }}><div style={{ width: 64, height: 5, borderRadius: 10, background: "#aab4c1" }} /></div>
     <div style={{ padding: "18px 17px 20px", borderRadius: 20, background: "#fff", minHeight: width * 0.36 }}>
       <div style={{ fontSize: 11, color: "#738196", fontWeight: 800, letterSpacing: 1 }}>PREVIEW APLIKASI</div>
-      <div style={{ fontSize: 22, fontWeight: 900, margin: "8px 0 16px" }}>{mockup.title || scene.text}</div>
-      {rows.map((row, index) => <div key={index} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 0", borderTop: "1px solid #e9edf2", fontSize: 12, fontWeight: 650 }}>
-        <span style={{ width: 25, height: 25, borderRadius: 8, background: accent + "28", color: "#24354b", display: "grid", placeItems: "center" }}>{index + 1}</span>
-        <span>{row}</span>
+      <div style={{ fontSize: titleLayout.fontSize, fontWeight: 900, lineHeight: 1.16, whiteSpace: "pre-line", overflowWrap: "anywhere", margin: "8px 0 16px" }}>{titleLayout.text}</div>
+      {rowLayouts.map((row, index) => <div key={index} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 0", borderTop: "1px solid #e9edf2", minWidth: 0, fontSize: row.fontSize, fontWeight: 650 }}>
+        <span style={{ width: 25, height: 25, borderRadius: 8, background: accent + "28", color: "#24354b", display: "grid", placeItems: "center", flex: "0 0 auto" }}>{index + 1}</span>
+        <span style={{ minWidth: 0, whiteSpace: "pre-line", overflowWrap: "anywhere", lineHeight: 1.2 }}>{row.text}</span>
       </div>)}
-      {mockup.cta ? <div style={{ marginTop: 12, padding: "11px 14px", borderRadius: 12, textAlign: "center", color: "#fff", background: accent, fontWeight: 850, fontSize: 12 }}>{mockup.cta}</div> : null}
+      {mockup.cta ? <div style={{ marginTop: 12, padding: "11px 14px", borderRadius: 12, textAlign: "center", color: "#fff", background: accent, fontWeight: 850, fontSize: ctaLayout.fontSize, lineHeight: 1.2, whiteSpace: "pre-line", overflowWrap: "anywhere" }}>{ctaLayout.text}</div> : null}
     </div>
   </div>;
 };
@@ -172,35 +181,41 @@ export const FaceBubble = ({ src, position = "bottom-right", durationInFrames = 
 
 export const NotificationOverlay = ({ notifications = [], accent = "#68DDB8" }) => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, width } = useVideoConfig();
   const active = notifications.find(item => {
     const start = Number(item.delaySeconds || 0) * fps;
     const end = start + Number(item.durationSeconds || 2.6) * fps;
     return frame >= start && frame <= end;
   });
+  const textLayout = React.useMemo(() => fitTextBlock(active?.text || "", Math.min(width * 0.78, 590), {
+    maxFontSize: 18, minFontSize: 13, maxLines: 3, fontWeight: 750, letterSpacing: 0
+  }), [active?.text, width]);
   if (!active) return null;
   const startFrame = Number(active.delaySeconds || 0) * fps;
   const enter = spring({ frame: Math.max(0, frame - startFrame), fps, config: { damping: 18, stiffness: 125 } });
   return <div style={{ position: "absolute", top: "8%", left: "7%", right: "7%", zIndex: 12, display: "flex", justifyContent: "center", pointerEvents: "none" }}>
     <div style={{ width: "min(90%, 650px)", padding: "16px 20px", borderRadius: 18, background: "rgba(248,250,252,.96)", color: "#182333", boxShadow: "0 18px 50px rgba(0,0,0,.28)", borderLeft: "5px solid " + accent, transform: "translateY(" + ((1 - enter) * -38) + "px)", opacity: enter }}>
       <div style={{ fontSize: 12, fontWeight: 900, opacity: 0.58, marginBottom: 5 }}>{active.sender || "NOTIFIKASI"}</div>
-      <div style={{ fontSize: 18, fontWeight: 750, lineHeight: 1.35 }}>{active.text}</div>
+      <div style={{ fontSize: textLayout.fontSize, fontWeight: 750, lineHeight: 1.3, whiteSpace: "pre-line", overflowWrap: "anywhere" }}>{textLayout.text}</div>
     </div>
   </div>;
 };
 
 export const CalloutOverlay = ({ callouts = [], accent = "#68DDB8" }) => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, width } = useVideoConfig();
   const active = callouts.find(item => {
     const start = Number(item.delaySeconds || 0) * fps;
     return frame >= start && frame <= start + Number(item.durationSeconds || 2) * fps;
   });
+  const textLayout = React.useMemo(() => fitTextBlock(active?.text || "", width * 0.78, {
+    maxFontSize: 18, minFontSize: 13, maxLines: 3, fontWeight: 900, letterSpacing: 0
+  }), [active?.text, width]);
   if (!active) return null;
   const position = active.position === "top" ? { top: "16%" } : active.position === "center" ? { top: "48%" } : { bottom: "19%" };
   const start = Number(active.delaySeconds || 0) * fps;
   const progress = spring({ frame: Math.max(0, frame - start), fps, config: { damping: 16, stiffness: 140 } });
   return <div style={{ position: "absolute", left: "8%", right: "8%", ...position, zIndex: 10, textAlign: "center", opacity: progress, transform: "scale(" + (0.9 + progress * 0.1) + ")" }}>
-    <span style={{ display: "inline-block", padding: "10px 18px", borderRadius: 14, color: "#fff", background: accent, boxShadow: "0 10px 30px rgba(0,0,0,.24)", fontWeight: 900, fontSize: 18 }}>{active.text}</span>
+    <span style={{ display: "inline-block", maxWidth: "100%", boxSizing: "border-box", padding: "10px 18px", borderRadius: 14, color: "#fff", background: accent, boxShadow: "0 10px 30px rgba(0,0,0,.24)", fontWeight: 900, fontSize: textLayout.fontSize, lineHeight: 1.2, whiteSpace: "pre-line", overflowWrap: "anywhere" }}>{textLayout.text}</span>
   </div>;
 };
