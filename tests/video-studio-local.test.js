@@ -10,7 +10,7 @@ import { createHash } from 'node:crypto';
 import { localJson, localServiceUrl } from '../video-studio/local-service.js';
 import { resolveRenderTimeout } from '../video-studio/engine/performance.js';
 import { buildLocalServiceEnvironment, getLocalVideoServiceConfig, isVoxCPMReady, startLocalVideoServices } from '../video-studio/local-services.js';
-import { planVideoPrompt } from '../video-studio/prompt/planner.js';
+import { parseStoryboardInput } from '../video-studio/prompt/storyboard.js';
 import { prepareVoiceover } from '../video-studio/media/voiceover.js';
 import { prepareVideoMedia } from '../video-studio/media/pipeline.js';
 import { buildTimelineTracks } from '../video-studio/engine/timeline.js';
@@ -144,8 +144,8 @@ test('local inference HTTP requests can wait for a slow response without a deadl
 test('Remotion frame readiness uses a practically unbounded delayRender timeout', () => {
   assert.equal(resolveRenderTimeout(), 2147000000);
 });
-test('planner accepts ChatGPT storyboard JSON without a local inference service', () => {
-  const plan = planVideoPrompt(JSON.stringify({
+test('storyboard parser accepts externally authored JSON without a local inference service', () => {
+  const plan = parseStoryboardInput(JSON.stringify({
     schemaVersion: 1,
     sourcePrompt: 'Buat video promosi kopi lokal tanpa musik.',
     title: 'Kopi Lokal',
@@ -173,15 +173,15 @@ test('the published ChatGPT fox storyboard example matches the runtime schema', 
   const fence = String.fromCharCode(96).repeat(3);
   const blocks = [...guide.matchAll(new RegExp(fence + 'json\\s*([\\s\\S]*?)' + fence, 'gi'))];
   assert.ok(blocks.length >= 2, 'guide should include schema and full example JSON');
-  const plan = planVideoPrompt(blocks.at(-1)[1]);
+  const plan = parseStoryboardInput(blocks.at(-1)[1]);
   assert.equal(plan.title, 'Rumi dan Cahaya Hutan');
   assert.equal(plan.scenes.length, 5);
   assert.equal(plan.targetDurationSeconds, 30);
 });
 
-test('planner rejects plain-language briefs and directs owners to the ChatGPT JSON guide', () => {
+test('storyboard parser rejects plain-language briefs and directs owners to the ChatGPT JSON guide', () => {
   assert.throws(
-    () => planVideoPrompt('Buat video promosi kopi lokal, tanpa musik.'),
+    () => parseStoryboardInput('Buat video promosi kopi lokal, tanpa musik.'),
     /JSON storyboard dari ChatGPT/
   );
 });
