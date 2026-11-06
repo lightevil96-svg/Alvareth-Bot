@@ -6,6 +6,8 @@ import io
 import json
 import os
 import threading
+import time
+import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -37,10 +39,13 @@ def synthesize(text, language="id"):
     if language not in ("id", "en"):
         language = "id"  # TTS infers language; this is only an alignment hint.
     style = os.getenv("VOXCPM_VOICE_DESCRIPTION", "A warm clear narrator, natural pace and calm expression")
+    started_at = time.monotonic()
+    print(f"[VoxCPM2] Sintesis dimulai: {len(text)} karakter, device={os.getenv('VOXCPM_DEVICE', 'cpu')}, inference_timesteps=10.", flush=True)
     wav = np.asarray(MODEL.generate(text=f"({style}){text}", cfg_value=2.0,
         inference_timesteps=10, normalize=False, denoise=False,
         retry_badcase=True, retry_badcase_max_times=1, max_len=1024), dtype=np.float32).reshape(-1)
     rate = MODEL.tts_model.sample_rate
+    print(f"[VoxCPM2] Inferensi selesai dalam {time.monotonic() - started_at:.1f} detik; audio={len(wav) / rate:.2f} detik.", flush=True)
     if not wav.size or not np.isfinite(wav).all() or len(wav) / rate > 19.7:
         raise ValueError("Invalid or overlong speech; shorten scene narration")
     peak = float(np.max(np.abs(wav)))
@@ -91,7 +96,10 @@ class Handler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", "0"))
             if not 0 < length <= 10000:
                 return self.reply(413, {"error": "Invalid request size"})
-            body = json.loads(self.rfile.read(length))
+            raw_body = self.rfile.read(length)
+            # The short timeout protects request-body intake only. Inference and WAV delivery may take a long time.
+            self.connection.settimeout(None)
+            body = json.loads(raw_body)
             text = body.get("text")
             if not isinstance(text, str) or not 1 <= len(text.strip()) <= 1200:
                 return self.reply(400, {"error": "Text must contain 1-1200 characters"})
@@ -102,9 +110,20 @@ class Handler(BaseHTTPRequestHandler):
         if not LOCK.acquire(blocking=False):
             return self.reply(429, {"error": "VoxCPM2 busy; only one inference at a time"})
         try:
-            self.reply(200, synthesize(text.strip(), body.get("language", "id")))
-        except Exception:
-            self.reply(500, {"error": "Local synthesis failed; check model/device and narration length"})
+            print(f"[VoxCPM2] Request diterima: {len(text.strip())} karakter; mulai inferensi.", flush=True)
+            result = synthesize(text.strip(), body.get("language", "id"))
+            try:
+                self.reply(200, result)
+                print(f"[VoxCPM2] WAV terkirim: {len(result.get('audio_base64', ''))} karakter base64.", flush=True)
+            except (BrokenPipeError, ConnectionResetError, TimeoutError, OSError) as error:
+                print(f"[VoxCPM2] Klien menutup koneksi sebelum WAV diterima: {error}", flush=True)
+        except Exception as error:
+            print(f"[VoxCPM2] Sintesis gagal: {type(error).__name__}: {error}", flush=True)
+            traceback.print_exc()
+            try:
+                self.reply(500, {"error": "Local synthesis failed; inspect voxcpm2.log"})
+            except (BrokenPipeError, ConnectionResetError, TimeoutError, OSError):
+                print("[VoxCPM2] Klien sudah terputus; respons error tidak dapat dikirim.", flush=True)
         finally:
             LOCK.release()
 
