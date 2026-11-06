@@ -26,10 +26,10 @@ Alur runtime saat ini:
 - **Subtitle:** `captionStyle` menentukan gaya caption. Edge TTS mengirim metadata `WordBoundary` sehingga timing kata dapat diambil langsung dari hasil sintesis. Jika metadata tidak tersedia, runtime memperkirakan timing caption dari durasi audio terukur dan bobot kata/tanda baca; hasilnya perkiraan, bukan forced alignment. VoxCPM2 memakai alignment lokal hanya jika aligner opsional dikonfigurasi.
 - **AI footage:** opsional melalui workflow ComfyUI lokal yang sudah ditinjau. Default pipeline hanya memilih maksimal **2 scene** untuk AI video (dapat diubah operator, maksimum 4). Setiap klip yang dihasilkan dibatasi 3–8 detik. Workflow yang tidak dikonfigurasi berarti footage AI tidak dibuat.
 - **Character reference:** satu referensi karakter dapat dibuat jika image workflow ComfyUI aktif dan workflow video memakai placeholder `{{REFERENCE_IMAGE}}`. Ini membantu kontinuitas, tetapi tidak menjamin karakter identik di semua frame/klip.
-- **Remotion:** merender komposisi berdasarkan data tervalidasi. Tanpa footage ComfyUI, visual tetap dapat dirender sebagai motion graphics, tetapi jangan menyebut hasilnya sebagai animasi 3D penuh atau footage sinematik nyata.
+- **Remotion 3D:** `visualType: "3d"` memakai Three.js + React Three Fiber melalui `@remotion/three`. Ini adalah 3D motion graphics prosedural yang benar-benar dirender dalam scene 3D, bukan sekadar efek zoom/parallax. Gunakan untuk objek, bentuk abstrak, product hero, dan visual explainer. **Animasi karakter 3D kompleks** tetap memerlukan model/rig 3D atau footage ComfyUI yang sesuai.
 - **Audio tambahan:** SFX prosedural lokal tersedia. Musik tidak wajib dan default-nya tidak ada. Jangan mengarang bahwa musik AI atau efek audio spesifik tersedia jika workflow/provider tidak dikonfigurasi.
 
-**Penting:** fitur 3D dalam brief harus diterjemahkan menjadi `aiVideoPrompt` yang konkret untuk scene terpilih. Jika ComfyUI video workflow tidak aktif, bot hanya dapat menggunakan komposisi/motion graphics yang tersedia. Jangan menjanjikan hasil visual yang tidak didukung runtime.
+**Penting:** pilih jalur visual yang tepat. Untuk objek, bentuk abstrak, product hero, dan motion design 3D gunakan `visualType: "3d"`; ini tidak membutuhkan ComfyUI. Untuk karakter 3D sinematik atau aksi kompleks, gunakan `generateAiFootage: true` dan `aiVideoPrompt` hanya jika workflow ComfyUI video benar-benar aktif. Jangan menyebut motion graphics prosedural sebagai animasi karakter 3D.
 
 ## 3. Aturan stabilitas storyboard
 
@@ -55,11 +55,20 @@ Alur runtime saat ini:
 - `kicker` idealnya 1–3 kata dan maksimal sekitar 24 karakter; `highlight` idealnya 1–4 kata dan maksimal sekitar 28 karakter.
 - `points` maksimal 4 butir; idealnya maksimal 45 karakter per butir. Satu butir hanya memuat satu informasi.
 - Hindari paragraf panjang, huruf kapital penuh untuk kalimat panjang, pengulangan headline di subtext, serta menaruh seluruh voice-over sebagai teks layar.
-- Jika credit brand ditampilkan, tulis persis `Dibuat oleh ALVARETHBOT` dengan spasi antar-kata yang jelas. Jangan menempelkan kata, dan jangan meminta model AI footage menggambar tulisan; credit harus menjadi teks overlay yang dirender oleh Remotion.
+- Jika credit brand ditampilkan, set root field `brandCredit: true`. Jangan memasukkan `Dibuatoleh ALVARETHBOT` ke `text`, `subtext`, atau footage. Remotion akan menampilkan credit terpisah sebagai overlay dengan jarak kata yang benar. Jangan meminta model AI footage menggambar tulisan.
 - Runtime mengukur dan membungkus headline sesuai lebar layar, tetapi model tetap wajib membuat teks ringkas agar komposisi tidak padat.
 - Untuk `data-chart`, `diagram`, `app-mockup`, dan `waveform`, visual ditempatkan di sisi kanan dan headline/subtext di sisi kiri. Jangan menaruh teks penting di area visual atau membuat label diagram terlalu panjang.
 - `narration` maksimal 1.200 karakter per scene, tetapi untuk video pendek sebaiknya jauh lebih ringkas.
 - Untuk subtitle biasa, pilih `captionStyle: "subtitle"`. Jangan memasukkan teks subtitle ke `text` sekaligus menyalin seluruh narasi.
+
+### 3D motion design
+
+- Untuk visual 3D yang dapat dirender lokal, gunakan `visualType: "3d"`; jangan memilih `cinematic` lalu menganggapnya otomatis menjadi 3D.
+- Pilih satu bahasa visual yang konsisten: glassmorphism/translucent glass, chrome metal, claymation, neon emissive, atau soft matte 3D. Hindari mencampur semuanya dalam satu video.
+- Gunakan `threeDObject` untuk memilih bentuk hero. Satu objek utama lebih kuat daripada banyak objek kecil yang berebut perhatian.
+- Arahkan pencahayaan tiga titik, material yang sesuai, depth, orbit kamera yang halus, partikel seperlunya, dan ruang kosong untuk teks.
+- Untuk gaya yang sedang populer di short-form, utamakan 3D product hero, glossy chrome, translucent glass, clay-like characters, dan isometric miniature worlds. Adaptasikan ke topik; jangan meniru karakter atau merek berhak cipta.
+- Jangan meminta AI video menghasilkan headline, subtitle, logo, atau credit. Pisahkan footage dan overlay teks.
 
 ### Konsistensi visual
 
@@ -69,7 +78,7 @@ Alur runtime saat ini:
 - Setiap scene harus memiliki satu aksi/ide visual utama. Hindari banyak aksi yang saling bertabrakan dalam satu klip.
 - `visualDescription` menjelaskan apa yang tampak di scene. `aiVideoPrompt` menjelaskan shot/aksi footage AI jika scene tersebut memang dipilih untuk AI video.
 - Untuk karakter berulang, isi `characterBible` dengan ciri yang tidak berubah: siluet, wajah, warna, bulu/rambut, pakaian, aksesori, dan aturan kontinuitas. Gunakan satu karakter utama yang jelas untuk referensi karakter otomatis.
-- Untuk `aiVideoPrompt`, gunakan bahasa Inggris yang konkret, maksimal sekitar 700 karakter agar tidak terpotong pada tahap downstream. Fokus pada satu aksi, framing, gerakan kamera, pencahayaan, dan lingkungan. Hindari instruksi teks/subtitle/logo/watermark di footage.
+- Untuk `aiVideoPrompt`, gunakan bahasa Inggris yang konkret, maksimal sekitar 700 karakter agar tidak terpotong pada tahap downstream. Fokus pada satu aksi, framing, gerakan kamera, pencahayaan, dan lingkungan. Tegaskan visual-only: tanpa tulisan, huruf, angka, subtitle, logo, watermark, signature, atau brand credit. Semua teks harus ditambahkan oleh Remotion.
 - Set `generateAiFootage: true` dan isi `aiVideoPrompt` hanya pada scene yang benar-benar membutuhkan footage AI. Untuk scene lain, gunakan `false` dan string kosong. Jangan menandai semua scene sebagai AI footage: default hanya dua scene yang diproses.
 - Jika footage AI yang konsisten menjadi syarat utama, prioritaskan scene penting untuk dibuat sebagai klip AI dan jelaskan keterbatasan jika workflow tidak tersedia.
 
@@ -176,7 +185,9 @@ Properti wajib: `schemaVersion`, `sourcePrompt`, `title`, dan `scenes`. Properti
 | `motif` | `rings`, `orbit`, `wave`, `grid`, `bars`, `ribbon`, `spark`, `none` |
 | `motion` | `fade-up`, `scale-in`, `slide-left`, `slide-right`, `reveal`, `float`, `count-up` |
 | `transition` | `cut`, `fade`, `crossfade`, `wipe`, `wipe-left`, `wipe-right`, `wipe-up`, `wipe-down`, `slide`, `slide-left`, `slide-right`, `slide-up`, `slide-down`, `zoom`, `glitch`, `dissolve`, `flash`, `dip-to-black` |
-| `visualType` | `cinematic`, `kinetic`, `editorial`, `data-chart`, `diagram`, `app-mockup`, `waveform` |
+| `visualType` | `cinematic`, `kinetic`, `editorial`, `data-chart`, `diagram`, `app-mockup`, `waveform`, `3d` |
+| `threeDStyle` | `glass`, `chrome`, `clay`, `neon`, `soft` |
+| `threeDObject` | `orb`, `cube`, `torus`, `rings`, `crystal`, `cluster` |
 | `backgroundEffect` | `none`, `orbs`, `particles`, `grid`, `waves`, `dots`, `vignette` |
 | `cameraMotion` | `static`, `push-in`, `pull-out`, `pan-left`, `pan-right`, `tilt-up`, `tilt-down`, `drift` |
 | `colorGrade` | `neutral`, `warm`, `cool`, `film`, `vivid`, `mono` |
@@ -197,6 +208,7 @@ Properti wajib: `schemaVersion`, `sourcePrompt`, `title`, dan `scenes`. Properti
 - `palette`: opsional; `background` dan `accent` harus HEX `#RRGGBB`.
 - `musicStyle`: gunakan `none` jika pengguna tidak meminta musik.
 - `soundEffects`: boolean.
+- `brandCredit`: boolean opsional; `true` menambahkan overlay `Dibuat oleh ALVARETHBOT` pada bagian akhir video. Jangan tulis credit tersebut sebagai teks scene.
 - `musicDirection`: catatan singkat, maksimal 240 karakter; ini bukan file musik.
 - `creativeBrief`: `coreMessage` 300, `hook` 220, `tone` 120, `visualDirection` 300, `ending` 220 karakter.
 - `visualBible`: masing-masing field maksimal 180 karakter, `compositionRules` maksimal 240.
@@ -215,6 +227,8 @@ Properti wajib: `schemaVersion`, `sourcePrompt`, `title`, dan `scenes`. Properti
 - `generateAiFootage`: boolean.
 - `aiVideoPrompt`: maksimal 1.800 karakter pada schema, tetapi gunakan maksimal sekitar 700 karakter karena tahap ComfyUI mengambil bagian awal hingga 800 karakter setelah identitas karakter/style ditambahkan.
 - `visualType`, `layout`, `motif`, `motion`, `transition`, `backgroundEffect`, `cameraMotion`, `colorGrade`, `soundCue`: wajib mengikuti enum.
+- `threeDStyle`: gunakan `glass` untuk translucent/glass, `chrome` untuk metal reflektif, `clay` untuk claymation look, `neon` untuk emissive futuristic, atau `soft` untuk material matte premium. Berlaku saat `visualType: "3d"`.
+- `threeDObject`: pilih `orb`, `cube`, `torus`, `rings`, `crystal`, atau `cluster`. Berlaku saat `visualType: "3d"`.
 - `chartTitle`, `chartUnit`, `chartSource`, `chartData`: gunakan hanya untuk visualisasi data yang benar-benar didukung sumber.
 - `chartData`: maksimal 8 item `{ "label": "...", "value": 0 }`.
 - `diagramNodes`: maksimal 7 item; setiap node memiliki `id`, `label`, dan koordinat opsional `x` 8–92, `y` 15–85.
