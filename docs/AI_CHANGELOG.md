@@ -1,3 +1,11 @@
+## 2026-11-06 — Owner WhatsApp installer for local Ollama/Qwen and VoxCPM2
+
+- **Gap found:** a rootless Linux bootstrap script already existed, but it was only documented as a shell command. No WhatsApp action invoked it. `.remotion services` was intentionally status-only; it did not provision binaries, Python packages, or model weights.
+- **WhatsApp controls:** added owner-only `.remotion install`, `.remotion install cpu`, and `.remotion install status`; added an installer row to the menu. GPU mode checks visible NVIDIA hardware; CPU mode requires an explicit command. Installation runs detached in the background and reports completion/failure back to the originating chat.
+- **Provisioning:** the command invokes the existing rootless script with `--with-models`, which installs uv/Python 3.11, the official Ollama Linux binary, PyTorch and the pinned OpenBMB VoxCPM2 adapter, then downloads the configured Ollama planner model and VoxCPM2 weights. FFmpeg/FFprobe, Chromium OS libraries, npm dependencies, ComfyUI and optional media workflows are not installed by this script.
+- **Safety:** installer subprocess receives only an allowlisted runtime/download environment, not WhatsApp owner numbers, bot tokens, or API keys. Added a persistent lock, PID, exit-code state, private log, and stale-lock handling. GPU absence now fails before package installation unless CPU mode is explicitly requested.
+- **Diagnostics:** `.remotion services` now distinguishes missing Ollama binary, missing VoxCPM Python virtualenv, missing model weights, and a merely stopped local adapter. Added parser, installer-state, allowlist and owner-gate regression tests.
+- **Hardware boundary:** VoxCPM2 2B requires substantial RAM/VRAM and disk. CPU is supported but may be very slow. Actual target-server RAM/VRAM, disk capacity, download network, real synthesis and WhatsApp MP4 delivery still require VPS verification.
 ## 2026-11-06 — Video Studio dibuat WhatsApp-only; remote API dan Cloudflare Tunnel dihapus
 
 - **Keputusan produk:** Video Studio hanya digunakan dari WhatsApp oleh owner. Alur yang dipertahankan adalah prompt WhatsApp → Ollama/Qwen lokal → storyboard/compiler → queue → VoxCPM2 lokal → opsional ComfyUI lokal → Remotion/FFmpeg → MP4 dikirim ke chat asal.

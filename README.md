@@ -179,9 +179,10 @@ owner WhatsApp → Ollama/Qwen lokal → storyboard/compiler → antrean render 
 - .remotion membuka menu produksi.
 - .remotion generate meminta brief video pada pesan berikutnya.
 - .remotion &lt;prompt&gt; langsung memulai produksi dari prompt.
-- .remotion status, .remotion history, .remotion send, .remotion guide, .remotion services, dan .remotion cancel mengelola pekerjaan video.
+- .remotion status, .remotion history, .remotion send, .remotion guide, dan .remotion services mengelola pekerjaan video.
+- .remotion install memasang runtime dan model lokal melalui installer Linux; .remotion install cpu memilih mode CPU secara eksplisit; .remotion install status menampilkan progres dan log.
 
-Semua akses produksi tetap dibatasi untuk owner melalui pemeriksaan plugin. Hasil MP4 dikirim langsung melalui Baileys ke chat WhatsApp yang memulai pekerjaan dan disimpan pada direktori data Video Studio.
+Semua akses produksi dan instalasi tetap dibatasi untuk owner melalui pemeriksaan plugin. Hasil MP4 dikirim langsung melalui Baileys ke chat WhatsApp yang memulai pekerjaan dan disimpan pada direktori data Video Studio.
 
 ### Engine lokal
 

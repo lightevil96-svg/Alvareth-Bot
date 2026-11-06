@@ -14,7 +14,7 @@
 - 2026-11-06: Follow-up CI fixes the planner base URL and VoxCPM2 transport diagnostics; see the latest changelog entry.
 - 2026-11-06: Local Ollama/VoxCPM2 child processes now inherit only allowlisted runtime/model/CUDA variables; bot credentials are excluded. Regression test added.
 
-- 2026-11-06: Remotion readiness now treats Ollama/VoxCPM2 defaults as configured, auto-starts local services only when their installed binaries, virtualenv and model weights exist, and reports exact setup actions when prerequisites are missing. No automatic package/model downloads; VPS provisioning and live MP4 verification remain separate.
+- 2026-11-06: Remotion readiness now distinguishes missing Ollama binary, VoxCPM2 virtualenv, model weights, and stopped services. Owner-only `.remotion install` provisions local runtimes and model weights in the background; `.remotion install cpu` is an explicit slow CPU path; `.remotion install status` reads persistent setup state/logs. VPS hardware suitability and real MP4 verification remain separate.
 
 - 2026-11-06: Branch feat/remotion-whatsapp-linux migrates media to loopback Ollama + VoxCPM2, fixes audio serialization/timing, adds event SFX and authorization regression tests. See docs/REMOTION_AUDIT_2026-11-06.md for actual verification; earlier hosted-provider entries below are historical and superseded.
 

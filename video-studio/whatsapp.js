@@ -6,6 +6,7 @@ const ACTIONS = new Map([
   ["history", "history"], ["riwayat", "history"],
   ["guide", "guide"], ["panduan", "guide"],
   ["services", "services"], ["layanan", "services"],
+  ["install", "install"], ["pasang", "install"], ["setup", "install"],
   ["cancel", "cancel"], ["batal", "cancel"],
   ["send", "send"], ["kirim", "send"]
 ]);

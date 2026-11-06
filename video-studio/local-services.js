@@ -167,7 +167,7 @@ async function inspectOllama(config, env, waitMs, startAllowed = config.autoStar
     if (!commandWorks(config.ollamaBin, ["--version"])) {
       return {
         ready: false, reachable: false, model: config.ollamaModel,
-        detail: "Ollama tidak merespons dan binary ollama tidak ditemukan. Instal Ollama di Linux, lalu jalankan: ollama pull " + config.ollamaModel + "."
+        detail: "Binary Ollama belum ditemukan. Jalankan .remotion install untuk memasang Ollama dan model " + config.ollamaModel + "."
       };
     }
     const url = new URL(config.ollamaUrl);
@@ -179,11 +179,14 @@ async function inspectOllama(config, env, waitMs, startAllowed = config.autoStar
       probe = await waitForService(endpoint, data => Boolean(data), waitMs);
     }
   } else if (!probe.reachable && !startAllowed) {
+    const installed = commandWorks(config.ollamaBin, ["--version"]);
     return {
       ready: false, reachable: false, model: config.ollamaModel,
-      detail: config.autoStart
-        ? "Ollama belum berjalan. Pemeriksaan status tidak memuat model; .remotion generate akan menyalakan layanan otomatis."
-        : "Ollama tidak merespons. Autostart dimatikan; jalankan perintah ollama serve pada server."
+      detail: !installed
+        ? "Binary Ollama belum terpasang. Gunakan .remotion install untuk memasang runtime dan model lokal."
+        : config.autoStart
+          ? "Binary Ollama sudah ada, tetapi service belum berjalan. Saat membuat video, bot akan mencoba menyalakannya otomatis."
+          : "Ollama tidak merespons. Autostart dimatikan; jalankan ollama serve pada server."
     };
   }
 
@@ -202,7 +205,7 @@ async function inspectOllama(config, env, waitMs, startAllowed = config.autoStar
   if (!isOllamaModelReady(probe.data, config.ollamaModel)) {
     return {
       ready: false, reachable: true, model: config.ollamaModel,
-      detail: "Ollama aktif, tetapi model " + config.ollamaModel + " belum tersedia. Jalankan sekali: ollama pull " + config.ollamaModel + "."
+      detail: "Ollama aktif, tetapi model " + config.ollamaModel + " belum tersedia. Jalankan .remotion install untuk mengunduh model planner lokal."
     };
   }
   return {
@@ -248,14 +251,14 @@ async function inspectVoxCPM(config, env, waitMs, startAllowed = config.autoStar
     if (!existsSync(config.pythonPath) || !commandWorks(config.pythonPath)) {
       return {
         ready: false, reachable: false,
-        detail: "Python virtualenv VoxCPM2 belum siap. Buat .venv-voxcpm, pasang PyTorch yang sesuai GPU/CPU, lalu instal video-studio/services/voxcpm/requirements.txt."
+        detail: "Python virtualenv VoxCPM2 belum siap. Jalankan .remotion install untuk memasang Python, PyTorch, adapter, dan bobot model lokal."
       };
     }
     if (!existsSync(config.pythonServer)) {
       return { ready: false, reachable: false, detail: "Adapter VoxCPM2 tidak ditemukan: " + config.pythonServer };
     }
     const model = readVoxModelConfig(config.modelPath);
-    if (!model.ok) return { ready: false, reachable: false, detail: model.detail };
+    if (!model.ok) return { ready: false, reachable: false, detail: model.detail + " Jalankan .remotion install untuk mengunduh model lokal." };
 
     const url = new URL(config.voxUrl);
     if (url.hostname !== "127.0.0.1") {
@@ -274,11 +277,17 @@ async function inspectVoxCPM(config, env, waitMs, startAllowed = config.autoStar
       probe = await waitForService(endpoint, isVoxCPMReady, waitMs);
     }
   } else if (!probe.reachable && !startAllowed) {
+    const pythonReady = existsSync(config.pythonPath) && commandWorks(config.pythonPath);
+    const model = readVoxModelConfig(config.modelPath);
     return {
       ready: false, reachable: false,
-      detail: config.autoStart
-        ? "VoxCPM2 belum berjalan. Pemeriksaan status tidak memuat model; layanan akan dimulai saat video membutuhkan narasi."
-        : "VoxCPM2 tidak merespons. Autostart dimatikan; jalankan adapter Python di video-studio/services/voxcpm/server.py."
+      detail: !pythonReady
+        ? "Python virtualenv VoxCPM2 belum terpasang. Gunakan .remotion install untuk memasang Python, PyTorch, dan adapter."
+        : !model.ok
+          ? model.detail + " Jalankan .remotion install untuk mengunduh model."
+          : config.autoStart
+            ? "Virtualenv dan bobot VoxCPM2 tersedia, tetapi adapter belum berjalan. Bot akan memulainya otomatis saat narasi dibutuhkan."
+            : "VoxCPM2 tidak merespons. Autostart dimatikan; jalankan adapter Python di video-studio/services/voxcpm/server.py."
     };
   }
 

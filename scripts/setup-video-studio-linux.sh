@@ -2,6 +2,7 @@
 # Rootless bootstrap for Alvareth Remotion on Pterodactyl/Linux containers.
 # Uses only user-writable paths; no apt, sudo, systemd, or shell installer.
 set -Eeuo pipefail
+umask 077
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -11,6 +12,9 @@ OLLAMA_BIN="${LOCAL_BIN}/ollama"
 VENV="${ROOT}/.venv-voxcpm"
 MODEL_DIR="${VOXCPM_MODEL_PATH:-${HOME}/alvareth-models/VoxCPM2}"
 LOG_DIR="${ALVARETH_DATA_DIR:-${HOME}/.alvareth-bot-data}/video-studio/logs"
+LOCK_DIR="${LOG_DIR}/setup.lock"
+EXIT_CODE_FILE="${LOG_DIR}/setup.exit-code"
+TMP_UV=""
 UV_VERSION="${UV_VERSION:-0.13.7}"
 WITH_MODELS=0
 ALLOW_CPU="${VOXCPM_ALLOW_CPU:-0}"
@@ -49,6 +53,40 @@ fail() { echo "[Alvareth setup] ERROR: $*" >&2; exit 1; }
 info() { echo "[Alvareth setup] $*"; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
+# Serialize installs and persist a result for the WhatsApp status command.
+mkdir -p "$LOG_DIR"
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+  EXISTING_PID=""
+  for _ in 1 2 3 4 5; do
+    EXISTING_PID="$(cat "$LOCK_DIR/pid" 2>/dev/null || true)"
+    [ -n "$EXISTING_PID" ] && break
+    sleep 1
+  done
+  if [ -n "$EXISTING_PID" ] && kill -0 "$EXISTING_PID" 2>/dev/null; then
+    EXISTING_CMD="$(tr '\0' ' ' < "/proc/$EXISTING_PID/cmdline" 2>/dev/null || true)"
+    case "$EXISTING_CMD" in
+      *setup-video-studio-linux.sh*) fail "Installer lain masih berjalan dengan PID $EXISTING_PID." ;;
+    esac
+  fi
+  rm -rf -- "$LOCK_DIR"
+  mkdir "$LOCK_DIR" || fail "Tidak dapat membuat lock installer."
+fi
+chmod 700 "$LOG_DIR" "$LOCK_DIR" 2>/dev/null || true
+printf '%s\n' "$BASHPID" > "$LOCK_DIR/pid"
+rm -f -- "$EXIT_CODE_FILE"
+
+finish_setup() {
+  local code=$?
+  trap - EXIT
+  if [ -n "$TMP_UV" ]; then rm -rf -- "$TMP_UV" || true; fi
+  printf '%s\n' "$code" > "$EXIT_CODE_FILE.tmp.$BASHPID"
+  mv -f -- "$EXIT_CODE_FILE.tmp.$BASHPID" "$EXIT_CODE_FILE" || true
+  rm -rf -- "$LOCK_DIR" || true
+  exit "$code"
+}
+trap finish_setup EXIT
+trap 'exit 130' INT TERM
+
 [ "$(uname -s)" = "Linux" ] || fail "Script ini hanya untuk Linux."
 case "$(uname -m)" in
   x86_64|amd64)
@@ -67,6 +105,24 @@ have find || fail "Perintah find tidak tersedia."
 mkdir -p "$LOCAL_BIN" "$LOCAL_PREFIX/lib/ollama" "$LOG_DIR"
 export PATH="$LOCAL_BIN:$PATH"
 
+GPU_AVAILABLE=0
+GPU_DESCRIPTION=""
+if have nvidia-smi; then
+  GPU_DESCRIPTION="$(nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>/dev/null | head -n 1 || true)"
+  if [ -n "$GPU_DESCRIPTION" ]; then GPU_AVAILABLE=1; fi
+fi
+if [ "$GPU_AVAILABLE" -ne 1 ] && [ "$ALLOW_CPU" != "1" ]; then
+  fail "GPU NVIDIA tidak terlihat dari container. Tidak ada paket yang dipasang. Jika server memang CPU-only dan kamu menerima performa lambat, jalankan .remotion install cpu atau bash scripts/setup-video-studio-linux.sh --allow-cpu --with-models."
+fi
+if [ "$GPU_AVAILABLE" -eq 1 ]; then
+  info "GPU terdeteksi: $GPU_DESCRIPTION"
+else
+  info "Mode CPU dipilih secara eksplisit. VoxCPM2 2B dapat berjalan di CPU, tetapi inferensi bisa sangat lambat."
+fi
+if have df; then
+  df -Pk "$HOME" | tail -n 1 | awk '{printf "[Alvareth setup] Storage available: %.1f GiB\n", $4/1048576}'
+fi
+
 download() {
   curl -fL --retry 3 --connect-timeout 20 "$1" -o "$2"
 }
@@ -76,7 +132,6 @@ download() {
 if ! have uv && [ ! -x "$LOCAL_BIN/uv" ]; then
   info "Mengunduh uv ${UV_VERSION} (binary standalone)..."
   TMP_UV="$(mktemp -d)"
-  trap 'rm -rf "$TMP_UV"' EXIT
   download "https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/${UV_ARCHIVE}" "$TMP_UV/uv.tar.gz"
   tar -xzf "$TMP_UV/uv.tar.gz" -C "$TMP_UV"
   UV_SOURCE="$(find "$TMP_UV" -type f -name uv -print -quit)"
@@ -84,7 +139,7 @@ if ! have uv && [ ! -x "$LOCAL_BIN/uv" ]; then
   cp "$UV_SOURCE" "$LOCAL_BIN/uv"
   chmod 755 "$LOCAL_BIN/uv"
   rm -rf "$TMP_UV"
-  trap - EXIT
+  TMP_UV=""
 fi
 UV_BIN="$(command -v uv || true)"
 [ -n "$UV_BIN" ] || UV_BIN="$LOCAL_BIN/uv"
@@ -154,7 +209,7 @@ PY
 if [ -n "${VOXCPM_TORCH_INDEX_URL:-}" ]; then
   info "Memasang PyTorch dari index: ${VOXCPM_TORCH_INDEX_URL}"
   "$UV_BIN" pip install --python "$PYTHON" torch torchaudio --index-url "$VOXCPM_TORCH_INDEX_URL"
-elif have nvidia-smi && nvidia-smi >/dev/null 2>&1; then
+elif [ "$GPU_AVAILABLE" -eq 1 ]; then
   info "GPU NVIDIA terdeteksi. Memasang PyTorch; periksa hasil CUDA di bawah..."
   "$UV_BIN" pip install --python "$PYTHON" torch torchaudio
 else
@@ -217,5 +272,5 @@ Virtualenv: ${PYTHON}
 Model directory: ${MODEL_DIR}
 Logs: ${LOG_DIR}
 
-Restart bot, lalu kirim: .remotion services
+Runtime dan model sudah disiapkan. Kirim: .remotion services, lalu buat video. VoxCPM2 akan dimuat otomatis saat narasi pertama diperlukan.
 SUMMARY

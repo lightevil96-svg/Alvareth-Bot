@@ -104,10 +104,30 @@ bash scripts/setup-video-studio-linux.sh --allow-cpu --with-models
 
 Untuk server dengan GPU NVIDIA yang sudah dipassthrough, jalankan tanpa `--allow-cpu`. Jika build PyTorch tertentu dibutuhkan, set `VOXCPM_TORCH_INDEX_URL` sesuai driver/CUDA dari [PyTorch Start Locally](https://pytorch.org/get-started/locally/).
 
-Bootstrap ini tidak memerlukan `sudo`, `apt`, `systemd`, `free`, atau `nvidia-smi` untuk membuat virtualenv. Ketersediaan GPU dideteksi dari `nvidia-smi` jika tool itu terlihat di container; tidak ditemukannya tool tersebut belum membuktikan host fisik tidak punya GPU. Script menampilkan RAM host-visible dan limit cgroup bila tersedia. VoxCPM2 2B mendukung CPU sebagai pilihan perangkat, tetapi performanya bisa sangat lambat. Pastikan provider mengizinkan binary execution, koneksi HTTPS keluar, proses background, dan storage persisten.
+Bootstrap ini tidak memerlukan `sudo`, `apt`, atau `systemd`. Mode GPU memerlukan GPU NVIDIA yang terlihat dari container melalui `nvidia-smi`; jika tool tidak terlihat, hal itu belum membuktikan host fisik tidak punya GPU karena GPU passthrough mungkin belum aktif. Mode CPU harus dipilih secara eksplisit dengan `--allow-cpu`. Script menampilkan RAM host-visible, limit cgroup, dan ruang storage bila tersedia. VoxCPM2 2B mendukung CPU, tetapi performanya dapat sangat lambat. Pastikan provider mengizinkan binary execution, koneksi HTTPS keluar, proses background, dan storage persisten.
 
 Ollama memakai URL paket resmi `https://ollama.com/download/ollama-linux-amd64.tar.zst` (atau arm64 sesuai arsitektur). Script memasang binary ke `$HOME/.local/bin/ollama`, tanpa menulis ke `/usr`. Setelah bootstrap selesai, restart bot dan jalankan `.remotion services`. Bila panel membutuhkan environment path eksplisit, gunakan nilai `VIDEO_STUDIO_OLLAMA_BIN` yang dicetak script.
 
+## Install engine langsung dari WhatsApp
+
+Setelah commit terbaru sudah ada di server dan bot berjalan, owner tidak perlu masuk console untuk memasang runtime/model. Kirim perintah berikut di chat WhatsApp bot:
+
+```text
+.remotion install
+```
+
+Perintah tersebut mendeteksi GPU NVIDIA di container, lalu menjalankan installer di background dengan `--with-models`. Installer memasang `uv`, Python 3.11, Ollama, PyTorch, adapter VoxCPM2 pada commit upstream yang dipin, kemudian mengunduh model planner Qwen dan bobot VoxCPM2. Log dan status tersimpan di data directory bot.
+
+Perintah lain:
+
+- `.remotion install status` — melihat apakah installer berjalan, hasil exit code, dan potongan log terakhir.
+- `.remotion install cpu` — memilih CPU secara eksplisit jika GPU NVIDIA tidak tersedia/di-pass-through. CPU bisa sangat lambat; periksa RAM dan disk sebelum menjalankannya.
+
+Jika tidak ada GPU NVIDIA yang terlihat, `.remotion install` berhenti sebelum mengunduh runtime/model dan meminta pilihan CPU secara eksplisit. Acuan upstream VoxCPM2 2B sekitar 8 GB VRAM; kebutuhan aktual bergantung pada device dan konfigurasi. CPU didukung, tetapi bukan jaminan performa layak untuk produksi.
+
+Installer ini tidak memasang FFmpeg/FFprobe, Chromium OS libraries, atau dependency npm bot. Pada server yang dibahas, pemeriksaan sebelumnya sudah mendeteksi Remotion + FFmpeg. Jika komponen itu tidak tersedia, pasang lewat image/container hosting atau administrator server. ComfyUI, workflow footage, dan musik tetap opsional dan tidak diunduh oleh installer inti.
+
+Jangan menjalankan dua instalasi bersamaan atau menghapus folder data/log saat proses berjalan. Setelah exit code 0, jalankan `.remotion services`; Ollama akan dipakai untuk planner, sedangkan adapter VoxCPM2 dimulai otomatis saat video pertama kali membutuhkan narasi.
 ## Automatic local service startup
 
 The bot starts local services only when the production step needs them: Ollama for storyboard planning, then VoxCPM2 when narration is present. This avoids loading the 7B planner and 2B TTS model together during a redundant preflight. `.remotion services` is status-only and does not load models. Runtime startup never installs packages, downloads model weights, or calls a hosted provider. VoxCPM2 cold-start wait defaults to 10 minutes and can be adjusted with `VIDEO_STUDIO_VOXCPM_STARTUP_TIMEOUT_MS`.
@@ -127,7 +147,7 @@ For a rootless/Pterodactyl installation, use the bootstrap above rather than the
 
 If the model is stored elsewhere, set `VOXCPM_MODEL_PATH` in the private server environment. If the Python executable is elsewhere, set `VIDEO_STUDIO_VOXCPM_PYTHON`. The adapter process is detached from the bot worker and bound to loopback. Its private startup/error logs are written under $ALVARETH_DATA_DIR/video-studio/logs/ (default ~/.alvareth-bot-data/video-studio/logs/); inspect ollama.log or voxcpm2.log if a process exits. The bot reports a missing binary, virtualenv, model, unloaded model, or missing Ollama model separately. Run `.remotion services` again after setup and wait until both direct checks are green.
 
-This is process autostart, not provisioning: the server still needs enough RAM/VRAM, disk, compatible PyTorch/CUDA and model weights. A green health check is not a substitute for a real narration and MP4 test.
+Service autostart itself is not provisioning; `.remotion install` provisions the local runtime and model weights. The server still needs enough RAM/VRAM, disk, compatible PyTorch/CUDA and network access. A green health check is not a substitute for a real narration and MP4 test.
 
 ## Optional ComfyUI
 
@@ -141,7 +161,7 @@ The .remotion plugin is the only Video Studio control surface. The bot plans, re
 
 ## WhatsApp commands
 
-`.remotion` provides seven menu actions: generate, status, history, resend, services, guide, cancel. `.remotion <natural prompt>` also works. Every plugin invocation requires `isROwner === true`; the router retains its own owner check. Prompt sessions require matching sender and chat; another owner cannot cancel that session. Cancellation only cancels input, not a queued render. Job history/output can be accessed by authorized owners. `/services` is configuration plus live Ollama/VoxCPM2 health, not an end-to-end guarantee.
+`.remotion` provides eight menu actions: generate, status, history, resend, services, install, guide, cancel. `.remotion <natural prompt>` also works. Every plugin invocation requires `isROwner === true`; the router retains its own owner check. Prompt sessions require matching sender and chat; another owner cannot cancel that session. Cancellation only cancels input, not a queued render. Job history/output can be accessed by authorized owners. `/services` is configuration plus live Ollama/VoxCPM2 health, not an end-to-end guarantee. `.remotion install` provisions local runtimes and model weights; `.remotion install status` reports the installer.
 
 ## Sound and timing
 
@@ -160,6 +180,6 @@ npm run test:remotion-live
 node scripts/remotion-smoke.js --fixture
 ```
 
-Smoke output defaults to /tmp/alvareth-remotion-smoke; override REMOTION_SMOKE_DIR to retain it. A successful smoke includes H.264 video, audio, correct dimensions, full FFmpeg decode and JSON probe evidence. Listen to voice/SFX, inspect transitions/subtitles, then test all seven actions plus a non-owner account on real WhatsApp. CI fixture rendering never establishes that VoxCPM2 or WhatsApp works on the VPS.
+Smoke output defaults to /tmp/alvareth-remotion-smoke; override REMOTION_SMOKE_DIR to retain it. A successful smoke includes H.264 video, audio, correct dimensions, full FFmpeg decode and JSON probe evidence. Listen to voice/SFX, inspect transitions/subtitles, then test all eight actions plus a non-owner account on real WhatsApp. CI fixture rendering never establishes that VoxCPM2 or WhatsApp works on the VPS.
 
 See REMOTION_LOCAL_LICENSES.md for licensing and REMOTION_AUDIT_2026-11-06.md for this session's evidence and limitations.

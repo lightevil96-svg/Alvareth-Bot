@@ -1,4 +1,5 @@
 import { startLocalVideoServices } from "../../video-studio/local-services.js";
+import { readVideoStudioInstallerStatus, startVideoStudioInstaller } from "../../video-studio/installer.js";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -125,6 +126,12 @@ async function showMenu(m, conn, usedPrefix = ".") {
     },
     {
       header: "",
+      title: "⬇️ Pasang engine lokal",
+      description: "Pasang Ollama, Qwen, VoxCPM2, dan model secara otomatis.",
+      id: usedPrefix + "remotion install"
+    },
+    {
+      header: "",
       title: "✖️ Batalkan prompt",
       description: "Hapus sesi menunggu prompt, bukan render aktif.",
       id: usedPrefix + "remotion cancel"
@@ -164,6 +171,9 @@ async function showMenu(m, conn, usedPrefix = ".") {
       "• " + prefix + "remotion send\n" +
       "• " + prefix + "remotion guide\n" +
       "• " + prefix + "remotion services\n" +
+      "• " + prefix + "remotion install\n" +
+      "• " + prefix + "remotion install cpu\n" +
+      "• " + prefix + "remotion install status\n" +
       "• " + prefix + "remotion cancel"
     );
   }
@@ -393,6 +403,95 @@ async function showHistory(m) {
   return m.reply("📁 *RIWAYAT VIDEO REMOTION*\n\n" + lines.join("\n\n") + "\n\nKirim ulang hasil: .remotion send ID");
 }
 
+
+function formatInstallerStatus(status) {
+  if (status.status === "running") {
+    return "⏳ *INSTALLER SEDANG BERJALAN*\nPID: " + (status.pid || "-") + "\nCek lagi dengan .remotion install status.";
+  }
+  if (status.status === "completed") {
+    return "✅ *INSTALLER SELESAI*\nRuntime dan bobot model berhasil disiapkan. Lanjutkan dengan .remotion services.";
+  }
+  if (status.status === "failed") {
+    return "❌ *INSTALLER GAGAL*\nExit code: " + status.exitCode + "\nPeriksa log terakhir di bawah.";
+  }
+  if (status.status === "interrupted") {
+    return "⚠️ *STATUS INSTALLER TIDAK PASTI*\nLock tersisa tetapi proses tidak terdeteksi. Jalankan .remotion install lagi; script akan membersihkan lock usang.";
+  }
+  return "Belum ada proses instalasi. Jalankan .remotion install untuk GPU atau .remotion install cpu untuk mode CPU.";
+}
+
+async function showInstallerStatus(m) {
+  const status = readVideoStudioInstallerStatus();
+  const tail = status.logTail
+    ? "\n\n*Log terakhir:*\n" + status.logTail.split(/\r?\n/).slice(-12).join("\n").slice(-2200)
+    : "";
+  return m.reply(formatInstallerStatus(status) + tail);
+}
+
+async function installLocalEngine(m, conn, argument = "") {
+  const option = String(argument || "").trim().toLowerCase();
+  if (option === "status") return showInstallerStatus(m);
+  if (option && option !== "cpu") {
+    return m.reply(
+      "Perintah instalasi:\n" +
+      "• .remotion install — otomatis memakai GPU NVIDIA yang terdeteksi\n" +
+      "• .remotion install cpu — paksa jalur CPU (lebih lambat)\n" +
+      "• .remotion install status — lihat proses dan log terakhir"
+    );
+  }
+
+  const ollamaUrl = String(process.env.VIDEO_STUDIO_OLLAMA_URL || "http://127.0.0.1:11434").trim();
+  const voxUrl = String(process.env.VIDEO_STUDIO_VOXCPM_URL || "http://127.0.0.1:7861").trim();
+  if (ollamaUrl !== "http://127.0.0.1:11434" || voxUrl !== "http://127.0.0.1:7861") {
+    return m.reply(
+      "Installer otomatis saat ini menyiapkan endpoint lokal default:\n" +
+      "Ollama: http://127.0.0.1:11434\nVoxCPM2: http://127.0.0.1:7861\n\n" +
+      "Konfigurasi VIDEO_STUDIO_OLLAMA_URL atau VIDEO_STUDIO_VOXCPM_URL kamu berbeda. Sesuaikan endpoint ke default tersebut atau siapkan service sesuai endpoint yang sudah dikonfigurasi."
+    );
+  }
+
+  const mode = option === "cpu" ? "cpu" : "gpu";
+  const result = startVideoStudioInstaller({
+    mode,
+    onExit: code => {
+      void sendText(
+        m.chat,
+        code === 0
+          ? "✅ *Pemasangan engine lokal selesai.*\nKetik .remotion services untuk pemeriksaan, lalu coba buat video. Pemanggilan pertama VoxCPM2 dapat memerlukan waktu untuk memuat model."
+          : "❌ *Pemasangan engine lokal berhenti dengan error (exit " + code + ").*\nKetik .remotion install status untuk melihat log terakhir.",
+        conn
+      );
+    },
+    onError: error => {
+      void sendText(m.chat, "❌ Installer tidak dapat dijalankan: " + String(error?.message || error).slice(0, 300), conn);
+    }
+  });
+
+  if (result.alreadyRunning) {
+    return m.reply("⏳ Installer sudah berjalan (PID " + (result.pid || "-") + "). Ketik .remotion install status untuk melihat progres.");
+  }
+  if (result.needsCpuOptIn) {
+    return m.reply(
+      "⚠️ *GPU NVIDIA tidak terdeteksi di container.*\n" +
+      "Installer tidak akan diam-diam memaksa mode CPU. Jika server memang CPU-only dan kamu menerima proses yang jauh lebih lambat, kirim:\n\n" +
+      ".remotion install cpu\n\n" +
+      "Jika VPS seharusnya memiliki GPU, aktifkan GPU passthrough pada container lalu ulangi .remotion install."
+    );
+  }
+  if (!result.started) return m.reply("❌ Instalasi tidak dimulai: " + (result.error || "kesalahan tidak diketahui"));
+
+  const hardware = mode === "cpu"
+    ? "Mode CPU dipilih secara eksplisit. VoxCPM2 2B dapat berjalan di CPU, tetapi sangat lambat."
+    : "GPU terdeteksi: " + result.gpu.name + (result.gpu.memoryMiB ? " (" + result.gpu.memoryMiB + " MiB VRAM)" : "") +
+      (result.gpu.memoryMiB && result.gpu.memoryMiB < 8192 ? "\n⚠️ VRAM di bawah acuan resmi sekitar 8 GB; pemuatan model bisa gagal karena memori." : "");
+  return m.reply(
+    "🚀 *PEMASANGAN ENGINE REMOTION DIMULAI*\n" +
+    hardware + "\n\n" +
+    "Installer akan memasang Ollama, Python 3.11, PyTorch, adapter VoxCPM2, lalu mengunduh model Qwen dan VoxCPM2. Proses berjalan di background dan log tersimpan di server.\n\n" +
+    "Ketik .remotion install status untuk memantau. Jangan hapus atau restart file instalasi saat proses berjalan."
+  );
+}
+
 async function showServices(m) {
   const statuses = providerReadiness();
   // Status is observational: do not load two large models just to inspect them.
@@ -406,7 +505,8 @@ async function showServices(m) {
   );
   lines.push(
     "",
-    "SFX dibuat lokal. Musik tidak dipaksakan. Konfigurasi dan pemeriksaan langsung dibedakan; kesehatan service belum membuktikan hasil video.",
+    "Untuk memasang runtime dan model lokal, gunakan .remotion install (GPU) atau .remotion install cpu (CPU). Pantau dengan .remotion install status.",
+    "SFX dibuat lokal. Musik tidak dipaksakan. Kesehatan service belum membuktikan hasil video.",
     "Reference image dapat meningkatkan konsistensi karakter, tetapi tidak menjamin identitas identik pada semua scene."
   );
   return m.reply("⚙️ *KESIAPAN REMOTION DI SERVER LINUX*\n\n" + lines.join("\n\n"));
@@ -444,6 +544,7 @@ async function handleCommand(m, { conn, usedPrefix, text }) {
   if (parsed.action === "history") return showHistory(m);
   if (parsed.action === "guide") return showGuide(m);
   if (parsed.action === "services") return showServices(m);
+  if (parsed.action === "install") return installLocalEngine(m, conn, parsed.argument);
   if (parsed.action === "cancel") {
     const ownSession = sessions.get(m.chat)?.sender === m.sender;
     const removed = ownSession && sessions.delete(m.chat);

@@ -34,6 +34,9 @@ test("routes status, history, guide, services, cancel and resend actions", () =>
   assert.equal(parseRemotionCommand("riwayat").action, "history");
   assert.equal(parseRemotionCommand("panduan").action, "guide");
   assert.equal(parseRemotionCommand("services").action, "services");
+  assert.deepEqual(parseRemotionCommand("install"), { action: "install", argument: "" });
+  assert.deepEqual(parseRemotionCommand("install cpu"), { action: "install", argument: "cpu" });
+  assert.deepEqual(parseRemotionCommand("install status"), { action: "install", argument: "status" });
   assert.equal(parseRemotionCommand("batal").action, "cancel");
   assert.deepEqual(parseRemotionCommand("send job-123"), { action: "send", jobId: "job-123" });
 });
@@ -102,13 +105,13 @@ test("plugin rejects every non-owner action and binds prompt sessions to their i
   const replies=[], sent=[];
   const m={chat:'test-chat',sender:'owner-a',reply:async text=>replies.push(text)};
   const conn={sendMessage:async (...args)=>sent.push(args)};
-  for (const text of ['', 'generate', 'status', 'history', 'send id', 'services', 'guide', 'cancel', 'buatkan video kopi']) {
+  for (const text of ['', 'generate', 'status', 'history', 'send id', 'services', 'install', 'install status', 'guide', 'cancel', 'buatkan video kopi']) {
     await handler(m,{conn,text,isROwner:false});
     assert.match(replies.at(-1),/hanya untuk owner/);
   }
   assert.equal(sent.length,0);
   await handler(m,{conn,text:'',isROwner:true,usedPrefix:'!'});
-  assert.equal(sent[0][1].nativeFlow[0].sections[0].rows.length,7);
+  assert.equal(sent[0][1].nativeFlow[0].sections[0].rows.length,8);
   assert.equal(sent[0][1].nativeFlow[0].sections[0].rows[0].id,'!remotion generate');
   await handler(m,{conn,text:'generate',isROwner:true});
   assert.equal(global.__alvarethRemotionSessions.get(m.chat).sender,'owner-a');
@@ -118,6 +121,7 @@ test("plugin rejects every non-owner action and binds prompt sessions to their i
   assert.equal(global.__alvarethRemotionSessions.has(m.chat),true);
   await handler(m,{conn,text:'cancel',isROwner:true});
   assert.equal(global.__alvarethRemotionSessions.has(m.chat),false);
-  for (const text of ['status','history','send','guide']) await handler(m,{conn,text,isROwner:true});
+  for (const text of ['status','history','send','guide','install status']) await handler(m,{conn,text,isROwner:true});
+  assert.ok(replies.some(text=>/Belum ada proses instalasi/.test(text)));
   assert.ok(replies.some(text=>/Riwayat video masih kosong/.test(text)));
 });

@@ -269,7 +269,7 @@ export async function planVideoPrompt(prompt) {
   if (/cloud/i.test(model)) throw new Error("Model Ollama cloud tidak diizinkan.");
   try {
     if (new URL(base).origin === "http://127.0.0.1:11434") {
-      const services = await startLocalVideoServices({ services: ["ollama"], waitMs: 3000 });
+      const services = await startLocalVideoServices({ services: ["ollama"], waitMs: 10000 });
       if (!services.ollama?.ready) throw new Error(services.ollama?.detail || "Ollama lokal belum siap.");
     }
     const json = await localJson(endpoint, {
@@ -280,6 +280,9 @@ export async function planVideoPrompt(prompt) {
     }, Math.min(600000, Math.max(10000, Number(process.env.VIDEO_STUDIO_AI_TIMEOUT_MS) || 180000)));
     return normalizeVideoPlan(parseJsonResponse(json?.message?.content), sourcePrompt);
   } catch (error) {
-    throw new Error("Planner Ollama lokal gagal. Periksa service/model dengan .remotion services. " + error.message);
+    const detail = /fetch failed|ECONNREFUSED|ETIMEDOUT/i.test(String(error?.message || ""))
+      ? "Tidak dapat terhubung ke " + new URL(endpoint).origin + (error?.cause?.code ? " (" + error.cause.code + ")" : "") + ". Jalankan .remotion services; jika runtime/model belum dipasang, gunakan .remotion install."
+      : String(error?.message || error);
+    throw new Error("Planner Ollama lokal gagal. " + detail);
   }
 }
