@@ -1,6 +1,6 @@
 # Panduan Prompt Remotion — Alvareth Bot
 
-**Tujuan:** menjadi kontrak kerja bagi ChatGPT saat menyusun storyboard untuk fitur WhatsApp `.remotion`. Output ChatGPT akan ditempel langsung ke bot. Bot tidak lagi menjalankan Ollama atau LLM lokal untuk menyusun cerita; bot hanya mem-parsing, menormalisasi, memvalidasi, mengompilasi, dan merender JSON yang diberikan.
+**Tujuan:** menjadi kontrak kerja bagi model AI pilihan pengguna saat menyusun storyboard untuk fitur WhatsApp `.remotion`. Output model AI pilihan pengguna akan ditempel langsung ke bot. Bot tidak lagi menjalankan Ollama atau LLM lokal untuk menyusun cerita; bot hanya mem-parsing, menormalisasi, memvalidasi, mengompilasi, dan merender JSON yang diberikan.
 
 ## 1. Cara menggunakan panduan ini
 
@@ -12,18 +12,18 @@ Saat pengguna meminta dibuatkan video untuk Alvareth Remotion:
 4. Keluarkan **satu objek JSON valid** sesuai schema di bawah. Jangan menambahkan penjelasan sebelum atau sesudah JSON. Jangan memakai komentar, trailing comma, `undefined`, `NaN`, atau JavaScript.
 5. Pengguna menyalin seluruh JSON dan mengirimkannya melalui `.remotion generate` atau langsung setelah `.remotion`.
 
-Jangan menyuruh bot menafsirkan brief teks bebas. Brief bebas harus diolah di ChatGPT terlebih dahulu.
+Jangan menyuruh bot menafsirkan brief teks bebas. Brief bebas harus diolah di model AI pilihan pengguna terlebih dahulu.
 
 ## 2. Pipeline dan batas kemampuan yang benar
 
 Alur runtime saat ini:
 
-`Brief pengguna → ChatGPT (di luar bot) → storyboard JSON → parser/normalizer → compiler → validator → antrean → media lokal opsional → Remotion/FFmpeg → MP4 → WhatsApp`.
+`Brief pengguna → model AI pilihan pengguna (di luar bot) → storyboard JSON → parser/normalizer → compiler → validator → antrean → media lokal opsional → Remotion/FFmpeg → MP4 → WhatsApp`.
 
-- **ChatGPT:** menyusun storyboard. Bot tidak memanggil ChatGPT API, Ollama, atau model bahasa lain.
+- **model AI pilihan pengguna:** menyusun storyboard. Bot tidak memanggil model AI pilihan pengguna API, Ollama, atau model bahasa lain.
 - **Parser/normalizer/compiler:** menerima JSON, menerapkan default aman, membatasi enum, menghitung durasi, dan mengubah storyboard menjadi payload Remotion.
-- **Voice-over:** narasi per scene diproses oleh service VoxCPM2 lokal jika `VIDEO_STUDIO_VOXCPM_URL` sudah aktif. Jika narasi diminta tetapi service wajib tidak tersedia, pekerjaan dapat gagal dengan pesan provider yang jelas. Jangan menganggap narasi sudah menjadi audio hanya karena field `narration` terisi.
-- **Subtitle:** `captionStyle` menentukan gaya caption. Jika alignment tersedia, timing kata menggunakan hasil alignment. Jika tidak, runtime memperkirakan timing caption dari durasi WAV terukur serta bobot suku kata/tanda baca; hasilnya perkiraan, bukan forced alignment yang akurat. Jangan menjanjikan highlight per kata yang presisi saat aligner tidak tersedia.
+- **Voice-over:** provider default adalah Edge TTS online melalui paket `edge-tts`, menggunakan suara Neural Bahasa Indonesia dan word-boundary timing. Provider ini gratis digunakan tanpa API key atau model GPU, tetapi merupakan klien tidak resmi terhadap layanan Edge online sehingga ketersediaan dan kebijakannya dapat berubah. VoxCPM2 tetap tersedia sebagai opsi lokal yang lebih berat dan dapat lebih lambat pada CPU. Provider dan suara dipilih melalui `.remotion voice`.
+- **Subtitle:** `captionStyle` menentukan gaya caption. Edge TTS mengirim metadata `WordBoundary` sehingga timing kata dapat diambil langsung dari hasil sintesis. Jika metadata tidak tersedia, runtime memperkirakan timing caption dari durasi audio terukur dan bobot kata/tanda baca; hasilnya perkiraan, bukan forced alignment. VoxCPM2 memakai alignment lokal hanya jika aligner opsional dikonfigurasi.
 - **AI footage:** opsional melalui workflow ComfyUI lokal yang sudah ditinjau. Default pipeline hanya memilih maksimal **2 scene** untuk AI video (dapat diubah operator, maksimum 4). Setiap klip yang dihasilkan dibatasi 3–8 detik. Workflow yang tidak dikonfigurasi berarti footage AI tidak dibuat.
 - **Character reference:** satu referensi karakter dapat dibuat jika image workflow ComfyUI aktif dan workflow video memakai placeholder `{{REFERENCE_IMAGE}}`. Ini membantu kontinuitas, tetapi tidak menjamin karakter identik di semua frame/klip.
 - **Remotion:** merender komposisi berdasarkan data tervalidasi. Tanpa footage ComfyUI, visual tetap dapat dirender sebagai motion graphics, tetapi jangan menyebut hasilnya sebagai animasi 3D penuh atau footage sinematik nyata.
