@@ -30,6 +30,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Install native build dependencies for canvas
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libcairo2-dev libpango1.0-dev libpixman-1-dev libjpeg-dev libgif-dev librsvg2-dev
       - name: Install project dependencies
         run: npm install --no-audit --no-fund
       - name: Run syntax and regression tests

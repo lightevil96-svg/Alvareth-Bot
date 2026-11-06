@@ -28,7 +28,7 @@ test("settings are normalized to supported values", () => {
     maxDurationSeconds: 180,
     removeSilence: false
   });
-  assert.deepEqual(getOutputDimensions({ ratio: "4:5", resolution: "720p" }), { width: 576, height: 720 });
+  assert.deepEqual(getOutputDimensions({ ratio: "4:5", resolution: "720p" }), { width: 720, height: 900 });
 });
 
 test("valid custom plan accepts chronological clips and timed captions", () => {

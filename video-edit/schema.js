@@ -47,7 +47,7 @@ export function getOutputDimensions(output = {}) {
   const ratio = Object.hasOwn(RATIOS, output.ratio) ? output.ratio : "9:16";
   const [baseWidth, baseHeight] = RATIOS[ratio];
   if (output.resolution === "720p") {
-    const scale = 720 / Math.max(baseWidth, baseHeight);
+    const scale = 720 / Math.min(baseWidth, baseHeight);
     return {
       width: Math.max(2, Math.round(baseWidth * scale / 2) * 2),
       height: Math.max(2, Math.round(baseHeight * scale / 2) * 2)
