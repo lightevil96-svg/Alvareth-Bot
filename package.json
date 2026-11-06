@@ -19,7 +19,7 @@
     "test:video-studio": "node --test tests/video-studio.test.js tests/video-studio-media.test.js tests/video-studio-voice.test.js tests/video-studio-local.test.js tests/video-studio-installer.test.js",
     "skills:remotion": "npx -y skills@latest add remotion-dev/skills --all -y",
     "test:remotion-live": "node --env-file=.env scripts/remotion-smoke.js",
-    "test:edit": "node --check plugins/owner/edit.js && node --check video-edit/schema.js && node --check video-edit/engine.js && node --check video-edit/queue.js && node --test tests/video-edit.test.js tests/edit-whatsapp.test.js"
+    "test:edit": "node --check plugins/owner/edit.js && node --check video-edit/schema.js && node --check video-edit/engine.js && node --check video-edit/queue.js && node --check tests/video-edit.test.js && node --check tests/edit-whatsapp.test.js && node --test tests/video-edit.test.js tests/edit-whatsapp.test.js"
   },
   "keywords": [
     "alvareth-bot",
