@@ -7,8 +7,8 @@ function clean(value, max = 500) {
 
 export function sanitizeAiVideoPrompt(value) {
   return clean(value, 1800)
-    .replace(/Dibuat\\s*oleh\\s*ALVARETH\\s*BOT/giu, " ")
-    .replace(/\\s+/g, " ")
+    .replace(/Dibuat\s*oleh\s*ALVARETH\s*BOT/giu, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
