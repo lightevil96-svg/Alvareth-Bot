@@ -32,7 +32,7 @@ function followLogFile(name, logPath) {
     const stream = createReadStream(logPath, { start, end: size - 1 });
     stream.on("data", chunk => {
       pending += chunk.toString("utf8");
-      const lines = pending.split(/\\r\\n|\\n|\\r/);
+      const lines = pending.split(/\r\n|\n|\r/);
       pending = lines.pop() || "";
       for (const line of lines) {
         if (line.trim()) console.log("[" + new Date().toISOString() + "] [REMOTION:" + name + "] " + line.trim());
