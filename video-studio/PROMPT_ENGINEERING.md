@@ -140,15 +140,17 @@ This is a **planning envelope**, not the current `validateVideoProject()` input 
 ## 4. Current Remotion compatibility boundary
 
 The current server validator accepts:
-- `title`, `mode`, `ratio` (`9:16`, `16:9`, `1:1`), `fps` (24/25/30)
+- `title`, `mode`, `ratio` (`9:16`, `16:9`, `1:1`), `fps` (24/25/30), and optional `brandCredit`
 - `scenes[]` with text, variable duration (1–20 sec), background/accent colors, layout, motif, motion, transition, narration metadata, and allowlisted sound cue
+- `visualType: "3d"` with allowlisted `threeDStyle` and `threeDObject` presets
 - `musicStyle` (`cinematic`, `upbeat`, `calm`, `none`) and `soundEffects` boolean
 - Total maximum 60 scenes / 300 seconds.
 
-Current Remotion composition supports animated typography, entrance motion, scene sequences, procedural background music, and a limited repeating set of SFX. It does **not** yet support AI-generated visuals, uploaded images/video, arbitrary camera/3D animation, per-scene custom audio cues, generated voice-over, precise audio ducking, or an editable keyframe timeline.
+Current Remotion composition supports animated typography, scene sequencing, procedural music/SFX, optional ComfyUI-generated footage, and deterministic 3D motion graphics through Three.js / React Three Fiber (`@remotion/three`). Server-side WebGL uses Chromium ANGLE. The procedural 3D renderer covers abstract/product objects and visual accents; it is not a rigged 3D character-animation system. Uploaded user media, arbitrary user-supplied 3D model files, and an editable keyframe timeline are not yet supported.
 
 Therefore, in the first implementation, the compiler must degrade gracefully:
-- Map supported visual descriptions to typography + background + supported motion.
+- Render `visualType: "3d"` through the allowlisted Three.js scene renderer.
+- Use ComfyUI only when a reviewed local workflow and model are configured; otherwise retain supported Remotion visuals and report the missing footage capability.
 - Preserve full storyboard descriptions in project metadata for future renderers.
 - Put unsupported requirements in `unsupportedRequests` and explain them in the UI.
 - Never silently claim unsupported features were rendered.
@@ -210,13 +212,16 @@ When asked to implement this feature:
 | Capability | Status |
 | --- | --- |
 | Manual text-scene project creation | Implemented |
-| Remotion typography animation | Implemented |
+| Remotion typography animation and normalized brand-credit overlay | Implemented; verify on a fresh render |
+| Procedural Three.js 3D object scenes | Implemented in code; CI fixture render verifies the WebGL path |
+| ComfyUI-generated video footage | Optional; requires reviewed local workflow and model |
 | Procedural background music moods | Implemented in code; runtime render not yet verified |
 | Scene sound effects | Implemented in code; runtime render not yet verified |
 | External-AI-authored storyboard JSON intake | Implemented; no LLM call is made by the bot |
 | AI storyboard generation inside the bot | Not implemented by design; the AI model is chosen and used separately by the operator |
 | JSON storyboard to safe Remotion project compiler | Implemented |
-| Local VoxCPM2 voice-over / TTS | Implemented in code; runtime model quality must be tested on the target host |
+| Local VoxCPM2 / Edge TTS voice-over | Implemented; provider quality and timing must be checked on the target host |
+| Rigged 3D character animation from native 3D models | Not implemented |
 | Uploaded image/video assets | Not implemented |
 | Preview/edit storyboard before render | Not implemented |
 
