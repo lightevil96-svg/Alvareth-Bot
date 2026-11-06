@@ -1,14 +1,18 @@
 # Alvareth Remotion — local Linux setup
 
-Current pipeline: owner WhatsApp → local Ollama JSON storyboard → schema/compiler → single-worker queue → local VoxCPM2 → optional reviewed local ComfyUI → deterministic Remotion → MP4 sent to the originating WhatsApp chat. This is WhatsApp-only: no LightJurnal remote-render API, public Video Studio endpoint, Cloudflare Tunnel, cloudflared process, or tunnel/API token is required.
+## Current architecture
+
+Brief pengguna → ChatGPT (di luar bot) → storyboard JSON → parser/normalizer → compiler → validator → single-worker queue → VoxCPM2 lokal → ComfyUI opsional → Remotion/FFmpeg → MP4 → WhatsApp.
+
+Bot tidak menjalankan Ollama, Qwen, ChatGPT API, atau LLM lokal untuk menyusun storyboard. Pemilik membuat JSON di ChatGPT dengan mengikuti prompt-remotion.md di root repository, lalu menempelkannya ke .remotion. Backend hanya mem-parsing, menormalisasi, memvalidasi, mengompilasi, dan merender JSON tersebut.
 
 ## Requirements
 
-Node.js 22+, Python 3.10+ (3.11 recommended), FFmpeg/FFprobe, Chromium dependencies, disk space for model weights and renders. A CUDA-capable GPU is strongly preferable for VoxCPM2 and any visual generation. CPU is selectable but throughput/RAM must be measured; no minimum VRAM or real-time claim is made. Ollama unloads after planning (keep_alive=0); the TTS service serializes synthesis. Run one bot process for this filesystem-backed queue, not multiple replicas sharing jobs.json.
+Node.js 22+, Python 3.10+ (3.11 recommended), FFmpeg/FFprobe, Chromium dependencies, dan ruang disk untuk model serta hasil render. GPU CUDA sangat membantu VoxCPM2 dan generasi visual; CPU dapat dipilih secara eksplisit, tetapi throughput/RAM harus diuji. Jangan menganggap render CPU atau AI footage akan real-time. Jalankan satu proses bot untuk antrean berbasis filesystem ini; jangan menjalankan beberapa replica yang berbagi jobs.json.
 
 ## Install in an existing checkout
 
-Preserve .env, sessions and database. If the checkout has local edits, resolve them before switching branches. Do not overwrite .env with the example.
+Preserve .env, sessions, and database. If the checkout has local edits, resolve them before switching branches. Do not overwrite .env with the example.
 
 ```bash
 git status --short
@@ -25,29 +29,100 @@ python3 -m venv .venv-voxcpm
 
 Package names differ across distributions (older Ubuntu uses libasound2). Upstream VoxCPM dependencies are substantial; select the matching PyTorch CUDA build for the VPS and lock the resolved environment after a real synthesis test.
 
-Install Ollama using its official Linux instructions: https://docs.ollama.com/linux. Then download an explicitly licensed model once:
-
-```bash
-ollama pull qwen2.5:7b
-```
-
-Set `OLLAMA_NO_CLOUD=1` on the Ollama service and bind to `127.0.0.1:11434`. The application rejects non-loopback URLs and cloud-tagged model names. Do not expose Ollama, ComfyUI or the TTS port publicly.
-
 Download VoxCPM2 once (model download is not inference/API credit usage):
 
 ```bash
 mkdir -p "$HOME/alvareth-models/VoxCPM2"
 .venv-voxcpm/bin/hf download openbmb/VoxCPM2 --local-dir "$HOME/alvareth-models/VoxCPM2"
-VOXCPM_MODEL_PATH="$HOME/alvareth-models/VoxCPM2" VOXCPM_DEVICE=cuda   .venv-voxcpm/bin/python video-studio/services/voxcpm/server.py
+VOXCPM_MODEL_PATH="$HOME/alvareth-models/VoxCPM2" VOXCPM_DEVICE=cuda .venv-voxcpm/bin/python video-studio/services/voxcpm/server.py
 ```
 
-Use `VOXCPM_DEVICE=cpu` only when GPU is unavailable and memory/latency are acceptable. The wrapper validates architecture=voxcpm2, loads local files only, disables denoiser downloads and synthesis-time normalization dependencies, uses the documented voice-description prefix, and retains a single loaded model. `/speech` is OUR HTTP wrapper contract, not an alleged official OpenBMB REST endpoint.
+Use VOXCPM_DEVICE=cpu only when GPU is unavailable and memory/latency are acceptable. The wrapper validates architecture=voxcpm2, loads local files only, disables denoiser downloads and synthesis-time normalization dependencies, and serializes synthesis. /speech is Alvareth's HTTP wrapper contract, not an official OpenBMB REST endpoint.
 
-The process must remain running via your existing supervisor/systemd. No production supervisor configuration is changed automatically. Successful health means loaded model, not proven voice quality:
+Keep the process running through your existing supervisor/systemd. No production supervisor configuration is changed automatically. A successful health response means the model loaded; it does not prove voice quality:
 
 ```bash
 curl --fail http://127.0.0.1:7861/health
 ```
+
+## Rootless / Pterodactyl installation
+
+If the hosting console is in /home/container and does not provide root/apt, use scripts/setup-video-studio-linux.sh. It installs uv, Python 3.11, the pinned VoxCPM2 adapter dependencies, and optionally the VoxCPM2 weights under user-writable paths. It does not install Ollama or any LLM planner.
+
+Runtime and dependencies only:
+
+```bash
+bash scripts/setup-video-studio-linux.sh
+```
+
+If NVIDIA is not visible inside the container but you explicitly accept slow CPU inference:
+
+```bash
+bash scripts/setup-video-studio-linux.sh --allow-cpu
+```
+
+After checking container RAM and disk, download model weights:
+
+```bash
+bash scripts/setup-video-studio-linux.sh --allow-cpu --with-models
+```
+
+For a server with NVIDIA passthrough, run without --allow-cpu. If a specific PyTorch build is needed, set VOXCPM_TORCH_INDEX_URL according to the driver/CUDA version from PyTorch Start Locally.
+
+The bootstrap does not require sudo, apt, or systemd. GPU mode requires NVIDIA to be visible in the container through nvidia-smi; if it is not visible, the physical host may still have a GPU that has not been passed through. CPU mode must be selected explicitly. The script reports host-visible RAM, cgroup limits, and storage where available. VoxCPM2 2B supports CPU but may be very slow. Ensure the provider allows binary execution, outbound HTTPS, background processes, and persistent storage.
+
+## Install engine from WhatsApp
+
+After the latest commit is on the server and the bot is running, an owner can install the local narration runtime without opening the console:
+
+```text
+.remotion install
+```
+
+The command detects NVIDIA visibility and starts the installer in the background with model download enabled. It installs uv, Python 3.11, PyTorch, the pinned VoxCPM2 adapter, and VoxCPM2 weights only. It does not install Ollama, Qwen, ComfyUI, visual models, music models, FFmpeg, Chromium system libraries, or npm dependencies.
+
+Other commands:
+
+- .remotion install status — installer status, exit code, and recent log lines.
+- .remotion services start voice — starts the VoxCPM2 adapter and waits for model readiness.
+- .remotion services — checks status without loading large models.
+- .remotion install cpu — explicitly selects CPU if NVIDIA is not visible. CPU can be very slow; check RAM/disk first.
+- .remotion hardware — reports CPU, RAM, disk, and visible graphics devices.
+
+If NVIDIA is not visible, .remotion install stops before installing/downloading the runtime and asks the owner to choose CPU explicitly. Upstream VoxCPM2 2B cites around 8 GB VRAM as a reference; actual requirements depend on device and configuration. CPU support does not guarantee production-quality throughput.
+
+## Bot environment
+
+Add/update these values in the existing private .env:
+
+```dotenv
+VIDEO_STUDIO_VOXCPM_URL=http://127.0.0.1:7861
+VIDEO_STUDIO_VOXCPM_TIMEOUT_MS=600000
+VIDEO_STUDIO_VOICE_REQUIRED=true
+VIDEO_STUDIO_LOCAL_SERVICES_AUTOSTART=true
+VIDEO_STUDIO_VOXCPM_STARTUP_TIMEOUT_MS=600000
+VIDEO_STUDIO_RENDER_CONCURRENCY=1
+VIDEO_STUDIO_WA_MAX_ACTIVE_JOBS=2
+```
+
+Optional paths for rootless/Pterodactyl environments:
+
+```dotenv
+VOXCPM_MODEL_PATH=/home/container/alvareth-models/VoxCPM2
+VIDEO_STUDIO_VOXCPM_PYTHON=/home/container/.venv-voxcpm/bin/python
+```
+
+If speech infrastructure cannot run, an operator may explicitly set VIDEO_STUDIO_VOICE_REQUIRED=false; the result includes a no-narration warning. There is no alternate TTS provider. Remove obsolete local planner URL/model/timeout settings from the private .env if present. Preserve unrelated bot credentials and configuration.
+
+The repository updater defaults to main. On a staging checkout, set AUTO_UPDATE_ENABLED=false before starting so development testing is not replaced by production branch updates. Do not change a live VPS updater without an explicit deployment decision.
+
+## ChatGPT storyboard input
+
+Use the repository-root prompt-remotion.md as the authoritative prompt and schema guide. ChatGPT must return one valid JSON object with schemaVersion: 1, sourcePrompt containing the original user brief, and scenes containing 1–60 scene objects. Target duration must not exceed 300 seconds; each scene must be no longer than 20 seconds and long enough for its narration/reading.
+
+The WhatsApp payload limit is 24,000 characters. .remotion generate opens an input session; paste the JSON in the next message. .remotion <JSON> can start immediately. Plain-language briefs are intentionally rejected because the bot no longer has a local prompt-generating LLM. The shared POST /api/video-studio/plan route also accepts the JSON string in its prompt field; any separate LightJurnal frontend that still submits free-form prose must be updated separately.
+
+Duration fitting never compresses a scene below its estimated narration/reading requirement. If the target duration is too short, the bot rejects the storyboard and asks for shorter narration or a longer video instead of producing rushed speech.
 
 ## Optional word alignment
 
@@ -60,129 +135,33 @@ mkdir -p "$HOME/alvareth-models/whisper"
 cp /tmp/alvareth-whisper-download/base.pt "$HOME/alvareth-models/whisper/base.pt"
 ```
 
-Restart the TTS service with `VOXCPM_ALIGNMENT_MODEL_PATH=$HOME/alvareth-models/whisper/base.pt`. The adapter uses upstream StableTSAligner with language `id` by default. Without valid alignment, speech remains scene-synchronized and word-highlight captions are disabled with a warning. No evenly-spaced fake timestamps. Each scene is synthesized separately; speaker/prosody continuity must still be evaluated by listening.
-
-## Bot environment
-
-Add/update these values in the existing private .env:
-
-```dotenv
-VIDEO_STUDIO_OLLAMA_URL=http://127.0.0.1:11434
-VIDEO_STUDIO_OLLAMA_MODEL=qwen2.5:7b
-VIDEO_STUDIO_AI_TIMEOUT_MS=180000
-VIDEO_STUDIO_VOXCPM_URL=http://127.0.0.1:7861
-VIDEO_STUDIO_VOXCPM_TIMEOUT_MS=600000
-VIDEO_STUDIO_VOICE_REQUIRED=true
-VIDEO_STUDIO_RENDER_CONCURRENCY=1
-```
-
-If infrastructure cannot run speech, an operator may explicitly set `VIDEO_STUDIO_VOICE_REQUIRED=false`; the result includes a no-narration warning. There is no alternate TTS provider. Remove obsolete VIDEO_STUDIO_AI_API_KEY/BASE_URL/FALLBACK_URL, VIDEO_STUDIO_ELEVENLABS_*, VIDEO_STUDIO_PEXELS_* and VIDEO_STUDIO_COMFYUI_API_KEY settings after checking no external custom script uses them. Other bot features' API keys are unrelated and must be preserved.
-
-The repository updater defaults to main. On a staging checkout, set `AUTO_UPDATE_ENABLED=false` before starting so development testing is not replaced by production branch updates. Do not change a live VPS updater without an explicit deployment decision.
-
-## Pterodactyl / container tanpa akses root
-
-Jika console hosting menunjukkan path seperti `/home/container` dan tidak memiliki akses `apt`/root, gunakan bootstrap user-space. Script terbaru mengunduh binary `uv` langsung dari GitHub Releases (tanpa menjalankan installer `/bin/sh`), mengelola Python 3.11 tanpa `ensurepip`, dan mengekstrak paket resmi Ollama `.tar.zst` ke `$HOME/.local` dengan decompressor Python.
-
-Runtime dan dependensi saja:
-
-```bash
-bash scripts/setup-video-studio-linux.sh
-```
-
-Jika container tidak menampilkan GPU NVIDIA tetapi kamu memang ingin mencoba inference VoxCPM2 dengan CPU:
-
-```bash
-bash scripts/setup-video-studio-linux.sh --allow-cpu
-```
-
-Setelah RAM container diperiksa dan cukup, unduh bobot model:
-
-```bash
-bash scripts/setup-video-studio-linux.sh --allow-cpu --with-models
-```
-
-Untuk server dengan GPU NVIDIA yang sudah dipassthrough, jalankan tanpa `--allow-cpu`. Jika build PyTorch tertentu dibutuhkan, set `VOXCPM_TORCH_INDEX_URL` sesuai driver/CUDA dari [PyTorch Start Locally](https://pytorch.org/get-started/locally/).
-
-Bootstrap ini tidak memerlukan `sudo`, `apt`, atau `systemd`. Mode GPU memerlukan GPU NVIDIA yang terlihat dari container melalui `nvidia-smi`; jika tool tidak terlihat, hal itu belum membuktikan host fisik tidak punya GPU karena GPU passthrough mungkin belum aktif. Mode CPU harus dipilih secara eksplisit dengan `--allow-cpu`. Script menampilkan RAM host-visible, limit cgroup, dan ruang storage bila tersedia. VoxCPM2 2B mendukung CPU, tetapi performanya dapat sangat lambat. Pastikan provider mengizinkan binary execution, koneksi HTTPS keluar, proses background, dan storage persisten.
-
-Ollama memakai URL paket resmi `https://ollama.com/download/ollama-linux-amd64.tar.zst` (atau arm64 sesuai arsitektur). Script memasang binary ke `$HOME/.local/bin/ollama`, tanpa menulis ke `/usr`. Setelah bootstrap selesai, restart bot dan jalankan `.remotion services`. Bila panel membutuhkan environment path eksplisit, gunakan nilai `VIDEO_STUDIO_OLLAMA_BIN` yang dicetak script.
-
-## Install engine langsung dari WhatsApp
-
-Setelah commit terbaru sudah ada di server dan bot berjalan, owner tidak perlu masuk console untuk memasang runtime/model. Kirim perintah berikut di chat WhatsApp bot:
-
-```text
-.remotion install
-```
-
-Perintah tersebut mendeteksi GPU NVIDIA di container, lalu menjalankan installer di background dengan `--with-models`. Installer memasang `uv`, Python 3.11, Ollama, PyTorch, adapter VoxCPM2 pada commit upstream yang dipin, kemudian mengunduh model planner Qwen dan bobot VoxCPM2. Log dan status tersimpan di data directory bot.
-
-Perintah lain:
-
-- `.remotion install status` — melihat apakah installer berjalan, hasil exit code, dan potongan log terakhir.
-- `.remotion services start voice` — memulai adapter VoxCPM2 dan menunggu model siap tanpa harus mengirim prompt video.
-- `.remotion services start planner` — memulai Ollama secara eksplisit.
-- `.remotion services` tetap hanya memeriksa status; perintah ini tidak memuat model.
-- `.remotion install cpu` — memilih CPU secara eksplisit jika GPU NVIDIA tidak tersedia/di-pass-through. CPU bisa sangat lambat; periksa RAM dan disk sebelum menjalankannya.
-
-Jika tidak ada GPU NVIDIA yang terlihat, `.remotion install` berhenti sebelum mengunduh runtime/model dan meminta pilihan CPU secara eksplisit. Acuan upstream VoxCPM2 2B sekitar 8 GB VRAM; kebutuhan aktual bergantung pada device dan konfigurasi. CPU didukung, tetapi bukan jaminan performa layak untuk produksi.
-
-Installer ini tidak memasang FFmpeg/FFprobe, Chromium OS libraries, atau dependency npm bot. Pada server yang dibahas, pemeriksaan sebelumnya sudah mendeteksi Remotion + FFmpeg. Jika komponen itu tidak tersedia, pasang lewat image/container hosting atau administrator server. ComfyUI, workflow footage, dan musik tetap opsional dan tidak diunduh oleh installer inti.
-
-Jangan menjalankan dua instalasi bersamaan atau menghapus folder data/log saat proses berjalan. Setelah exit code 0, jalankan `.remotion services`; Ollama akan dipakai untuk planner, sedangkan adapter VoxCPM2 dimulai otomatis saat video pertama kali membutuhkan narasi.
-## Automatic local service startup
-
-The bot starts local services only when the production step needs them: Ollama for storyboard planning, then VoxCPM2 when narration is present. This avoids loading the 7B planner and 2B TTS model together during a redundant preflight. `.remotion services` is status-only and does not load models. To warm up one service explicitly, use `.remotion services start voice` (VoxCPM2) or `.remotion services start planner` (Ollama); the bot replies after readiness or a startup error. Runtime startup never installs packages, downloads model weights, or calls a hosted provider. VoxCPM2 cold-start wait defaults to 10 minutes and can be adjusted with `VIDEO_STUDIO_VOXCPM_STARTUP_TIMEOUT_MS`. If startup fails, the status message includes the private service log path.
-
-Defaults:
-- Ollama: `http://127.0.0.1:11434`, model `qwen2.5:7b`.
-- VoxCPM2: `http://127.0.0.1:7861`, Python `.venv-voxcpm/bin/python`, model directory `$HOME/alvareth-models/VoxCPM2`.
-- `VIDEO_STUDIO_LOCAL_SERVICES_AUTOSTART=true`; set it to `false` to disable process startup.
-- `VIDEO_STUDIO_VOXCPM_STARTUP_TIMEOUT_MS=600000`; maximum wait for VoxCPM2 to load its local model (10 minutes by default).
-- `VOXCPM_DEVICE` may be `cuda` or `cpu`; leave it blank to detect CUDA through the installed PyTorch.
-
-For a rootless/Pterodactyl installation, use the bootstrap above rather than the Debian `python3 -m venv` commands. It can also download both models when run with `--with-models`. If downloading models separately, use the full Ollama path if `~/.local/bin` is not on the panel's PATH:
-```bash
-~/.local/bin/ollama pull qwen2.5:7b
-.venv-voxcpm/bin/hf download openbmb/VoxCPM2 --local-dir "$HOME/alvareth-models/VoxCPM2"
-```
-
-If the model is stored elsewhere, set `VOXCPM_MODEL_PATH` in the private server environment. If the Python executable is elsewhere, set `VIDEO_STUDIO_VOXCPM_PYTHON`. The adapter process is detached from the bot worker and bound to loopback. Its private startup/error logs are written under $ALVARETH_DATA_DIR/video-studio/logs/ (default ~/.alvareth-bot-data/video-studio/logs/); inspect ollama.log or voxcpm2.log if a process exits. The bot reports a missing binary, virtualenv, model, unloaded model, or missing Ollama model separately. Run `.remotion services` again after setup and wait until both direct checks are green.
-
-Service autostart itself is not provisioning; `.remotion install` provisions the local runtime and model weights. The server still needs enough RAM/VRAM, disk, compatible PyTorch/CUDA and network access. A green health check is not a substitute for a real narration and MP4 test.
+Restart the TTS service with VOXCPM_ALIGNMENT_MODEL_PATH=$HOME/alvareth-models/whisper/base.pt. Without valid alignment, captions remain scene-synchronized; word-highlight timing is disabled rather than filled with fabricated timestamps. Each scene is synthesized separately, so speaker/prosody continuity must still be evaluated by listening.
 
 ## Optional ComfyUI
 
-The core `.remotion install` command does not install ComfyUI, visual/audio model weights, custom nodes, or workflow files. The `.remotion services` report marks a ComfyUI workflow ready only when the file exists and its exact SHA-256 is approved; character reference additionally requires both reviewed image/video workflows and the `{{REFERENCE_IMAGE}}` placeholder in the video graph. No default visual/music model is silently chosen. Audit model license, node source, all network-capable nodes and memory requirements. Use only non-WAN local workflows. Put approved API-format graphs outside Git secrets/data, calculate `sha256sum /path/to/workflow.json`, and add the exact digest to comma-separated `VIDEO_STUDIO_COMFYUI_REVIEWED_SHA256`. Set the relevant VIDEO_STUDIO_COMFYUI_*_WORKFLOW_FILE and loopback URL. Hash checks pin reviewed bytes; they cannot prove custom-node behavior or detect a renamed banned model. The operator review is necessary.
+The core installer does not install ComfyUI, visual/audio model weights, custom nodes, or workflow files. .remotion services marks a ComfyUI workflow ready only when the file exists and its exact SHA-256 is approved. Character reference additionally requires reviewed image/video workflows and the {{REFERENCE_IMAGE}} placeholder in the video graph.
 
-Without suitable visual workflows the output is designed motion graphics, not generated character animation/photorealistic footage. Without suitable music, there is no music. SFX are generated locally and require no model.
+Audit each model license, custom-node source, network-capable node, and memory requirement. Use only operator-reviewed local workflows. Store approved API-format graphs outside Git secrets/data, calculate sha256sum /path/to/workflow.json, and add the exact digest to VIDEO_STUDIO_COMFYUI_REVIEWED_SHA256. Set the relevant VIDEO_STUDIO_COMFYUI_*_WORKFLOW_FILE and loopback URL. Hash checks pin reviewed bytes but cannot prove custom-node behavior or detect every renamed/banned model; operator review is necessary.
 
-## WhatsApp-only operation
-
-The .remotion plugin is the only Video Studio control surface. The bot plans, renders, stores and sends the MP4 inside its own WhatsApp workflow. No external website, public render endpoint, Cloudflare Tunnel, cloudflared, VIDEO_STUDIO_API_KEY, or tunnel token is part of this design. The optional Alvareth /health endpoint is hosting monitoring only and cannot submit or download Video Studio jobs.
-
-## WhatsApp commands
-
-`.remotion` provides eight menu actions: generate, status, history, resend, services, install, guide, cancel. `.remotion <natural prompt>` also works. Every plugin invocation requires `isROwner === true`; the router retains its own owner check. Prompt sessions require matching sender and chat; another owner cannot cancel that session. Cancellation only cancels input, not a queued render. Job history/output can be accessed by authorized owners. `/services` is configuration plus live Ollama/VoxCPM2 health, not an end-to-end guarantee. `.remotion install` provisions local runtimes and model weights; `.remotion install status` reports the installer.
+Default AI-video selection is two scenes per job (configurable, maximum four); generated clips are 3–8 seconds. A character reference image can help continuity but does not guarantee identical identity across every frame/clip. Without a suitable ComfyUI video workflow, the output is motion graphics, not generated 3D character footage. Without a music workflow/track, there is no music. SFX are generated locally and require no model.
 
 ## Sound and timing
 
-The planner selects a scene cue and overlay delays. `engine/sound-design.js` converts visible entry/transition/notification/callout events to frame positions shared with the scene. Nine procedural effects have bounded peaks, short fades and speech attenuation. Cues too close together are deduplicated and effects that cannot finish before scene end are omitted. Each motion does not automatically deserve a noise. Optional music uses only a supplied/generated local track.
+The storyboard JSON assigns scene sound cues and overlay delays. engine/sound-design.js converts visual entry/transition/notification/callout events to frame positions shared with the scene. Procedural effects have bounded peaks, short fades, and speech attenuation. Cues too close together are deduplicated; effects that cannot finish before scene end are omitted. Not every movement needs a sound. Music is not forced.
 
-Narration WAV is probed and fully decoded before use. Scene durations expand to complete speech plus breathing space, quantized to project FPS. Longer than 19.7 seconds spoken per scene or 300 seconds total fails clearly rather than truncating narration.
+Narration WAV is probed and fully decoded before use. Scene durations expand to complete speech plus breathing space, quantized to project FPS. Overlong narration (more than 19.7 seconds spoken per scene) or more than 300 seconds total fails clearly rather than truncating speech.
 
 ## Acceptance tests
 
 ```bash
 npm test
 python3 -m unittest discover -s tests -p '*_test.py'
-# Real services required; this must produce actual VoxCPM2 narration:
+# Real VoxCPM2 service required; this must produce actual narration:
 npm run test:remotion-live
 # Renderer-only fixed storyboard, explicitly NOT an AI or speech test:
 node scripts/remotion-smoke.js --fixture
 ```
 
-Smoke output defaults to /tmp/alvareth-remotion-smoke; override REMOTION_SMOKE_DIR to retain it. A successful smoke includes H.264 video, audio, correct dimensions, full FFmpeg decode and JSON probe evidence. Listen to voice/SFX, inspect transitions/subtitles, then test all eight actions plus a non-owner account on real WhatsApp. CI fixture rendering never establishes that VoxCPM2 or WhatsApp works on the VPS.
+Smoke output defaults to /tmp/alvareth-remotion-smoke; override REMOTION_SMOKE_DIR to retain it. A successful smoke includes H.264 video, audio, correct dimensions, full FFmpeg decode, and JSON probe evidence. Listen to voice/SFX, inspect transitions/subtitles, then test all menu actions and a non-owner account on real WhatsApp. CI fixture rendering never establishes that VoxCPM2 or WhatsApp works on the VPS.
 
-See REMOTION_LOCAL_LICENSES.md for licensing and REMOTION_AUDIT_2026-11-06.md for this session's evidence and limitations.
+See REMOTION_LOCAL_LICENSES.md for licensing and REMOTION_AUDIT_2026-11-06.md for audit evidence and limitations.
