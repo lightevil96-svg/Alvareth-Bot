@@ -240,6 +240,11 @@ test('each narrated scene duration follows its own measured TTS audio length', a
   assert.equal(result.scenes[0].duration, 38 / 30);
   assert.equal(result.scenes[1].duration, 71 / 30);
   assert.equal(result.scenes[1].startSeconds, 38 / 30);
+  const timeline = buildTimelineTracks({ ...project, ...result }, 30);
+  assert.equal(timeline.videoClips[0].endFrame, 38);
+  assert.equal(timeline.videoClips[1].speechStartFrame, 38);
+  assert.equal(timeline.videoClips[1].endFrame, 109);
+  assert.equal(timeline.voiceClips[1].startFrame, 38);
 });
 
 test('required narration fails clearly when VoxCPM2 is missing; explicit silent mode works', async t => {
