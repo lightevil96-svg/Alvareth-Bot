@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { getVideoStudioLimits, validateVideoProject } from "../video-studio/validate.js";
-import { normalizeVideoPlan, parseJsonResponse } from "../video-studio/prompt/planner.js";
+import { normalizeVideoPlan, parseJsonResponse } from "../video-studio/prompt/storyboard.js";
 import { compileVideoPlan } from "../video-studio/prompt/compile.js";
 
 test("normalizes a legacy manual project and keeps its dimensions", () => {
