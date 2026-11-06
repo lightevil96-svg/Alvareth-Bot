@@ -1,7 +1,8 @@
 import { startLocalVideoServices } from "../../video-studio/local-services.js";
 import { localJson, localServiceUrl } from "../../video-studio/local-service.js";
+import { validateReviewedWorkflow } from "../../video-studio/media/comfyui.js";
 import { readVideoStudioInstallerStatus, startVideoStudioInstaller } from "../../video-studio/installer.js";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { planVideoPrompt } from "../../video-studio/prompt/planner.js";
@@ -80,10 +81,23 @@ function providerReadiness() {
     existsSync(join(process.cwd(), "node_modules", "@remotion", "renderer", "package.json")) &&
     existsSync(join(process.cwd(), "node_modules", "remotion", "package.json"));
   const ffmpegInstalled = hasBinary("ffmpeg") && hasBinary("ffprobe");
+  const approvedHashes = String(process.env.VIDEO_STUDIO_COMFYUI_REVIEWED_SHA256 || "");
+  const workflowCheck = path => {
+    const content = readFileSync(path, "utf8");
+    validateReviewedWorkflow(content, approvedHashes);
+    return { configured: true, detail: "Workflow API JSON ditemukan dan SHA-256 disetujui." };
+  };
+  const referenceWorkflowCheck = (_imagePath, videoPath) => {
+    const videoContent = readFileSync(videoPath, "utf8");
+    if (!videoContent.includes("{{REFERENCE_IMAGE}}")) {
+      return { configured: false, detail: "Workflow video belum memakai placeholder {{REFERENCE_IMAGE}}." };
+    }
+    return { configured: true, detail: "Workflow image dan video lolos pemeriksaan SHA-256; placeholder {{REFERENCE_IMAGE}} tersedia." };
+  };
   return getRemotionProviderReadiness(
     process.env,
     path => existsSync(path),
-    { remotionInstalled: rendererInstalled, ffmpegInstalled }
+    { remotionInstalled: rendererInstalled, ffmpegInstalled, workflowCheck, referenceWorkflowCheck }
   );
 }
 

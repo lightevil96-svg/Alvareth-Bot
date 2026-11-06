@@ -10,6 +10,7 @@
 ## Pembaruan terbaru
 
 - 2026-11-06: Added explicit `.remotion services start voice/planner`, VoxCPM2 loading wait, early process-exit diagnostics, and a direct ComfyUI health check. Core installer still does not provision ComfyUI models/workflows.
+- 2026-11-06: ComfyUI readiness now requires exact workflow SHA-256 approval; character reference also requires reviewed image/video workflows and the `{{REFERENCE_IMAGE}}` placeholder.
 
 - 2026-11-06: Video Studio ditetapkan WhatsApp-only. Remote LightJurnal API dan Cloudflare Tunnel dihapus: server.js hanya mempertahankan health/ping hosting, tidak ada route /api/video-studio, cloudflared, API key, maupun token tunnel. Satu-satunya kontrol produksi adalah owner-only .remotion; MP4 dikirim ke chat WhatsApp asal.
 

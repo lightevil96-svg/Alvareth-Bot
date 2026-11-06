@@ -1,10 +1,18 @@
+## 2026-11-06 — ComfyUI readiness requires reviewed workflow bytes
+
+- **Symptom:** a ComfyUI workflow path could appear configured merely because a file existed, even though its SHA-256 had not been approved; a reference-image workflow could also appear ready without a compatible video graph.
+- **Root cause:** provider readiness checked file existence but did not reuse the runtime's exact-byte SHA-256/model-policy validator or verify the reference placeholder.
+- **Fix:** readiness now validates each configured API workflow with `validateReviewedWorkflow`; video/image/music workflows stay unavailable until their exact bytes are approved. Character reference additionally requires both reviewed image and video workflows and the `{{REFERENCE_IMAGE}}` placeholder in the video graph. The ComfyUI live health check remains separate.
+- **Files:** `video-studio/whatsapp.js`, `plugins/owner/remotion.js`, `tests/remotion-whatsapp.test.js`, `README.md`, `docs/REMOTION_WHATSAPP_LINUX.md`, `AI_CONTEXT.md`.
+- **Tests:** added readiness regressions for unapproved hashes, missing video workflow, and missing reference placeholder. GitHub Actions result pending after commit; real ComfyUI inference and model compatibility remain unverified.
+
 ## 2026-11-06 — Explicit local service start and VoxCPM2 loading diagnostics
 
 - **Symptom:** `.remotion services` correctly stayed status-only, so an installed VoxCPM2 adapter remained stopped until narration was requested. A VoxCPM2 process that had already bound its HTTP port but was still loading returned HTTP 503; the readiness path could report it as not ready immediately instead of waiting. A failed detached process could also leave an unhelpful generic status without its exit code/log path.
 - **Root cause:** there was no explicit owner command to warm up one local service; `inspectVoxCPM` waited only when the port was unreachable, not when the service was reachable-but-loading; status-only diagnostics did not include a previous managed-process failure.
 - **Fix:** added `.remotion services start voice` and `.remotion services start planner` as opt-in single-service startup commands; kept bare `.remotion services` observational. VoxCPM2 readiness now waits through its loading response, detached process failures stop polling early, and status output includes the private service log path/exit code when available. Added a direct loopback ComfyUI `/system_stats` check and clarified that the core installer does not install ComfyUI/workflows.
 - **Files:** `video-studio/local-services.js`, `plugins/owner/remotion.js`, `tests/video-studio-local.test.js`, `tests/remotion-whatsapp.test.js`, `README.md`, `docs/REMOTION_WHATSAPP_LINUX.md`, `AI_CONTEXT.md`.
-- **Tests:** added regressions for VoxCPM2 already-listening/loading readiness, managed-process failure diagnostics, and explicit service command parsing. GitHub Actions result pending after commit; live VoxCPM2 inference, ComfyUI model/workflow execution, VPS render, and WhatsApp delivery remain unverified.
+- **Tests:** regressions for VoxCPM2 already-listening/loading readiness, managed-process failure diagnostics, and explicit service command parsing passed in GitHub Actions on commit `88019e1`: JavaScript syntax checks, Video Studio regression suite, mock Python voice-service contract, JSX compilation, and real fixture MP4 render/decode. Live VoxCPM2 inference, ComfyUI model/workflow execution, VPS render, and WhatsApp delivery remain unverified.
 - **Operational boundary:** no hosted AI, WAN, ElevenLabs, stock provider, or forced music was introduced. ComfyUI footage/image/music remain inactive until a local reviewed workflow and compatible model are installed and configured.
 
 ## 2026-11-06 — Owner-only forced update with local conflict backups

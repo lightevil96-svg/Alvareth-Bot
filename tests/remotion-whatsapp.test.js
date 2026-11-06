@@ -79,6 +79,40 @@ test("reports optional media providers as unconfigured without secrets", () => {
   assert.equal(status.find(item => item.name === "Character reference image").configured, false);
 });
 
+test("does not mark ComfyUI workflows ready until their exact bytes pass review", () => {
+  const status = getRemotionProviderReadiness({
+    VIDEO_STUDIO_COMFYUI_VIDEO_WORKFLOW_FILE: "/srv/workflows/video.json",
+    VIDEO_STUDIO_COMFYUI_IMAGE_WORKFLOW_FILE: "/srv/workflows/image.json",
+    VIDEO_STUDIO_COMFYUI_MUSIC_WORKFLOW_FILE: "/srv/workflows/music.json"
+  }, () => true, {
+    remotionInstalled: true,
+    ffmpegInstalled: true,
+    workflowCheck: () => ({ configured: false, detail: "SHA-256 belum disetujui." })
+  });
+  for (const name of ["AI video footage", "Character reference image", "AI background music"]) {
+    assert.equal(status.find(item => item.name === name).configured, false);
+    assert.match(status.find(item => item.name === name).detail, /SHA-256 belum disetujui/);
+  }
+});
+
+test("character reference requires a video workflow and a compatible reference placeholder", () => {
+  const missingVideo = getRemotionProviderReadiness({
+    VIDEO_STUDIO_COMFYUI_IMAGE_WORKFLOW_FILE: "/srv/workflows/image.json"
+  }, () => true, {});
+  assert.equal(missingVideo.find(item => item.name === "Character reference image").configured, false);
+  assert.match(missingVideo.find(item => item.name === "Character reference image").detail, /workflow video/i);
+
+  const incompatible = getRemotionProviderReadiness({
+    VIDEO_STUDIO_COMFYUI_VIDEO_WORKFLOW_FILE: "/srv/workflows/video.json",
+    VIDEO_STUDIO_COMFYUI_IMAGE_WORKFLOW_FILE: "/srv/workflows/image.json"
+  }, () => true, {
+    workflowCheck: () => ({ configured: true, detail: "SHA-256 disetujui." }),
+    referenceWorkflowCheck: () => ({ configured: false, detail: "Workflow video belum memakai placeholder {{REFERENCE_IMAGE}}." })
+  });
+  assert.equal(incompatible.find(item => item.name === "Character reference image").configured, false);
+  assert.match(incompatible.find(item => item.name === "Character reference image").detail, /placeholder/);
+});
+
 test("recognizes configured voice and ComfyUI workflow files", () => {
   const status = getRemotionProviderReadiness({
     VIDEO_STUDIO_VOXCPM_URL: "http://127.0.0.1:7861",
