@@ -11,7 +11,7 @@ test("opens the menu when no Remotion action is supplied", () => {
   assert.deepEqual(parseRemotionCommand(""), { action: "menu" });
 });
 
-test("accepts generate aliases and keeps the full natural-language prompt", () => {
+test("accepts generate aliases and preserves the submitted payload unchanged", () => {
   assert.deepEqual(parseRemotionCommand("generate Buat video cinematic tentang laut"), {
     action: "generate",
     prompt: "Buat video cinematic tentang laut"
@@ -22,7 +22,7 @@ test("accepts generate aliases and keeps the full natural-language prompt", () =
   });
 });
 
-test("treats an unrecognized first word as the beginning of a prompt", () => {
+test("treats an unrecognized first word as the beginning of a generate payload", () => {
   assert.deepEqual(parseRemotionCommand("Film pendek tentang seorang penjelajah"), {
     action: "generate",
     prompt: "Film pendek tentang seorang penjelajah"
@@ -38,7 +38,6 @@ test("routes status, history, guide, services, cancel and resend actions", () =>
   assert.equal(parseRemotionCommand("install-menu").action, "installMenu");
   assert.equal(parseRemotionCommand("hardware").action, "hardware");
   assert.deepEqual(parseRemotionCommand("services start voice"), { action: "services", argument: "start voice" });
-  assert.deepEqual(parseRemotionCommand("services start planner"), { action: "services", argument: "start planner" });
   assert.deepEqual(parseRemotionCommand("install"), { action: "install", argument: "" });
   assert.deepEqual(parseRemotionCommand("install cpu"), { action: "install", argument: "cpu" });
   assert.deepEqual(parseRemotionCommand("install status"), { action: "install", argument: "status" });
@@ -74,8 +73,7 @@ test("reports optional media providers as unconfigured without secrets", () => {
     ffmpegInstalled: true
   });
   assert.equal(status.find(item => item.name === "Remotion + FFmpeg").configured, true);
-  assert.equal(status.find(item => item.name === "AI prompt planner").configured, true);
-  assert.match(status.find(item => item.name === "AI prompt planner").detail, /qwen2.5:7b/);
+  assert.equal(status.some(item => /Ollama|AI prompt planner/i.test(item.name + " " + item.detail)), false);
   assert.equal(status.find(item => item.name === "Voice-over + subtitle sinkron").configured, true);
   assert.match(status.find(item => item.name === "Voice-over + subtitle sinkron").detail, /127.0.0.1:7861/);
   assert.equal(status.find(item => item.name === "AI video footage").configured, false);
@@ -169,7 +167,6 @@ test("plugin rejects every non-owner action and binds prompt sessions to their i
   assert.deepEqual(serviceIds, [
     "!remotion services",
     "!remotion services start voice",
-    "!remotion services start planner",
     "!remotion"
   ]);
   await handler(m,{conn,text:"install-menu",isROwner:true,usedPrefix:"!"});
@@ -182,6 +179,7 @@ test("plugin rejects every non-owner action and binds prompt sessions to their i
   ]);
   await handler(m,{conn,text:'generate',isROwner:true});
   assert.equal(global.__alvarethRemotionSessions.get(m.chat).sender,'owner-a');
+  assert.match(replies.at(-1),/JSON storyboard/);
   assert.equal(await global.__alvarethRemotionPromptHandler({...m,sender:'intruder',text:'Buatkan video kopi'},{conn,isROwner:false}),false);
   assert.equal(await global.__alvarethRemotionPromptHandler({...m,sender:'owner-b',text:'Buatkan video kopi'},{conn,isROwner:true}),false);
   await handler({...m,sender:'owner-b'},{conn,text:'cancel',isROwner:true});
@@ -193,4 +191,5 @@ test("plugin rejects every non-owner action and binds prompt sessions to their i
   assert.ok(replies.some(text=>/RAM:/.test(text)));
   assert.ok(replies.some(text=>/Belum ada proses instalasi/.test(text)));
   assert.ok(replies.some(text=>/Riwayat video masih kosong/.test(text)));
+  assert.ok(replies.some(text=>/prompt-remotion\\.md/.test(text)));
 });
