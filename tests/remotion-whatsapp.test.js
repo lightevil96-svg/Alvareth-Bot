@@ -158,7 +158,7 @@ test("plugin rejects every non-owner action and binds prompt sessions to their i
   assert.equal(sent.length,0);
   await handler(m,{conn,text:'',isROwner:true,usedPrefix:'!'});
   const mainSections = sent[0][1].nativeFlow[0].sections;
-  assert.deepEqual(mainSections.map(section => section.rows.length), [6, 5]);
+  assert.deepEqual(mainSections.map(section => section.rows.length), [6, 2, 3]);
   const mainIds = mainSections.flatMap(section => section.rows.map(row => row.id));
   assert.deepEqual(mainIds, [
     "!remotion generate",
@@ -169,9 +169,11 @@ test("plugin rejects every non-owner action and binds prompt sessions to their i
     "!remotion cancel",
     "!remotion services-menu",
     "!remotion install-menu",
-    "!remotion hardware",
+    "!remotion style",
     "!remotion voice",
-    "!remotion style"
+    "!remotion services-menu",
+    "!remotion install-menu",
+    "!remotion hardware"
   ]);
   await handler(m,{conn,text:"voice",isROwner:true,usedPrefix:"!"});
   const voiceIds = sent.at(-1)[1].nativeFlow[0].sections.flatMap(section=>section.rows.map(row=>row.id));
@@ -180,14 +182,36 @@ test("plugin rejects every non-owner action and binds prompt sessions to their i
   assert.ok(voiceIds.includes("!remotion voice rate +10%"));
   assert.ok(voiceIds.includes("!remotion voice reset"));
   assert.ok(voiceIds.includes("!remotion voice style cinematic"));
+  assert.ok(voiceIds.includes("!remotion voice style natural"));
+  assert.ok(voiceIds.includes("!remotion voice provider voxcpm2"));
+  assert.ok(voiceIds.includes("!remotion voice model id-ID-ArdiNeural"));
+  assert.ok(voiceIds.includes("!remotion voice rate -10%"));
+  assert.ok(voiceIds.includes("!remotion voice pitch +10Hz"));
+  assert.ok(voiceIds.includes("!remotion voice volume +10%"));
+  assert.ok(voiceIds.includes("!remotion install"));
+  assert.ok(voiceIds.includes("!remotion services start voice"));
+  assert.ok(voiceIds.includes("!remotion"));
   await handler(m,{conn,text:"style",isROwner:true,usedPrefix:"!"});
   const styleIds = sent.at(-1)[1].nativeFlow[0].sections.flatMap(section=>section.rows.map(row=>row.id));
   assert.ok(styleIds.includes("!remotion style cinematic-illustrated"));
   assert.ok(styleIds.includes("!remotion style 3d-glass"));
+  assert.ok(styleIds.includes("!remotion style cinematic-illustrated"));
+  assert.ok(styleIds.includes("!remotion style kinetic-bold"));
+  assert.ok(styleIds.includes("!remotion style clean-editorial"));
+  assert.ok(styleIds.includes("!remotion style reset"));
+  assert.ok(styleIds.includes("!remotion"));
   await handler(m,{conn,text:"style 3d-glass",isROwner:true,usedPrefix:"!"});
   const savedStyleSettings = JSON.parse(await readFile(dir + "/video-studio/style-settings.json", "utf8"));
   assert.equal(savedStyleSettings.preset, "3d-glass");
   await handler(m,{conn,text:"style reset",isROwner:true,usedPrefix:"!"});
+  await handler(m,{conn,text:"",isROwner:true,usedPrefix:"!"});
+  assert.deepEqual(sent.at(-1)[1].nativeFlow[0].sections.map(section => section.rows.length), [6, 2, 3]);
+  await handler(m,{conn,text:"voice style cinematic",isROwner:true,usedPrefix:"!"});
+  const cinematicSettings = JSON.parse(await readFile(dir + "/video-studio/voice-settings.json", "utf8"));
+  assert.equal(cinematicSettings.provider, "voxcpm2");
+  assert.equal(cinematicSettings.voxStyle, "cinematic");
+  await handler(m,{conn,text:"",isROwner:true,usedPrefix:"!"});
+  assert.deepEqual(sent.at(-1)[1].nativeFlow[0].sections.map(section => section.rows.length), [6, 2, 3]);
   await handler(m,{conn,text:"voice provider voxcpm2",isROwner:true,usedPrefix:"!"});
   const savedVoiceSettings = JSON.parse(await readFile(dir + "/video-studio/voice-settings.json", "utf8"));
   assert.equal(savedVoiceSettings.provider, "voxcpm2");
