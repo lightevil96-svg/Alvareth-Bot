@@ -34,6 +34,8 @@ test("routes status, history, guide, services, cancel and resend actions", () =>
   assert.equal(parseRemotionCommand("riwayat").action, "history");
   assert.equal(parseRemotionCommand("panduan").action, "guide");
   assert.equal(parseRemotionCommand("services").action, "services");
+  assert.equal(parseRemotionCommand("services-menu").action, "servicesMenu");
+  assert.equal(parseRemotionCommand("install-menu").action, "installMenu");
   assert.deepEqual(parseRemotionCommand("services start voice"), { action: "services", argument: "start voice" });
   assert.deepEqual(parseRemotionCommand("services start planner"), { action: "services", argument: "start planner" });
   assert.deepEqual(parseRemotionCommand("install"), { action: "install", argument: "" });
@@ -147,8 +149,35 @@ test("plugin rejects every non-owner action and binds prompt sessions to their i
   }
   assert.equal(sent.length,0);
   await handler(m,{conn,text:'',isROwner:true,usedPrefix:'!'});
-  assert.equal(sent[0][1].nativeFlow[0].sections[0].rows.length,8);
-  assert.equal(sent[0][1].nativeFlow[0].sections[0].rows[0].id,'!remotion generate');
+  const mainSections = sent[0][1].nativeFlow[0].sections;
+  assert.deepEqual(mainSections.map(section => section.rows.length), [6, 2]);
+  const mainIds = mainSections.flatMap(section => section.rows.map(row => row.id));
+  assert.deepEqual(mainIds, [
+    "!remotion generate",
+    "!remotion status",
+    "!remotion history",
+    "!remotion send",
+    "!remotion guide",
+    "!remotion cancel",
+    "!remotion services-menu",
+    "!remotion install-menu"
+  ]);
+  await handler(m,{conn,text:"services-menu",isROwner:true,usedPrefix:"!"});
+  const serviceIds = sent.at(-1)[1].nativeFlow[0].sections.flatMap(section=>section.rows.map(row=>row.id));
+  assert.deepEqual(serviceIds, [
+    "!remotion services",
+    "!remotion services start voice",
+    "!remotion services start planner",
+    "!remotion"
+  ]);
+  await handler(m,{conn,text:"install-menu",isROwner:true,usedPrefix:"!"});
+  const installIds = sent.at(-1)[1].nativeFlow[0].sections.flatMap(section=>section.rows.map(row=>row.id));
+  assert.deepEqual(installIds, [
+    "!remotion install",
+    "!remotion install cpu",
+    "!remotion install status",
+    "!remotion"
+  ]);
   await handler(m,{conn,text:'generate',isROwner:true});
   assert.equal(global.__alvarethRemotionSessions.get(m.chat).sender,'owner-a');
   assert.equal(await global.__alvarethRemotionPromptHandler({...m,sender:'intruder',text:'Buatkan video kopi'},{conn,isROwner:false}),false);

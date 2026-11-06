@@ -101,99 +101,144 @@ function providerReadiness() {
   );
 }
 
-async function showMenu(m, conn, usedPrefix = ".") {
-  const rows = [
-    {
-      header: "",
-      title: "🎬 Buat video",
-      description: "Ceritakan ide; AI menyusun produksi otomatis.",
-      id: usedPrefix + "remotion generate"
-    },
-    {
-      header: "",
-      title: "📊 Status render",
-      description: "Lihat antrean dan progres pekerjaan.",
-      id: usedPrefix + "remotion status"
-    },
-    {
-      header: "",
-      title: "📁 Riwayat",
-      description: "Lihat hasil dan ID pekerjaan sebelumnya.",
-      id: usedPrefix + "remotion history"
-    },
-    {
-      header: "",
-      title: "📤 Kirim ulang MP4",
-      description: "Kirim kembali MP4 yang sudah selesai.",
-      id: usedPrefix + "remotion send"
-    },
-    {
-      header: "",
-      title: "🧠 Panduan prompt",
-      description: "Contoh brief untuk hasil yang lebih terarah.",
-      id: usedPrefix + "remotion guide"
-    },
-    {
-      header: "",
-      title: "⚙️ Cek layanan",
-      description: "Periksa Remotion, audio, footage, dan ComfyUI.",
-      id: usedPrefix + "remotion services"
-    },
-    {
-      header: "",
-      title: "⬇️ Pasang engine lokal",
-      description: "Pasang Ollama, Qwen, VoxCPM2, dan model secara otomatis.",
-      id: usedPrefix + "remotion install"
-    },
-    {
-      header: "",
-      title: "✖️ Batalkan prompt",
-      description: "Hapus sesi menunggu prompt, bukan render aktif.",
-      id: usedPrefix + "remotion cancel"
-    }
-  ];
-
+async function sendNativeMenu(m, conn, { title, description, sections, fallback }) {
+  if (!conn || typeof conn.sendMessage !== "function") return m.reply(fallback);
   try {
     await conn.sendMessage(m.chat, {
       text: [
         "🎬 *ALVARETH REMOTION VIDEO STUDIO*",
         "",
-        "Buat video cukup dengan satu brief dalam bahasa sehari-hari.",
-        "AI akan menentukan alur, scene, visual, gerakan, audio, dan format secara otomatis.",
+        description,
         "",
         "🔒 Akses dibatasi untuk owner.",
         "Pilih tindakan di bawah ini."
       ].join("\n"),
       footer: "Alvareth Bot • Linux Remotion Engine",
       optionText: "Pilih fitur",
-      optionTitle: "Remotion Video Studio",
+      optionTitle: title,
       nativeFlow: [{
-        text: "Menu produksi video",
-        sections: [{ title: "Video Studio", rows }],
+        text: title,
+        sections,
         icon: "document"
       }],
       interactiveAsTemplate: false
     }, { quoted: m });
   } catch (error) {
     console.warn("[REMOTION] Menu interaktif gagal; memakai fallback teks:", error?.message || error);
-    const prefix = usedPrefix || ".";
-    await m.reply(
-      "🎬 *REMOTION VIDEO STUDIO*\n\n" +
-      "Ketik salah satu perintah:\n" +
-      "• " + prefix + "remotion generate\n" +
-      "• " + prefix + "remotion status\n" +
-      "• " + prefix + "remotion history\n" +
-      "• " + prefix + "remotion send\n" +
-      "• " + prefix + "remotion guide\n" +
-      "• " + prefix + "remotion services\n" +
-      "• " + prefix + "remotion install\n" +
-      "• " + prefix + "remotion install cpu\n" +
-      "• " + prefix + "remotion install status\n" +
-      "• " + prefix + "remotion cancel"
-    );
+    await m.reply(fallback);
   }
 }
 
+function remotionMenuRow(usedPrefix, title, description, command = "") {
+  return {
+    header: "",
+    title,
+    description,
+    id: usedPrefix + "remotion" + (command ? " " + command : "")
+  };
+}
+
+async function showMenu(m, conn, usedPrefix = ".") {
+  const sections = [
+    {
+      title: "Produksi video",
+      rows: [
+        remotionMenuRow(usedPrefix, "🎬 Buat video", "Kirim brief; AI menyusun produksi.", "generate"),
+        remotionMenuRow(usedPrefix, "📊 Status render", "Lihat antrean dan progres.", "status"),
+        remotionMenuRow(usedPrefix, "📁 Riwayat video", "Lihat pekerjaan dan ID hasil.", "history"),
+        remotionMenuRow(usedPrefix, "📤 Kirim MP4 terakhir", "Kirim ulang hasil yang selesai.", "send"),
+        remotionMenuRow(usedPrefix, "🧠 Panduan prompt", "Lihat contoh brief video.", "guide"),
+        remotionMenuRow(usedPrefix, "✖️ Batalkan input", "Batalkan sesi prompt yang menunggu.", "cancel")
+      ]
+    },
+    {
+      title: "Engine & layanan lokal",
+      rows: [
+        remotionMenuRow(usedPrefix, "⚙️ Kelola layanan", "Cek status, mulai VoxCPM2 dan Ollama.", "services-menu"),
+        remotionMenuRow(usedPrefix, "⬇️ Instalasi engine", "Pilih GPU otomatis, CPU, atau cek progres.", "install-menu")
+      ]
+    }
+  ];
+
+  const fallback = [
+    "🎬 *REMOTION VIDEO STUDIO*",
+    "",
+    "*Produksi:*",
+    "• " + usedPrefix + "remotion generate",
+    "• " + usedPrefix + "remotion status",
+    "• " + usedPrefix + "remotion history",
+    "• " + usedPrefix + "remotion send [ID]",
+    "• " + usedPrefix + "remotion guide",
+    "• " + usedPrefix + "remotion cancel",
+    "",
+    "*Layanan:*",
+    "• " + usedPrefix + "remotion services",
+    "• " + usedPrefix + "remotion services start voice",
+    "• " + usedPrefix + "remotion services start planner",
+    "",
+    "*Instalasi:*",
+    "• " + usedPrefix + "remotion install",
+    "• " + usedPrefix + "remotion install cpu",
+    "• " + usedPrefix + "remotion install status"
+  ].join("\n");
+
+  return sendNativeMenu(m, conn, {
+    title: "Remotion Video Studio",
+    description: "Akses produksi video, riwayat, pengiriman MP4, layanan AI lokal, dan instalasi engine dari satu menu.",
+    sections,
+    fallback
+  });
+}
+
+async function showServicesMenu(m, conn, usedPrefix = ".") {
+  const sections = [{
+    title: "Layanan lokal",
+    rows: [
+      remotionMenuRow(usedPrefix, "🔎 Periksa semua layanan", "Cek Ollama, VoxCPM2, ComfyUI dan workflow.", "services"),
+      remotionMenuRow(usedPrefix, "🗣️ Mulai VoxCPM2", "Aktifkan voice-over lokal dan tunggu model siap.", "services start voice"),
+      remotionMenuRow(usedPrefix, "🧠 Mulai Ollama", "Aktifkan model planner Qwen lokal.", "services start planner"),
+      remotionMenuRow(usedPrefix, "↩️ Kembali ke menu", "Kembali ke menu utama Remotion.")
+    ]
+  }];
+  const fallback = [
+    "⚙️ *LAYANAN REMOTION*",
+    "• " + usedPrefix + "remotion services",
+    "• " + usedPrefix + "remotion services start voice",
+    "• " + usedPrefix + "remotion services start planner",
+    "• " + usedPrefix + "remotion"
+  ].join("\n");
+  return sendNativeMenu(m, conn, {
+    title: "Layanan lokal",
+    description: "Pilih pemeriksaan atau nyalakan service lokal. Memulai VoxCPM2 dapat membutuhkan waktu untuk memuat model.",
+    sections,
+    fallback
+  });
+}
+
+async function showInstallMenu(m, conn, usedPrefix = ".") {
+  const sections = [{
+    title: "Instalasi engine lokal",
+    rows: [
+      remotionMenuRow(usedPrefix, "🚀 Instal otomatis (GPU)", "Gunakan GPU NVIDIA jika terdeteksi.", "install"),
+      remotionMenuRow(usedPrefix, "🐢 Instal mode CPU", "Paksa instalasi CPU; proses inferensi lebih lambat.", "install cpu"),
+      remotionMenuRow(usedPrefix, "📋 Status instalasi", "Lihat progres, exit code, dan log installer.", "install status"),
+      remotionMenuRow(usedPrefix, "↩️ Kembali ke menu", "Kembali ke menu utama Remotion.")
+    ]
+  }];
+  const fallback = [
+    "⬇️ *INSTALASI REMOTION*",
+    "• " + usedPrefix + "remotion install",
+    "• " + usedPrefix + "remotion install cpu",
+    "• " + usedPrefix + "remotion install status",
+    "• " + usedPrefix + "remotion"
+  ].join("\n");
+  return sendNativeMenu(m, conn, {
+    title: "Instalasi engine",
+    description: "Pilih instalasi otomatis dengan deteksi GPU NVIDIA, mode CPU secara eksplisit, atau pemeriksaan progres.",
+    sections,
+    fallback
+  });
+}
 function activeJobs() {
   return listVideoJobs(30).filter(job => ["queued", "rendering"].includes(job.status));
 }
@@ -595,6 +640,8 @@ async function handleCommand(m, { conn, usedPrefix, text }) {
   const parsed = parseRemotionCommand(text);
 
   if (parsed.action === "menu") return showMenu(m, conn, usedPrefix);
+  if (parsed.action === "servicesMenu") return showServicesMenu(m, conn, usedPrefix);
+  if (parsed.action === "installMenu") return showInstallMenu(m, conn, usedPrefix);
   if (parsed.action === "generate") {
     if (parsed.prompt) {
       void startPromptJob(parsed.prompt, m.chat, conn);
