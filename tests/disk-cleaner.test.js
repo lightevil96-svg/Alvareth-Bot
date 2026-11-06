@@ -24,10 +24,12 @@ test("Disk Manager preview and cleanup only remove stale files from allowlisted 
 
   const oldEnv = {
     data: process.env.ALVARETH_DATA_DIR,
-    tmp: process.env.ALVARETH_WA_TMPDIR,\n    generated: process.env.ALVARETH_DISK_GENERATED_DIR
+    tmp: process.env.ALVARETH_WA_TMPDIR,
+    generated: process.env.ALVARETH_DISK_GENERATED_DIR
   };
   process.env.ALVARETH_DATA_DIR = data;
-  process.env.ALVARETH_WA_TMPDIR = waTmp;\n  process.env.ALVARETH_DISK_GENERATED_DIR = generated;
+  process.env.ALVARETH_WA_TMPDIR = waTmp;
+  process.env.ALVARETH_DISK_GENERATED_DIR = generated;
   const moduleUrl = new URL("../lib/disk-cleaner.js?test=" + Date.now(), import.meta.url);
   try {
     const cleaner = await import(moduleUrl);
@@ -43,7 +45,8 @@ test("Disk Manager preview and cleanup only remove stale files from allowlisted 
     assert.equal(await import("node:fs/promises").then(fs => fs.readFile(path.join(data, "session", "creds.json"), "utf8")), "keep-me");
   } finally {
     oldEnv.data === undefined ? delete process.env.ALVARETH_DATA_DIR : process.env.ALVARETH_DATA_DIR = oldEnv.data;
-    oldEnv.tmp === undefined ? delete process.env.ALVARETH_WA_TMPDIR : process.env.ALVARETH_WA_TMPDIR = oldEnv.tmp;\n    oldEnv.generated === undefined ? delete process.env.ALVARETH_DISK_GENERATED_DIR : process.env.ALVARETH_DISK_GENERATED_DIR = oldEnv.generated;
+    oldEnv.tmp === undefined ? delete process.env.ALVARETH_WA_TMPDIR : process.env.ALVARETH_WA_TMPDIR = oldEnv.tmp;
+    oldEnv.generated === undefined ? delete process.env.ALVARETH_DISK_GENERATED_DIR : process.env.ALVARETH_DISK_GENERATED_DIR = oldEnv.generated;
     await rm(base, { recursive: true, force: true });
   }
 });
