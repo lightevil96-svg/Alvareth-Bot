@@ -56,6 +56,7 @@ Alur runtime saat ini:
 - `points` maksimal 4 butir; idealnya maksimal 45 karakter per butir. Satu butir hanya memuat satu informasi.
 - Hindari paragraf panjang, huruf kapital penuh untuk kalimat panjang, pengulangan headline di subtext, serta menaruh seluruh voice-over sebagai teks layar.
 - Runtime mengukur dan membungkus headline sesuai lebar layar, tetapi model tetap wajib membuat teks ringkas agar komposisi tidak padat.
+- Untuk `data-chart`, `diagram`, `app-mockup`, dan `waveform`, visual ditempatkan di sisi kanan dan headline/subtext di sisi kiri. Jangan menaruh teks penting di area visual atau membuat label diagram terlalu panjang.
 - `narration` maksimal 1.200 karakter per scene, tetapi untuk video pendek sebaiknya jauh lebih ringkas.
 - Untuk subtitle biasa, pilih `captionStyle: "subtitle"`. Jangan memasukkan teks subtitle ke `text` sekaligus menyalin seluruh narasi.
 
