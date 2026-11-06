@@ -120,7 +120,7 @@ The repository updater defaults to main. On a staging checkout, set AUTO_UPDATE_
 
 Use the repository-root prompt-remotion.md as the authoritative prompt and schema guide. ChatGPT must return one valid JSON object with schemaVersion: 1, sourcePrompt containing the original user brief, and scenes containing 1–60 scene objects. Target duration must not exceed 300 seconds; each scene must be no longer than 20 seconds and long enough for its narration/reading.
 
-The WhatsApp payload limit is 24,000 characters. .remotion generate opens an input session; paste the JSON in the next message. .remotion <JSON> can start immediately. Plain-language briefs are intentionally rejected because the bot no longer has a local prompt-generating LLM. The shared POST /api/video-studio/plan route also accepts the JSON string in its prompt field; any separate LightJurnal frontend that still submits free-form prose must be updated separately.
+The WhatsApp payload limit is 24,000 characters. .remotion generate opens an input session; paste the JSON in the next message. .remotion <JSON> can start immediately. Plain-language briefs are intentionally rejected because the bot no longer has a local prompt-generating LLM.
 
 Duration fitting never compresses a scene below its estimated narration/reading requirement. If the target duration is too short, the bot rejects the storyboard and asks for shorter narration or a longer video instead of producing rushed speech.
 
