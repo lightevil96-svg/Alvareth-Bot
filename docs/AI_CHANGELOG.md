@@ -6,7 +6,6 @@
 - **Provisioning:** Ollama/Qwen install, service manager, environment settings, archive extractor, and model download were removed from the Linux bootstrap and WhatsApp installer. VoxCPM2, ComfyUI optional workflow checks, and server hardware diagnostics are preserved.
 - **Stability:** scene duration fitting no longer compresses narration/reading below its estimated minimum; too-short target durations and narration longer than 20 seconds per scene fail clearly.
 - **Documentation:** added repository-root prompt-remotion.md and updated README, AI_CONTEXT, environment example, Linux setup, skill policy, license audit, and prompt-engineering contract.
-- **Compatibility note:** POST /api/video-studio/plan now also expects the JSON storyboard string in its prompt field. Any external LightJurnal frontend that sends free-form natural language must be updated separately.
 - **Verification status:** source changes and regression tests are committed to main. GitHub Actions is the source for test/render status; no successful production VPS deployment, live VoxCPM2 synthesis, ComfyUI generation, or live WhatsApp delivery is claimed.
 
 ## 2026-11-06 — ComfyUI readiness requires reviewed workflow bytes
