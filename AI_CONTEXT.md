@@ -9,6 +9,8 @@
 
 ## Pembaruan terbaru
 
+- 2026-11-06: Video Studio ditetapkan WhatsApp-only. Remote LightJurnal API dan Cloudflare Tunnel dihapus: server.js hanya mempertahankan health/ping hosting, tidak ada route /api/video-studio, cloudflared, API key, maupun token tunnel. Satu-satunya kontrol produksi adalah owner-only .remotion; MP4 dikirim ke chat WhatsApp asal.
+
 - 2026-11-06: Follow-up CI fixes the planner base URL and VoxCPM2 transport diagnostics; see the latest changelog entry.
 - 2026-11-06: Local Ollama/VoxCPM2 child processes now inherit only allowlisted runtime/model/CUDA variables; bot credentials are excluded. Regression test added.
 
@@ -25,7 +27,7 @@
 
 - 2026-11-04: Updater `.update` tidak lagi menganggap batas 300 file dari GitHub REST sebagai daftar lengkap; otomatis memakai Git diff read-only pada repository bare sementara untuk diff penuh, dengan batas pengaman 20.000 file dan output 20 MiB.
 
-- 2026-11-04: Video Studio memakai named Cloudflare Tunnel khusus `video.lightjurnal.my.id`; bot auto-detect/auto-install cloudflared (SHA-256), membaca token privat dari environment/file, dan reconnect dengan backoff. DNS dan remote ingress sudah diprovisikan; konektor live menunggu token di environment Pterodactyl.
+- 2026-11-04 (historical, retired 2026-11-06): Video Studio pernah memakai named Cloudflare Tunnel video.lightjurnal.my.id. Integrasi tersebut sudah dihapus; jangan menghidupkan kembali cloudflared, token tunnel, atau remote-render API.
 
 - 2026-11-04: Automatic self-update kini dijalankan setelah plugin dimuat (90 detik awal, lalu interval AUTO_UPDATE_INTERVAL_MINUTES); memakai ulang plugins/owner/update.js, menjaga .env/sesi/database/file konflik, memasang dependency berubah, lalu meminta supervisor index.js restart worker. Tidak memerlukan .update atau PM2.
 
@@ -90,7 +92,7 @@ Alvareth Bot adalah bot WhatsApp Multi-Device berbasis Node.js, ES Modules, Bail
 - **AutoDL:** `lib/auto-download.js` memetakan satu URL dari host yang didukung ke plugin downloader yang ada. `handler.js` memproses pesan biasa sebagai synthetic command hanya saat cocok, tanpa mengubah `m.text` atau melewati cek izin/limit. Chat pribadi aktif secara default (termasuk satu URL teks dari akun WhatsApp yang sama meski `fromMe === true`), grup harus `.enable autodl`; link dari bot sendiri diabaikan. `runAutoDownloadJob` membatasi dua unduhan paralel dengan antrean maksimal delapan. **Router lama** `plugins/anu/_autodl.js` masih menangani layanan tambahan dan kasus TikTok link polos dari akun sendiri, tetapi harus mengabaikan `m.autoDownload` untuk mencegah duplikasi; pemilihan prefix pada router lama memakai `findAutoDownloadPrefix()` dari helper yang sama agar prefix regex/default konsisten. Jangan mengaktifkan dua router pada pesan yang sama atau menambah unduhan di `plugin.all`. `plugins/downloader/tiktok.js` menggunakan teks masuk bila `m.autoDownload` agar quoted media tidak mengganti link yang dideteksi.
 - **Plugin:** plugin dimuat secara rekursif dari `plugins/`. Ikuti konvensi handler yang dipakai file sejenis; periksa izin `handler.group`, `handler.admin`, `handler.botAdmin`, limit, dan format command sebelum mengubahnya.
 - **TikTok search/downloader:** `plugins/search/tiktok.js` memakai helper di `lib/scrape/tikwm.js`. API eksternal bisa membatasi IP/host. Jangan memperlakukan HTTP 403 sebagai kueri kosong; gunakan fallback berbeda dan tetap jelaskan jika semua penyedia gagal. Semua direktori kerja TikTok (video, render foto, dan fallback yt-dlp) harus memakai `ALVARETH_TIKTOK_TMPDIR` bila diatur; jangan membuat jalur sementara tambahan langsung di `os.tmpdir()`.
-- **Video Studio remote renderer:** `server.js` mounts `video-studio/api.js` and starts `video-studio/tunnel.js` after the HTTP server listens. LightJurnal calls `/api/video-studio/*` with a Bearer `VIDEO_STUDIO_API_KEY`; the API validates plans and stores queue/output under `<ALVARETH_DATA_DIR or ~/.alvareth-bot-data>/video-studio`. The dedicated remotely-managed Cloudflare Tunnel `lightjurnal-video-studio` publishes `video.lightjurnal.my.id` to the local HTTP server. The bot reads `VIDEO_STUDIO_TUNNEL_TOKEN` or the private token file `<ALVARETH_DATA_DIR or ~/.alvareth-bot-data>/video-studio/tunnel-token`, auto-detects or downloads the official cloudflared binary (SHA-256 verified), and reconnects with bounded exponential backoff. The token must never enter Git, browser code, or logs. Cloudflare DNS/ingress can be configured while the tunnel remains inactive until the server has its token. Keep the render queue single-worker by default so CPU/memory spikes do not starve Baileys.
+- **Video Studio WhatsApp-only:** `plugins/owner/remotion.js` is the only production entrypoint. It checks `isROwner === true`, uses the local planner/compiler/queue/renderer, and sends the completed MP4 to the originating chat through the existing Baileys uploader. `server.js` may expose `/`, `/health`, and `/ping` for hosting monitoring only; it must not mount a Video Studio HTTP API. There is no Cloudflare Tunnel, `cloudflared`, public render endpoint, LightJurnal API key, or tunnel token. Keep the render queue bounded so CPU/memory spikes do not starve Baileys.
 - **Updater saat startup:** `npm start` menjalankan `scripts/start-with-update.js`, yang mengambil update Git secara fast-forward dan memulai versi lokal bila pembaruan gagal. Ini bukan update/deploy VPS jarak jauh. Perubahan updater harus mempertahankan data dan perubahan tracked lokal.
 - **Data persisten:** database default berada di `~/.alvareth-bot-data/database.json`; sesi di `~/.alvareth-bot-data/sessions/`. Lokasi dapat berbeda lewat `ALVARETH_DATA_DIR` dan `WA_SESSION_DIR`. Jangan menghapus salinan lama sebelum migrasi berhasil diverifikasi.
 - **Deploy:** saat ini jangan menganggap tersedia auto-deploy ke VPS hanya karena ada workflow GitHub. Periksa file workflow yang benar-benar ada.
@@ -104,13 +106,13 @@ Perintah dasar:
 
 Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes nyata, commit/PR, serta batasan yang belum diuji. Tes sintaks bukan bukti API pihak ketiga atau pengiriman WhatsApp berhasil.
 
-## Video Studio — prompt-first creative director
+## Video Studio — prompt-first WhatsApp creative director
 
-- LightJurnal now submits one natural-language prompt. The AI planner in video-studio/prompt/planner.js creates a structured creative brief and storyboard; video-studio/prompt/compile.js safely compiles it to the validated Remotion schema.
-- Authenticated POST /api/video-studio/plan returns the plan. POST /api/video-studio/jobs accepts the validated plan (legacy manual payloads remain supported for compatibility).
-- Creative decisions are inferred: scene count and timing, aspect ratio, FPS, palette, layout, motion, transitions, music mood, and sound cues. Current render limits are 60 scenes, 20 seconds per scene, and 300 seconds total.
-- video-studio/remotion/Composition.jsx supports varied hero/editorial/split/stat/quote/steps/outro layouts, animated geometric motifs, motion presets, a scene progress indicator, music fades, and allowlisted sound cues.
-- Do not reintroduce manual creative settings in the LightJurnal UI. Keep only the single prompt field; API connection credentials are infrastructure settings, not creative controls.
+- Owner mengirim satu brief natural-language melalui .remotion; planner di video-studio/prompt/planner.js menyusun creative brief/storyboard, lalu video-studio/prompt/compile.js mengompilasinya ke skema Remotion yang tervalidasi.
+- Tidak ada HTTP submit/download API atau browser UI. Semua status, riwayat, kontrol, dan pengiriman hasil terjadi di WhatsApp.
+- Keputusan kreatif diinferensikan: jumlah dan durasi scene, rasio, FPS, palet, layout, motion, transisi, mood musik, dan sound cues. Batas render saat ini 60 scene, 20 detik per scene, dan 300 detik total.
+- video-studio/remotion/Composition.jsx mendukung layout hero/editorial/split/stat/quote/steps/outro, motif geometris animatif, preset motion, indikator progres scene, music fades, dan sound cues yang diizinkan.
+- Jangan menambahkan kembali remote LightJurnal API, Cloudflare Tunnel, atau pengaturan kreatif manual. Pertahankan prompt-first dan owner-only di WhatsApp.
 
 
 ## 6. Pembaruan terbaru
@@ -195,10 +197,10 @@ Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes n
 - Jika ada kandidat image tetapi tidak ada `[IMAGE] ▶ Mulai`, telusuri tahap plugin loop, status disabled, dan tipe export plugin. Jika `[IMAGE] ▶ Mulai` muncul, lanjutkan ke tahap download/upload/API.
 
 
-## LightJurnal Video Studio — deployment notes (2026-11-04)
-- `main.js` starts the optional HTTP server when `PORT` or Pterodactyl's `SERVER_PORT` is present; `server.js` listens on `PORT` first, then `SERVER_PORT`.
-- Video Studio API creates a 256-bit random API key on first startup when `VIDEO_STUDIO_API_KEY` is not set. It persists at `~/.alvareth-bot-data/video-studio/api-key` (or under `ALVARETH_DATA_DIR`) with mode 0600. Do not commit this file or disclose its contents in logs/chat.
-- LightJurnal still requires a public HTTPS URL and the generated key in the browser session. A raw Pterodactyl TCP allocation is not automatically HTTPS; configure a reverse proxy or Cloudflare Tunnel before calling the deployment live.
+## Video Studio — WhatsApp-only deployment (2026-11-06)
+- main.js may start server.js when PORT or Pterodactyl SERVER_PORT is present, but that server is only for /, /health, and /ping hosting checks.
+- The Video Studio HTTP API and Cloudflare Tunnel were removed. No VIDEO_STUDIO_API_KEY, VIDEO_STUDIO_ALLOWED_ORIGINS, VIDEO_STUDIO_TUNNEL_TOKEN, VIDEO_STUDIO_TUNNEL_TOKEN_FILE, CLOUDFLARED_BIN, VIDEO_STUDIO_TUNNEL, public hostname, reverse proxy, or browser credential is required.
+- Use the owner-only .remotion WhatsApp command; completed MP4 is delivered to the originating WhatsApp chat. Old tunnel/API files on the VPS are inert and may be deleted after updating.
 - Do not claim deployment is complete until dependency installation, health check, authenticated limits request, and a real short MP4 render have succeeded on the user's Pterodactyl instance.
 
 Current media invariant: local numerical loopback URLs, redirects rejected, no hosted AI fallback. VoxCPM2 Python source pinned; model must be local. Single bot worker only. SFX time uses Scene startFrame (including transition handle), not speechStartFrame. Validator must retain music/caption metadata and up to 60 voice tracks.

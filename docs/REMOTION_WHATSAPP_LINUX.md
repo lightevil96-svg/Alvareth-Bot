@@ -1,6 +1,6 @@
 # Alvareth Remotion — local Linux setup
 
-Current pipeline: owner WhatsApp → local Ollama JSON storyboard → schema/compiler → single-worker queue → local VoxCPM2 → optional reviewed local ComfyUI → deterministic Remotion → MP4 upload. No hosted planner/TTS/stock fallback. No deployment is performed by this change.
+Current pipeline: owner WhatsApp → local Ollama JSON storyboard → schema/compiler → single-worker queue → local VoxCPM2 → optional reviewed local ComfyUI → deterministic Remotion → MP4 sent to the originating WhatsApp chat. This is WhatsApp-only: no LightJurnal remote-render API, public Video Studio endpoint, Cloudflare Tunnel, cloudflared process, or tunnel/API token is required.
 
 ## Requirements
 
@@ -13,8 +13,8 @@ Preserve .env, sessions and database. If the checkout has local edits, resolve t
 ```bash
 git status --short
 git fetch origin
-git switch feat/remotion-whatsapp-linux
-git pull --ff-only origin feat/remotion-whatsapp-linux
+git switch main
+git pull --ff-only origin main
 sudo apt-get update
 sudo apt-get install -y ffmpeg python3-venv libnss3 libatk-bridge2.0-0 libgbm1 libasound2t64
 npm install
@@ -134,6 +134,10 @@ This is process autostart, not provisioning: the server still needs enough RAM/V
 No default visual/music model is silently chosen. Audit model license, node source, all network-capable nodes and memory requirements. Use only non-WAN local workflows. Put approved API-format graphs outside Git secrets/data, calculate `sha256sum /path/to/workflow.json`, and add the exact digest to comma-separated `VIDEO_STUDIO_COMFYUI_REVIEWED_SHA256`. Set the relevant VIDEO_STUDIO_COMFYUI_*_WORKFLOW_FILE and loopback URL. Hash checks pin reviewed bytes; they cannot prove custom-node behavior or detect a renamed banned model. The operator review is necessary.
 
 Without suitable visual workflows the output is designed motion graphics, not generated character animation/photorealistic footage. Without suitable music, there is no music. SFX are generated locally and require no model.
+
+## WhatsApp-only operation
+
+The .remotion plugin is the only Video Studio control surface. The bot plans, renders, stores and sends the MP4 inside its own WhatsApp workflow. No external website, public render endpoint, Cloudflare Tunnel, cloudflared, VIDEO_STUDIO_API_KEY, or tunnel token is part of this design. The optional Alvareth /health endpoint is hosting monitoring only and cannot submit or download Video Studio jobs.
 
 ## WhatsApp commands
 

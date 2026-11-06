@@ -166,40 +166,30 @@ Repository ini mewarisi struktur dan sebagian kode dari source sebelumnya. Perta
 Sebelum mengubah kode, AI/developer wajib membaca [`AGENTS.md`](AGENTS.md), [`AI_CONTEXT.md`](AI_CONTEXT.md), dan [`docs/AI_CHANGELOG.md`](docs/AI_CHANGELOG.md). Setiap perubahan bermakna harus memperbarui changelog dan ringkasan terbaru di `AI_CONTEXT.md` dalam PR yang sama. Ikuti aturan keamanan, jalankan tes yang relevan, dan laporkan dengan jujur apa yang sudah serta belum diverifikasi.
 
 
-## LightJurnal Video Studio — prompt-first Remotion editing
+## Remotion Video Studio — WhatsApp-only
 
-LightJurnal sends one natural-language prompt to Alvareth-Bot. The AI planner turns the brief into a creative direction and storyboard, then compiles it into a validated Remotion project. Scene count, per-scene pacing, aspect ratio, FPS, palette, layout, motion, transitions, music mood and sound cues are inferred from the prompt; users do not configure them manually.
+Alvareth Video Studio hanya dioperasikan melalui WhatsApp oleh owner. Tidak ada lagi integrasi LightJurnal remote-render API, public Video Studio endpoint, Cloudflare Tunnel, atau kebutuhan token tunnel/API eksternal.
 
-### WhatsApp owner command
+Alur produksi berjalan di server bot sendiri:
 
-The same Video Studio engine is also available directly inside Alvareth Bot through the owner-only `.remotion` command:
+owner WhatsApp → Ollama/Qwen lokal → storyboard/compiler → antrean render → VoxCPM2 lokal → opsional ComfyUI lokal → Remotion + FFmpeg → MP4 dikirim kembali ke chat WhatsApp asal.
 
-- `.remotion` opens the interactive WhatsApp menu.
-- `.remotion generate` asks for a natural-language video brief in the next message.
-- `.remotion <prompt>` starts a video job immediately.
-- `.remotion status`, `.remotion history`, `.remotion send`, `.remotion guide`, `.remotion services`, and `.remotion cancel` manage the workflow.
-- Rendered MP4 files are sent back to WhatsApp and retained in the persistent Video Studio render directory.
+### Perintah owner WhatsApp
 
-See [Linux deployment and provider setup](docs/REMOTION_WHATSAPP_LINUX.md). Android/Termux tutorial steps are not used by this implementation.
+- .remotion membuka menu produksi.
+- .remotion generate meminta brief video pada pesan berikutnya.
+- .remotion <prompt> langsung memulai produksi dari prompt.
+- .remotion status, .remotion history, .remotion send, .remotion guide, .remotion services, dan .remotion cancel mengelola pekerjaan video.
 
-### Local setup and verification
+Semua akses produksi tetap dibatasi untuk owner melalui pemeriksaan plugin. Hasil MP4 dikirim langsung melalui Baileys ke chat WhatsApp yang memulai pekerjaan dan disimpan pada direktori data Video Studio.
 
-Follow [Linux local-service setup](docs/REMOTION_WHATSAPP_LINUX.md) and [license/skill audit](docs/REMOTION_LOCAL_LICENSES.md). Planning uses local Ollama; narration uses the included VoxCPM2 Python adapter. No hosted AI or stock-media fallback is used. Music is absent unless a suitable local track exists. Motion graphics remain available without an optional reviewed ComfyUI workflow.
+### Engine lokal
 
-Existing authenticated LightJurnal API routes and the tunnel are preserved. The WhatsApp owner check applies to the WhatsApp entrypoint; the separate HTTP API retains Bearer authentication. Native voice generation, subtitles, hardware performance and WhatsApp delivery must be validated on the actual VPS.
+- Ollama + Qwen: menyusun storyboard dan arahan visual/audio.
+- VoxCPM2: menghasilkan voice-over secara lokal.
+- Remotion + FFmpeg: menyusun, mengedit, dan merender MP4.
+- SFX lokal: memberi efek suara sesuai kejadian dan gerakan.
+- ComfyUI: opsional untuk workflow visual open-source yang sudah diperiksa. Tanpa workflow, engine tetap dapat membuat motion graphics.
+- Musik: opsional; tidak dipaksakan jika tidak tersedia.
 
-### Existing authenticated LightJurnal HTTP API
-
-The existing HTTP API and optional Cloudflare Tunnel remain available alongside the WhatsApp owner command. The API is mounted under `/api/video-studio`.
-
-- `GET /api/video-studio/health` — public service readiness check.
-- `GET /api/video-studio/limits` — renderer limits; requires Bearer authentication.
-- `POST /api/video-studio/plan` — turns a prompt into a normalized storyboard; requires Bearer authentication.
-- `POST /api/video-studio/jobs` — validates and queues a video project; requires Bearer authentication.
-- `GET /api/video-studio/jobs` — lists recent jobs; requires Bearer authentication.
-- `GET /api/video-studio/jobs/:id` — reads job status; requires Bearer authentication.
-- `GET /api/video-studio/jobs/:id/download` — downloads a completed MP4; requires Bearer authentication.
-
-On first startup, the API key is generated automatically and stored outside the Git checkout at `~/.alvareth-bot-data/video-studio/api-key` with owner-only file permissions. Set `VIDEO_STUDIO_API_KEY` to a private value of at least 32 characters to override it. All protected routes require `Authorization: Bearer <API_KEY>`; never commit or expose this key to the browser or GitHub. The default allowed browser origin is `https://lightjurnal.my.id`; configure `VIDEO_STUDIO_ALLOWED_ORIGINS` only when necessary.
-
-The optional named Cloudflare Tunnel publishes the local API when `VIDEO_STUDIO_TUNNEL_TOKEN` or its private token file is configured. Tunnel setup and local-service requirements are documented in [Linux deployment and provider setup](docs/REMOTION_WHATSAPP_LINUX.md). Pushing code to GitHub does not itself deploy or restart the VPS.
+Lihat panduan instalasi Linux (docs/REMOTION_WHATSAPP_LINUX.md) dan audit lisensi serta skills (docs/REMOTION_LOCAL_LICENSES.md). HTTP health-check server Alvareth (jika PORT diaktifkan) hanya untuk pemantauan hosting dan tidak menjadi jalur produksi atau pengiriman video.
