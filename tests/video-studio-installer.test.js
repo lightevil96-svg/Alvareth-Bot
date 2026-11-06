@@ -15,7 +15,6 @@ test("installer subprocess receives runtime variables but never WhatsApp credent
     PATH: "/usr/bin",
     CUDA_VISIBLE_DEVICES: "0",
     NVIDIA_VISIBLE_DEVICES: "all",
-    VIDEO_STUDIO_OLLAMA_MODEL: "qwen2.5:7b",
     HF_ENDPOINT: "https://hf-mirror.com",
     OWNER_NUMBER: "628000000000",
     BOT_TOKEN: "must-not-leak",
@@ -25,7 +24,7 @@ test("installer subprocess receives runtime variables but never WhatsApp credent
   assert.match(env.PATH, /^\/home\/alvareth\/\.local\/bin:/);
   assert.equal(env.CUDA_VISIBLE_DEVICES, "0");
   assert.equal(env.NVIDIA_VISIBLE_DEVICES, "all");
-  assert.equal(env.VIDEO_STUDIO_OLLAMA_MODEL, "qwen2.5:7b");
+  assert.equal(env.VIDEO_STUDIO_OLLAMA_MODEL, undefined);
   assert.equal(env.HF_ENDPOINT, "https://hf-mirror.com");
   assert.equal(env.OWNER_NUMBER, undefined);
   assert.equal(env.BOT_TOKEN, undefined);
