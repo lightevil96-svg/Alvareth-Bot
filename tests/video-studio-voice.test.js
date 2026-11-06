@@ -11,11 +11,18 @@ import {
   updateVoiceSettings
 } from "../video-studio/voice-settings.js";
 import { buildWordBoundaryCaptionGroups } from "../video-studio/media/voiceover.js";
+import { validateVideoProject } from "../video-studio/validate.js";
 
 test("Edge TTS is the default fast online voice provider", () => {
   assert.equal(DEFAULT_VOICE_SETTINGS.provider, "edge-tts");
   assert.equal(normalizeVoiceSettings().voice, "id-ID-GadisNeural");
   assert.equal(normalizeVoiceSettings(null).provider, "edge-tts");
+});
+
+test("new validated projects carry the default Edge TTS provider", () => {
+  const project = validateVideoProject({ scenes: [{ text: "Halo", narration: "Halo dunia", duration: 3 }] });
+  assert.equal(project.voiceSettings.provider, "edge-tts");
+  assert.equal(project.voiceSettings.voice, "id-ID-GadisNeural");
 });
 
 test("voice settings are persisted outside the repository and normalized safely", async t => {
