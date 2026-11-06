@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { parseStoryboardInput } from "../../video-studio/prompt/storyboard.js";
 import { getVoiceSettings, updateVoiceSettings, EDGE_TTS_VOICES, VOXCPM_STYLES } from "../../video-studio/voice-settings.js";
+import { getStyleSettings, updateStyleSettings, STYLE_PRESETS, DEFAULT_STYLE_SETTINGS, applyVisualStyle } from "../../video-studio/style-settings.js";
 import { compileVideoPlan } from "../../video-studio/prompt/compile.js";
 import {
   startVideoQueue,
@@ -228,7 +229,8 @@ async function showMenu(m, conn, usedPrefix = ".") {
         remotionMenuRow(usedPrefix, "⚙️ Kelola layanan", "Cek Edge TTS online, VoxCPM2, dan layanan video.", "services-menu"),
         remotionMenuRow(usedPrefix, "⬇️ Instalasi engine", "Pilih GPU otomatis, CPU, atau cek progres.", "install-menu"),
         remotionMenuRow(usedPrefix, "🖥️ Spesifikasi server", "Periksa CPU, RAM, storage, dan GPU.", "hardware"),
-        remotionMenuRow(usedPrefix, "🗣️ Pengaturan voice", "Pilih provider, suara, kecepatan, pitch, dan karakter narator.", "voice")
+        remotionMenuRow(usedPrefix, "🗣️ Pengaturan voice", "Pilih provider, suara, kecepatan, pitch, dan karakter narator.", "voice"),
+        remotionMenuRow(usedPrefix, "🎨 Pilih style video", "Atur preset visual default untuk video baru.", "style")
       ]
     }
   ];
@@ -246,6 +248,7 @@ async function showMenu(m, conn, usedPrefix = ".") {
     "",
     "• " + usedPrefix + "remotion hardware",
     "• " + usedPrefix + "remotion voice",
+    "• " + usedPrefix + "remotion style",
     "",
     "*Layanan:*",
     "• " + usedPrefix + "remotion services",
@@ -343,6 +346,7 @@ async function showVoiceMenu(m, conn, usedPrefix = ".", notice = "") {
         remotionMenuRow(usedPrefix, "Energetic", "Lebih hidup dan ekspresif.", "voice style energetic"),
         remotionMenuRow(usedPrefix, "Calm", "Tenang dan lembut.", "voice style calm"),
         remotionMenuRow(usedPrefix, "Storytelling", "Intonasi penceritaan lebih ekspresif.", "voice style storytelling"),
+        remotionMenuRow(usedPrefix, "🎙️ Cinematic Narrator", "Narator laki-laki dewasa, hangat, dalam, dan ekspresif melalui voice design VoxCPM2.", "voice style cinematic"),
         remotionMenuRow(usedPrefix, "↩️ Reset pengaturan", "Kembalikan provider dan suara ke default.", "voice reset")
       ]
     }
@@ -364,6 +368,7 @@ async function showVoiceMenu(m, conn, usedPrefix = ".", notice = "") {
     "• " + usedPrefix + "remotion voice provider voxcpm2",
     "• " + usedPrefix + "remotion voice model id-ID-GadisNeural",
     "• " + usedPrefix + "remotion voice model id-ID-ArdiNeural",
+    "• " + usedPrefix + "remotion voice style cinematic",
     "• " + usedPrefix + "remotion voice rate +10%",
     "• " + usedPrefix + "remotion voice pitch +10Hz",
     "• " + usedPrefix + "remotion voice volume +10%",
@@ -376,6 +381,53 @@ async function showVoiceMenu(m, conn, usedPrefix = ".", notice = "") {
     sections,
     fallback
   });
+}
+
+async function showStyleMenu(m, conn, usedPrefix = ".", notice = "") {
+  const settings = getStyleSettings();
+  const active = STYLE_PRESETS[settings.preset];
+  const rows = Object.entries(STYLE_PRESETS).map(([id, preset]) => remotionMenuRow(
+    usedPrefix,
+    (id === settings.preset ? "✅ " : "🎨 ") + preset.label,
+    preset.description,
+    "style " + id
+  ));
+  rows.push(remotionMenuRow(usedPrefix, "↩️ Reset style default", "Kembali ke Cinematic 2.5D Explainer.", "style reset"));
+  const description = [
+    notice,
+    "Style aktif: " + active.label,
+    "Style diterapkan otomatis setelah JSON storyboard divalidasi; isi cerita dan fakta tidak diubah.",
+    "Pengaturan berlaku untuk video baru, bukan job yang sudah masuk antrean."
+  ].filter(Boolean).join("\n");
+  const fallback = [
+    "🎨 *PILIH STYLE VIDEO REMOTION*",
+    description,
+    "",
+    ...Object.entries(STYLE_PRESETS).map(([id, preset]) => "• " + usedPrefix + "remotion style " + id + " — " + preset.label),
+    "• " + usedPrefix + "remotion style reset"
+  ].join("\n");
+  return sendNativeMenu(m, conn, {
+    title: "Style video",
+    description,
+    sections: [{ title: "Preset visual", rows }],
+    fallback
+  });
+}
+
+async function handleStyleCommand(m, conn, usedPrefix = ".", argument = "") {
+  const parts = String(argument || "").trim().split(/\s+/).filter(Boolean);
+  const key = String(parts[0] || "").toLowerCase();
+  const presetId = key === "preset" ? String(parts[1] || "").toLowerCase() : key;
+  if (!key) return showStyleMenu(m, conn, usedPrefix);
+  if (key === "reset") {
+    updateStyleSettings({ preset: DEFAULT_STYLE_SETTINGS.preset });
+    return showStyleMenu(m, conn, usedPrefix, "✅ Style dikembalikan ke preset default.");
+  }
+  if (!Object.hasOwn(STYLE_PRESETS, presetId)) {
+    return m.reply("Style tidak dikenal. Ketik .remotion style untuk melihat pilihan yang tersedia.");
+  }
+  const updated = updateStyleSettings({ preset: presetId });
+  return showStyleMenu(m, conn, usedPrefix, "✅ Style aktif diubah menjadi " + STYLE_PRESETS[updated.preset].label + ".");
 }
 
 async function installEdgeTts(m, conn) {
@@ -466,7 +518,7 @@ async function handleVoiceCommand(m, conn, usedPrefix = ".", argument = "") {
   let patch;
   if (key === "provider" && ["edge-tts", "voxcpm2"].includes(value)) patch = { provider: value };
   else if (key === "model" && Object.hasOwn(EDGE_TTS_VOICES, value)) patch = { voice: value };
-  else if (key === "style" && Object.hasOwn(VOXCPM_STYLES, value)) patch = { voxStyle: value };
+  else if (key === "style" && Object.hasOwn(VOXCPM_STYLES, value)) patch = { provider: "voxcpm2", voxStyle: value };
   else if (key === "rate" && /^[+-]\d{1,2}%$/.test(value)) patch = { rate: value };
   else if (key === "pitch" && /^[+-]\d{1,2}Hz$/i.test(value)) patch = { pitch: value };
   else if (key === "volume" && /^[+-]\d{1,2}%$/.test(value)) patch = { volume: value };
@@ -479,7 +531,7 @@ async function handleVoiceCommand(m, conn, usedPrefix = ".", argument = "") {
       "• .remotion voice rate +10%|-10%|+0%\n" +
       "• .remotion voice pitch +10Hz|-10Hz|+0Hz\n" +
       "• .remotion voice volume +10%|-10%|+0%\n" +
-      "• .remotion voice style natural|warm|energetic|calm|storytelling\n" +
+      "• .remotion voice style natural|warm|energetic|calm|storytelling|cinematic\n" +
       "• .remotion voice install|reset"
     );
   }
@@ -550,7 +602,8 @@ async function startPromptJob(prompt, chat, fallbackConn) {
 
   try {
     // Storyboard JSON is supplied by the operator; the selected TTS provider starts only during media preparation.
-    const plan = parseStoryboardInput(cleanPrompt);
+    const styleSettings = getStyleSettings();
+    const plan = applyVisualStyle(parseStoryboardInput(cleanPrompt), styleSettings.preset);
     const project = compileVideoPlan(plan);
     project.voiceSettings = getVoiceSettings();
     const job = createVideoJob(project);
@@ -563,6 +616,7 @@ async function startPromptJob(prompt, chat, fallbackConn) {
       "Durasi: " + job.durationSeconds + " detik\n" +
       "Scene: " + job.sceneCount + "\n" +
       "Format: " + job.ratio + " • " + (plan.fps || 30) + " FPS\n" +
+      "Style: " + STYLE_PRESETS[styleSettings.preset].label + "\n" +
       "ID: " + job.id + "\n\n" +
       "Bot akan mengirim MP4 setelah rendering selesai. Cek kapan saja dengan .remotion status.",
       fallbackConn
@@ -909,6 +963,7 @@ async function handleCommand(m, { conn, usedPrefix, text }) {
   if (parsed.action === "servicesMenu") return showServicesMenu(m, conn, usedPrefix);
   if (parsed.action === "installMenu") return showInstallMenu(m, conn, usedPrefix);
   if (parsed.action === "voice") return handleVoiceCommand(m, conn, usedPrefix, parsed.argument);
+  if (parsed.action === "style") return handleStyleCommand(m, conn, usedPrefix, parsed.argument);
   if (parsed.action === "generate") {
     if (parsed.prompt) {
       void startPromptJob(parsed.prompt, m.chat, conn);

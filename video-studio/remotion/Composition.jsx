@@ -81,6 +81,115 @@ const SceneMotif = ({ type, accent, index }) => {
   </svg>;
 };
 
+
+const IllustratedScene = ({ scene = {}, accent = "#F5C96B" }) => {
+  const frame = useCurrentFrame();
+  const description = [scene.visualDescription, scene.text, scene.subtext, scene.purpose].join(" ").toLowerCase();
+  const hasMoney = /(uang|invest|modal|dana|rupiah|keuntungan|profit|saham|money|coin|cash|bisnis|usaha)/i.test(description);
+  const hasIslamic = /(masjid|islam|muslim|zakat|wakaf|syariah|shalat|sholat|ramadan|sedekah)/i.test(description);
+  const hasNature = /(hutan|pohon|gunung|laut|alam|forest|tree|mountain|ocean)/i.test(description);
+  const hasTransport = /(sampah|rute|truk|angkut|jalan|kendaraan|mobil|transport|logistik)/i.test(description);
+  const hasEducation = /(sekolah|siswa|guru|belajar|kampus|buku|pendidikan|kelas)/i.test(description);
+  const hasHospital = /(rumah sakit|dokter|pasien|kesehatan|perawat|klinik|hospital)/i.test(description);
+  const hasFood = /(makanan|masakan|kopi|restoran|pangan|kuliner|food|cafe)/i.test(description);
+  const drift = Math.sin(frame / 48) * 14;
+  const lift = Math.sin(frame / 35) * 9;
+  const sceneId = String(scene.id || "illustrated-scene").replace(/[^a-z0-9_-]/gi, "");
+  const gradientId = "illustrated-sky-" + sceneId;
+  return <AbsoluteFill style={{ pointerEvents: "none", overflow: "hidden" }}>
+    <svg viewBox="0 0 1080 1920" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <defs>
+        <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#F4B36E" stopOpacity=".3" />
+          <stop offset="52%" stopColor="#D47C55" stopOpacity=".12" />
+          <stop offset="100%" stopColor="#111A33" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <rect x="0" y="0" width="1080" height="1280" fill={"url(#" + gradientId + ")"} />
+      <circle cx="770" cy={420 + lift} r="235" fill="#F4C66B" opacity=".18" />
+      <circle cx="770" cy={420 + lift} r="165" fill="#FFD98A" opacity=".15" />
+      <g opacity=".26" stroke="#FFE2A1" strokeWidth="5" strokeLinecap="round">
+        <path d="M770 100 V190 M770 650 V740 M450 420 H540 M1000 420 H1080" />
+        <path d="M545 195 L600 250 M940 590 L1000 650 M545 645 L600 590" />
+      </g>
+      <g transform={"translate(0 " + drift + ")"}>
+        <path d="M0 1010 Q190 850 390 1005 T790 970 T1080 930 V1320 H0 Z" fill="#293B5C" opacity=".68" />
+        <path d="M0 1100 Q220 920 430 1080 T850 1030 T1080 1010 V1370 H0 Z" fill="#172947" opacity=".9" />
+        <g fill="#223657" opacity=".94">
+          <path d="M65 1110 V820 H225 V1110 Z M255 1110 V730 H430 V1110 Z M455 1110 V875 H600 V1110 Z M825 1110 V790 H1000 V1110 Z" />
+        </g>
+        <g fill="#F3C66A" opacity=".62">
+          <path d="M95 860 H125 V900 H95 Z M150 860 H180 V900 H150 Z M95 935 H125 V975 H95 Z M150 935 H180 V975 H150 Z M290 775 H325 V815 H290 Z M360 775 H395 V815 H360 Z M290 850 H325 V890 H290 Z M360 850 H395 V890 H360 Z M290 925 H325 V965 H290 Z M360 925 H395 V965 H360 Z M490 920 H520 V960 H490 Z M540 920 H570 V960 H540 Z M860 835 H895 V875 H860 Z M925 835 H960 V875 H925 Z M860 910 H895 V950 H860 Z M925 910 H960 V950 H925 Z" />
+        </g>
+      </g>
+      {hasNature ? <g transform={"translate(" + drift + " 0)"}>
+        <path d="M90 1110 Q130 870 245 1050 Q335 850 420 1110 Z M680 1110 Q760 820 900 1080 Q1000 900 1080 1110 Z" fill="#34745E" opacity=".82" />
+        <path d="M190 1110 V820 M145 900 L190 840 L240 900 M150 970 L190 915 L230 970" stroke="#F2C66D" strokeWidth="24" strokeLinecap="round" fill="none" />
+      </g> : null}
+      {hasIslamic ? <g transform={"translate(" + (-drift * .4) + " 0)"}>
+        <path d="M380 1000 V800 Q540 610 700 800 V1000 Z" fill="#D99B54" stroke="#F7D58A" strokeWidth="12" />
+        <path d="M420 800 Q540 610 660 800 Z" fill="#F4C66B" />
+        <path d="M360 1000 V760 H410 V1000 M670 1000 V760 H720 V1000" fill="#263B5D" />
+        <path d="M385 760 Q385 675 435 760 Z M695 760 Q695 675 745 760 Z" fill="#E9B65F" />
+        <path d="M535 620 V540 M520 560 H550" stroke="#F8D98C" strokeWidth="12" strokeLinecap="round" />
+        <path d="M490 1000 V880 Q540 820 590 880 V1000" fill="#172947" />
+      </g> : null}
+      {hasMoney ? <g transform={"translate(" + drift + " " + lift + ")"}>
+        <ellipse cx="790" cy="870" rx="105" ry="30" fill="#9C6B34" opacity=".65" />
+        <ellipse cx="790" cy="840" rx="105" ry="30" fill="#F1C66A" stroke="#FFF0B9" strokeWidth="9" />
+        <ellipse cx="790" cy="785" rx="105" ry="30" fill="#D99B43" stroke="#FFE7A3" strokeWidth="8" />
+        <ellipse cx="790" cy="730" rx="105" ry="30" fill="#F4CD72" stroke="#FFF0B9" strokeWidth="8" />
+        <circle cx="590" cy="790" r="76" fill="#E6B85B" stroke="#FFE6A0" strokeWidth="12" />
+        <text x="590" y="817" textAnchor="middle" fontSize="76" fontWeight="900" fill="#5A3A24">Rp</text>
+        <path d="M510 660 L600 600 L690 640 L780 520" fill="none" stroke="#F9D477" strokeWidth="13" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M745 520 H780 V555" fill="none" stroke="#F9D477" strokeWidth="13" strokeLinecap="round" />
+      </g> : null}
+      {hasTransport ? <g transform={"translate(" + drift + " 0)"}>
+        <path d="M180 1010 H830 L920 1120 H100 V1060 Q100 1010 180 1010 Z" fill="#263D5D" stroke="#F3C66A" strokeWidth="10" />
+        <rect x="310" y="900" width="420" height="170" rx="28" fill="#D98D4E" stroke="#FFE1A1" strokeWidth="12" />
+        <rect x="365" y="930" width="140" height="70" rx="10" fill="#A8D8DF" />
+        <rect x="530" y="930" width="140" height="70" rx="10" fill="#A8D8DF" />
+        <circle cx="405" cy="1080" r="56" fill="#17243D" stroke="#F4D17B" strokeWidth="15" />
+        <circle cx="665" cy="1080" r="56" fill="#17243D" stroke="#F4D17B" strokeWidth="15" />
+      </g> : null}
+      {hasEducation ? <g transform={"translate(" + (-drift * .5) + " " + lift + ")"}>
+        <path d="M330 900 Q450 820 540 900 Q630 820 750 900 V1060 Q630 980 540 1060 Q450 980 330 1060 Z" fill="#E9B95F" stroke="#FFF0B9" strokeWidth="12" />
+        <path d="M540 900 V1060" stroke="#8A5C39" strokeWidth="10" />
+        <path d="M380 930 Q450 900 500 930 M380 970 Q450 940 500 970 M580 930 Q650 900 700 930 M580 970 Q650 940 700 970" stroke="#6A4B39" strokeWidth="8" strokeLinecap="round" />
+      </g> : null}
+      {hasHospital ? <g>
+        <rect x="330" y="780" width="420" height="300" rx="28" fill="#DCE9E9" stroke="#F4C66B" strokeWidth="12" />
+        <path d="M500 850 H580 V920 H650 V1000 H580 V1070 H500 V1000 H430 V920 H500 Z" fill="#D66E59" />
+        <path d="M385 780 V720 H695 V780" fill="none" stroke="#F4C66B" strokeWidth="18" strokeLinecap="round" />
+      </g> : null}
+      {hasFood ? <g transform={"translate(0 " + lift + ")"}>
+        <path d="M350 940 Q540 1140 730 940 Z" fill="#F0C56B" stroke="#FFF0B9" strokeWidth="12" />
+        <path d="M390 930 Q540 830 690 930" fill="none" stroke="#E8A45A" strokeWidth="18" strokeLinecap="round" />
+        <circle cx="470" cy="900" r="26" fill="#5E9B68" /><circle cx="545" cy="875" r="32" fill="#C95E4D" /><circle cx="620" cy="900" r="24" fill="#E5B34F" />
+      </g> : null}
+      <g transform={"translate(" + (-drift * .35) + " 0)"}>
+        <circle cx="410" cy="730" r="56" fill="#D9A178" />
+        <path d="M350 730 Q350 655 410 655 Q470 655 470 730 Q440 685 410 685 Q380 685 350 730" fill="#30263B" />
+        <path d="M330 1040 V860 Q410 790 490 860 V1040 Z" fill="#E8B45B" stroke="#FFE3A0" strokeWidth="10" />
+        <path d="M360 1040 L350 1150 M460 1040 L470 1150" stroke="#263653" strokeWidth="30" strokeLinecap="round" />
+        <circle cx="650" cy="760" r="48" fill="#B97F5D" />
+        <path d="M600 760 Q600 695 650 695 Q700 695 700 760 Q680 725 650 725 Q620 725 600 760" fill="#22283A" />
+        <path d="M585 1060 V880 Q650 820 715 880 V1060 Z" fill="#5B83A5" stroke="#A9D9E4" strokeWidth="9" />
+        <path d="M615 1060 L610 1150 M690 1060 L700 1150" stroke="#263653" strokeWidth="28" strokeLinecap="round" />
+      </g>
+      <g fill="#FFE2A1" opacity=".62">
+        {Array.from({ length: 12 }, (_, index) => {
+          const x = 90 + index * 82;
+          const y = 250 + ((index * 67) % 360);
+          const size = 4 + (index % 3) * 2;
+          const pulse = .45 + Math.abs(Math.sin(frame / 18 + index)) * .5;
+          return <circle key={index} cx={x} cy={y} r={size} opacity={pulse} />;
+        })}
+      </g>
+    </svg>
+  </AbsoluteFill>;
+};
+
 const SceneSound = ({ cue, volume = 0.55 }) => {
   const frame = useCurrentFrame();
   const source = SFX_FILES[cue];
@@ -169,11 +278,12 @@ const Scene = ({ scene, index, total, durationFrames, transitionInFrames }) => {
   const foreground = lightBackground ? "#1B263B" : "#FFFFFF";
   const layout = scene.layout || "hero";
   const visualType = scene.visualType || "editorial";
+  const illustrated = visualType === "illustrated";
   const hasSideVisual = ["data-chart", "diagram", "app-mockup", "waveform", "3d"].includes(visualType);
-  const alignLeft = layout === "editorial" || layout === "split" || hasSideVisual;
+  const alignLeft = !illustrated && (layout === "editorial" || layout === "split" || hasSideVisual);
   const fontScale = height >= 1600 ? 1 : 0.82;
-  const contentWidth = hasSideVisual ? "47%" : layout === "split" ? "62%" : layout === "editorial" ? "86%" : "90%";
-  const contentWidthRatio = hasSideVisual ? 0.47 : layout === "split" ? 0.62 : layout === "editorial" ? 0.86 : 0.9;
+  const contentWidth = illustrated ? "90%" : hasSideVisual ? "47%" : layout === "split" ? "62%" : layout === "editorial" ? "86%" : "90%";
+  const contentWidthRatio = illustrated ? 0.9 : hasSideVisual ? 0.47 : layout === "split" ? 0.62 : layout === "editorial" ? 0.86 : 0.9;
   const contentWidthPx = Math.max(180, width * 0.84 * contentWidthRatio);
   const headlineLayout = React.useMemo(() => fitTextBlock(scene.text, contentWidthPx, {
     maxFontSize: 92 * fontScale,
@@ -231,7 +341,7 @@ const Scene = ({ scene, index, total, durationFrames, transitionInFrames }) => {
     zIndex: 2
   };
   const Renderer = getSceneRenderer(visualType);
-  const specialVisual = Renderer && visualType !== "kinetic" ? <Renderer scene={scene} accent={accent} foreground={foreground} /> : null;
+  const specialVisual = Renderer && visualType !== "kinetic" && !(illustrated && scene.footageSrc) ? <Renderer scene={scene} accent={accent} foreground={foreground} /> : null;
   const kinetic = visualType === "kinetic";
   const grade = ({ warm: "saturate(1.08) sepia(.12) contrast(1.05)", cool: "saturate(.88) hue-rotate(8deg) contrast(1.05)", film: "saturate(.82) contrast(1.1) brightness(.96)", vivid: "saturate(1.25) contrast(1.06)", mono: "grayscale(1) contrast(1.08)", neutral: "saturate(.92) contrast(1.04)" })[scene.colorGrade] || "saturate(.92) contrast(1.04)";
   return <AbsoluteFill style={{ background: scene.footageSrc ? "#111827" : "linear-gradient(135deg, " + background + ", " + accent + "24)", color: foreground, overflow: "hidden", fontFamily: "Inter, Arial, sans-serif", opacity: transitionOpacity, clipPath, transform: "translate3d(" + (transitionX * width / 100) + "px," + (transitionY * height / 100) + "px,0) scale(" + transitionScale + ")" }}>
@@ -244,7 +354,7 @@ const Scene = ({ scene, index, total, durationFrames, transitionInFrames }) => {
     <BackgroundEffects type={scene.backgroundEffect || (scene.footageSrc ? "vignette" : "orbs")} accent={accent} intensity={scene.backgroundEffectIntensity ?? 0.26} />
     <SceneMotif type={scene.motif || "rings"} accent={accent} index={index} />
     {specialVisual}
-    <div style={{ position: "absolute", inset: "8%", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: alignLeft ? "flex-start" : "center" }}>
+    <div style={{ position: "absolute", inset: illustrated ? "54% 8% 11%" : "8%", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: alignLeft ? "flex-start" : "center" }}>
       <div style={contentStyle}>
         {scene.kicker ? <div style={{ color: accent, fontSize: kickerLayout.fontSize, fontWeight: 800, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 22, whiteSpace: "pre-line", overflowWrap: "anywhere" }}>{kickerLayout.text}</div> : null}
         {layout === "quote" ? <div style={{ color: accent, fontSize: 110 * fontScale, fontWeight: 900, lineHeight: 0.65, marginBottom: 20 }}>“</div> : null}
@@ -315,6 +425,7 @@ registerVideoPlugin({
   name: "builtin-visuals",
   sceneRenderers: {
     "data-chart": DataChartScene,
+    illustrated: IllustratedScene,
     diagram: DiagramScene,
     "app-mockup": AppMockupScene,
     waveform: WaveformScene,
