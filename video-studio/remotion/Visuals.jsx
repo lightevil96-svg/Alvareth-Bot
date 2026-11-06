@@ -130,14 +130,13 @@ export const AppMockupScene = ({ scene = {}, accent = "#68DDB8" }) => {
   const frame = useCurrentFrame();
   const { width, fps } = useVideoConfig();
   const mockup = scene.appMockup || {};
-  const rows = Array.isArray(mockup.rows) ? mockup.rows.slice(0, 5) : [];
   const innerWidth = Math.max(180, Math.min(width * 0.4, 470) - 58);
   const titleLayout = React.useMemo(() => fitTextBlock(mockup.title || scene.text, innerWidth, {
     maxFontSize: 22, minFontSize: 14, maxLines: 3, fontWeight: 900, letterSpacing: 0
   }), [mockup.title, scene.text, innerWidth]);
-  const rowLayouts = React.useMemo(() => rows.map(row => fitTextBlock(row, innerWidth - 42, {
+  const rowLayouts = React.useMemo(() => (Array.isArray(mockup.rows) ? mockup.rows.slice(0, 5) : []).map(row => fitTextBlock(row, innerWidth - 42, {
     maxFontSize: 12, minFontSize: 10, maxLines: 2, fontWeight: 650, letterSpacing: 0
-  })), [rows, innerWidth]);
+  })), [mockup.rows, innerWidth]);
   const ctaLayout = React.useMemo(() => fitTextBlock(mockup.cta, innerWidth - 28, {
     maxFontSize: 12, minFontSize: 10, maxLines: 2, fontWeight: 850, letterSpacing: 0
   }), [mockup.cta, innerWidth]);
