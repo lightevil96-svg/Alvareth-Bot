@@ -61,14 +61,14 @@ export const KineticTypography = ({
     minFontSize,
     maxLines,
     fontWeight: 850,
-    letterSpacing: -1.4
+    letterSpacing: 0
   }), [text, availableWidth, preferredSize, minFontSize, maxLines]);
   const words = layout.text.replace(/\n/g, " ").split(/\s+/).filter(Boolean);
   return <div style={{ display: "flex", width: availableWidth, maxWidth: "100%", minWidth: 0, flexWrap: "wrap", alignItems: "center", justifyContent: "center", gap: "0.08em 0.2em", textAlign: "center", padding: "0 1%", lineHeight: 1.08, boxSizing: "border-box" }}>
     {words.map((word, index) => {
       const progress = spring({ frame: Math.max(0, frame - index * 3), fps, config: { damping: 15, stiffness: 155, mass: 0.62 } });
       const emphasized = highlight && word.replace(/[.,!?;:]/g, "").toLowerCase() === String(highlight).toLowerCase();
-      return <span key={index} style={{ display: "inline-block", maxWidth: "100%", opacity: progress, transform: "translateY(" + (1 - progress) * 42 + "px) scale(" + (0.78 + progress * 0.22) + ")", color: emphasized ? accent : "inherit", fontSize: layout.fontSize, fontWeight: emphasized ? 950 : 850, letterSpacing: "-0.045em", overflowWrap: "anywhere", textShadow: "0 12px 35px rgba(0,0,0,.24)" }}>{word}</span>;
+      return <span key={index} style={{ display: "inline-block", maxWidth: "100%", opacity: progress, transform: "translateY(" + (1 - progress) * 42 + "px) scale(" + (0.78 + progress * 0.22) + ")", color: emphasized ? accent : "inherit", fontSize: layout.fontSize, fontWeight: emphasized ? 950 : 850, letterSpacing: 0, overflowWrap: "anywhere", textShadow: "0 12px 35px rgba(0,0,0,.24)" }}>{word}</span>;
     })}
   </div>;
 };
