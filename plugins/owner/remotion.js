@@ -530,7 +530,7 @@ async function startPromptJob(prompt, chat, fallbackConn) {
   );
 
   try {
-    // Storyboard JSON is supplied externally; VoxCPM2 starts later when narration is prepared.
+    // Storyboard JSON is supplied by the operator; the selected TTS provider starts only during media preparation.
     const plan = parseStoryboardInput(cleanPrompt);
     const project = compileVideoPlan(plan);
     project.voiceSettings = getVoiceSettings();
