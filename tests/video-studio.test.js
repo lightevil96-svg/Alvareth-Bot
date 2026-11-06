@@ -160,3 +160,24 @@ test("preserves visual and recurring character bibles through Remotion compilati
   assert.equal(project.visualBible.artStyle, "stylized cinematic 3D animation");
   assert.equal(project.scenes[0].aiVideoPrompt, "The fox slowly approaches a glowing firefly.");
 });
+
+test("compiles deterministic 3D scenes and a separate brand-credit overlay", () => {
+  const plan = normalizeVideoPlan({
+    title: "3D product reveal",
+    brandCredit: true,
+    scenes: [{
+      text: "Bentuk baru, pengalaman baru",
+      narration: "Kenali desain baru dengan tampilan yang lebih modern.",
+      visualType: "3d",
+      threeDStyle: "chrome",
+      threeDObject: "rings",
+      layout: "editorial"
+    }]
+  }, "Buat video 3D product reveal");
+  const project = compileVideoPlan(plan);
+  assert.equal(plan.brandCredit, true);
+  assert.equal(project.brandCredit, "Dibuat oleh ALVARETHBOT");
+  assert.equal(project.scenes[0].visualType, "3d");
+  assert.equal(project.scenes[0].threeDStyle, "chrome");
+  assert.equal(project.scenes[0].threeDObject, "rings");
+});
