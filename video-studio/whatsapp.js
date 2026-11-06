@@ -69,10 +69,7 @@ export function formatRemotionJob(job) {
 }
 
 export function getRemotionProviderReadiness(env = {}, fileExists = () => false, runtime = {}) {
-  const plannerModel = String(env.VIDEO_STUDIO_OLLAMA_MODEL || "qwen2.5:7b").trim();
-  const plannerUrl = String(env.VIDEO_STUDIO_OLLAMA_URL || "http://127.0.0.1:11434").trim();
   const voiceUrl = String(env.VIDEO_STUDIO_VOXCPM_URL || "http://127.0.0.1:7861").trim();
-  const plannerKey = Boolean(plannerModel);
   const voiceover = Boolean(voiceUrl);
   const videoWorkflow = String(env.VIDEO_STUDIO_COMFYUI_VIDEO_WORKFLOW_FILE || "").trim();
   const imageWorkflow = String(env.VIDEO_STUDIO_COMFYUI_IMAGE_WORKFLOW_FILE || "").trim();
@@ -142,11 +139,6 @@ export function getRemotionProviderReadiness(env = {}, fileExists = () => false,
   }
 
   return [
-    {
-      name: "AI prompt planner",
-      configured: plannerKey,
-      detail: "Target model " + plannerModel + (env.VIDEO_STUDIO_OLLAMA_MODEL ? "" : " (default)") + " pada " + plannerUrl + ". Kesehatan service diperiksa terpisah."
-    },
     {
       name: "Remotion + FFmpeg",
       configured: Boolean(runtime.remotionInstalled && runtime.ffmpegInstalled),
