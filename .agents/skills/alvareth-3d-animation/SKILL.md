@@ -63,6 +63,7 @@ Choose one primary object per scene: `orb`, `cube`, `torus`, `rings`, `crystal`,
 ## Typography and brand-credit regression
 
 - Brand credit must be the root field `brandCredit: true`, not text baked into AI footage or copied into a scene headline.
+- The storyboard normalizer also detects the exact joined phrase in visible scene fields, removes it from that field, and promotes it to the dedicated overlay.
 - The renderer owns the exact phrase `Dibuat oleh ALVARETHBOT` as three separately spaced text spans.
 - If text appears joined, first identify whether it is a Remotion overlay or pixels embedded in `footageSrc`. CSS and text normalization can fix only the overlay; regenerate or mask the source footage if the words are baked into the video.
 - Never use negative letter spacing for normal Indonesian captions.
