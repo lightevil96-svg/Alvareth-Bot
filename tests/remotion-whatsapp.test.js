@@ -11,7 +11,7 @@ test("opens the menu when no Remotion action is supplied", () => {
   assert.deepEqual(parseRemotionCommand(""), { action: "menu" });
 });
 
-test("accepts generate aliases and keeps the full natural-language prompt", () => {
+test("accepts generate aliases and preserves the submitted payload unchanged", () => {
   assert.deepEqual(parseRemotionCommand("generate Buat video cinematic tentang laut"), {
     action: "generate",
     prompt: "Buat video cinematic tentang laut"
@@ -22,7 +22,7 @@ test("accepts generate aliases and keeps the full natural-language prompt", () =
   });
 });
 
-test("treats an unrecognized first word as the beginning of a prompt", () => {
+test("treats an unrecognized first word as the beginning of a generate payload", () => {
   assert.deepEqual(parseRemotionCommand("Film pendek tentang seorang penjelajah"), {
     action: "generate",
     prompt: "Film pendek tentang seorang penjelajah"
@@ -66,6 +66,7 @@ test("reports optional media providers as unconfigured without secrets", () => {
     ffmpegInstalled: true
   });
   assert.equal(status.find(item => item.name === "Remotion + FFmpeg").configured, true);
+  assert.equal(status.some(item => /Ollama|AI prompt planner/i.test(item.name + " " + item.detail)), false);
   assert.equal(status.find(item => item.name === "Voice-over + subtitle sinkron").configured, false);
   assert.equal(status.find(item => item.name === "AI video footage").configured, false);
   assert.equal(status.find(item => item.name === "Character reference image").configured, false);
