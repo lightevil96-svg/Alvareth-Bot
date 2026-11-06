@@ -141,11 +141,11 @@ The repository updater defaults to main. On a staging checkout, set AUTO_UPDATE_
 
 ## External AI storyboard input
 
-Use the repository-root prompt-remotion.md as the authoritative prompt and schema guide. Any external AI model must return one valid JSON object with schemaVersion: 1, sourcePrompt containing the original user brief, and scenes containing 1–60 scene objects. Target duration must not exceed 300 seconds; each scene must be no longer than 20 seconds and long enough for its narration/reading.
+Use the repository-root prompt-remotion.md as the authoritative prompt and schema guide. Any external AI model must return one valid JSON object with schemaVersion: 1, sourcePrompt containing the original user brief, and scenes containing 1–60 scene objects. Target duration must not exceed 300 seconds; each initial scene estimate must be no longer than 20 seconds. Keep headlines short (ideally 3–8 words), subtext concise, and points brief.
 
 The WhatsApp payload limit is 24,000 characters. .remotion generate opens an input session; paste the JSON in the next message. .remotion <JSON> can start immediately. Plain-language briefs are intentionally rejected because the bot no longer has a local prompt-generating LLM.
 
-Duration fitting never compresses a scene below its estimated narration/reading requirement. If the target duration is too short, the bot rejects the storyboard and asks for shorter narration or a longer video instead of producing rushed speech.
+Storyboard fitting rejects a target that is shorter than its estimated narration/reading requirement. After TTS, each narrated scene is re-timed from its measured audio file: the video scene lasts at least 1.25 seconds or the actual voice duration plus a 0.25-second visual tail, whichever is longer. The original AI duration is only an estimate for narrated scenes. Scenes without narration retain their planned duration.
 
 ## Optional word alignment
 
@@ -172,7 +172,7 @@ Default AI-video selection is two scenes per job (configurable, maximum four); g
 
 The storyboard JSON assigns scene sound cues and overlay delays. engine/sound-design.js converts visual entry/transition/notification/callout events to frame positions shared with the scene. Procedural effects have bounded peaks, short fades, and speech attenuation. Cues too close together are deduplicated; effects that cannot finish before scene end are omitted. Not every movement needs a sound. Music is not forced.
 
-Narration audio (MP3 from Edge TTS or WAV from VoxCPM2) is probed and fully decoded before use. Scene durations expand to complete speech plus breathing space, quantized to project FPS. Overlong narration (more than 19.7 seconds spoken per scene) or more than 300 seconds total fails clearly rather than truncating speech.
+Narration audio (MP3 from Edge TTS or WAV from VoxCPM2) is probed and fully decoded before use. Every narrated scene is timed from its own measured voice-over duration, plus a short 0.25-second visual tail and a 1.25-second minimum hold, quantized to project FPS. This means short narration produces a shorter scene and longer narration produces a longer scene; the AI's original duration estimate cannot force all scenes to stay equal. Overlong narration (more than 19.7 seconds spoken per scene) or more than 300 seconds total fails clearly rather than truncating speech.
 
 ## Acceptance tests
 
