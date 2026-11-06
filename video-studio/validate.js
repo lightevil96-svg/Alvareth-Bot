@@ -1,3 +1,5 @@
+import { normalizeVoiceSettings } from "./voice-settings.js";
+
 const RATIOS = Object.freeze({
   "9:16": { width: 1080, height: 1920 },
   "16:9": { width: 1920, height: 1080 },
@@ -78,6 +80,7 @@ export function validateVideoProject(input) {
   const musicBpm = Number.isFinite(Number(input.musicBpm)) && Number(input.musicBpm) >= 0 && Number(input.musicBpm) <= 240 ? Number(input.musicBpm) : 0;
   const musicVolume = Number.isFinite(Number(input.musicVolume)) ? Math.max(0, Math.min(0.5, Number(input.musicVolume))) : 0.16;
   const soundEffects = input.soundEffects !== false;
+  const voiceSettings = normalizeVoiceSettings(input.voiceSettings);
   const rawScenes = Array.isArray(input.scenes) ? input.scenes : [];
   if (rawScenes.length < 1 || rawScenes.length > 60) throw new Error("Proyek harus memiliki 1 sampai 60 scene.");
   let sequentialCursor = 0;
@@ -244,6 +247,7 @@ export function validateVideoProject(input) {
     creativeBrief,
     visualBible,
     characterBible,
+    voiceSettings,
     voiceoverTracks,
     captions,
     mediaCredits,
