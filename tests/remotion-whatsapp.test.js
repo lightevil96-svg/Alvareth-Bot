@@ -37,6 +37,8 @@ test("routes status, history, guide, services, cancel and resend actions", () =>
   assert.equal(parseRemotionCommand("services-menu").action, "servicesMenu");
   assert.deepEqual(parseRemotionCommand("voice"), { action: "voice", argument: "" });
   assert.deepEqual(parseRemotionCommand("voice provider edge-tts"), { action: "voice", argument: "provider edge-tts" });
+  assert.deepEqual(parseRemotionCommand("style"), { action: "style", argument: "" });
+  assert.deepEqual(parseRemotionCommand("style cinematic-illustrated"), { action: "style", argument: "cinematic-illustrated" });
   assert.equal(parseRemotionCommand("install-menu").action, "installMenu");
   assert.equal(parseRemotionCommand("hardware").action, "hardware");
   assert.deepEqual(parseRemotionCommand("services start voice"), { action: "services", argument: "start voice" });
@@ -149,14 +151,14 @@ test("plugin rejects every non-owner action and binds prompt sessions to their i
   const replies=[], sent=[];
   const m={chat:'test-chat',sender:'owner-a',reply:async text=>replies.push(text)};
   const conn={sendMessage:async (...args)=>sent.push(args)};
-  for (const text of ['', 'generate', 'status', 'history', 'send id', 'services', 'services start voice', 'install', 'install status', 'guide', 'voice', 'cancel', 'buatkan video kopi']) {
+  for (const text of ['', 'generate', 'status', 'history', 'send id', 'services', 'services start voice', 'install', 'install status', 'guide', 'voice', 'style', 'cancel', 'buatkan video kopi']) {
     await handler(m,{conn,text,isROwner:false});
     assert.match(replies.at(-1),/hanya untuk owner/);
   }
   assert.equal(sent.length,0);
   await handler(m,{conn,text:'',isROwner:true,usedPrefix:'!'});
   const mainSections = sent[0][1].nativeFlow[0].sections;
-  assert.deepEqual(mainSections.map(section => section.rows.length), [6, 4]);
+  assert.deepEqual(mainSections.map(section => section.rows.length), [6, 5]);
   const mainIds = mainSections.flatMap(section => section.rows.map(row => row.id));
   assert.deepEqual(mainIds, [
     "!remotion generate",
@@ -168,7 +170,8 @@ test("plugin rejects every non-owner action and binds prompt sessions to their i
     "!remotion services-menu",
     "!remotion install-menu",
     "!remotion hardware",
-    "!remotion voice"
+    "!remotion voice",
+    "!remotion style"
   ]);
   await handler(m,{conn,text:"voice",isROwner:true,usedPrefix:"!"});
   const voiceIds = sent.at(-1)[1].nativeFlow[0].sections.flatMap(section=>section.rows.map(row=>row.id));
@@ -176,6 +179,15 @@ test("plugin rejects every non-owner action and binds prompt sessions to their i
   assert.ok(voiceIds.includes("!remotion voice model id-ID-GadisNeural"));
   assert.ok(voiceIds.includes("!remotion voice rate +10%"));
   assert.ok(voiceIds.includes("!remotion voice reset"));
+  assert.ok(voiceIds.includes("!remotion voice style cinematic"));
+  await handler(m,{conn,text:"style",isROwner:true,usedPrefix:"!"});
+  const styleIds = sent.at(-1)[1].nativeFlow[0].sections.flatMap(section=>section.rows.map(row=>row.id));
+  assert.ok(styleIds.includes("!remotion style cinematic-illustrated"));
+  assert.ok(styleIds.includes("!remotion style 3d-glass"));
+  await handler(m,{conn,text:"style 3d-glass",isROwner:true,usedPrefix:"!"});
+  const savedStyleSettings = JSON.parse(await readFile(dir + "/video-studio/style-settings.json", "utf8"));
+  assert.equal(savedStyleSettings.preset, "3d-glass");
+  await handler(m,{conn,text:"style reset",isROwner:true,usedPrefix:"!"});
   await handler(m,{conn,text:"voice provider voxcpm2",isROwner:true,usedPrefix:"!"});
   const savedVoiceSettings = JSON.parse(await readFile(dir + "/video-studio/voice-settings.json", "utf8"));
   assert.equal(savedVoiceSettings.provider, "voxcpm2");
