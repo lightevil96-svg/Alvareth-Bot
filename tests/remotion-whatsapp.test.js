@@ -167,8 +167,6 @@ test("plugin rejects every non-owner action and binds prompt sessions to their i
     "!remotion send",
     "!remotion guide",
     "!remotion cancel",
-    "!remotion services-menu",
-    "!remotion install-menu",
     "!remotion style",
     "!remotion voice",
     "!remotion services-menu",
@@ -195,7 +193,6 @@ test("plugin rejects every non-owner action and binds prompt sessions to their i
   const styleIds = sent.at(-1)[1].nativeFlow[0].sections.flatMap(section=>section.rows.map(row=>row.id));
   assert.ok(styleIds.includes("!remotion style cinematic-illustrated"));
   assert.ok(styleIds.includes("!remotion style 3d-glass"));
-  assert.ok(styleIds.includes("!remotion style cinematic-illustrated"));
   assert.ok(styleIds.includes("!remotion style kinetic-bold"));
   assert.ok(styleIds.includes("!remotion style clean-editorial"));
   assert.ok(styleIds.includes("!remotion style reset"));
