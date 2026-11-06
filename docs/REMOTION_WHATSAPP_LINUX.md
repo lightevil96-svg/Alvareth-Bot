@@ -73,7 +73,7 @@ The bootstrap does not require sudo, apt, or systemd. GPU mode requires NVIDIA t
 
 ## Install engine from WhatsApp
 
-After the latest commit is on the server and the bot is running, an owner can install the default online narration provider without opening the console:
+Optional: if you want the slower local VoxCPM2 provider instead of the default online Edge TTS, an owner can install it without opening the console:
 
 ```text
 .remotion install
@@ -98,6 +98,10 @@ This creates a lightweight `.venv-edge-tts` using uv/Python 3.11 and installs on
 ```
 
 Available Indonesian voices are `id-ID-GadisNeural` (female) and `id-ID-ArdiNeural` (male). The menu also changes speech rate, pitch, and volume. Settings are persisted and snapshotted into each new job. Edge TTS returns word-boundary events used for subtitle timing. If the online service is unavailable, switch to VoxCPM2 only if its local runtime and model are installed.
+
+## Optional local VoxCPM2 provider
+
+Use `.remotion install` only if you want to download and run the 2B local speech model. It is not required for Edge TTS.
 
 Other commands:
 
