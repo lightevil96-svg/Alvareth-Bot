@@ -115,15 +115,28 @@ test('local policy rejects hosted endpoints, credentials and redirect destinatio
 
 test('local inference HTTP requests can wait for a slow response without a deadline', async t => {
   let completed = false;
-  const base = await server(t, (_req, res) => {
-    setTimeout(() => {
-      completed = true;
-      res.end(JSON.stringify({ ready: true }));
-    }, 250);
+  let received = null;
+  const base = await server(t, (req, res) => {
+    let raw = '';
+    req.setEncoding('utf8');
+    req.on('data', chunk => { raw += chunk; });
+    req.on('end', () => {
+      received = { contentLength: req.headers['content-length'], body: JSON.parse(raw) };
+      setTimeout(() => {
+        completed = true;
+        res.end(JSON.stringify({ ready: true }));
+      }, 250);
+    });
   });
   const startedAt = Date.now();
-  const result = await localJson(base, {}, null);
+  const result = await localJson(base, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ text: 'Tes tanpa batas waktu' })
+  }, null);
   assert.deepEqual(result, { ready: true });
+  assert.deepEqual(received.body, { text: 'Tes tanpa batas waktu' });
+  assert.equal(Number(received.contentLength), Buffer.byteLength(JSON.stringify({ text: 'Tes tanpa batas waktu' })));
   assert.equal(completed, true);
   assert.ok(Date.now() - startedAt >= 200);
 });
