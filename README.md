@@ -168,32 +168,36 @@ Sebelum mengubah kode, AI/developer wajib membaca [`AGENTS.md`](AGENTS.md), [`AI
 
 ## Remotion Video Studio — WhatsApp-only
 
-Alvareth Video Studio hanya dioperasikan melalui WhatsApp oleh owner. Tidak ada lagi integrasi LightJurnal remote-render API, public Video Studio endpoint, Cloudflare Tunnel, atau kebutuhan token tunnel/API eksternal.
+Alvareth Video Studio dioperasikan melalui WhatsApp oleh owner. Produksi berjalan di server bot sendiri dan MP4 dikirim kembali ke chat asal. Tidak ada kebutuhan website render eksternal, Cloudflare Tunnel, atau token tunnel/API untuk alur ini.
 
-Alur produksi berjalan di server bot sendiri:
+**Alur produksi saat ini:**
 
-owner WhatsApp → Ollama/Qwen lokal → storyboard/compiler → antrean render → VoxCPM2 lokal → opsional ComfyUI lokal → Remotion + FFmpeg → MP4 dikirim kembali ke chat WhatsApp asal.
+owner WhatsApp → ChatGPT (penyusunan storyboard di luar bot) → JSON storyboard → parser/normalizer/compiler → antrean render → VoxCPM2 lokal → ComfyUI lokal opsional → Remotion + FFmpeg → MP4 dikirim ke WhatsApp.
+
+Bot **tidak menjalankan Ollama atau LLM lokal**. ChatGPT menghasilkan satu objek JSON mengikuti [prompt-remotion.md](prompt-remotion.md); bot hanya mem-parsing, memvalidasi, mengompilasi, dan merendernya.
 
 ### Perintah owner WhatsApp
 
-- .remotion membuka menu produksi.
-- .remotion generate meminta brief video pada pesan berikutnya.
-- .remotion &lt;prompt&gt; langsung memulai produksi dari prompt.
-- .remotion status, .remotion history, .remotion send, .remotion guide, dan .remotion services mengelola pekerjaan video.
-- .remotion install memasang runtime dan model lokal melalui installer Linux; .remotion install cpu memilih mode CPU secara eksplisit; .remotion install status menampilkan progres dan log.
-- .remotion services start voice memulai adapter VoxCPM2 secara eksplisit; .remotion services start planner memulai Ollama. Tanpa subperintah start, services hanya memeriksa status dan tidak memuat model.
+- `.remotion` membuka menu produksi.
+- `.remotion generate` meminta storyboard JSON pada pesan berikutnya.
+- `.remotion <JSON>` langsung memvalidasi storyboard dan memulai produksi. Brief teks biasa tidak diproses.
+- `.remotion status`, `.remotion history`, `.remotion send`, dan `.remotion guide` mengelola pekerjaan video.
+- `.remotion services` memeriksa Remotion, FFmpeg, VoxCPM2, ComfyUI, dan workflow; `.remotion services start voice` memulai adapter VoxCPM2.
+- `.remotion install` memasang runtime dan bobot model VoxCPM2; `.remotion install cpu` memilih mode CPU secara eksplisit; `.remotion install status` menampilkan progres dan log.
+- `.remotion hardware` memeriksa CPU, RAM, storage, dan perangkat grafis server.
 - ComfyUI, model footage/image/audio, dan workflow API JSON tidak termasuk installer inti; masing-masing harus dipasang, diaudit, dan dikonfigurasi terpisah.
-- Status workflow ComfyUI hanya hijau jika file tersedia dan SHA-256 persisnya disetujui; character reference juga membutuhkan placeholder `{{REFERENCE_IMAGE}}` pada workflow video.
 
-Semua akses produksi dan instalasi tetap dibatasi untuk owner melalui pemeriksaan plugin. Hasil MP4 dikirim langsung melalui Baileys ke chat WhatsApp yang memulai pekerjaan dan disimpan pada direktori data Video Studio.
+Semua akses produksi dan instalasi dibatasi untuk owner melalui pemeriksaan plugin. Hasil MP4 dikirim langsung melalui Baileys ke chat WhatsApp yang memulai pekerjaan dan disimpan pada direktori data Video Studio.
 
-### Engine lokal
+### Engine lokal dan batas kemampuan
 
-- Ollama + Qwen: menyusun storyboard dan arahan visual/audio.
-- VoxCPM2: menghasilkan voice-over secara lokal.
-- Remotion + FFmpeg: menyusun, mengedit, dan merender MP4.
-- SFX lokal: memberi efek suara sesuai kejadian dan gerakan.
-- ComfyUI: opsional untuk workflow visual open-source yang sudah diperiksa. Tanpa workflow, engine tetap dapat membuat motion graphics.
-- Musik: opsional; tidak dipaksakan jika tidak tersedia.
+- **ChatGPT:** menyusun storyboard JSON secara manual di luar bot; tidak ada API call atau proses LLM di VPS.
+- **VoxCPM2:** menghasilkan voice-over Bahasa Indonesia secara lokal jika service/model tersedia.
+- **Remotion + FFmpeg:** menyusun dan merender komposisi MP4.
+- **SFX lokal:** memberi efek suara berdasarkan kejadian dan gerakan.
+- **ComfyUI:** opsional untuk workflow visual open-source yang sudah diperiksa. Tanpa workflow footage, engine menghasilkan motion graphics, bukan animasi 3D karakter penuh.
+- **Musik:** opsional; tidak dipaksakan jika workflow/track tidak tersedia.
 
-Lihat panduan instalasi Linux (docs/REMOTION_WHATSAPP_LINUX.md) dan audit lisensi serta skills (docs/REMOTION_LOCAL_LICENSES.md). HTTP health-check server Alvareth (jika PORT diaktifkan) hanya untuk pemantauan hosting dan tidak menjadi jalur produksi atau pengiriman video.
+Untuk setup Linux, lihat [docs/REMOTION_WHATSAPP_LINUX.md](docs/REMOTION_WHATSAPP_LINUX.md). Untuk schema JSON, batas prompt, enum, dan contoh storyboard lengkap, lihat [prompt-remotion.md](prompt-remotion.md). Untuk audit lisensi dan skills, lihat [docs/REMOTION_LOCAL_LICENSES.md](docs/REMOTION_LOCAL_LICENSES.md).
+
+HTTP health-check server Alvareth (jika PORT diaktifkan) hanya untuk pemantauan hosting dan bukan jalur produksi atau pengiriman video.
