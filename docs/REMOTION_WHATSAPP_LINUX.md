@@ -135,7 +135,7 @@ mkdir -p "$HOME/alvareth-models/whisper"
 cp /tmp/alvareth-whisper-download/base.pt "$HOME/alvareth-models/whisper/base.pt"
 ```
 
-Restart the TTS service with VOXCPM_ALIGNMENT_MODEL_PATH=$HOME/alvareth-models/whisper/base.pt. Without valid alignment, captions remain scene-synchronized; word-highlight timing is disabled rather than filled with fabricated timestamps. Each scene is synthesized separately, so speaker/prosody continuity must still be evaluated by listening.
+Restart the TTS service with VOXCPM_ALIGNMENT_MODEL_PATH=$HOME/alvareth-models/whisper/base.pt. Without valid alignment, runtime still generates approximate caption timing using measured WAV duration and syllable/punctuation weights. This is not forced alignment and may not match every word exactly. Each scene is synthesized separately, so speaker/prosody continuity must still be evaluated by listening.
 
 ## Optional ComfyUI
 
