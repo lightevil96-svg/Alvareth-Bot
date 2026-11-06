@@ -11,7 +11,9 @@ const LAYOUTS = ["hero", "editorial", "split", "stat", "quote", "steps", "outro"
 const MOTIFS = ["rings", "orbit", "wave", "grid", "bars", "ribbon", "spark", "none"];
 const MOTIONS = ["fade-up", "scale-in", "slide-left", "slide-right", "reveal", "float", "count-up"];
 const TRANSITIONS = ["cut", "fade", "crossfade", "wipe", "wipe-left", "wipe-right", "wipe-up", "wipe-down", "slide", "slide-left", "slide-right", "slide-up", "slide-down", "zoom", "glitch", "dissolve", "flash", "dip-to-black"];
-const VISUAL_TYPES = ["cinematic", "kinetic", "editorial", "data-chart", "diagram", "app-mockup", "waveform"];
+const VISUAL_TYPES = ["cinematic", "kinetic", "editorial", "data-chart", "diagram", "app-mockup", "waveform", "3d"];
+const THREE_D_STYLES = ["glass", "chrome", "clay", "neon", "soft"];
+const THREE_D_OBJECTS = ["orb", "cube", "torus", "rings", "crystal", "cluster"];
 const BACKGROUND_EFFECTS = ["none", "orbs", "particles", "grid", "waves", "dots", "vignette"];
 const CAMERA_MOTIONS = ["static", "push-in", "pull-out", "pan-left", "pan-right", "tilt-up", "tilt-down", "drift"];
 const COLOR_GRADES = ["neutral", "warm", "cool", "film", "vivid", "mono"];
@@ -160,6 +162,8 @@ export function validateVideoProject(input) {
       generateAiFootage: scene.generateAiFootage === true,
       aiVideoPrompt: text(scene.aiVideoPrompt, 1800),
       visualType,
+      threeDStyle: THREE_D_STYLES.includes(scene.threeDStyle) ? scene.threeDStyle : "glass",
+      threeDObject: THREE_D_OBJECTS.includes(scene.threeDObject) ? scene.threeDObject : "orb",
       backgroundEffect: BACKGROUND_EFFECTS.includes(scene.backgroundEffect) ? scene.backgroundEffect : "orbs",
       backgroundEffectIntensity: Number.isFinite(Number(scene.backgroundEffectIntensity)) ? Math.max(0, Math.min(0.65, Number(scene.backgroundEffectIntensity))) : 0.26,
       cameraMotion: CAMERA_MOTIONS.includes(scene.cameraMotion) ? scene.cameraMotion : "static",
@@ -239,6 +243,7 @@ export function validateVideoProject(input) {
   return {
     title, mode, ratio, width: dimensions.width, height: dimensions.height, fps,
     language: text(input.language, 12) || "id",
+    brandCredit: input.brandCredit === true || /dibuat\s*oleh\s*alvarethbot/i.test(text(input.brandCredit, 80)) ? "Dibuat oleh ALVARETHBOT" : "",
     musicTrackSrc, musicBpm, musicVolume, captionStyle, captionPosition,
     aiFootageCount: Number(input.aiFootageCount) || 0,
     scenes, musicStyle, soundEffects, durationSeconds, durationInFrames,
