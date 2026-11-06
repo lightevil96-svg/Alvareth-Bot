@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import path from "node:path";
-import { mkdir, rm, stat } from "node:fs/promises";
+import { copyFile, lstat, mkdir, rm, stat } from "node:fs/promises";
 import { renderEditVideo } from "./engine.js";
 import { validateEditPlan } from "./schema.js";
 
@@ -65,7 +65,7 @@ async function pump() {
   job.updatedAt = new Date().toISOString();
   try {
     await ensureDirectories();
-    const workDir = path.join(WORK_DIR, job.id);
+    const workDir = job.workDir || path.join(WORK_DIR, job.id);
     job.stage = "rendering";
     const result = await renderEditVideo({
       sourcePath: job.sourcePath,
@@ -102,12 +102,13 @@ async function pump() {
     await rm(job.outputPath, { force: true }).catch(() => {});
     try { await job.onError?.(publicJob(job)); } catch {}
   } finally {
+    await rm(job.workDir || path.join(WORK_DIR, job.id), { recursive: true, force: true }).catch(() => {});
     state.running = false;
     setImmediate(pump);
   }
 }
 
-export function enqueueEditJob(input) {
+export async function enqueueEditJob(input) {
   if (!input || typeof input !== "object") throw new Error("Data pekerjaan edit tidak valid.");
   if (typeof input.sourcePath !== "string" || !input.sourcePath.trim()) throw new Error("File sumber belum tersedia.");
   const active = Array.from(state.jobs.values()).filter(job => ["queued", "rendering"].includes(job.status)).length;
@@ -116,13 +117,26 @@ export function enqueueEditJob(input) {
   const settings = input.settings || {};
   const plan = validateEditPlan(input.plan, { settings });
   const id = randomUUID().replace(/-/g, "").slice(0, 10);
+  const workDir = path.join(WORK_DIR, id);
+  await ensureDirectories();
+  const sourceInfo = await lstat(input.sourcePath);
+  if (sourceInfo.isSymbolicLink() || !sourceInfo.isFile()) throw new Error("Sumber video harus berupa file biasa, bukan symbolic link.");
+  await mkdir(workDir, { recursive: true, mode: 0o700 });
+  const jobSourcePath = path.join(workDir, "source.source");
+  try {
+    await copyFile(input.sourcePath, jobSourcePath);
+  } catch (error) {
+    await rm(workDir, { recursive: true, force: true }).catch(() => {});
+    throw new Error("Sumber video tidak dapat disalin ke ruang kerja render: " + String(error?.message || error).slice(0, 240));
+  }
   const now = new Date().toISOString();
   const job = {
     id,
     title: plan.title,
     sender: String(input.sender || ""),
     chat: String(input.chat || ""),
-    sourcePath: input.sourcePath,
+    sourcePath: jobSourcePath,
+    workDir,
     outputPath: path.join(RENDER_DIR, id + ".mp4"),
     plan,
     settings,
