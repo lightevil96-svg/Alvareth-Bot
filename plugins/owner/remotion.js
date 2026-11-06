@@ -114,7 +114,7 @@ async function showMenu(m, conn, usedPrefix = ".") {
     {
       header: "",
       title: "🧠 Panduan prompt",
-      description: "Contoh brief untuk hasil yang lebih terarah.",
+      description: "Cara meminta ChatGPT membuat JSON storyboard yang valid.",
       id: usedPrefix + "remotion guide"
     },
     {
@@ -176,11 +176,11 @@ function activeJobs() {
 async function startPromptJob(prompt, chat, fallbackConn) {
   const cleanPrompt = String(prompt || "").trim();
   if (cleanPrompt.length < 8) {
-    await sendText(chat, "Prompt terlalu singkat. Jelaskan ide videonya minimal beberapa kata.", fallbackConn);
+    await sendText(chat, "JSON storyboard terlalu singkat. Tempel objek JSON lengkap dari ChatGPT.", fallbackConn);
     return;
   }
   if (cleanPrompt.length > MAX_PROMPT_CHARS) {
-    await sendText(chat, "Prompt maksimal " + MAX_PROMPT_CHARS + " karakter. Ringkas brief lalu kirim ulang.", fallbackConn);
+    await sendText(chat, "JSON storyboard maksimal " + MAX_PROMPT_CHARS + " karakter. Minta ChatGPT membuat output yang lebih ringkas.", fallbackConn);
     return;
   }
 
@@ -200,9 +200,9 @@ async function startPromptJob(prompt, chat, fallbackConn) {
   preparing.add(chat);
   await sendText(
     chat,
-    "🧠 *AI Director mulai bekerja*\n" +
-    "Sedang memahami brief, menyusun alur cerita, menentukan scene, visual, gerakan, dan arahan audio.\n" +
-    "Kamu tidak perlu mengatur FPS, rasio, warna, atau durasi scene secara manual.",
+    "🧩 *Memeriksa storyboard ChatGPT*\n" +
+    "Memvalidasi struktur JSON, scene, durasi narasi, visual, dan batas render.\n" +
+    "Setelah lolos validasi, video langsung masuk antrean produksi.",
     fallbackConn
   );
 
@@ -230,7 +230,7 @@ async function startPromptJob(prompt, chat, fallbackConn) {
       chat,
       "❌ *Video belum dapat diproses*\n" +
       String(error?.message || error).slice(0, 900) +
-      "\n\nPeriksa .remotion services untuk melihat provider yang belum siap.",
+      "\n\nPastikan JSON mengikuti prompt-remotion.md. Jika storyboard valid tetapi audio atau footage gagal, cek .remotion services.",
       fallbackConn
     );
   } finally {
@@ -415,12 +415,12 @@ async function showServices(m) {
 
 async function showGuide(m) {
   return m.reply(
-    "🧠 *PANDUAN PROMPT REMOTION*\\n\\n" +
-    "Storyboard dibuat di ChatGPT, bukan oleh AI lokal di VPS.\\n" +
-    "Buka panduan lengkap: https://github.com/lightevil96-svg/Alvareth-Bot/blob/feat/remotion-whatsapp-linux/prompt-remotion.md\\n\\n" +
-    "1. Kirim brief videomu ke ChatGPT dengan mengikuti panduan tersebut.\\n" +
-    "2. Minta satu objek JSON lengkap dengan schemaVersion: 1.\\n" +
-    "3. Salin seluruh JSON, lalu ketik .remotion generate dan tempel JSON itu.\\n\\n" +
+    "🧠 *PANDUAN PROMPT REMOTION*\n\n" +
+    "Storyboard dibuat di ChatGPT, bukan oleh AI lokal di VPS.\n" +
+    "Buka panduan lengkap: https://github.com/lightevil96-svg/Alvareth-Bot/blob/feat/remotion-whatsapp-linux/prompt-remotion.md\n\n" +
+    "1. Kirim brief videomu ke ChatGPT dengan mengikuti panduan tersebut.\n" +
+    "2. Minta satu objek JSON lengkap dengan schemaVersion: 1.\n" +
+    "3. Salin seluruh JSON, lalu ketik .remotion generate dan tempel JSON itu.\n\n" +
     "Batas input 24.000 karakter; 1–60 scene; maksimal 20 detik per scene dan 300 detik total. Brief teks biasa tidak diproses."
   );
 }
@@ -437,9 +437,9 @@ async function handleCommand(m, { conn, usedPrefix, text }) {
     const ttl = positiveInt(process.env.VIDEO_STUDIO_WA_PROMPT_TTL_MS, DEFAULT_SESSION_TTL_MS, 60000, 3600000);
     sessions.set(m.chat, { createdAt: Date.now(), sender: m.sender, ttl });
     return m.reply(
-      "🎬 *KIRIM PROMPT VIDEO*\n\n" +
-      "Ceritakan video yang ingin dibuat. Jelaskan ide, karakter, suasana, gaya visual, dan pesan yang ingin disampaikan.\n" +
-      "Tidak perlu mengatur FPS, resolusi, warna, atau durasi setiap scene.\n\n" +
+      "🎬 *KIRIM STORYBOARD JSON*\n\n" +
+      "Tempel JSON storyboard yang sudah dibuat ChatGPT sesuai panduan prompt-remotion.md.\n" +
+      "Jangan kirim brief biasa di sesi ini. Bot hanya memvalidasi JSON dan menjalankan render.\n\n" +
       "Sesi input berlaku " + Math.round(ttl / 60000) + " menit. Ketik .remotion cancel untuk membatalkan."
     );
   }
