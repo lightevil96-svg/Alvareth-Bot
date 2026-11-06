@@ -47,7 +47,7 @@ Pick one visual language per video:
 - `neon`: emissive accents, dark environments, restrained glow.
 - `soft`: matte premium materials, gentle lighting and calm motion.
 
-Choose one primary object per scene: `orb`, `cube`, `torus`, `rings`, `crystal`, or `cluster`. Add supporting particles or rings only when they improve depth or communicate an idea.
+Choose one primary object per scene: `orb`, `cube`, `torus`, `rings`, `crystal`, `cluster`, or `isometric` for a miniature diorama. Add supporting particles or rings only when they improve depth or communicate an idea.
 
 ## Remotion implementation rules
 
