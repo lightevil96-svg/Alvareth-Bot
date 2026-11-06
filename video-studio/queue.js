@@ -67,14 +67,20 @@ function update(job, values) {
   Object.assign(job, values, { updatedAt: new Date().toISOString() });
   persist();
 }
+function logJob(job, message) {
+  console.log("[" + new Date().toISOString() + "] [REMOTION] [" + job.id + "] " + message);
+}
 async function pump() {
   if (running) return;
   const next = Array.from(jobs.values()).find(job => job.status === "queued");
   if (!next) return;
   running = true;
   const outputPath = join(OUTPUT_DIR, next.id + ".mp4");
+  const startedAt = Date.now();
+  let lastLoggedProgress = 0;
   try {
     update(next, { status: "rendering", stage: "preparing-media", progress: 0, error: null, outputPath });
+    logJob(next, "Mulai: " + next.project.title + " | " + next.project.scenes.length + " scene | " + next.project.durationSeconds + " detik.");
     const prepared = await prepareVideoMedia(next.project, next.id, stage => {
       const labels = {
         voiceover: "preparing-voiceover",
@@ -82,24 +88,44 @@ async function pump() {
         footage: "searching-footage",
         "ai-music": "generating-ai-music"
       };
-      update(next, { stage: labels[stage] || "preparing-media" });
+      const nextStage = labels[stage] || "preparing-media";
+      if (next.stage !== nextStage) {
+        update(next, { stage: nextStage });
+        const stageNames = {
+          "preparing-voiceover": "Membuat voice-over dan subtitle",
+          "generating-ai-video": "Menyiapkan footage AI",
+          "searching-footage": "Mencari footage stok",
+          "generating-ai-music": "Menyiapkan musik AI"
+        };
+        logJob(next, "Tahap: " + (stageNames[nextStage] || nextStage));
+      }
     });
     next.project = validateVideoProject(prepared);
     update(next, { project: next.project, stage: "rendering" });
+    logJob(next, "Aset media siap. Memulai rendering MP4.");
     await renderVideoProject(next.project, outputPath, progress => {
-      if (progress !== next.progress) update(next, { stage: "rendering", progress });
+      const normalized = Math.max(0, Math.min(100, Math.round(Number(progress) || 0)));
+      if (normalized !== next.progress) update(next, { stage: "rendering", progress: normalized });
+      const mark = Math.floor(normalized / 5) * 5;
+      if (mark >= 5 && mark > lastLoggedProgress) {
+        lastLoggedProgress = mark;
+        logJob(next, "Progres render: " + mark + "%");
+      }
     });
     update(next, { stage: "verifying-output" });
+    logJob(next, "Rendering selesai. Memverifikasi MP4 dan audio."); 
     await verifyVideoOutput(outputPath, next.project);
     const sizeBytes = statSync(outputPath).size;
     cleanupGeneratedAssets(next.id);
     update(next, { status: "completed", stage: "completed", progress: 100, sizeBytes, outputPath });
-    console.log("[VIDEO STUDIO] Render selesai: " + next.id + " (" + sizeBytes + " bytes)");
+    logJob(next, "SELESAI dalam " + ((Date.now() - startedAt) / 1000).toFixed(1) + " detik | MP4 " + sizeBytes + " byte.");
   } catch (error) {
     try { if (existsSync(outputPath)) unlinkSync(outputPath); }
     catch (cleanupError) { console.warn("[VIDEO STUDIO] Gagal membersihkan render parsial:", cleanupError.message); }
     cleanupGeneratedAssets(next.id);
-    update(next, { status: "failed", stage: "failed", error: String(error?.message || error).slice(0, 500), outputPath: null });
+    const detail = String(error?.message || error).slice(0, 500);
+    logJob(next, "GAGAL pada tahap " + String(next.stage || "tidak diketahui") + ": " + detail);
+    update(next, { status: "failed", stage: "failed", error: detail, outputPath: null });
     console.error("[VIDEO STUDIO] Render gagal " + next.id + ":", error);
   } finally {
     running = false;
