@@ -23,7 +23,7 @@ function diskMenu(prefix = ".") {
 }
 
 async function showReport(m, { scan = false } = {}) {
-  const report = getDiskReport();
+  const report = await getDiskReport();
   const fs = report.filesystem;
   const lines = [
     "💽 *LAPORAN STORAGE ALVARETH*",
