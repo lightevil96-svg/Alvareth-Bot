@@ -9,6 +9,8 @@
 
 ## Pembaruan terbaru
 
+- 2026-11-06: Added owner-only .hermes maintenance bridge in plugins/owner/hermes.js and lib/hermes-agent.js. It invokes the locally configured Hermes CLI through the existing Baileys connection, supports audit/ask/patch/pending/apply/undo/verify, and stores chat session IDs and patch backups under ALVARETH_DATA_DIR/hermes/. The agent gets file/web/search/clarify tools only (no terminal); HERMES_WRITE_SAFE_ROOT confines proposal writes to a temporary workspace. Patch application requires an explicit owner command, Git clean target files, backup, and JS syntax checks. Setup: docs/HERMES_AGENT.md.
+
 - 2026-11-06: Added repository-root `prompt-remotion.md`, a strict ChatGPT guide with the current JSON schema, enum allowlists, capability limits, and a complete Indonesian story example. WhatsApp accepts up to 24,000 characters; plain-language briefs are intentionally rejected.
 - 2026-11-06: Planner is now an offline JSON parser/normalizer only. It has no Ollama, Qwen, or ChatGPT API dependency.
 - 2026-11-06: Scene duration fitting rejects targets shorter than estimated narration/reading time instead of compressing speech. Ollama installer/bootstrap, local service management, environment settings, and obsolete archive extractor were removed; VoxCPM2-only installation and hardware diagnostics remain.
@@ -113,6 +115,16 @@ Perintah dasar:
 - Jalankan tes/skrip unit atau tes manual tambahan bila tersedia.
 
 Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes nyata, commit/PR, serta batasan yang belum diuji. Tes sintaks bukan bukti API pihak ketiga atau pengiriman WhatsApp berhasil.
+
+## Hermes Agent — owner-only maintenance bridge
+
+- .hermes is an optional CLI bridge to Nous Research Hermes Agent, not a second WhatsApp gateway. Alvareth keeps its existing Baileys socket; never pair a second Hermes WhatsApp bridge to the same number.
+- Install/configure Hermes separately as the same server user/container that runs Node.js. The process must resolve HERMES_BIN (default hermes) and use the configured HERMES_HOME; credentials belong in Hermes, not Alvareth .env.
+- plugins/owner/hermes.js rechecks isROwner === true. lib/hermes-agent.js uses spawn without a shell, allowlists child environment variables, and sets HERMES_WRITE_SAFE_ROOT to a temporary workspace.
+- Enabled toolsets are file/web/search/clarify only. No terminal, shell, code execution, WhatsApp gateway, or bot credential environment is passed to Hermes. Prompt rules forbid secrets/runtime directories; Hermes secret redaction remains enabled.
+- .hermes audit and .hermes ask are non-mutating. .hermes patch <path> <instruction> produces a unified diff in a temporary workspace and queues it for review. .hermes apply <id> is a separate explicit owner action that validates paths, rejects local edits/symlinks/binary/rename/delete/package changes, backs up files, runs git apply --check, and syntax-checks JS before leaving the patch applied. .hermes undo <id> reverses it when context still matches.
+- .hermes verify runs npm test. Patch application does not commit, push, or deploy. Review git diff and test results before committing.
+- Configuration: HERMES_BIN, HERMES_HOME, HERMES_TIMEOUT_MS, and HERMES_MAX_PROMPT_CHARS; see .env.example and docs/HERMES_AGENT.md.
 
 ## Video Studio — prompt-first WhatsApp creative director
 
