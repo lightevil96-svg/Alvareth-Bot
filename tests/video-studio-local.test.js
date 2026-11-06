@@ -27,23 +27,39 @@ function env(t, key, value) {
   if (value === undefined) delete process.env[key]; else process.env[key] = value;
   t.after(() => old === undefined ? delete process.env[key] : process.env[key] = old);
 }
-test('local policy rejects hosted endpoints, credentials and redirect destinations', () => {
+test('local media policy rejects hosted endpoints, credentials and redirect destinations', () => {
   for (const url of ['https://api.openai.com', 'http://localhost', 'http://127.0.0.1.evil.test', 'http://user:pass@127.0.0.1', 'file:///tmp/x']) assert.throws(() => localServiceUrl(url));
-  assert.equal(localServiceUrl('http://127.0.0.1:11434', '/api/chat'), 'http://127.0.0.1:11434/api/chat');
+  assert.equal(localServiceUrl('http://127.0.0.1:7861', '/health'), 'http://127.0.0.1:7861/health');
 });
-test('planner uses local Ollama JSON contract even with legacy API credentials present', async t => {
-  let received;
-  const base = await server(t, async (req, res) => {
-    let text = ''; for await (const chunk of req) text += chunk;
-    received = { path: req.url, auth: req.headers.authorization, body: JSON.parse(text) };
-    res.end(JSON.stringify({ message: { content: JSON.stringify({ title: 'Kopi', scenes: [{ text: 'Kopi lokal', narration: 'Nikmati kopi lokal.' }] }) } }));
-  });
-  env(t, 'VIDEO_STUDIO_OLLAMA_URL', base);
-  env(t, 'VIDEO_STUDIO_AI_API_KEY', 'not-a-real-key');
-  const plan = await planVideoPrompt('Buat video promosi kopi lokal, tanpa musik.');
-  assert.equal(received.path, '/api/chat'); assert.equal(received.auth, undefined);
-  assert.equal(received.body.stream, false); assert.equal(received.body.format, 'json');
+test('planner accepts ChatGPT storyboard JSON without calling a local inference service', () => {
+  const plan = planVideoPrompt(JSON.stringify({
+    schemaVersion: 1,
+    sourcePrompt: 'Buat video promosi kopi lokal tanpa musik.',
+    title: 'Kopi Lokal',
+    category: 'product',
+    ratio: '9:16',
+    fps: 30,
+    targetDurationSeconds: 6,
+    musicStyle: 'none',
+    captionStyle: 'subtitle',
+    scenes: [{
+      id: 'scene-01',
+      text: 'Kopi lokal pilihan',
+      narration: 'Nikmati cita rasa kopi lokal yang diracik dengan sepenuh hati.',
+      durationSeconds: 6
+    }]
+  }));
+  assert.equal(plan.title, 'Kopi Lokal');
+  assert.equal(plan.sourcePrompt, 'Buat video promosi kopi lokal tanpa musik.');
   assert.equal(plan.musicStyle, 'none');
+  assert.equal(plan.scenes.length, 1);
+});
+
+test('planner rejects plain-language briefs and directs the owner to the ChatGPT JSON guide', () => {
+  assert.throws(
+    () => planVideoPrompt('Buat video promosi kopi lokal, tanpa musik.'),
+    /JSON storyboard dari ChatGPT/
+  );
 });
 test('voice adapter probes and decodes actual WAV fixture; aligns scenes to integer frames', async t => {
   const dir = await mkdtemp(join(tmpdir(), 'voxcpm-contract-'));
