@@ -28,7 +28,7 @@ const ALLOWED = {
 };
 
 function cleanText(value, maxLength) {
-  return String(value == null ? "" : value).replace(/\u0000/g, "").trim().slice(0, maxLength);
+  return String(value == null ? "" : value).replace(/\x00/g, "").trim().slice(0, maxLength);
 }
 function pick(value, choices, fallback) {
   return choices.includes(value) ? value : fallback;
