@@ -1,6 +1,6 @@
 # Panduan Prompt Remotion — Alvareth Bot
 
-**Tujuan:** menjadi kontrak kerja bagi model AI pilihan pengguna saat menyusun storyboard untuk fitur WhatsApp `.remotion`. Output model AI pilihan pengguna akan ditempel langsung ke bot. Bot tidak lagi menjalankan Ollama atau LLM lokal untuk menyusun cerita; bot hanya mem-parsing, menormalisasi, memvalidasi, mengompilasi, dan merender JSON yang diberikan.
+**Tujuan:** menjadi kontrak kerja bagi model AI eksternal saat menyusun storyboard untuk fitur WhatsApp `.remotion`. Output model AI eksternal akan ditempel langsung ke bot. Bot tidak lagi menjalankan Ollama atau LLM lokal untuk menyusun cerita; bot hanya mem-parsing, menormalisasi, memvalidasi, mengompilasi, dan merender JSON yang diberikan.
 
 ## 1. Cara menggunakan panduan ini
 
@@ -12,15 +12,15 @@ Saat pengguna meminta dibuatkan video untuk Alvareth Remotion:
 4. Keluarkan **satu objek JSON valid** sesuai schema di bawah. Jangan menambahkan penjelasan sebelum atau sesudah JSON. Jangan memakai komentar, trailing comma, `undefined`, `NaN`, atau JavaScript.
 5. Pengguna menyalin seluruh JSON dan mengirimkannya melalui `.remotion generate` atau langsung setelah `.remotion`.
 
-Jangan menyuruh bot menafsirkan brief teks bebas. Brief bebas harus diolah di model AI pilihan pengguna terlebih dahulu.
+Jangan menyuruh bot menafsirkan brief teks bebas. Brief bebas harus diolah di model AI eksternal terlebih dahulu.
 
 ## 2. Pipeline dan batas kemampuan yang benar
 
 Alur runtime saat ini:
 
-`Brief pengguna → model AI pilihan pengguna (di luar bot) → storyboard JSON → parser/normalizer → compiler → validator → antrean → media lokal opsional → Remotion/FFmpeg → MP4 → WhatsApp`.
+`Brief pengguna → model AI eksternal (di luar bot) → storyboard JSON → parser/normalizer → compiler → validator → antrean → media lokal opsional → Remotion/FFmpeg → MP4 → WhatsApp`.
 
-- **model AI pilihan pengguna:** menyusun storyboard. Bot tidak memanggil model AI pilihan pengguna API, Ollama, atau model bahasa lain.
+- **model AI eksternal:** menyusun storyboard. Bot tidak memanggil API model bahasa, Ollama, atau layanan inferensi lain.
 - **Parser/normalizer/compiler:** menerima JSON, menerapkan default aman, membatasi enum, menghitung durasi, dan mengubah storyboard menjadi payload Remotion.
 - **Voice-over:** provider default adalah Edge TTS online melalui paket `edge-tts`, menggunakan suara Neural Bahasa Indonesia dan word-boundary timing. Provider ini gratis digunakan tanpa API key atau model GPU, tetapi merupakan klien tidak resmi terhadap layanan Edge online sehingga ketersediaan dan kebijakannya dapat berubah. VoxCPM2 tetap tersedia sebagai opsi lokal yang lebih berat dan dapat lebih lambat pada CPU. Provider dan suara dipilih melalui `.remotion voice`.
 - **Subtitle:** `captionStyle` menentukan gaya caption. Edge TTS mengirim metadata `WordBoundary` sehingga timing kata dapat diambil langsung dari hasil sintesis. Jika metadata tidak tersedia, runtime memperkirakan timing caption dari durasi audio terukur dan bobot kata/tanda baca; hasilnya perkiraan, bukan forced alignment. VoxCPM2 memakai alignment lokal hanya jika aligner opsional dikonfigurasi.
