@@ -9,6 +9,8 @@ import { fileURLToPath } from "url";
 
 const PUBLIC_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "remotion", "public");
 const GAP_SECONDS = 0.16;
+const MIN_NARRATED_SCENE_SECONDS = 1.25;
+const POST_NARRATION_HOLD_SECONDS = 0.25;
 
 function clean(value, max = 5000) {
   return String(value == null ? "" : value).replace(/\u0000/g, "").trim().slice(0, max);
@@ -370,7 +372,8 @@ export async function prepareVoiceover(project, jobId) {
         " dtk; durasi " + duration.toFixed(2) + " dtk; ukuran " + audio.length + " byte."
       );
 
-      durationFrames = Math.max(durationFrames, Math.ceil((duration + 0.25) * fps));
+      // A narrated scene follows its measured audio length, not the AI estimate. Keep a short visual tail after the last spoken word.
+      durationFrames = Math.max(1, Math.ceil(Math.max(MIN_NARRATED_SCENE_SECONDS, duration + POST_NARRATION_HOLD_SECONDS) * fps));
       voiceoverTracks.push({ src: "generated/" + jobId + "/" + filename, startSeconds, durationSeconds: duration });
       const words = Array.isArray(response.words) ? response.words : [];
       if (isValidWordAlignment(words, duration)) {
