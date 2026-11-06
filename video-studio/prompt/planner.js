@@ -257,7 +257,7 @@ export function normalizeVideoPlan(raw, sourcePrompt) {
 }
 
 export function planVideoPrompt(input) {
-  const rawText = String(input == null ? "" : input).replace(/\\u0000/g, "").trim();
+  const rawText = String(input == null ? "" : input).replace(/\x00/g, "").trim();
   if (rawText.length < 8) {
     const error = new Error("Tempel JSON storyboard lengkap yang dibuat ChatGPT.");
     error.statusCode = 400;
