@@ -30,7 +30,6 @@ import {
 const MAX_PROMPT_CHARS = 24000;
 const DEFAULT_SESSION_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_POLL_INTERVAL_MS = 6000;
-const DEFAULT_WATCH_TIMEOUT_MS = 30 * 60 * 1000;
 const sessions = global.__alvarethRemotionSessions || (global.__alvarethRemotionSessions = new Map());
 const watchers = global.__alvarethRemotionWatchers || (global.__alvarethRemotionWatchers = new Set());
 
@@ -378,12 +377,11 @@ function ensureJobWatcher(jobId, chat, fallbackConn) {
 
 async function watchJob(jobId, chat, fallbackConn) {
   const pollInterval = positiveInt(process.env.VIDEO_STUDIO_WA_POLL_INTERVAL_MS, DEFAULT_POLL_INTERVAL_MS, 3000, 30000);
-  const watchTimeout = positiveInt(process.env.VIDEO_STUDIO_WA_WATCH_TIMEOUT_MS, DEFAULT_WATCH_TIMEOUT_MS, 60000, 7200000);
-  const deadline = Date.now() + watchTimeout;
   let lastStage = "";
   let lastProgressMark = 0;
 
-  while (Date.now() < deadline) {
+  // Monitoring has no deadline: keep notifying until the render completes or fails.
+  while (true) {
     const job = getVideoJob(jobId);
     if (!job) {
       await sendText(chat, "⚠️ Job " + jobId + " tidak ditemukan dalam riwayat render.", fallbackConn);
@@ -462,13 +460,6 @@ async function watchJob(jobId, chat, fallbackConn) {
 
     await new Promise(resolve => setTimeout(resolve, pollInterval));
   }
-
-  await sendText(
-    chat,
-    "⏳ Job masih berjalan melewati batas pemantauan WhatsApp.\n" +
-    "Render tidak dihentikan. Ketik .remotion status untuk memeriksa kembali.",
-    fallbackConn
-  );
 }
 
 async function sendCompletedJob(m, conn, requestedId = "") {
@@ -619,8 +610,8 @@ async function showServices(m, conn, argument = "") {
 
     const service = "voxcpm";
     const label = "VoxCPM2";
-    const waitMs = positiveInt(process.env.VIDEO_STUDIO_VOXCPM_STARTUP_TIMEOUT_MS, 600000, 30000, 1800000);
-    await m.reply("⏳ Memulai " + label + " lokal. Bot akan mengirim hasil pemeriksaan setelah service siap atau gagal.");
+    const waitMs = Infinity;
+    await m.reply("⏳ Memulai " + label + " lokal. Bot akan menunggu sampai model siap atau proses service berhenti; tanpa batas waktu.");
     void startLocalVideoServices({ services: [service], waitMs, start: true }).then(result => {
       const state = result[service];
       return sendText(
