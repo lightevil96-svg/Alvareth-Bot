@@ -1,4 +1,4 @@
-> Current implementation (2026-11-06): local Ollama and VoxCPM2, optional local alignment, event SFX. See ../docs/REMOTION_WHATSAPP_LINUX.md. Historical aspirational sections below are not capability guarantees.
+> Current runtime (2026-11-06): ChatGPT-authored storyboard JSON is supplied manually; no LLM planner runs in the bot. The bot parses, normalizes, compiles, validates, and renders the JSON. See [../prompt-remotion.md](../prompt-remotion.md) for the authoritative input contract and [../docs/REMOTION_WHATSAPP_LINUX.md](../docs/REMOTION_WHATSAPP_LINUX.md) for setup. Earlier design sections below are historical guidance, not current runtime guarantees.
 
 # Video Studio — AI Prompt Understanding & Remotion Planning Contract
 
@@ -213,20 +213,26 @@ When asked to implement this feature:
 | Remotion typography animation | Implemented |
 | Procedural background music moods | Implemented in code; runtime render not yet verified |
 | Scene sound effects | Implemented in code; runtime render not yet verified |
-| Natural-language AI prompt understanding | **Not implemented — this document specifies how to build it** |
-| AI storyboard generation | Not implemented |
-| Natural-language to safe Remotion project compiler | Not implemented |
-| AI voice-over / TTS | Not implemented |
+| ChatGPT-authored storyboard JSON intake | Implemented; no LLM call is made by the bot |
+| AI storyboard generation inside the bot | Not implemented by design; ChatGPT is used separately |
+| JSON storyboard to safe Remotion project compiler | Implemented |
+| Local VoxCPM2 voice-over / TTS | Implemented in code; runtime model quality must be tested on the target host |
 | Uploaded image/video assets | Not implemented |
 | Preview/edit storyboard before render | Not implemented |
 
 
-## 10. Implemented prompt-first workflow (2026-11-04)
+## 10. Current ChatGPT-authored JSON workflow (2026-11-06)
 
-The current end-to-end planning path is:
-1. LightJurnal sends only the user's natural-language prompt to POST /api/video-studio/plan.
-3. video-studio/prompt/compile.js maps the plan to the allowlisted render schema and calls validateVideoProject().
-4. LightJurnal shows the generated storyboard as read-only information and submits it to POST /api/video-studio/jobs.
-5. The existing single-worker queue renders the MP4 with the updated motion-graphics composition.
+The WhatsApp owner workflow is now:
 
-The prompt-only UI must not expose manual controls for scene duration, colors, aspect ratio, FPS, music, or transitions. Infrastructure connection credentials remain separate. Current visual output is motion graphics, not generated footage. Narration remains text metadata until a real TTS provider and audio-duration alignment are implemented.
+1. The operator gives the user's brief to ChatGPT and follows the repository-root `prompt-remotion.md`.
+2. ChatGPT returns exactly one JSON object with `schemaVersion: 1`, `sourcePrompt`, and `scenes[]`.
+3. The owner pastes the JSON using `.remotion generate` or `.remotion <JSON>`.
+4. `video-studio/prompt/planner.js` parses and normalizes the supplied JSON. It rejects plain-language briefs and never calls Ollama, ChatGPT API, or another inference service.
+5. `video-studio/prompt/compile.js` maps the normalized plan to the allowlisted Remotion payload and calls `validateVideoProject()`.
+6. The single-worker queue prepares local VoxCPM2 narration when configured, optional reviewed ComfyUI footage/music, and renders the deterministic Remotion composition.
+7. The completed MP4 is verified and returned to WhatsApp.
+
+The HTTP `POST /api/video-studio/plan` route shares this JSON-only contract: its `prompt` field must contain the ChatGPT-authored JSON string. Any separate frontend that previously sent ordinary natural-language prompts must be updated to submit a structured storyboard instead.
+
+The current renderer remains a deterministic motion-graphics composition. True generated character footage requires an enabled, reviewed ComfyUI workflow; character identity is not guaranteed. Word-level subtitle timing depends on successful local alignment. See `prompt-remotion.md` for all exact field limits and allowed enums.
