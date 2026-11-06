@@ -36,23 +36,26 @@ Alur runtime saat ini:
 ### Durasi dan scene
 
 - `scenes` harus berisi 1–60 scene.
-- Setiap scene maksimal 20 detik dan minimal efektif 2,4 detik.
-- Total video maksimal 300 detik (5 menit).
+- Durasi awal setiap scene pada storyboard berada di rentang 2,4–20 detik; total video maksimal 300 detik (5 menit).
 - Untuk video 15–30 detik, umumnya gunakan 4–7 scene. Untuk 30–60 detik, umumnya 5–9 scene. Pilih berdasarkan cerita, bukan angka kaku.
-- Durasi tidak boleh seragam secara otomatis. Sesuaikan dengan panjang narasi, waktu baca teks, aksi visual, dan jeda emosional.
-- Estimasi internal: narasi sekitar 2,55 kata/detik ditambah ruang napas; teks layar sekitar 3,1 kata/detik ditambah waktu baca. Layout `quote` memiliki batas minimum lebih tinggi.
-- **Jangan memadatkan narasi agar muat ke durasi yang tidak realistis.** Jika jumlah kata membutuhkan waktu lebih lama, ringkas narasi atau naikkan `targetDurationSeconds`. Normalizer akan menolak target yang lebih pendek daripada kebutuhan minimum narasi/teks.
+- Durasi scene tidak boleh dibuat seragam hanya demi merapikan angka. Tentukan berdasarkan panjang voice-over, kebutuhan baca teks, aksi visual, dan jeda emosional.
+- Estimasi awal: narasi sekitar 2,55 kata/detik ditambah ruang napas; teks layar sekitar 3,1 kata/detik ditambah waktu baca. Layout `quote` dapat membutuhkan waktu visual lebih panjang.
+- **Durasi final scene yang memiliki voice-over dihitung ulang oleh runtime berdasarkan durasi audio TTS yang benar-benar dihasilkan:** minimal 1,25 detik atau durasi audio ditambah 0,25 detik ruang visual, mana yang lebih panjang. Durasi awal dari AI tidak akan memaksa scene tetap panjang ketika audio lebih pendek.
+- Scene tanpa voice-over tetap memakai durasi storyboard. Jika pengguna meminta jeda visual setelah narasi, buat scene lanjutan tanpa narration; jangan memperpanjang scene bernarasi secara arbitrer.
+- **Jangan memadatkan narasi agar muat ke durasi yang tidak realistis.** Jika jumlah kata membutuhkan waktu lebih lama, ringkas narasi atau naikkan `targetDurationSeconds`. Normalizer menolak target storyboard yang lebih pendek daripada estimasi minimum.
 - Usahakan durasi setiap scene tidak lebih dari 20 detik. Jika satu scene membutuhkan lebih dari itu, pecah menjadi dua scene.
-- Isi `targetDurationSeconds` dengan angka jika durasi diminta. Gunakan `null` jika pengguna tidak menentukan durasi dan jangan mengarang durasi eksplisit.
+- Isi `targetDurationSeconds` dengan angka jika durasi diminta. Gunakan `null` jika pengguna tidak menentukan durasi dan jangan mengarang durasi eksplisit. Durasi final dapat berubah mengikuti hasil TTS aktual.
 
 ### Narasi dan teks layar
 
 - `narration` adalah kalimat yang benar-benar diucapkan voice-over. Tulis natural, enak didengar, sesuai bahasa yang diminta, dan hindari kalimat terlalu panjang.
-- Bagi narasi per scene. Jangan mengulang narasi scene sebelumnya atau menumpuk seluruh cerita di satu scene.
-- `text` adalah headline/teks utama di layar, bukan salinan seluruh narasi. Maksimal 180 karakter.
-- `subtext` maksimal 220 karakter; gunakan hanya jika menambah informasi.
-- `kicker` maksimal 60 karakter; `highlight` maksimal 70 karakter.
-- `points` maksimal 4 butir, masing-masing maksimal 90 karakter.
+- Bagi narasi per scene. Satu scene idealnya menyampaikan satu gagasan yang utuh. Jangan mengulang narasi scene sebelumnya atau menumpuk seluruh cerita di satu scene.
+- `text` adalah headline singkat, bukan salinan narasi: idealnya 3–8 kata dan maksimal sekitar 55 karakter. Gunakan frasa yang kuat dan mudah dipindai dalam sekali lihat.
+- `subtext` adalah keterangan pendukung: idealnya satu kalimat pendek, maksimal sekitar 100 karakter. Kosongkan jika tidak menambah informasi.
+- `kicker` idealnya 1–3 kata dan maksimal sekitar 24 karakter; `highlight` idealnya 1–4 kata dan maksimal sekitar 28 karakter.
+- `points` maksimal 4 butir; idealnya maksimal 45 karakter per butir. Satu butir hanya memuat satu informasi.
+- Hindari paragraf panjang, huruf kapital penuh untuk kalimat panjang, pengulangan headline di subtext, serta menaruh seluruh voice-over sebagai teks layar.
+- Runtime mengukur dan membungkus headline sesuai lebar layar, tetapi model tetap wajib membuat teks ringkas agar komposisi tidak padat.
 - `narration` maksimal 1.200 karakter per scene, tetapi untuk video pendek sebaiknya jauh lebih ringkas.
 - Untuk subtitle biasa, pilih `captionStyle: "subtitle"`. Jangan memasukkan teks subtitle ke `text` sekaligus menyalin seluruh narasi.
 
