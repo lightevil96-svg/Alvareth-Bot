@@ -1,5 +1,5 @@
 import { SFX_SECONDS } from "../engine/sound-design.js";
-import { fitTextBlock } from "./text-layout.js";
+import { fitTextBlock, normalizeDisplayText } from "./text-layout.js";
 import React from "react";
 import {
   AbsoluteFill,
@@ -250,7 +250,7 @@ const Scene = ({ scene, index, total, durationFrames, transitionInFrames }) => {
         {layout === "stat" && scene.highlight ? <div style={{ color: accent, fontSize: statHighlightLayout.fontSize, lineHeight: 0.98, fontWeight: 900, marginBottom: 18, letterSpacing: -2 * fontScale, whiteSpace: "pre-line", overflowWrap: "anywhere" }}>{statHighlightLayout.text}</div> : null}
         {kinetic
           ? <KineticTypography text={scene.text} highlight={scene.highlight} accent={accent} maxWidthPx={contentWidthPx} maxFontSize={headlineLayout.fontSize} minFontSize={headlineLayout.fontSize} maxLines={headlineLayout.lineCount} />
-          : <div style={{ maxWidth: "100%", minWidth: 0, fontSize: headlineLayout.fontSize, lineHeight: 1.08, fontWeight: 850, letterSpacing: -1.4 * fontScale, whiteSpace: "pre-line", overflowWrap: "anywhere", wordBreak: "normal", textShadow: lightBackground ? "none" : "0 8px 35px rgba(0,0,0,.22)" }}>{headlineLayout.text}</div>}
+          : <div style={{ maxWidth: "100%", minWidth: 0, fontSize: headlineLayout.fontSize, lineHeight: 1.08, fontWeight: 850, letterSpacing: 0, whiteSpace: "pre-line", overflowWrap: "anywhere", wordBreak: "normal", textShadow: lightBackground ? "none" : "0 8px 35px rgba(0,0,0,.22)" }}>{headlineLayout.text}</div>}
         {scene.highlight && layout !== "stat" && !kinetic ? <div style={{ display: "inline-block", maxWidth: "100%", boxSizing: "border-box", marginTop: 18, padding: "8px 16px", borderRadius: 16, color: foreground, background: accent, fontSize: highlightLayout.fontSize, lineHeight: 1.2, fontWeight: 800, whiteSpace: "pre-line", overflowWrap: "anywhere" }}>{highlightLayout.text}</div> : null}
         {scene.subtext ? <div style={{ marginTop: 22, maxWidth: "100%", minWidth: 0, color: foreground, opacity: 0.84, fontSize: subtextLayout.fontSize, lineHeight: 1.38, fontWeight: 450, whiteSpace: "pre-line", overflowWrap: "anywhere" }}>{subtextLayout.text}</div> : null}
         {pointLayouts.length ? <div style={{ display: "grid", gap: 12, marginTop: 24, maxWidth: "100%", textAlign: "left" }}>
@@ -293,12 +293,13 @@ const CaptionOverlay = ({ captions = [], style = "tiktok", position = "bottom" }
   return <AbsoluteFill style={{ justifyContent, alignItems: "center", paddingBottom, paddingTop, paddingLeft: width * 0.04, paddingRight: width * 0.04, boxSizing: "border-box", pointerEvents: "none", zIndex: 30 }}>
     <div style={{ width: "fit-content", maxWidth: width * 0.88, boxSizing: "border-box", display: "flex", flexWrap: "wrap", justifyContent: "center", alignItems: "center", gap: "4px 8px", padding: cleanSubtitle ? "9px 14px" : "11px 18px", borderRadius: cleanSubtitle ? 10 : 16, background: cleanSubtitle ? "rgba(0,0,0,.66)" : "rgba(8,12,20,.84)", border: cleanSubtitle ? "none" : "1px solid rgba(255,255,255,.16)", boxShadow: "0 10px 28px rgba(0,0,0,.22)", textAlign: "center" }}>
       {visibleWords.map((word, index) => {
+        const captionText = normalizeDisplayText(word.text);
         const active = index === activeWord;
         const wave = style === "wave" ? Math.sin(frame / 3 + index * 0.9) * 5 : 0;
         const pop = style === "pop" && active ? 1.08 : 1;
         const activeBackground = style === "highlight" && active ? "#FFE36E" : "transparent";
         const color = active && ["tiktok", "karaoke", "pop", "wave"].includes(style) ? "#FFE36E" : active && style === "highlight" ? "#172033" : "#FFFFFF";
-        return <span key={index} style={{ display: "inline-block", maxWidth: "100%", color, background: activeBackground, borderRadius: 6, padding: activeBackground === "transparent" ? 0 : "2px 6px", fontSize, lineHeight: 1.2, fontWeight: 850, letterSpacing: "-0.01em", whiteSpace: "pre-wrap", overflowWrap: "anywhere", transform: "translateY(" + wave + "px) scale(" + pop + ")", textShadow: "0 2px 12px rgba(0,0,0,.4)" }}>{word.text}</span>;
+        return <span key={index} style={{ display: "inline-block", maxWidth: "100%", color, background: activeBackground, borderRadius: 6, padding: activeBackground === "transparent" ? 0 : "2px 6px", fontSize, lineHeight: 1.2, fontWeight: 850, letterSpacing: "-0.01em", whiteSpace: "pre-wrap", overflowWrap: "anywhere", transform: "translateY(" + wave + "px) scale(" + pop + ")", textShadow: "0 2px 12px rgba(0,0,0,.4)" }}>{captionText}</span>;
       })}
     </div>
   </AbsoluteFill>;
