@@ -37,7 +37,7 @@ function hasBrandCredit(value) {
 }
 function stripBrandCredit(value, maxLength) {
   return cleanText(value, maxLength)
-    .replace(/dibuat\s*oleh\s*alvarethbot/giu, "")
+    .replace(/dibuat\s*oleh\s*alvarethbot[.!?,;:]*/giu, "")
     .replace(/[ \t]+/g, " ")
     .trim();
 }
