@@ -20,7 +20,9 @@ async function getServeUrl() {
 }
 
 export async function renderVideoProject(project, outputPath, onProgress = () => {}) {
+  console.log("[REMOTION:RENDER] Menyiapkan bundle Remotion...");
   const [{ renderMedia, selectComposition }, serveUrl] = await Promise.all([import("@remotion/renderer"), getServeUrl()]);
+  console.log("[REMOTION:RENDER] Bundle siap; memilih komposisi video.");
   await mkdir(dirname(outputPath), { recursive: true });
   const inputProps = {
     title: project.title,
@@ -41,6 +43,7 @@ export async function renderVideoProject(project, outputPath, onProgress = () =>
   };
   const composition = await selectComposition({ serveUrl, id: "LightJurnalVideo", inputProps });
   const renderSettings = resolveRenderSettings(project);
+  console.log("[REMOTION:RENDER] Mulai encode " + composition.durationInFrames + " frame @ " + composition.fps + " FPS.");
   await renderMedia({
     composition,
     serveUrl,
@@ -55,5 +58,6 @@ export async function renderVideoProject(project, outputPath, onProgress = () =>
     offthreadVideoCacheSizeInBytes: renderSettings.offthreadVideoCacheSizeInBytes,
     onProgress: ({ progress }) => onProgress(Math.max(0, Math.min(100, Math.round(progress * 100))))
   });
+  console.log("[REMOTION:RENDER] Encode selesai.");
   return outputPath;
 }
