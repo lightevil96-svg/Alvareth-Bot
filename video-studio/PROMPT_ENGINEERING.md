@@ -233,6 +233,6 @@ The WhatsApp owner workflow is now:
 6. The single-worker queue prepares local VoxCPM2 narration when configured, optional reviewed ComfyUI footage/music, and renders the deterministic Remotion composition.
 7. The completed MP4 is verified and returned to WhatsApp.
 
-The HTTP `POST /api/video-studio/plan` route shares this JSON-only contract: its `prompt` field must contain the ChatGPT-authored JSON string. Any separate frontend that previously sent ordinary natural-language prompts must be updated to submit a structured storyboard instead.
+The current production path is the owner-only WhatsApp plugin. No public storyboard-planning API is part of this main-branch workflow.
 
-The current renderer remains a deterministic motion-graphics composition. True generated character footage requires an enabled, reviewed ComfyUI workflow; character identity is not guaranteed. Word-level subtitle timing depends on successful local alignment. See `prompt-remotion.md` for all exact field limits and allowed enums.
+The current renderer remains a deterministic motion-graphics composition. True generated character footage requires an enabled, reviewed ComfyUI workflow; character identity is not guaranteed. Word-level subtitle timing uses local alignment when available; otherwise runtime estimates caption timing from measured WAV duration and syllable/punctuation weights. See `prompt-remotion.md` for all exact field limits and allowed enums.
