@@ -2,9 +2,9 @@
 
 ## Current architecture
 
-Brief pengguna → ChatGPT (di luar bot) → storyboard JSON → parser/normalizer → compiler → validator → single-worker queue → VoxCPM2 lokal → ComfyUI opsional → Remotion/FFmpeg → MP4 → WhatsApp.
+Brief pengguna → model AI eksternal pilihan operator → storyboard JSON → parser/normalizer → compiler → validator → single-worker queue → Edge TTS online (default) atau VoxCPM2 lokal (opsional) → ComfyUI opsional → Remotion/FFmpeg → MP4 → WhatsApp.
 
-Bot tidak menjalankan Ollama, Qwen, ChatGPT API, atau LLM lokal untuk menyusun storyboard. Pemilik membuat JSON di ChatGPT dengan mengikuti prompt-remotion.md di root repository, lalu menempelkannya ke .remotion. Backend hanya mem-parsing, menormalisasi, memvalidasi, mengompilasi, dan merender JSON tersebut.
+Bot tidak menjalankan Ollama, Qwen, API model bahasa, atau LLM lokal untuk menyusun storyboard. Pemilik meminta model AI pilihannya membaca prompt-remotion.md di root repository, menghasilkan JSON, lalu menempelkannya ke .remotion. Backend hanya mem-parsing, menormalisasi, memvalidasi, mengompilasi, dan merender JSON tersebut.
 
 ## Requirements
 
@@ -47,7 +47,7 @@ curl --fail http://127.0.0.1:7861/health
 
 ## Rootless / Pterodactyl installation
 
-If the hosting console is in /home/container and does not provide root/apt, use scripts/setup-video-studio-linux.sh. It installs uv, Python 3.11, the pinned VoxCPM2 adapter dependencies, and optionally the VoxCPM2 weights under user-writable paths. It does not install Ollama or any LLM planner.
+If the hosting console is in /home/container and does not provide root/apt, use scripts/setup-video-studio-linux.sh only when you want the optional local VoxCPM2 provider. The default Edge TTS provider has a separate lightweight installer and does not need PyTorch, VoxCPM2 weights, or a GPU.
 
 Runtime and dependencies only:
 
@@ -73,18 +73,38 @@ The bootstrap does not require sudo, apt, or systemd. GPU mode requires NVIDIA t
 
 ## Install engine from WhatsApp
 
-After the latest commit is on the server and the bot is running, an owner can install the local narration runtime without opening the console:
+After the latest commit is on the server and the bot is running, an owner can install the default online narration provider without opening the console:
 
 ```text
 .remotion install
 ```
 
-The command detects NVIDIA visibility and starts the installer in the background with model download enabled. It installs uv, Python 3.11, PyTorch, the pinned VoxCPM2 adapter, and VoxCPM2 weights only. It does not install Ollama, Qwen, ComfyUI, visual models, music models, FFmpeg, Chromium system libraries, or npm dependencies.
+The command detects NVIDIA visibility and starts the optional local VoxCPM2 installer in the background with model download enabled. It installs uv, Python 3.11, PyTorch, the pinned VoxCPM2 adapter, and VoxCPM2 weights. It is not required when using Edge TTS.
+
+## Default voice provider: Edge TTS online
+
+The default TTS provider is Microsoft's Indonesian Neural voice service through the community `edge-tts` client. It is free, needs no API key, does not download a speech model, and does not require a GPU. The client is unofficial and depends on Microsoft's online Edge speech endpoint; availability, rate limits, and endpoint behavior can change.
+
+Install it from WhatsApp:
+
+```text
+.remotion voice install
+```
+
+This creates a lightweight `.venv-edge-tts` using uv/Python 3.11 and installs only `edge-tts`; it does not install PyTorch or VoxCPM2. Select the provider and voice from:
+
+```text
+.remotion voice
+```
+
+Available Indonesian voices are `id-ID-GadisNeural` (female) and `id-ID-ArdiNeural` (male). The menu also changes speech rate, pitch, and volume. Settings are persisted and snapshotted into each new job. Edge TTS returns word-boundary events used for subtitle timing. If the online service is unavailable, switch to VoxCPM2 only if its local runtime and model are installed.
 
 Other commands:
 
 - .remotion install status — installer status, exit code, and recent log lines.
-- .remotion services start voice — starts the VoxCPM2 adapter and waits for model readiness.
+- .remotion voice — opens provider, voice, rate, pitch, volume, and narrator-style controls.
+- .remotion voice install — installs the lightweight online Edge TTS adapter.
+- .remotion services start voice — starts the VoxCPM2 adapter only when that local provider is selected.
 - .remotion services — checks status without loading large models.
 - .remotion install cpu — explicitly selects CPU if NVIDIA is not visible. CPU can be very slow; check RAM/disk first.
 - .remotion hardware — reports CPU, RAM, disk, and visible graphics devices.
@@ -97,7 +117,6 @@ Add/update these values in the existing private .env:
 
 ```dotenv
 VIDEO_STUDIO_VOXCPM_URL=http://127.0.0.1:7861
-VIDEO_STUDIO_VOXCPM_TIMEOUT_MS=600000
 VIDEO_STUDIO_VOICE_REQUIRED=true
 VIDEO_STUDIO_LOCAL_SERVICES_AUTOSTART=true
 VIDEO_STUDIO_VOXCPM_STARTUP_TIMEOUT_MS=600000
@@ -112,13 +131,13 @@ VOXCPM_MODEL_PATH=/home/container/alvareth-models/VoxCPM2
 VIDEO_STUDIO_VOXCPM_PYTHON=/home/container/.venv-voxcpm/bin/python
 ```
 
-If speech infrastructure cannot run, an operator may explicitly set VIDEO_STUDIO_VOICE_REQUIRED=false; the result includes a no-narration warning. There is no alternate TTS provider. Remove obsolete local planner URL/model/timeout settings from the private .env if present. Preserve unrelated bot credentials and configuration.
+If speech infrastructure cannot run, an operator may explicitly set VIDEO_STUDIO_VOICE_REQUIRED=false; the result includes a no-narration warning. Edge TTS is the default online provider; VoxCPM2 is optional. Remove obsolete local planner URL/model settings from the private .env if present. Preserve unrelated bot credentials and configuration.
 
 The repository updater defaults to main. On a staging checkout, set AUTO_UPDATE_ENABLED=false before starting so development testing is not replaced by production branch updates. Do not change a live VPS updater without an explicit deployment decision.
 
-## ChatGPT storyboard input
+## External AI storyboard input
 
-Use the repository-root prompt-remotion.md as the authoritative prompt and schema guide. ChatGPT must return one valid JSON object with schemaVersion: 1, sourcePrompt containing the original user brief, and scenes containing 1–60 scene objects. Target duration must not exceed 300 seconds; each scene must be no longer than 20 seconds and long enough for its narration/reading.
+Use the repository-root prompt-remotion.md as the authoritative prompt and schema guide. Any external AI model must return one valid JSON object with schemaVersion: 1, sourcePrompt containing the original user brief, and scenes containing 1–60 scene objects. Target duration must not exceed 300 seconds; each scene must be no longer than 20 seconds and long enough for its narration/reading.
 
 The WhatsApp payload limit is 24,000 characters. .remotion generate opens an input session; paste the JSON in the next message. .remotion <JSON> can start immediately. Plain-language briefs are intentionally rejected because the bot no longer has a local prompt-generating LLM.
 
@@ -135,7 +154,7 @@ mkdir -p "$HOME/alvareth-models/whisper"
 cp /tmp/alvareth-whisper-download/base.pt "$HOME/alvareth-models/whisper/base.pt"
 ```
 
-Restart the TTS service with VOXCPM_ALIGNMENT_MODEL_PATH=$HOME/alvareth-models/whisper/base.pt. Without valid alignment, runtime still generates approximate caption timing using measured WAV duration and syllable/punctuation weights. This is not forced alignment and may not match every word exactly. Each scene is synthesized separately, so speaker/prosody continuity must still be evaluated by listening.
+Restart the VoxCPM2 TTS service with VOXCPM_ALIGNMENT_MODEL_PATH=$HOME/alvareth-models/whisper/base.pt. Edge TTS already returns word-boundary timing and does not need this optional Whisper alignment. Without valid local alignment for VoxCPM2, captions use approximate timing from measured WAV duration and syllable/punctuation weights. Each scene is synthesized separately, so speaker/prosody continuity must still be evaluated by listening.
 
 ## Optional ComfyUI
 
@@ -149,19 +168,19 @@ Default AI-video selection is two scenes per job (configurable, maximum four); g
 
 The storyboard JSON assigns scene sound cues and overlay delays. engine/sound-design.js converts visual entry/transition/notification/callout events to frame positions shared with the scene. Procedural effects have bounded peaks, short fades, and speech attenuation. Cues too close together are deduplicated; effects that cannot finish before scene end are omitted. Not every movement needs a sound. Music is not forced.
 
-Narration WAV is probed and fully decoded before use. Scene durations expand to complete speech plus breathing space, quantized to project FPS. Overlong narration (more than 19.7 seconds spoken per scene) or more than 300 seconds total fails clearly rather than truncating speech.
+Narration audio (MP3 from Edge TTS or WAV from VoxCPM2) is probed and fully decoded before use. Scene durations expand to complete speech plus breathing space, quantized to project FPS. Overlong narration (more than 19.7 seconds spoken per scene) or more than 300 seconds total fails clearly rather than truncating speech.
 
 ## Acceptance tests
 
 ```bash
 npm test
 python3 -m unittest discover -s tests -p '*_test.py'
-# Real VoxCPM2 service required; this must produce actual narration:
+# Optional live VoxCPM2 service test; this requires its local model to be installed:
 npm run test:remotion-live
 # Renderer-only fixed storyboard, explicitly NOT an AI or speech test:
 node scripts/remotion-smoke.js --fixture
 ```
 
-Smoke output defaults to /tmp/alvareth-remotion-smoke; override REMOTION_SMOKE_DIR to retain it. A successful smoke includes H.264 video, audio, correct dimensions, full FFmpeg decode, and JSON probe evidence. Listen to voice/SFX, inspect transitions/subtitles, then test all menu actions and a non-owner account on real WhatsApp. CI fixture rendering never establishes that VoxCPM2 or WhatsApp works on the VPS.
+Smoke output defaults to /tmp/alvareth-remotion-smoke; override REMOTION_SMOKE_DIR to retain it. A successful smoke includes H.264 video, audio, correct dimensions, full FFmpeg decode, and JSON probe evidence. Listen to voice/SFX, inspect transitions/subtitles, then test all menu actions and a non-owner account on real WhatsApp. CI fixture rendering never establishes that the online Edge TTS endpoint, local VoxCPM2, or WhatsApp works on the VPS.
 
 See REMOTION_LOCAL_LICENSES.md for licensing and REMOTION_AUDIT_2026-11-06.md for audit evidence and limitations.
