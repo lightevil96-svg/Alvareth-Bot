@@ -41,6 +41,8 @@ async def synthesize(payload):
 
     audio = bytearray()
     words = []
+    total_words = max(1, len(text.split()))
+    last_progress = -5
     async for message in communicate.stream():
         if message["type"] == "audio":
             audio.extend(message["data"])
@@ -54,9 +56,14 @@ async def synthesize(payload):
                     "start": round(start, 4),
                     "end": round(end, 4),
                 })
+                progress = min(95, int(len(words) * 100 / total_words))
+                if progress >= last_progress + 5:
+                    last_progress = progress
+                    print("[EDGE-TTS] Progres kata: " + str(progress) + "% (" + str(len(words)) + "/" + str(total_words) + ")", file=sys.stderr, flush=True)
 
     if not audio:
         raise RuntimeError("Edge TTS tidak mengembalikan audio.")
+    print("[EDGE-TTS] Progres kata: 100% (sintesis selesai).", file=sys.stderr, flush=True)
     print(
         "[EDGE-TTS] Audio diterima: "
         + str(len(audio))
