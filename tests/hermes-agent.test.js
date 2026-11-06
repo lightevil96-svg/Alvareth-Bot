@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { chmod, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -146,7 +146,6 @@ test("Hermes one-shot bridge uses a restricted toolset and stores resumable sess
   const workspace = path.join(parent, "workspace");
   const repo = path.join(parent, "repo");
   await mkdir(repo, { recursive: true });
-  const usageFile = path.join(workspace, "unused.json");
   const fake = path.join(parent, "fake-hermes");
   const fakeScript = [
     "#!/usr/bin/env node",
@@ -178,7 +177,7 @@ test("Hermes one-shot bridge uses a restricted toolset and stores resumable sess
   assert.ok(result.usage.args.includes("--source"));
   assert.ok(result.usage.args.includes("tool"));
   assert.ok(result.usage.args.includes("--query"));
-  await assert.rejects(readFile(usageFile, "utf8"));
+  assert.deepEqual(await readdir(workspace), []);
 });
 
 test("output redaction and WhatsApp chunking keep responses safe and bounded", () => {
