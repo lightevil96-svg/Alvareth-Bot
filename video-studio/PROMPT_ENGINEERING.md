@@ -228,7 +228,7 @@ The WhatsApp owner workflow is now:
 1. The operator gives the user's brief to ChatGPT and follows the repository-root `prompt-remotion.md`.
 2. ChatGPT returns exactly one JSON object with `schemaVersion: 1`, `sourcePrompt`, and `scenes[]`.
 3. The owner pastes the JSON using `.remotion generate` or `.remotion <JSON>`.
-4. `video-studio/prompt/planner.js` parses and normalizes the supplied JSON. It rejects plain-language briefs and never calls Ollama, ChatGPT API, or another inference service.
+4. `video-studio/prompt/storyboard.js` parses and normalizes the supplied JSON. It rejects plain-language briefs and never calls Ollama, ChatGPT API, or another inference service.
 5. `video-studio/prompt/compile.js` maps the normalized plan to the allowlisted Remotion payload and calls `validateVideoProject()`.
 6. The single-worker queue prepares local VoxCPM2 narration when configured, optional reviewed ComfyUI footage/music, and renders the deterministic Remotion composition.
 7. The completed MP4 is verified and returned to WhatsApp.
