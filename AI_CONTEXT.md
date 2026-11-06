@@ -10,7 +10,7 @@
 ## Pembaruan terbaru
 
 - 2026-11-06: Added repository-root `prompt-remotion.md`, a strict ChatGPT guide with the current JSON schema, enum allowlists, capability limits, and a complete Indonesian story example. WhatsApp accepts up to 24,000 characters; plain-language briefs are intentionally rejected.
-- 2026-11-06: Planner is now an offline JSON parser/normalizer only. It has no Ollama, Qwen, or ChatGPT API dependency. The shared /api/video-studio/plan contract now expects a ChatGPT-authored JSON string; an external LightJurnal frontend sending prose needs a separate update.
+- 2026-11-06: Planner is now an offline JSON parser/normalizer only. It has no Ollama, Qwen, or ChatGPT API dependency.
 - 2026-11-06: Scene duration fitting rejects targets shorter than estimated narration/reading time instead of compressing speech. Ollama installer/bootstrap, local service management, environment settings, and obsolete archive extractor were removed; VoxCPM2-only installation and hardware diagnostics remain.
 
 - 2026-11-06: Removed the Ollama/Qwen planner and all Ollama provisioning from production `main`. Storyboard authoring now happens manually in ChatGPT; the bot accepts only JSON with `schemaVersion: 1` and validates/compiles it. See `prompt-remotion.md`.
