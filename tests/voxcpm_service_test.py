@@ -2,6 +2,7 @@
 import importlib.util
 import json
 import threading
+import time
 import unittest
 import urllib.request
 import urllib.error
@@ -51,6 +52,9 @@ class ContractTests(unittest.TestCase):
         service.synthesize = fake_synthesize
         self.assertEqual(self.request("/speech", {"text":"Halo", "voice_description":"warm narrator"})[1]["fixture"], True)
         self.assertEqual(received["voice_description"], "warm narrator")
+        deadline = time.monotonic() + 1
+        while service.LOCK.locked() and time.monotonic() < deadline:
+            time.sleep(0.01)
         self.assertFalse(service.LOCK.locked())
 
 if __name__ == "__main__":
