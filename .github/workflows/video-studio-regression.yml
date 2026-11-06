@@ -42,7 +42,7 @@ jobs:
       - name: Install FFmpeg and FFprobe
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y ffmpeg libnss3 libdbus-1-3 libatk1.0-0 libgbm-dev libasound2 libxrandr2 libxkbcommon-dev libxfixes3 libxcomposite1 libxdamage1 libatk-bridge2.0-0 libpango-1.0-0 libcairo2 libcups2 libegl1 libgl1 libgles2 libgl1-mesa-dri mesa-vulkan-drivers
           ffmpeg -version
           ffprobe -version
       - name: Check Video Studio JavaScript modules
