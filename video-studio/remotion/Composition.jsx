@@ -27,6 +27,7 @@ import {
   NotificationOverlay,
   WaveformScene
 } from "./Visuals.jsx";
+import { ThreeDScene } from "./ThreeDScene.jsx";
 
 const MUSIC_FILES = {
   cinematic: "audio/music-cinematic.wav",
@@ -168,7 +169,7 @@ const Scene = ({ scene, index, total, durationFrames, transitionInFrames }) => {
   const foreground = lightBackground ? "#1B263B" : "#FFFFFF";
   const layout = scene.layout || "hero";
   const visualType = scene.visualType || "editorial";
-  const hasSideVisual = ["data-chart", "diagram", "app-mockup", "waveform"].includes(visualType);
+  const hasSideVisual = ["data-chart", "diagram", "app-mockup", "waveform", "3d"].includes(visualType);
   const alignLeft = layout === "editorial" || layout === "split" || hasSideVisual;
   const fontScale = height >= 1600 ? 1 : 0.82;
   const contentWidth = hasSideVisual ? "47%" : layout === "split" ? "62%" : layout === "editorial" ? "86%" : "90%";
@@ -299,7 +300,7 @@ const CaptionOverlay = ({ captions = [], style = "tiktok", position = "bottom" }
         const pop = style === "pop" && active ? 1.08 : 1;
         const activeBackground = style === "highlight" && active ? "#FFE36E" : "transparent";
         const color = active && ["tiktok", "karaoke", "pop", "wave"].includes(style) ? "#FFE36E" : active && style === "highlight" ? "#172033" : "#FFFFFF";
-        return <span key={index} style={{ display: "inline-block", maxWidth: "100%", color, background: activeBackground, borderRadius: 6, padding: activeBackground === "transparent" ? 0 : "2px 6px", fontSize, lineHeight: 1.2, fontWeight: 850, letterSpacing: "-0.01em", whiteSpace: "pre-wrap", overflowWrap: "anywhere", transform: "translateY(" + wave + "px) scale(" + pop + ")", textShadow: "0 2px 12px rgba(0,0,0,.4)" }}>{captionText}</span>;
+        return <span key={index} style={{ display: "inline-block", maxWidth: "100%", color, background: activeBackground, borderRadius: 6, padding: activeBackground === "transparent" ? 0 : "2px 6px", fontSize, lineHeight: 1.2, fontWeight: 850, letterSpacing: 0, whiteSpace: "pre-wrap", overflowWrap: "anywhere", transform: "translateY(" + wave + "px) scale(" + pop + ")", textShadow: "0 2px 12px rgba(0,0,0,.4)" }}>{captionText}</span>;
       })}
     </div>
   </AbsoluteFill>;
@@ -317,12 +318,27 @@ registerVideoPlugin({
     diagram: DiagramScene,
     "app-mockup": AppMockupScene,
     waveform: WaveformScene,
-    kinetic: KineticTypography
+    kinetic: KineticTypography,
+    "3d": ThreeDScene
   }
 });
 
+const BrandCreditOverlay = () => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const enter = spring({ frame, fps, config: { damping: 20, stiffness: 110, mass: 0.8 } });
+  return <AbsoluteFill style={{ justifyContent: "flex-end", alignItems: "center", paddingBottom: "5%", pointerEvents: "none", zIndex: 50 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: "0.34em", padding: "10px 16px", borderRadius: 999, background: "rgba(5,10,18,.72)", color: "#fff", fontFamily: "Inter, Arial, sans-serif", fontSize: "clamp(16px, 2.1vw, 22px)", fontWeight: 700, letterSpacing: 0, opacity: enter, transform: "translateY(" + ((1 - enter) * 10) + "px)", boxShadow: "0 8px 28px rgba(0,0,0,.24)" }}>
+      <span>Dibuat</span>
+      <span>oleh</span>
+      <strong style={{ fontWeight: 900, letterSpacing: "0.02em" }}>ALVARETHBOT</strong>
+    </div>
+  </AbsoluteFill>;
+};
+
 const VideoComposition = ({
   scenes,
+  brandCredit = "",
   musicStyle = "none",
   musicTrackSrc = "",
   musicVolume = 0.16,
@@ -349,6 +365,9 @@ const VideoComposition = ({
       <SceneSound cue={clip.cue} volume={clip.volume} />
     </Sequence>) : null}
     <CaptionOverlay captions={captions} style={captionStyle} position={captionPosition} />
+    {brandCredit ? <Sequence from={Math.max(0, timeline.durationInFrames - Math.min(timeline.durationInFrames, Math.round(fps * 2.6)))} durationInFrames={Math.min(timeline.durationInFrames, Math.round(fps * 2.6))} name="brand-credit">
+      <BrandCreditOverlay />
+    </Sequence> : null}
   </AbsoluteFill>;
 };
 
@@ -361,6 +380,7 @@ export const RemotionRoot = () => <Composition
   durationInFrames={300}
   defaultProps={{
     scenes: [{ id: "scene-01", text: "Mulai berkarya", duration: 4, background: "#111827", accent: "#68DDB8", layout: "hero", motif: "rings", motion: "fade-up", transition: "fade", soundCue: "none" }],
+    brandCredit: "",
     musicStyle: "none",
     musicTrackSrc: "",
     musicVolume: 0.16,
