@@ -167,7 +167,8 @@ test("compiles deterministic 3D scenes and a separate brand-credit overlay", () 
     scenes: [{
       text: "Bentuk baru, pengalaman baru",
       subtext: "Dibuatoleh ALVARETHBOT",
-      narration: "Kenali desain baru dengan tampilan yang lebih modern.",
+      narration: "Dibuatoleh ALVARETHBOT. Kenali desain baru dengan tampilan yang lebih modern.",
+      aiVideoPrompt: "A premium product close-up. Dibuatoleh ALVARETHBOT",
       visualType: "3d",
       threeDStyle: "chrome",
       threeDObject: "isometric",
@@ -180,5 +181,7 @@ test("compiles deterministic 3D scenes and a separate brand-credit overlay", () 
   assert.equal(project.scenes[0].visualType, "3d");
   assert.equal(project.scenes[0].threeDStyle, "chrome");
   assert.equal(project.scenes[0].threeDObject, "isometric");
+  assert.equal(project.scenes[0].narration, "Kenali desain baru dengan tampilan yang lebih modern.");
+  assert.equal(project.scenes[0].aiVideoPrompt, "A premium product close-up.");
   assert.equal(project.scenes[0].subtext, "");
 });
