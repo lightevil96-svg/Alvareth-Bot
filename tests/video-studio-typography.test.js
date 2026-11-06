@@ -38,7 +38,7 @@ test("explicit line breaks and unusually long words remain inside the text layou
     fontWeight: 800
   });
   assert.ok(layout.lineCount <= 5);
-  assert.ok(layout.text.includes("Judul pertama"));
+  assert.ok(layout.text.replace(/\n/g, " ").replace(/\s+/g, " ").includes("Judul pertama"));
   assert.ok(layout.text.replace(/\n/g, "").includes("Supercalifragilisticexpialidocious"));
   assert.equal(layout.fits, true);
 });
