@@ -61,6 +61,17 @@ const HeroObject = ({ type, style, accent, frame, scale = 1 }) => {
       {material}
     </mesh>;
   }
+  if (type === "isometric") {
+    return <group position={[0, bob - 0.18, 0]} rotation={[0.28, rotation * 0.22, 0]} scale={scale * 0.88 * pulse}>
+      <mesh position={[0, -0.58, 0]}><boxGeometry args={[2.7, 0.22, 2.2]} /><meshStandardMaterial color="#24364a" roughness={0.82} /></mesh>
+      <mesh position={[-0.62, 0.02, 0]}><boxGeometry args={[0.72, 1.05, 0.72]} /><meshStandardMaterial color={accent} roughness={0.62} /></mesh>
+      <mesh position={[-0.62, 0.66, 0]}><coneGeometry args={[0.54, 0.48, 4]} /><meshStandardMaterial color="#f0b86b" roughness={0.7} /></mesh>
+      <mesh position={[0.56, -0.02, -0.12]}><boxGeometry args={[0.76, 0.92, 0.76]} /><meshStandardMaterial color="#e7edf5" roughness={0.72} /></mesh>
+      <mesh position={[0.56, 0.48, -0.12]}><boxGeometry args={[0.84, 0.12, 0.84]} /><meshStandardMaterial color="#9b8cff" roughness={0.5} /></mesh>
+      <mesh position={[-0.04, -0.43, 0.64]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[0.28, 0.07, 12, 48]} /><meshStandardMaterial color="#ffffff" metalness={0.35} roughness={0.25} /></mesh>
+      <mesh position={[0.96, 0.36, 0.45]}><sphereGeometry args={[0.22, 24, 24]} /><meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.25} /></mesh>
+    </group>;
+  }
   if (type === "cluster") {
     return <group position={[0, bob, 0]} rotation={[rotation * 0.5, rotation, rotation * 0.3]} scale={scale * pulse}>
       <mesh><sphereGeometry args={[0.64, 48, 48]} />{material}</mesh>
@@ -79,7 +90,7 @@ export const ThreeDScene = ({ scene = {}, accent = "#68DDB8" }) => {
   const frame = useCurrentFrame();
   const { width, height } = useVideoConfig();
   const style = ["glass", "chrome", "clay", "neon", "soft"].includes(scene.threeDStyle) ? scene.threeDStyle : "glass";
-  const object = ["orb", "cube", "torus", "rings", "crystal", "cluster"].includes(scene.threeDObject) ? scene.threeDObject : "orb";
+  const object = ["orb", "cube", "torus", "rings", "crystal", "cluster", "isometric"].includes(scene.threeDObject) ? scene.threeDObject : "orb";
   const hasTextColumn = ["editorial", "split"].includes(scene.layout);
   const objectX = hasTextColumn ? (width > height ? 1.55 : 0.62) : 0;
   const objectScale = hasTextColumn ? (width > height ? 1.12 : 0.94) : 1.35;
