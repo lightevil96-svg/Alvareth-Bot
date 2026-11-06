@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -132,6 +133,16 @@ test('planner accepts ChatGPT storyboard JSON without a local inference service'
   assert.equal(plan.sourcePrompt, 'Buat video promosi kopi lokal tanpa musik.');
   assert.equal(plan.musicStyle, 'none');
   assert.equal(plan.scenes.length, 1);
+});
+
+test('the published ChatGPT fox storyboard example matches the runtime schema', () => {
+  const guide = readFileSync(new URL('../prompt-remotion.md', import.meta.url), 'utf8');
+  const blocks = [...guide.matchAll(/\\`\\`\\`json\\s*([\\s\\S]*?)\\`\\`\\`/gi)];
+  assert.ok(blocks.length >= 2, 'guide should include schema and full example JSON');
+  const plan = planVideoPrompt(blocks.at(-1)[1]);
+  assert.equal(plan.title, 'Rumi dan Cahaya Hutan');
+  assert.equal(plan.scenes.length, 5);
+  assert.equal(plan.targetDurationSeconds, 30);
 });
 
 test('planner rejects plain-language briefs and directs owners to the ChatGPT JSON guide', () => {
