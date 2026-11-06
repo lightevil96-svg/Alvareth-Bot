@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
-import { chmodSync, closeSync, existsSync, mkdirSync, openSync, readFileSync } from "node:fs";
+import { chmodSync, closeSync, createReadStream, existsSync, mkdirSync, openSync, readFileSync, statSync, unwatchFile, watchFile } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,7 +8,68 @@ import { localServiceUrl } from "./local-service.js";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const DATA_DIR = process.env.ALVARETH_DATA_DIR ? resolve(process.env.ALVARETH_DATA_DIR) : join(homedir(), ".alvareth-bot-data");
 const MANAGED = global.__alvarethVideoLocalServices || (global.__alvarethVideoLocalServices = new Map());
+const LOG_TAILS = global.__alvarethVideoLocalServiceLogTails || (global.__alvarethVideoLocalServiceLogTails = new Map());
 const DEFAULT_VOXCPM_URL = "http://127.0.0.1:7861";
+
+function followLogFile(name, logPath) {
+  if (LOG_TAILS.has(logPath)) return;
+  let offset = 0;
+  try { offset = statSync(logPath).size; } catch { return; }
+  let pending = "";
+  let reading = false;
+  let changedWhileReading = false;
+
+  const readAppended = () => {
+    if (reading) { changedWhileReading = true; return; }
+    let size;
+    try { size = statSync(logPath).size; } catch { return; }
+    if (size < offset) { offset = 0; pending = ""; }
+    if (size <= offset) return;
+
+    const start = offset;
+    offset = size;
+    reading = true;
+    const stream = createReadStream(logPath, { start, end: size - 1 });
+    stream.on("data", chunk => {
+      pending += chunk.toString("utf8");
+      const lines = pending.split(/\\r\\n|\\n|\\r/);
+      pending = lines.pop() || "";
+      for (const line of lines) {
+        if (line.trim()) console.log("[" + new Date().toISOString() + "] [REMOTION:" + name + "] " + line.trim());
+      }
+    });
+    stream.on("error", error => {
+      reading = false;
+      console.warn("[REMOTION] Gagal membaca log " + name + ":", error.message);
+    });
+    stream.on("end", () => {
+      reading = false;
+      if (changedWhileReading) {
+        changedWhileReading = false;
+        readAppended();
+      }
+    });
+  };
+
+  const listener = () => readAppended();
+  watchFile(logPath, { interval: 500, persistent: false }, listener);
+  LOG_TAILS.set(logPath, () => unwatchFile(logPath, listener));
+  readAppended();
+  console.log("[REMOTION] Monitoring terminal untuk " + name + " aktif.");
+}
+
+function ensureVoxCPMLogTail() {
+  const logDir = join(DATA_DIR, "video-studio", "logs");
+  const logPath = join(logDir, "voxcpm2.log");
+  try {
+    mkdirSync(logDir, { recursive: true, mode: 0o700 });
+    const fd = openSync(logPath, "a", 0o600);
+    closeSync(fd);
+    followLogFile("VOXCPM2", logPath);
+  } catch (error) {
+    console.warn("[REMOTION] Monitoring log VoxCPM2 tidak dapat dimulai:", error.message);
+  }
+}
 
 export function getLocalVideoServiceConfig(env = process.env) {
   const voxUrl = String(env.VIDEO_STUDIO_VOXCPM_URL || DEFAULT_VOXCPM_URL).trim();
@@ -81,6 +142,7 @@ function launchManaged(name, command, args, env) {
     closeSync(logFd);
     logFd = null;
     state.logPath = logPath;
+    followLogFile(name.toUpperCase(), logPath);
     MANAGED.set(name, state);
     child.once("spawn", () => { state.pid = child.pid || null; });
     child.once("error", error => {
@@ -123,12 +185,14 @@ async function requestJson(url, timeoutMs = 1800) {
 const sleep = ms => new Promise(resolvePromise => setTimeout(resolvePromise, ms));
 
 async function waitForService(url, isReady, waitMs, shouldStop = () => false) {
+  const waitForever = waitMs === null || waitMs === Infinity;
   let result = await requestJson(url);
-  if (waitMs <= 0 || (result.reachable && isReady(result.data, result)) || shouldStop()) return result;
-  const deadline = Date.now() + waitMs;
-  while (Date.now() < deadline) {
+  if ((!waitForever && waitMs <= 0) || (result.reachable && isReady(result.data, result)) || shouldStop()) return result;
+  const deadline = waitForever ? Infinity : Date.now() + waitMs;
+  while (waitForever || Date.now() < deadline) {
     if (shouldStop()) break;
-    await sleep(Math.min(500, Math.max(50, deadline - Date.now())));
+    const remaining = waitForever ? 500 : Math.min(500, Math.max(50, deadline - Date.now()));
+    await sleep(remaining);
     result = await requestJson(url);
     if (result.reachable && isReady(result.data, result)) break;
     if (shouldStop()) break;
@@ -258,7 +322,10 @@ export async function startLocalVideoServices({ env = process.env, services = ["
   const startAllowed = start && config.autoStart;
   const result = {};
   const tasks = [];
-  if (services.includes("voxcpm")) tasks.push(inspectVoxCPM(config, env, waitMs, startAllowed).then(value => { result.voxcpm = value; }));
+  if (services.includes("voxcpm")) tasks.push(inspectVoxCPM(config, env, waitMs, startAllowed).then(value => {
+    result.voxcpm = value;
+    if (value.ready) ensureVoxCPMLogTail();
+  }));
   await Promise.all(tasks);
   return result;
 }
