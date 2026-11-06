@@ -170,7 +170,7 @@ test("compiles deterministic 3D scenes and a separate brand-credit overlay", () 
       narration: "Kenali desain baru dengan tampilan yang lebih modern.",
       visualType: "3d",
       threeDStyle: "chrome",
-      threeDObject: "rings",
+      threeDObject: "isometric",
       layout: "editorial"
     }]
   }, "Buat video 3D product reveal");
@@ -179,5 +179,5 @@ test("compiles deterministic 3D scenes and a separate brand-credit overlay", () 
   assert.equal(project.brandCredit, "Dibuat oleh ALVARETHBOT");
   assert.equal(project.scenes[0].visualType, "3d");
   assert.equal(project.scenes[0].threeDStyle, "chrome");
-  assert.equal(project.scenes[0].threeDObject, "rings");
+  assert.equal(project.scenes[0].threeDObject, "isometric");
 });
