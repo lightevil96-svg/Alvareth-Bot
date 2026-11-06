@@ -66,17 +66,17 @@ jobs:
           node --check video-studio/whatsapp.js
           node --check plugins/owner/remotion.js
           node --check server.js
+      - name: Install isolated renderer dependencies
+        run: |
+          mkdir -p "$RUNNER_TEMP/remotion-render"
+          npm install --prefix "$RUNNER_TEMP/remotion-render" --ignore-scripts --no-package-lock remotion@4.0.540 @remotion/bundler@4.0.540 @remotion/renderer@4.0.540 @remotion/layout-utils@4.0.540 react@19.2.0 react-dom@19.2.0
+          ln -s "$RUNNER_TEMP/remotion-render/node_modules" node_modules
       - name: Compile the Remotion JSX entrypoint
         run: npx -y esbuild@0.25.0 video-studio/remotion/index.jsx --bundle --platform=browser --external:react --external:remotion --outfile=/tmp/video-studio-entry-check.js
       - name: Run Video Studio regression tests
         run: node --test tests/video-studio.test.js tests/video-studio-media.test.js tests/video-studio-voice.test.js tests/video-studio-typography.test.js tests/remotion-whatsapp.test.js tests/video-studio-local.test.js tests/video-studio-installer.test.js
       - name: Test Python voice service contract (mock inference)
         run: python3 -m unittest discover -s tests -p '*_test.py'
-      - name: Install isolated renderer dependencies
-        run: |
-          mkdir -p "$RUNNER_TEMP/remotion-render"
-          npm install --prefix "$RUNNER_TEMP/remotion-render" --ignore-scripts --no-package-lock remotion@4.0.540 @remotion/bundler@4.0.540 @remotion/renderer@4.0.540 react@19.2.0 react-dom@19.2.0
-          ln -s "$RUNNER_TEMP/remotion-render/node_modules" node_modules
       - name: Render and decode real MP4 from fixed storyboard (no AI inference)
         env:
           VIDEO_STUDIO_RENDER_CONCURRENCY: '1'
