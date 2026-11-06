@@ -1,4 +1,4 @@
-> Current runtime (2026-11-06): ChatGPT-authored storyboard JSON is supplied manually; no LLM planner runs in the bot. The bot parses, normalizes, compiles, validates, and renders the JSON. See [../prompt-remotion.md](../prompt-remotion.md) for the authoritative input contract and [../docs/REMOTION_WHATSAPP_LINUX.md](../docs/REMOTION_WHATSAPP_LINUX.md) for setup. Earlier design sections below are historical guidance, not current runtime guarantees.
+> Current runtime (2026-11-06): storyboard JSON is authored manually by any external AI model selected by the operator; no LLM planner runs in the bot. The bot parses, normalizes, compiles, validates, and renders JSON. Do not reintroduce a planner or LLM call into the bot unless explicitly requested. See [../prompt-remotion.md](../prompt-remotion.md) for the authoritative input contract and [../docs/REMOTION_WHATSAPP_LINUX.md](../docs/REMOTION_WHATSAPP_LINUX.md) for setup. Sections describing in-bot planning below are historical design guidance, not current runtime guarantees.
 
 # Video Studio — AI Prompt Understanding & Remotion Planning Contract
 
@@ -213,22 +213,22 @@ When asked to implement this feature:
 | Remotion typography animation | Implemented |
 | Procedural background music moods | Implemented in code; runtime render not yet verified |
 | Scene sound effects | Implemented in code; runtime render not yet verified |
-| ChatGPT-authored storyboard JSON intake | Implemented; no LLM call is made by the bot |
-| AI storyboard generation inside the bot | Not implemented by design; ChatGPT is used separately |
+| External-AI-authored storyboard JSON intake | Implemented; no LLM call is made by the bot |
+| AI storyboard generation inside the bot | Not implemented by design; the AI model is chosen and used separately by the operator |
 | JSON storyboard to safe Remotion project compiler | Implemented |
 | Local VoxCPM2 voice-over / TTS | Implemented in code; runtime model quality must be tested on the target host |
 | Uploaded image/video assets | Not implemented |
 | Preview/edit storyboard before render | Not implemented |
 
 
-## 10. Current ChatGPT-authored JSON workflow (2026-11-06)
+## 10. Current external-AI-authored JSON workflow (2026-11-06)
 
 The WhatsApp owner workflow is now:
 
-1. The operator gives the user's brief to ChatGPT and follows the repository-root `prompt-remotion.md`.
-2. ChatGPT returns exactly one JSON object with `schemaVersion: 1`, `sourcePrompt`, and `scenes[]`.
+1. The operator gives the user's brief to any external AI model and asks it to follow the repository-root `prompt-remotion.md`.
+2. The external AI model returns exactly one JSON object with `schemaVersion: 1`, `sourcePrompt`, and `scenes[]`.
 3. The owner pastes the JSON using `.remotion generate` or `.remotion <JSON>`.
-4. `video-studio/prompt/storyboard.js` parses and normalizes the supplied JSON. It rejects plain-language briefs and never calls Ollama, ChatGPT API, or another inference service.
+4. `video-studio/prompt/storyboard.js` parses and normalizes the supplied JSON. It rejects plain-language briefs and never calls Ollama, an AI API, or another inference service.
 5. `video-studio/prompt/compile.js` maps the normalized plan to the allowlisted Remotion payload and calls `validateVideoProject()`.
 6. The single-worker queue prepares local VoxCPM2 narration when configured, optional reviewed ComfyUI footage/music, and renders the deterministic Remotion composition.
 7. The completed MP4 is verified and returned to WhatsApp.
