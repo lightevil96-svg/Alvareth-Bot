@@ -11,6 +11,7 @@ Use this skill when creating or changing a prompt-only video workflow for Alvare
 Always load `remotion-best-practices` and `remotion-professional-editor`. Then load only the relevant specialist skills:
 
 - `remotion-markup` for composition, typography, animation, effects, transitions, and audio.
+- `alvareth-3d-animation` plus `remotion-markup/3d.md` for Three.js / React Three Fiber motion graphics and 3D quality checks.
 - `remotion-captions` for timed narration captions and SRT handling.
 - `remotion-multimedia` for video/audio metadata.
 - `remotion-render` and `remotion-studio` for rendering and preview verification.
