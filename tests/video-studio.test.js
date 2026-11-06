@@ -79,6 +79,17 @@ test("fits scene durations to an explicit duration requested in the prompt", () 
   assert.equal(Math.round(plan.totalDurationSeconds), 30);
 });
 
+test("rejects a target duration shorter than narration and reading requirements", () => {
+  assert.throws(() => normalizeVideoPlan({
+    title: "Cerita hutan",
+    targetDurationSeconds: 5,
+    scenes: [{
+      text: "Menjelajahi hutan",
+      narration: "Hari ini kita akan berjalan menyusuri hutan yang sangat luas untuk menemukan rahasia kecil di balik pepohonan yang tinggi."
+    }]
+  }, "Buat video cerita hutan berdurasi lima detik"), /terlalu pendek untuk seluruh narasi dan teks/);
+});
+
 test("compiles a safe AI plan into a validated Remotion project", () => {
   const plan = normalizeVideoPlan({
     title: "Belajar fokus",
