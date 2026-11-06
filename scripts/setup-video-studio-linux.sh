@@ -8,7 +8,6 @@ ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 LOCAL_PREFIX="${HOME}/.local"
 LOCAL_BIN="${LOCAL_PREFIX}/bin"
-OLLAMA_BIN="${LOCAL_BIN}/ollama"
 VENV="${ROOT}/.venv-voxcpm"
 MODEL_DIR="${VOXCPM_MODEL_PATH:-${HOME}/alvareth-models/VoxCPM2}"
 LOG_DIR="${ALVARETH_DATA_DIR:-${HOME}/.alvareth-bot-data}/video-studio/logs"
@@ -27,17 +26,14 @@ for arg in "$@"; do
       cat <<'HELP'
 Usage: bash scripts/setup-video-studio-linux.sh [--allow-cpu] [--with-models]
 
-Installs uv, Python 3.11, the VoxCPM2 adapter and Ollama under user-writable
-paths. No apt, sudo, systemd, or ensurepip is required.
+Installs uv, Python 3.11, the VoxCPM2 adapter under user-writable paths.
+No apt, sudo, systemd, or ensurepip is required.
 
 Default: prepare runtimes/dependencies only. Large model weights are not downloaded.
---with-models: start local Ollama, pull the configured planner model, and download
-               openbmb/VoxCPM2 weights.
+--with-models: download openbmb/VoxCPM2 weights.
 --allow-cpu:   explicitly allow CPU-only VoxCPM2 (can be very slow).
 
 Optional environment:
-  VIDEO_STUDIO_OLLAMA_MODEL=qwen2.5:7b
-  VIDEO_STUDIO_OLLAMA_BIN=/absolute/path/to/ollama
   VOXCPM_MODEL_PATH=/absolute/path/to/VoxCPM2
   VOXCPM_TORCH_INDEX_URL=https://download.pytorch.org/whl/cuXXX
   VOXCPM_TORCH_INDEX_URL=https://download.pytorch.org/whl/cpu
@@ -90,11 +86,9 @@ trap 'exit 130' INT TERM
 [ "$(uname -s)" = "Linux" ] || fail "Script ini hanya untuk Linux."
 case "$(uname -m)" in
   x86_64|amd64)
-    OLLAMA_ARCH="amd64"
     UV_ARCHIVE="uv-x86_64-unknown-linux-musl.tar.gz"
     ;;
   aarch64|arm64)
-    OLLAMA_ARCH="arm64"
     UV_ARCHIVE="uv-aarch64-unknown-linux-musl.tar.gz"
     ;;
   *) fail "Arsitektur $(uname -m) belum didukung." ;;
@@ -102,7 +96,7 @@ esac
 have tar || fail "Perintah tar tidak tersedia."
 have curl || fail "Perintah curl diperlukan untuk mengunduh runtime."
 have find || fail "Perintah find tidak tersedia."
-mkdir -p "$LOCAL_BIN" "$LOCAL_PREFIX/lib/ollama" "$LOG_DIR"
+mkdir -p "$LOCAL_BIN" "$LOG_DIR"
 export PATH="$LOCAL_BIN:$PATH"
 
 GPU_AVAILABLE=0
@@ -159,29 +153,6 @@ fi
 PYTHON="$VENV/bin/python"
 [ -x "$PYTHON" ] || fail "Virtualenv gagal dibuat: $VENV"
 
-# The current official Ollama Linux package is .tar.zst, not the obsolete .tgz.
-# Install zstandard into the isolated venv and stream-extract into ~/.local.
-DETECTED_OLLAMA="${VIDEO_STUDIO_OLLAMA_BIN:-}"
-if [ -n "$DETECTED_OLLAMA" ]; then
-  [ -x "$DETECTED_OLLAMA" ] || fail "VIDEO_STUDIO_OLLAMA_BIN tidak executable: $DETECTED_OLLAMA"
-elif have ollama; then
-  DETECTED_OLLAMA="$(command -v ollama)"
-elif [ -x "$OLLAMA_BIN" ]; then
-  DETECTED_OLLAMA="$OLLAMA_BIN"
-else
-  info "Memasang modul decompressor zstandard di virtualenv..."
-  "$UV_BIN" pip install --python "$PYTHON" zstandard
-  info "Mengunduh paket resmi Ollama Linux ${OLLAMA_ARCH} (.tar.zst) dan mengekstraknya ke ${LOCAL_PREFIX}..."
-  curl -fL --retry 3 --connect-timeout 20 --progress-bar \
-    "https://ollama.com/download/ollama-linux-${OLLAMA_ARCH}.tar.zst" \
-    | "$PYTHON" scripts/extract-ollama-tar-zst.py "$LOCAL_PREFIX"
-  [ -x "$OLLAMA_BIN" ] || fail "Ekstraksi selesai tetapi $OLLAMA_BIN tidak ditemukan."
-  chmod 755 "$OLLAMA_BIN"
-  DETECTED_OLLAMA="$OLLAMA_BIN"
-fi
-info "Ollama binary: $DETECTED_OLLAMA"
-"$DETECTED_OLLAMA" --version
-
 # Report host and container memory without requiring the optional free command.
 "$PYTHON" - <<'PY'
 from pathlib import Path
@@ -236,21 +207,6 @@ PY
 [ -x "$VENV/bin/hf" ] || fail "Perintah hf tidak terpasang; huggingface-hub CLI tidak ditemukan."
 
 if [ "$WITH_MODELS" -eq 1 ]; then
-  info "Menyiapkan Ollama loopback untuk unduhan model..."
-  if ! curl -fsS --max-time 2 http://127.0.0.1:11434/api/tags >/dev/null 2>&1; then
-    mkdir -p "${HOME}/.ollama/models"
-    nohup env OLLAMA_HOST=127.0.0.1:11434 OLLAMA_NO_CLOUD=1 \
-      OLLAMA_MODELS="${HOME}/.ollama/models" \
-      "$DETECTED_OLLAMA" serve >> "$LOG_DIR/ollama.log" 2>&1 </dev/null &
-  fi
-  READY=0
-  for _ in $(seq 1 60); do
-    if curl -fsS --max-time 2 http://127.0.0.1:11434/api/tags >/dev/null 2>&1; then READY=1; break; fi
-    sleep 2
-  done
-  [ "$READY" -eq 1 ] || fail "Ollama tidak siap setelah 120 detik. Log: $LOG_DIR/ollama.log"
-  info "Mengunduh planner model ${VIDEO_STUDIO_OLLAMA_MODEL:-qwen2.5:7b}..."
-  "$DETECTED_OLLAMA" pull "${VIDEO_STUDIO_OLLAMA_MODEL:-qwen2.5:7b}"
   info "Mengunduh bobot VoxCPM2 ke ${MODEL_DIR}..."
   mkdir -p "$MODEL_DIR"
   "$VENV/bin/hf" download openbmb/VoxCPM2 --local-dir "$MODEL_DIR"
@@ -260,9 +216,6 @@ cat <<SUMMARY
 
 [Alvareth setup] Runtime berhasil disiapkan.
 
-VIDEO_STUDIO_OLLAMA_BIN=${DETECTED_OLLAMA}
-VIDEO_STUDIO_OLLAMA_URL=http://127.0.0.1:11434
-VIDEO_STUDIO_OLLAMA_MODEL=${VIDEO_STUDIO_OLLAMA_MODEL:-qwen2.5:7b}
 VIDEO_STUDIO_VOXCPM_URL=http://127.0.0.1:7861
 VIDEO_STUDIO_LOCAL_SERVICES_AUTOSTART=true
 VOXCPM_MODEL_PATH=${MODEL_DIR}
@@ -272,5 +225,5 @@ Virtualenv: ${PYTHON}
 Model directory: ${MODEL_DIR}
 Logs: ${LOG_DIR}
 
-Runtime dan model sudah disiapkan. Kirim: .remotion services, lalu buat video. VoxCPM2 akan dimuat otomatis saat narasi pertama diperlukan.
+Runtime VoxCPM2 sudah disiapkan. Kirim: .remotion services, lalu buat video. VoxCPM2 akan dimuat otomatis saat narasi pertama diperlukan.
 SUMMARY
