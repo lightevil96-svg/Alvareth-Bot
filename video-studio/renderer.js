@@ -42,7 +42,10 @@ export async function renderVideoProject(project, outputPath, onProgress = () =>
     captionStyle: project.captionStyle || "tiktok",
     captionPosition: project.captionPosition || "bottom"
   };
-  const chromiumOptions = { gl: "angle" };
+  const uses3D = project.scenes.some(scene => scene.visualType === "3d");
+  const requestedGl = String(process.env.VIDEO_STUDIO_WEBGL_RENDERER || "swangle").trim();
+  const supportedGl = ["angle", "angle-egl", "egl", "swiftshader", "swangle", "vulkan"];
+  const chromiumOptions = uses3D ? { gl: supportedGl.includes(requestedGl) ? requestedGl : "swangle" } : {};
   const composition = await selectComposition({ serveUrl, id: "LightJurnalVideo", inputProps, chromiumOptions });
   const renderSettings = resolveRenderSettings(project);
   console.log("[REMOTION:RENDER] Mulai encode " + composition.durationInFrames + " frame @ " + composition.fps + " FPS.");
