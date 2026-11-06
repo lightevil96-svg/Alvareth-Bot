@@ -211,6 +211,17 @@ async function showHardware(m) {
 }
 
 async function showMenu(m, conn, usedPrefix = ".") {
+  const styleSettings = getStyleSettings();
+  const voiceSettings = getVoiceSettings();
+  const activeStyle = STYLE_PRESETS[styleSettings.preset]?.label || styleSettings.preset;
+  const activeVoice = voiceSettings.provider === "edge-tts"
+    ? "Edge TTS • " + (EDGE_TTS_VOICES[voiceSettings.voice] || voiceSettings.voice)
+    : "VoxCPM2 • " + voiceSettings.voxStyle;
+  const menuDescription = [
+    "Style aktif: " + activeStyle,
+    "Voice aktif: " + activeVoice,
+    "Pilih kategori di bawah untuk mengatur video, suara, engine, dan layanan."
+  ].join("\n");
   const sections = [
     {
       title: "Produksi video",
@@ -224,13 +235,18 @@ async function showMenu(m, conn, usedPrefix = ".") {
       ]
     },
     {
+      title: "Tampilan & audio",
+      rows: [
+        remotionMenuRow(usedPrefix, "🎨 Pilih style video", "Pilih Cinematic 2.5D, 3D Glass, Kinetic, atau Editorial.", "style"),
+        remotionMenuRow(usedPrefix, "🗣️ Pengaturan voice", "Pilih provider, voice Indonesia, karakter, tempo, pitch, dan volume.", "voice")
+      ]
+    },
+    {
       title: "Engine & layanan lokal",
       rows: [
-        remotionMenuRow(usedPrefix, "⚙️ Kelola layanan", "Cek Edge TTS online, VoxCPM2, dan layanan video.", "services-menu"),
-        remotionMenuRow(usedPrefix, "⬇️ Instalasi engine", "Pilih GPU otomatis, CPU, atau cek progres.", "install-menu"),
-        remotionMenuRow(usedPrefix, "🖥️ Spesifikasi server", "Periksa CPU, RAM, storage, dan GPU.", "hardware"),
-        remotionMenuRow(usedPrefix, "🗣️ Pengaturan voice", "Pilih provider, suara, kecepatan, pitch, dan karakter narator.", "voice"),
-        remotionMenuRow(usedPrefix, "🎨 Pilih style video", "Atur preset visual default untuk video baru.", "style")
+        remotionMenuRow(usedPrefix, "⚙️ Kelola layanan", "Cek Edge TTS online, VoxCPM2, ComfyUI, dan workflow.", "services-menu"),
+        remotionMenuRow(usedPrefix, "⬇️ Instalasi engine", "Pasang engine otomatis GPU/CPU dan cek progres.", "install-menu"),
+        remotionMenuRow(usedPrefix, "🖥️ Spesifikasi server", "Periksa CPU, RAM, storage, dan GPU.", "hardware")
       ]
     }
   ];
@@ -247,8 +263,8 @@ async function showMenu(m, conn, usedPrefix = ".") {
     "• " + usedPrefix + "remotion cancel",
     "",
     "• " + usedPrefix + "remotion hardware",
-    "• " + usedPrefix + "remotion voice",
     "• " + usedPrefix + "remotion style",
+    "• " + usedPrefix + "remotion voice",
     "",
     "*Layanan:*",
     "• " + usedPrefix + "remotion services",
@@ -262,7 +278,7 @@ async function showMenu(m, conn, usedPrefix = ".") {
 
   return sendNativeMenu(m, conn, {
     title: "Remotion Video Studio",
-    description: "Akses produksi video, riwayat, pengiriman MP4, layanan lokal, diagnostik server, dan instalasi engine dari satu menu.",
+    description: menuDescription,
     sections,
     fallback
   });
@@ -304,7 +320,9 @@ async function showVoiceMenu(m, conn, usedPrefix = ".", notice = "") {
       rows: [
         remotionMenuRow(usedPrefix, "☁️ Edge TTS online", "Microsoft Neural voice, gratis, tanpa model GPU.", "voice provider edge-tts"),
         remotionMenuRow(usedPrefix, "🖥️ VoxCPM2 lokal", "Model lokal 2B; dapat lambat pada CPU.", "voice provider voxcpm2"),
-        remotionMenuRow(usedPrefix, "⬇️ Pasang Edge TTS", "Instal adapter ringan tanpa mengunduh model suara.", "voice install")
+        remotionMenuRow(usedPrefix, "⬇️ Pasang Edge TTS", "Instal adapter ringan tanpa mengunduh model suara.", "voice install"),
+        remotionMenuRow(usedPrefix, "🚀 Pasang engine VoxCPM2", "Instal runtime dan model lokal (butuh storage dan resource server).", "install"),
+        remotionMenuRow(usedPrefix, "▶️ Aktifkan VoxCPM2", "Jalankan layanan suara lokal jika engine sudah terpasang.", "services start voice")
       ]
     },
     {
@@ -347,7 +365,8 @@ async function showVoiceMenu(m, conn, usedPrefix = ".", notice = "") {
         remotionMenuRow(usedPrefix, "Calm", "Tenang dan lembut.", "voice style calm"),
         remotionMenuRow(usedPrefix, "Storytelling", "Intonasi penceritaan lebih ekspresif.", "voice style storytelling"),
         remotionMenuRow(usedPrefix, "🎙️ Cinematic Narrator", "Narator laki-laki dewasa, hangat, dalam, dan ekspresif melalui voice design VoxCPM2.", "voice style cinematic"),
-        remotionMenuRow(usedPrefix, "↩️ Reset pengaturan", "Kembalikan provider dan suara ke default.", "voice reset")
+        remotionMenuRow(usedPrefix, "↩️ Reset pengaturan", "Kembalikan provider dan suara ke default.", "voice reset"),
+        remotionMenuRow(usedPrefix, "🏠 Kembali ke menu utama", "Kembali ke daftar fitur .remotion.", "")
       ]
     }
   ];
@@ -368,12 +387,13 @@ async function showVoiceMenu(m, conn, usedPrefix = ".", notice = "") {
     "• " + usedPrefix + "remotion voice provider voxcpm2",
     "• " + usedPrefix + "remotion voice model id-ID-GadisNeural",
     "• " + usedPrefix + "remotion voice model id-ID-ArdiNeural",
-    "• " + usedPrefix + "remotion voice style cinematic",
+    "• " + usedPrefix + "remotion voice style natural|warm|energetic|calm|storytelling|cinematic",
     "• " + usedPrefix + "remotion voice rate +10%",
     "• " + usedPrefix + "remotion voice pitch +10Hz",
     "• " + usedPrefix + "remotion voice volume +10%",
     "• " + usedPrefix + "remotion voice install",
-    "• " + usedPrefix + "remotion voice reset"
+    "• " + usedPrefix + "remotion voice reset",
+    "• " + usedPrefix + "remotion"
   ].join("\n");
   return sendNativeMenu(m, conn, {
     title: "Pengaturan voice",
@@ -393,6 +413,7 @@ async function showStyleMenu(m, conn, usedPrefix = ".", notice = "") {
     "style " + id
   ));
   rows.push(remotionMenuRow(usedPrefix, "↩️ Reset style default", "Kembali ke Cinematic 2.5D Explainer.", "style reset"));
+  rows.push(remotionMenuRow(usedPrefix, "🏠 Kembali ke menu utama", "Kembali ke daftar fitur .remotion.", ""));
   const description = [
     notice,
     "Style aktif: " + active.label,
@@ -404,7 +425,8 @@ async function showStyleMenu(m, conn, usedPrefix = ".", notice = "") {
     description,
     "",
     ...Object.entries(STYLE_PRESETS).map(([id, preset]) => "• " + usedPrefix + "remotion style " + id + " — " + preset.label),
-    "• " + usedPrefix + "remotion style reset"
+    "• " + usedPrefix + "remotion style reset",
+    "• " + usedPrefix + "remotion"
   ].join("\n");
   return sendNativeMenu(m, conn, {
     title: "Style video",
@@ -517,7 +539,7 @@ async function handleVoiceCommand(m, conn, usedPrefix = ".", argument = "") {
   }
   let patch;
   if (key === "provider" && ["edge-tts", "voxcpm2"].includes(value)) patch = { provider: value };
-  else if (key === "model" && Object.hasOwn(EDGE_TTS_VOICES, value)) patch = { voice: value };
+  else if (key === "model" && Object.hasOwn(EDGE_TTS_VOICES, value)) patch = { provider: "edge-tts", voice: value };
   else if (key === "style" && Object.hasOwn(VOXCPM_STYLES, value)) patch = { provider: "voxcpm2", voxStyle: value };
   else if (key === "rate" && /^[+-]\d{1,2}%$/.test(value)) patch = { rate: value };
   else if (key === "pitch" && /^[+-]\d{1,2}Hz$/i.test(value)) patch = { pitch: value };
