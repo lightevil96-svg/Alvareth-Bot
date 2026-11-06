@@ -175,6 +175,7 @@ test("plugin rejects every non-owner action and binds prompt sessions to their i
   assert.ok(voiceIds.includes("!remotion voice provider edge-tts"));
   assert.ok(voiceIds.includes("!remotion voice model id-ID-GadisNeural"));
   assert.ok(voiceIds.includes("!remotion voice rate +10%"));
+  assert.ok(voiceIds.includes("!remotion voice reset"));
   await handler(m,{conn,text:"voice provider voxcpm2",isROwner:true,usedPrefix:"!"});
   const savedVoiceSettings = JSON.parse(await readFile(dir + "/video-studio/voice-settings.json", "utf8"));
   assert.equal(savedVoiceSettings.provider, "voxcpm2");
