@@ -186,7 +186,7 @@ Properti wajib: `schemaVersion`, `sourcePrompt`, `title`, dan `scenes`. Properti
 | `motif` | `rings`, `orbit`, `wave`, `grid`, `bars`, `ribbon`, `spark`, `none` |
 | `motion` | `fade-up`, `scale-in`, `slide-left`, `slide-right`, `reveal`, `float`, `count-up` |
 | `transition` | `cut`, `fade`, `crossfade`, `wipe`, `wipe-left`, `wipe-right`, `wipe-up`, `wipe-down`, `slide`, `slide-left`, `slide-right`, `slide-up`, `slide-down`, `zoom`, `glitch`, `dissolve`, `flash`, `dip-to-black` |
-| `visualType` | `cinematic`, `kinetic`, `editorial`, `data-chart`, `diagram`, `app-mockup`, `waveform`, `3d` |
+| `visualType` | `cinematic`, `kinetic`, `editorial`, `illustrated`, `data-chart`, `diagram`, `app-mockup`, `waveform`, `3d` |
 | `threeDStyle` | `glass`, `chrome`, `clay`, `neon`, `soft` |
 | `threeDObject` | `orb`, `cube`, `torus`, `rings`, `crystal`, `cluster`, `isometric` |
 | `backgroundEffect` | `none`, `orbs`, `particles`, `grid`, `waves`, `dots`, `vignette` |
