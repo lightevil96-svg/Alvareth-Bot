@@ -168,15 +168,15 @@ Sebelum mengubah kode, AI/developer wajib membaca [`AGENTS.md`](AGENTS.md), [`AI
 
 ## LightJurnal Video Studio — prompt-first Remotion editing
 
-LightJurnal sends one natural-language prompt to Alvareth-Bot. The AI planner turns the brief into a creative direction and storyboard, then compiles it into a validated Remotion project. Scene count, per-scene pacing, aspect ratio, FPS, palette, layout, motion, transitions, music mood and sound cues are inferred from the prompt; users do not configure them manually.
+Storyboard dibuat di ChatGPT secara terpisah menggunakan [panduan prompt-remotion.md](prompt-remotion.md), lalu dikirim sebagai satu objek JSON ke Alvareth-Bot. Bot tidak menjalankan Ollama atau LLM lokal: backend hanya mem-parsing, menormalisasi, memvalidasi, mengompilasi, dan merender storyboard yang dikirim. Scene, pacing, rasio, FPS, palet, layout, motion, transisi, dan sound cue harus sudah ditentukan dalam JSON.
 
 ### WhatsApp owner command
 
 The same Video Studio engine is also available directly inside Alvareth Bot through the owner-only `.remotion` command:
 
 - `.remotion` opens the interactive WhatsApp menu.
-- `.remotion generate` asks for a natural-language video brief in the next message.
-- `.remotion <prompt>` starts a video job immediately.
+- `.remotion generate` asks for the ChatGPT-generated storyboard JSON in the next message.
+- `.remotion <JSON>` validates the supplied storyboard and starts a video job immediately. Brief teks biasa tidak diproses.
 - `.remotion status`, `.remotion history`, `.remotion send`, `.remotion guide`, `.remotion services`, and `.remotion cancel` manage the workflow.
 - Rendered MP4 files are sent back to WhatsApp and retained in the persistent Video Studio render directory.
 
@@ -184,7 +184,7 @@ See [Linux deployment and provider setup](docs/REMOTION_WHATSAPP_LINUX.md). Andr
 
 ### Local setup and verification
 
-Follow [Linux local-service setup](docs/REMOTION_WHATSAPP_LINUX.md) and [license/skill audit](docs/REMOTION_LOCAL_LICENSES.md). Planning uses local Ollama; narration uses the included VoxCPM2 Python adapter. No hosted AI or stock-media fallback is used. Music is absent unless a suitable local track exists. Motion graphics remain available without an optional reviewed ComfyUI workflow.
+Follow [Linux local-service setup](docs/REMOTION_WHATSAPP_LINUX.md), [ChatGPT storyboard contract](prompt-remotion.md), and [license/skill audit](docs/REMOTION_LOCAL_LICENSES.md). Storyboard authoring happens manually in ChatGPT outside the bot; no LLM inference service or API key is required by the bot. Narration uses the included VoxCPM2 Python adapter. AI footage is optional through a reviewed local ComfyUI workflow; without it, Remotion renders motion graphics. Music is not forced.
 
 Existing authenticated LightJurnal API routes and the tunnel are preserved. The WhatsApp owner check applies to the WhatsApp entrypoint; the separate HTTP API retains Bearer authentication. Native voice generation, subtitles, hardware performance and WhatsApp delivery must be validated on the actual VPS.
 
@@ -194,7 +194,7 @@ The existing HTTP API and optional Cloudflare Tunnel remain available alongside 
 
 - `GET /api/video-studio/health` — public service readiness check.
 - `GET /api/video-studio/limits` — renderer limits; requires Bearer authentication.
-- `POST /api/video-studio/plan` — turns a prompt into a normalized storyboard; requires Bearer authentication.
+- `POST /api/video-studio/plan` — accepts a ChatGPT-authored storyboard JSON in `prompt` and returns the normalized plan; requires Bearer authentication.
 - `POST /api/video-studio/jobs` — validates and queues a video project; requires Bearer authentication.
 - `GET /api/video-studio/jobs` — lists recent jobs; requires Bearer authentication.
 - `GET /api/video-studio/jobs/:id` — reads job status; requires Bearer authentication.
