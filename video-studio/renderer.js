@@ -27,6 +27,7 @@ export async function renderVideoProject(project, outputPath, onProgress = () =>
   const inputProps = {
     title: project.title,
     scenes: project.scenes,
+    brandCredit: project.brandCredit || "",
     fps: project.fps,
     width: project.width,
     height: project.height,
@@ -41,7 +42,8 @@ export async function renderVideoProject(project, outputPath, onProgress = () =>
     captionStyle: project.captionStyle || "tiktok",
     captionPosition: project.captionPosition || "bottom"
   };
-  const composition = await selectComposition({ serveUrl, id: "LightJurnalVideo", inputProps });
+  const chromiumOptions = { gl: "angle" };
+  const composition = await selectComposition({ serveUrl, id: "LightJurnalVideo", inputProps, chromiumOptions });
   const renderSettings = resolveRenderSettings(project);
   console.log("[REMOTION:RENDER] Mulai encode " + composition.durationInFrames + " frame @ " + composition.fps + " FPS.");
   await renderMedia({
@@ -50,6 +52,7 @@ export async function renderVideoProject(project, outputPath, onProgress = () =>
     codec: "h264",
     outputLocation: outputPath,
     inputProps,
+    chromiumOptions,
     concurrency: renderSettings.concurrency,
     crf: renderSettings.crf,
     x264Preset: renderSettings.x264Preset,
