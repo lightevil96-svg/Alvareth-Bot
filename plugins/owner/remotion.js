@@ -539,7 +539,7 @@ async function handleVoiceCommand(m, conn, usedPrefix = ".", argument = "") {
   }
   let patch;
   if (key === "provider" && ["edge-tts", "voxcpm2"].includes(value)) patch = { provider: value };
-  else if (key === "model" && Object.hasOwn(EDGE_TTS_VOICES, value)) patch = { voice: value };
+  else if (key === "model" && Object.hasOwn(EDGE_TTS_VOICES, value)) patch = { provider: "edge-tts", voice: value };
   else if (key === "style" && Object.hasOwn(VOXCPM_STYLES, value)) patch = { provider: "voxcpm2", voxStyle: value };
   else if (key === "rate" && /^[+-]\d{1,2}%$/.test(value)) patch = { rate: value };
   else if (key === "pitch" && /^[+-]\d{1,2}Hz$/i.test(value)) patch = { pitch: value };
