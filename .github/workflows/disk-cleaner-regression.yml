@@ -1,0 +1,35 @@
+name: Disk Manager regression
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/disk-cleaner.js'
+      - 'plugins/owner/disk.js'
+      - 'tests/disk-cleaner.test.js'
+      - '.github/workflows/disk-cleaner-regression.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'lib/disk-cleaner.js'
+      - 'plugins/owner/disk.js'
+      - 'tests/disk-cleaner.test.js'
+      - '.github/workflows/disk-cleaner-regression.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  disk-cleaner:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check Disk Manager JavaScript
+        run: |
+          node --check lib/disk-cleaner.js
+          node --check plugins/owner/disk.js
+      - name: Test safe cleanup boundaries
+        run: node --test tests/disk-cleaner.test.js
