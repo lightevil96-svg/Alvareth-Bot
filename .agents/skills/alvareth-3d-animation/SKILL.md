@@ -53,7 +53,7 @@ Choose one primary object per scene: `orb`, `cube`, `torus`, `rings`, `crystal`,
 
 - Wrap every 3D scene in `<ThreeCanvas width={width} height={height}>`.
 - Animate only from `useCurrentFrame()` and `useVideoConfig()`; never use `useFrame()`, wall-clock time, CSS animation, timers, or unseeded randomness.
-- Use ANGLE (`gl: "angle"`) as the default headless WebGL backend; it is required by the verified CI renderer. Use `angle-egl` only on Linux hosts with working EGL/GPU support. Treat `swangle` as an opt-in fallback and verify it on the target host before enabling. Override with `VIDEO_STUDIO_WEBGL_RENDERER`.
+- Use `swangle` plus `enableMultiProcessOnLinux: true` on CPU-only Linux hosts and GitHub Actions; Remotion 4 recommends this software backend when no GPU is exposed. Use `angle` on desktop/GPU hosts and `angle-egl` on Linux GPU hosts. Override with `VIDEO_STUDIO_WEBGL_RENDERER` only after a real render test.
 - Keep the 3D canvas behind typography. Do not render headings, captions, logos, or brand credits inside the Three.js scene.
 - Keep the object in a clear visual area and preserve mobile-safe text margins.
 - Use intentional three-point lighting, appropriate roughness/metalness, restrained camera orbit, depth, and one dominant subject.
