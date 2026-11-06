@@ -5,6 +5,7 @@ on:
     branches: [main, feat/remotion-whatsapp-linux]
     paths:
       - "video-studio/**"
+      - "prompt-remotion.md"
       - "tests/video-studio*.js"
       - "tests/remotion-whatsapp.test.js"
       - "tests/voxcpm_service_test.py"
