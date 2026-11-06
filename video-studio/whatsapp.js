@@ -7,6 +7,7 @@ const ACTIONS = new Map([
   ["guide", "guide"], ["panduan", "guide"],
   ["services", "services"], ["layanan", "services"],
   ["services-menu", "servicesMenu"], ["install-menu", "installMenu"],
+  ["voice", "voice"], ["suara", "voice"],
   ["hardware", "hardware"], ["specs", "hardware"], ["server", "hardware"],
   ["install", "install"], ["pasang", "install"], ["setup", "install"],
   ["cancel", "cancel"], ["batal", "cancel"],
