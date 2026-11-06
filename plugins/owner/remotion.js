@@ -23,7 +23,7 @@ import {
   getRemotionProviderReadiness
 } from "../../video-studio/whatsapp.js";
 
-const MAX_PROMPT_CHARS = 6000;
+const MAX_PROMPT_CHARS = 24000;
 const DEFAULT_SESSION_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_POLL_INTERVAL_MS = 6000;
 const DEFAULT_WATCH_TIMEOUT_MS = 30 * 60 * 1000;
@@ -32,7 +32,7 @@ const watchers = global.__alvarethRemotionWatchers || (global.__alvarethRemotion
 
 startVideoQueue();
 
-const planning = global.__alvarethRemotionPlanning || (global.__alvarethRemotionPlanning = new Set());
+const preparing = global.__alvarethRemotionPreparing || (global.__alvarethRemotionPreparing = new Set());
 
 function positiveInt(value, fallback, min, max) {
   const parsed = Number(value);
@@ -90,7 +90,7 @@ async function showMenu(m, conn, usedPrefix = ".") {
     {
       header: "",
       title: "🎬 Buat video",
-      description: "Ceritakan ide; AI menyusun produksi otomatis.",
+      description: "Tempel storyboard JSON yang disusun ChatGPT.",
       id: usedPrefix + "remotion generate"
     },
     {
@@ -136,8 +136,8 @@ async function showMenu(m, conn, usedPrefix = ".") {
       text: [
         "🎬 *ALVARETH REMOTION VIDEO STUDIO*",
         "",
-        "Buat video cukup dengan satu brief dalam bahasa sehari-hari.",
-        "AI akan menentukan alur, scene, visual, gerakan, audio, dan format secara otomatis.",
+        "Susun storyboard JSON menggunakan ChatGPT dan panduan prompt-remotion.md.",
+        "Bot memvalidasi storyboard, menyiapkan media lokal, lalu merender MP4.",
         "",
         "🔒 Akses dibatasi untuk owner.",
         "Pilih tindakan di bawah ini."
@@ -185,7 +185,7 @@ async function startPromptJob(prompt, chat, fallbackConn) {
   }
 
   const maxActive = positiveInt(process.env.VIDEO_STUDIO_WA_MAX_ACTIVE_JOBS, 2, 1, 5);
-  if (planning.size) return sendText(chat, "Planner sedang menyusun storyboard. Tunggu proses sebelumnya selesai.", fallbackConn);
+  if (preparing.size) return sendText(chat, "Storyboard lain sedang divalidasi. Tunggu proses sebelumnya selesai.", fallbackConn);
   const currentJobs = activeJobs();
   if (currentJobs.length >= maxActive) {
     await sendText(
@@ -197,7 +197,7 @@ async function startPromptJob(prompt, chat, fallbackConn) {
     return;
   }
 
-  planning.add(chat);
+  preparing.add(chat);
   await sendText(
     chat,
     "🧠 *AI Director mulai bekerja*\n" +
@@ -234,7 +234,7 @@ async function startPromptJob(prompt, chat, fallbackConn) {
       fallbackConn
     );
   } finally {
-    planning.delete(chat);
+    preparing.delete(chat);
   }
 }
 
@@ -394,12 +394,11 @@ async function showHistory(m) {
 async function showServices(m) {
   const statuses = providerReadiness();
   for (const [name, base, path] of [
-    ["Ollama", process.env.VIDEO_STUDIO_OLLAMA_URL || "http://127.0.0.1:11434", "api/tags"],
     ["VoxCPM2", process.env.VIDEO_STUDIO_VOXCPM_URL || "http://127.0.0.1:7861", "health"]
   ]) {
     try {
       const health = await localJson(localServiceUrl(base, path), {}, 3000);
-      const ready = name === "Ollama" ? health.models?.some(item => item.name === (process.env.VIDEO_STUDIO_OLLAMA_MODEL || "qwen2.5:7b")) : health.ready === true && health.provider === "VoxCPM2";
+      const ready = health.ready === true && health.provider === "VoxCPM2";
       statuses.push({ name: name + " pemeriksaan langsung", configured: Boolean(ready), detail: ready ? "Service merespons dan model siap." : "Service merespons tetapi model belum siap." });
     } catch { statuses.push({ name: name + " pemeriksaan langsung", configured: false, detail: "Service lokal tidak dapat dihubungi." }); }
   }
@@ -408,7 +407,7 @@ async function showServices(m) {
   );
   lines.push(
     "",
-    "SFX dibuat lokal. Musik tidak dipaksakan. Konfigurasi dan pemeriksaan langsung dibedakan; kesehatan service belum membuktikan hasil video.",
+    "Storyboard dibuat di ChatGPT secara terpisah; bot tidak menjalankan Ollama atau LLM lokal. SFX dibuat lokal dan musik tidak dipaksakan. Kesehatan service belum membuktikan hasil video.",
     "Reference image dapat meningkatkan konsistensi karakter, tetapi tidak menjamin identitas identik pada semua scene."
   );
   return m.reply("⚙️ *KESIAPAN REMOTION DI SERVER LINUX*\n\n" + lines.join("\n\n"));
@@ -416,11 +415,13 @@ async function showServices(m) {
 
 async function showGuide(m) {
   return m.reply(
-    "🧠 *PANDUAN PROMPT REMOTION*\n\n" +
-    "Tulis seperti memberi brief kepada sutradara video. Tidak perlu mengatur teknis render.\n\n" +
-    "*Contoh:*\n" +
-    "Buat video cinematic 35 detik tentang seekor rubah kecil yang tersesat di hutan saat hujan. Gunakan gaya animasi 3D yang hangat, karakter utama berpenampilan konsisten, alur emosional dari takut menjadi berani, kamera sinematik, narasi Bahasa Indonesia, subtitle sinkron, musik orkestra lembut, dan efek suara alam. Akhiri dengan pesan tentang keberanian.\n\n" +
-    "*Tips:* sebutkan topik, penonton, suasana, karakter, pesan utama, dan platform jika memang penting. AI akan menentukan scene, tempo, rasio, warna, gerakan, dan transisi."
+    "🧠 *PANDUAN PROMPT REMOTION*\\n\\n" +
+    "Storyboard dibuat di ChatGPT, bukan oleh AI lokal di VPS.\\n" +
+    "Buka panduan lengkap: https://github.com/lightevil96-svg/Alvareth-Bot/blob/feat/remotion-whatsapp-linux/prompt-remotion.md\\n\\n" +
+    "1. Kirim brief videomu ke ChatGPT dengan mengikuti panduan tersebut.\\n" +
+    "2. Minta satu objek JSON lengkap dengan schemaVersion: 1.\\n" +
+    "3. Salin seluruh JSON, lalu ketik .remotion generate dan tempel JSON itu.\\n\\n" +
+    "Batas input 24.000 karakter; 1–60 scene; maksimal 20 detik per scene dan 300 detik total. Brief teks biasa tidak diproses."
   );
 }
 
@@ -483,7 +484,7 @@ global.__alvarethRemotionPromptHandler = async (m, context = {}) => {
     return true;
   }
   if (prompt.length < 8) {
-    await sendText(m.chat, "Prompt terlalu singkat. Kirim brief yang lebih jelas atau mulai ulang dengan .remotion generate.", context.conn);
+    await sendText(m.chat, "Input terlalu singkat. Tempel JSON storyboard lengkap dari ChatGPT atau mulai ulang dengan .remotion generate.", context.conn);
     return true;
   }
 
