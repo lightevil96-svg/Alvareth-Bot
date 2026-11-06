@@ -44,8 +44,13 @@ class ContractTests(unittest.TestCase):
             self.assertEqual(self.request("/speech", {"text":"Halo"})[0],429)
         finally:
             service.LOCK.release()
-        service.synthesize = lambda text, language: {"provider":"VoxCPM2", "fixture":True}
-        self.assertEqual(self.request("/speech", {"text":"Halo"})[1]["fixture"], True)
+        received = {}
+        def fake_synthesize(text, language, voice_description=None):
+            received["voice_description"] = voice_description
+            return {"provider":"VoxCPM2", "fixture":True}
+        service.synthesize = fake_synthesize
+        self.assertEqual(self.request("/speech", {"text":"Halo", "voice_description":"warm narrator"})[1]["fixture"], True)
+        self.assertEqual(received["voice_description"], "warm narrator")
         self.assertFalse(service.LOCK.locked())
 
 if __name__ == "__main__":
