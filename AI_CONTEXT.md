@@ -204,3 +204,5 @@ Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes n
 Current media invariant: local numerical loopback URLs, redirects rejected, no hosted AI fallback. VoxCPM2 Python source pinned; model must be local. Single bot worker only. SFX time uses Scene startFrame (including transition handle), not speechStartFrame. Validator must retain music/caption metadata and up to 60 voice tracks.
 
 - 2026-11-06: Added a rootless Pterodactyl/Linux bootstrap using uv-managed Python 3.11 and a user-local Ollama binary; setup details are in docs/REMOTION_WHATSAPP_LINUX.md.
+
+- 2026-11-06: Corrected rootless Linux bootstrap to use official Ollama tar.zst, Python streaming extraction, standalone uv release binary, and --allow-cpu flag; see scripts/setup-video-studio-linux.sh.

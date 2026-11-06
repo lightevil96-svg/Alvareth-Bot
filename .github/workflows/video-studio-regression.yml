@@ -10,6 +10,7 @@ on:
       - "tests/voxcpm_service_test.py"
       - "scripts/remotion-smoke.js"
       - "scripts/setup-video-studio-linux.sh"
+      - "scripts/extract-ollama-tar-zst.py"
       - "plugins/owner/remotion.js"
       - "tests/video-studio-media.test.js"
       - "tests/video-studio-tunnel.test.js"
@@ -23,6 +24,7 @@ on:
       - "tests/voxcpm_service_test.py"
       - "scripts/remotion-smoke.js"
       - "scripts/setup-video-studio-linux.sh"
+      - "scripts/extract-ollama-tar-zst.py"
       - "plugins/owner/remotion.js"
       - ".github/workflows/video-studio-regression.yml"
 
@@ -46,6 +48,7 @@ jobs:
       - name: Check Video Studio JavaScript modules
         run: |
           bash -n scripts/setup-video-studio-linux.sh
+          python3 -m py_compile scripts/extract-ollama-tar-zst.py
           node --check video-studio/api.js
           node --check video-studio/local-services.js
           node --check video-studio/tunnel.js

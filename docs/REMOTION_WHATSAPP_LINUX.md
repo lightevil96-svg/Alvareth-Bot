@@ -82,34 +82,31 @@ The repository updater defaults to main. On a staging checkout, set `AUTO_UPDATE
 
 ## Pterodactyl / container tanpa akses root
 
-Jika console hosting menunjukkan path seperti `/home/container` dan `apt install` tidak bisa dijalankan, jangan gunakan instruksi `sudo apt` atau `python3 -m venv` biasa. Jalankan bootstrap user-space dari root repository:
+Jika console hosting menunjukkan path seperti `/home/container` dan tidak memiliki akses `apt`/root, gunakan bootstrap user-space. Script terbaru mengunduh binary `uv` langsung dari GitHub Releases (tanpa menjalankan installer `/bin/sh`), mengelola Python 3.11 tanpa `ensurepip`, dan mengekstrak paket resmi Ollama `.tar.zst` ke `$HOME/.local` dengan decompressor Python.
+
+Runtime dan dependensi saja:
 
 ```bash
 bash scripts/setup-video-studio-linux.sh
 ```
 
-Script ini:
-- memasang binary resmi Ollama di `$HOME/.local` tanpa sudo/systemd;
-- memasang `uv` sebagai binary mandiri, lalu mengunduh Python 3.11 terkelola;
-- membuat ulang hanya folder virtualenv proyek `.venv-voxcpm`, tanpa bergantung pada Debian `ensurepip`;
-- memasang PyTorch dan dependensi VoxCPM2 yang dipin di `requirements.txt`;
-- mendeteksi GPU NVIDIA yang terlihat dari container dan menampilkan status CUDA.
-
-Untuk sekaligus mengunduh bobot model (unduhan besar dan memakai disk), jalankan:
+Jika container tidak menampilkan GPU NVIDIA tetapi kamu memang ingin mencoba inference VoxCPM2 dengan CPU:
 
 ```bash
-bash scripts/setup-video-studio-linux.sh --with-models
+bash scripts/setup-video-studio-linux.sh --allow-cpu
 ```
 
-Jika memilih build PyTorch CUDA, tentukan index yang cocok dengan driver host dari selector resmi PyTorch sebelum menjalankan script, misalnya:
+Setelah RAM container diperiksa dan cukup, unduh bobot model:
 
 ```bash
-VOXCPM_TORCH_INDEX_URL='https://download.pytorch.org/whl/<build-yang-cocok>' bash scripts/setup-video-studio-linux.sh
+bash scripts/setup-video-studio-linux.sh --allow-cpu --with-models
 ```
 
-Jangan menyalin placeholder `<build-yang-cocok>` secara literal. Pilih perintah yang sesuai dengan driver/GPU di [PyTorch Start Locally](https://pytorch.org/get-started/locally/). Jika container tidak menampilkan GPU NVIDIA, script sengaja menghentikan instalasi VoxCPM2. CPU inference tersedia, tetapi VoxCPM2 2B pada CPU bisa sangat lambat. Script tidak memilih CPU secara diam-diam; untuk mengaktifkannya secara sadar gunakan `VOXCPM_ALLOW_CPU=1 bash scripts/setup-video-studio-linux.sh`. Akselerasi NVIDIA memerlukan CUDA 12.0+ dan GPU yang benar-benar diteruskan ke container. Container harus mengizinkan binary execution, koneksi HTTPS keluar, proses background, serta menyediakan RAM dan disk yang cukup. Instalasi user-space tidak dapat menambahkan GPU ke container jika provider tidak melakukan GPU passthrough.
+Untuk server dengan GPU NVIDIA yang sudah dipassthrough, jalankan tanpa `--allow-cpu`. Jika build PyTorch tertentu dibutuhkan, set `VOXCPM_TORCH_INDEX_URL` sesuai driver/CUDA dari [PyTorch Start Locally](https://pytorch.org/get-started/locally/).
 
-Setelah bootstrap selesai, restart bot dan jalankan `.remotion services`. Ollama otomatis ditemukan di `$HOME/.local/bin/ollama`; bila panel membutuhkan environment path eksplisit, salin nilai `VIDEO_STUDIO_OLLAMA_BIN` yang dicetak script ke Startup Variables. Folder `.venv-voxcpm` dan model harus berada di storage persisten container.
+Bootstrap ini tidak memerlukan `sudo`, `apt`, `systemd`, `free`, atau `nvidia-smi` untuk membuat virtualenv. Ketersediaan GPU dideteksi dari `nvidia-smi` jika tool itu terlihat di container; tidak ditemukannya tool tersebut belum membuktikan host fisik tidak punya GPU. Script menampilkan RAM host-visible dan limit cgroup bila tersedia. VoxCPM2 2B mendukung CPU sebagai pilihan perangkat, tetapi performanya bisa sangat lambat. Pastikan provider mengizinkan binary execution, koneksi HTTPS keluar, proses background, dan storage persisten.
+
+Ollama memakai URL paket resmi `https://ollama.com/download/ollama-linux-amd64.tar.zst` (atau arm64 sesuai arsitektur). Script memasang binary ke `$HOME/.local/bin/ollama`, tanpa menulis ke `/usr`. Setelah bootstrap selesai, restart bot dan jalankan `.remotion services`. Bila panel membutuhkan environment path eksplisit, gunakan nilai `VIDEO_STUDIO_OLLAMA_BIN` yang dicetak script.
 
 ## Automatic local service startup
 

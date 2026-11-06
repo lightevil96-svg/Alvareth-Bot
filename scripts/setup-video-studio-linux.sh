@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Rootless bootstrap for Alvareth Remotion on Pterodactyl/Debian containers.
-# No apt, sudo, systemd, paid API, or global Python package changes.
+# Rootless bootstrap for Alvareth Remotion on Pterodactyl/Linux containers.
+# Uses only user-writable paths; no apt, sudo, systemd, or shell installer.
 set -Eeuo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -11,33 +11,33 @@ OLLAMA_BIN="${LOCAL_BIN}/ollama"
 VENV="${ROOT}/.venv-voxcpm"
 MODEL_DIR="${VOXCPM_MODEL_PATH:-${HOME}/alvareth-models/VoxCPM2}"
 LOG_DIR="${ALVARETH_DATA_DIR:-${HOME}/.alvareth-bot-data}/video-studio/logs"
+UV_VERSION="${UV_VERSION:-0.13.7}"
 WITH_MODELS=0
+ALLOW_CPU="${VOXCPM_ALLOW_CPU:-0}"
 
 for arg in "$@"; do
   case "$arg" in
     --with-models) WITH_MODELS=1 ;;
+    --allow-cpu) ALLOW_CPU=1 ;;
     --help|-h)
       cat <<'HELP'
-Usage: bash scripts/setup-video-studio-linux.sh [--with-models]
+Usage: bash scripts/setup-video-studio-linux.sh [--allow-cpu] [--with-models]
 
-Installs Ollama and uv into ~/.local, creates a Python 3.11 virtualenv
-without ensurepip, and installs the pinned VoxCPM2 adapter dependencies.
+Installs uv, Python 3.11, the VoxCPM2 adapter and Ollama under user-writable
+paths. No apt, sudo, systemd, or ensurepip is required.
 
-By default, large model weights are NOT downloaded.
-Pass --with-models to start local Ollama, pull qwen2.5:7b, and download
-openbmb/VoxCPM2 weights into $HOME/alvareth-models/VoxCPM2.
+Default: prepare runtimes/dependencies only. Large model weights are not downloaded.
+--with-models: start local Ollama, pull the configured planner model, and download
+               openbmb/VoxCPM2 weights.
+--allow-cpu:   explicitly allow CPU-only VoxCPM2 (can be very slow).
 
-Optional:
+Optional environment:
+  VIDEO_STUDIO_OLLAMA_MODEL=qwen2.5:7b
+  VIDEO_STUDIO_OLLAMA_BIN=/absolute/path/to/ollama
+  VOXCPM_MODEL_PATH=/absolute/path/to/VoxCPM2
   VOXCPM_TORCH_INDEX_URL=https://download.pytorch.org/whl/cuXXX
-      Select the exact PyTorch CUDA wheel index compatible with the host driver.
   VOXCPM_TORCH_INDEX_URL=https://download.pytorch.org/whl/cpu
-      Force CPU-only PyTorch.
-  VOXCPM_ALLOW_CPU=1
-      Explicitly choose slower CPU inference when no NVIDIA GPU is visible.
-  VOXCPM_MODEL_PATH=/absolute/path
-      Override the VoxCPM2 model directory.
-  VOXCPM_ALLOW_CPU=1
-      Explicitly opt into experimental/slow CPU-only VoxCPM2; CUDA is the upstream target.
+  UV_VERSION=0.13.7
 HELP
       exit 0
       ;;
@@ -51,90 +51,116 @@ have() { command -v "$1" >/dev/null 2>&1; }
 
 [ "$(uname -s)" = "Linux" ] || fail "Script ini hanya untuk Linux."
 case "$(uname -m)" in
-  x86_64|amd64) OLLAMA_ARCH="amd64" ;;
-  aarch64|arm64) OLLAMA_ARCH="arm64" ;;
-  *) fail "Arsitektur $(uname -m) belum didukung oleh bootstrap Ollama ini." ;;
+  x86_64|amd64)
+    OLLAMA_ARCH="amd64"
+    UV_ARCHIVE="uv-x86_64-unknown-linux-musl.tar.gz"
+    ;;
+  aarch64|arm64)
+    OLLAMA_ARCH="arm64"
+    UV_ARCHIVE="uv-aarch64-unknown-linux-musl.tar.gz"
+    ;;
+  *) fail "Arsitektur $(uname -m) belum didukung." ;;
 esac
-have tar || fail "Perintah tar tidak tersedia pada container."
-if ! have curl && ! have wget; then fail "Container membutuhkan curl atau wget untuk mengunduh runtime."; fi
+have tar || fail "Perintah tar tidak tersedia."
+have curl || fail "Perintah curl diperlukan untuk mengunduh runtime."
+have find || fail "Perintah find tidak tersedia."
+mkdir -p "$LOCAL_BIN" "$LOCAL_PREFIX/lib/ollama" "$LOG_DIR"
+export PATH="$LOCAL_BIN:$PATH"
 
 download() {
-  local url="$1" output="$2"
-  if have curl; then
-    curl -fL --retry 3 --connect-timeout 20 "$url" -o "$output"
-  else
-    wget -O "$output" "$url"
-  fi
+  curl -fL --retry 3 --connect-timeout 20 "$1" -o "$2"
 }
 
-mkdir -p "$LOCAL_BIN" "$LOCAL_PREFIX/lib/ollama" "$LOG_DIR"
-
-# Install official Ollama Linux archive into the writable user prefix.
-if ! have ollama && [ ! -x "$OLLAMA_BIN" ]; then
-  info "Mengunduh binary resmi Ollama untuk Linux ${OLLAMA_ARCH} ke ${LOCAL_PREFIX} (tanpa root)..."
-  TMP_OLLAMA="$(mktemp -d)"
-  trap 'rm -rf "$TMP_OLLAMA"' EXIT
-  download "https://ollama.com/download/ollama-linux-${OLLAMA_ARCH}.tgz" "$TMP_OLLAMA/ollama.tgz"
-  tar -tzf "$TMP_OLLAMA/ollama.tgz" | grep -Eq '(^|/)bin/ollama$' || fail "Arsip Ollama tidak berisi bin/ollama."
-  tar -xzf "$TMP_OLLAMA/ollama.tgz" -C "$LOCAL_PREFIX"
-  chmod 755 "$OLLAMA_BIN"
-  rm -rf "$TMP_OLLAMA"
-  trap - EXIT
-fi
-
-if have ollama; then
-  DETECTED_OLLAMA="$(command -v ollama)"
-else
-  DETECTED_OLLAMA="$OLLAMA_BIN"
-fi
-[ -x "$DETECTED_OLLAMA" ] || fail "Binary Ollama tidak ditemukan setelah instalasi: $DETECTED_OLLAMA"
-info "Ollama binary: $DETECTED_OLLAMA"
-"$DETECTED_OLLAMA" --version
-
-# Install uv as a standalone user binary. uv does not depend on Python/ensurepip.
+# Install the standalone uv release binary directly. Do not invoke install.sh:
+# some restricted game-server shells wrap /bin/sh and reject its option parsing.
 if ! have uv && [ ! -x "$LOCAL_BIN/uv" ]; then
-  info "Memasang uv ke ${LOCAL_BIN}..."
+  info "Mengunduh uv ${UV_VERSION} (binary standalone)..."
   TMP_UV="$(mktemp -d)"
   trap 'rm -rf "$TMP_UV"' EXIT
-  download "https://astral.sh/uv/install.sh" "$TMP_UV/install-uv.sh"
-  UV_INSTALL_DIR="$LOCAL_BIN" UV_NO_MODIFY_PATH=1 sh "$TMP_UV/install-uv.sh"
+  download "https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/${UV_ARCHIVE}" "$TMP_UV/uv.tar.gz"
+  tar -xzf "$TMP_UV/uv.tar.gz" -C "$TMP_UV"
+  UV_SOURCE="$(find "$TMP_UV" -type f -name uv -print -quit)"
+  [ -n "$UV_SOURCE" ] || fail "Arsip uv tidak berisi binary uv."
+  cp "$UV_SOURCE" "$LOCAL_BIN/uv"
+  chmod 755 "$LOCAL_BIN/uv"
   rm -rf "$TMP_UV"
   trap - EXIT
 fi
 UV_BIN="$(command -v uv || true)"
-if [ -z "$UV_BIN" ]; then UV_BIN="$LOCAL_BIN/uv"; fi
-[ -x "$UV_BIN" ] || fail "uv gagal dipasang. Periksa koneksi HTTPS dan izin tulis HOME."
-export PATH="$LOCAL_BIN:$PATH"
+[ -n "$UV_BIN" ] || UV_BIN="$LOCAL_BIN/uv"
+[ -x "$UV_BIN" ] || fail "Binary uv tidak ditemukan."
 info "uv: $("$UV_BIN" --version)"
 
-# VoxCPM2 upstream supports Python 3.10-3.12. Use managed Python 3.11 so
-# Debian's missing python3-venv/ensurepip package is not required.
+# uv provisions Python itself, bypassing Debian's missing python3-venv/ensurepip.
 info "Menyiapkan Python 3.11 terkelola oleh uv..."
 "$UV_BIN" python install 3.11
-if [ -e "$VENV" ]; then
-  case "$VENV" in
-    "$ROOT/.venv-voxcpm") rm -rf -- "$VENV" ;;
-    *) fail "Lokasi virtualenv tidak aman: $VENV" ;;
-  esac
+if [ -e "$VENV" ] && [ ! -x "$VENV/bin/python" ]; then
+  info "Menghapus virtualenv lama yang tidak lengkap..."
+  rm -rf -- "$VENV"
 fi
-"$UV_BIN" venv --python 3.11 "$VENV"
+if [ ! -x "$VENV/bin/python" ]; then
+  "$UV_BIN" venv --python 3.11 "$VENV"
+fi
 PYTHON="$VENV/bin/python"
 [ -x "$PYTHON" ] || fail "Virtualenv gagal dibuat: $VENV"
 
-# Pick CPU wheels when no NVIDIA GPU is exposed. For CUDA, users may pass the
-# official PyTorch index URL matching their driver/CUDA compatibility.
+# The current official Ollama Linux package is .tar.zst, not the obsolete .tgz.
+# Install zstandard into the isolated venv and stream-extract into ~/.local.
+DETECTED_OLLAMA="${VIDEO_STUDIO_OLLAMA_BIN:-}"
+if [ -n "$DETECTED_OLLAMA" ]; then
+  [ -x "$DETECTED_OLLAMA" ] || fail "VIDEO_STUDIO_OLLAMA_BIN tidak executable: $DETECTED_OLLAMA"
+elif have ollama; then
+  DETECTED_OLLAMA="$(command -v ollama)"
+elif [ -x "$OLLAMA_BIN" ]; then
+  DETECTED_OLLAMA="$OLLAMA_BIN"
+else
+  info "Memasang modul decompressor zstandard di virtualenv..."
+  "$UV_BIN" pip install --python "$PYTHON" zstandard
+  info "Mengunduh paket resmi Ollama Linux ${OLLAMA_ARCH} (.tar.zst) dan mengekstraknya ke ${LOCAL_PREFIX}..."
+  curl -fL --retry 3 --connect-timeout 20 --progress-bar \
+    "https://ollama.com/download/ollama-linux-${OLLAMA_ARCH}.tar.zst" \
+    | "$PYTHON" scripts/extract-ollama-tar-zst.py "$LOCAL_PREFIX"
+  [ -x "$OLLAMA_BIN" ] || fail "Ekstraksi selesai tetapi $OLLAMA_BIN tidak ditemukan."
+  chmod 755 "$OLLAMA_BIN"
+  DETECTED_OLLAMA="$OLLAMA_BIN"
+fi
+info "Ollama binary: $DETECTED_OLLAMA"
+"$DETECTED_OLLAMA" --version
+
+# Report host and container memory without requiring the optional free command.
+"$PYTHON" - <<'PY'
+from pathlib import Path
+mem = {}
+try:
+    for line in Path("/proc/meminfo").read_text().splitlines():
+        if line.startswith(("MemTotal:", "MemAvailable:")):
+            key, value, *_ = line.split()
+            mem[key.rstrip(":")] = int(value) // 1024
+except OSError:
+    pass
+print("[Alvareth setup] Host-visible RAM:", f"{mem.get('MemTotal', 'unknown')} MiB")
+print("[Alvareth setup] Host-visible available RAM:", f"{mem.get('MemAvailable', 'unknown')} MiB")
+for p in ("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory/memory.limit_in_bytes"):
+    try:
+        value = Path(p).read_text().strip()
+        if value != "max" and value.isdigit() and int(value) < 2**60:
+            print("[Alvareth setup] Container memory limit:", f"{int(value)//(1024*1024)} MiB")
+            break
+    except OSError:
+        continue
+PY
+
+# CPU-only must be explicit. PyTorch CPU wheels come from the official CPU index.
 if [ -n "${VOXCPM_TORCH_INDEX_URL:-}" ]; then
-  info "Memasang PyTorch dari index yang dipilih: ${VOXCPM_TORCH_INDEX_URL}"
+  info "Memasang PyTorch dari index: ${VOXCPM_TORCH_INDEX_URL}"
   "$UV_BIN" pip install --python "$PYTHON" torch torchaudio --index-url "$VOXCPM_TORCH_INDEX_URL"
 elif have nvidia-smi && nvidia-smi >/dev/null 2>&1; then
-  info "GPU NVIDIA terdeteksi. Memasang PyTorch dengan backend CUDA otomatis; verifikasi CUDA dilakukan sesudah instalasi."
-  UV_TORCH_BACKEND="${VOXCPM_TORCH_BACKEND:-auto}" "$UV_BIN" pip install --python "$PYTHON" torch torchaudio
+  info "GPU NVIDIA terdeteksi. Memasang PyTorch; periksa hasil CUDA di bawah..."
+  "$UV_BIN" pip install --python "$PYTHON" torch torchaudio
 else
-  if [ "${VOXCPM_ALLOW_CPU:-0}" != "1" ]; then
-    fail "GPU NVIDIA tidak terlihat di container. CPU inference VoxCPM2 bisa digunakan tetapi dapat sangat lambat. Untuk memilih CPU secara sadar, ulangi dengan VOXCPM_ALLOW_CPU=1; akselerasi NVIDIA memerlukan CUDA >=12.0 dan GPU passthrough."
-  fi
-  info "CPU-only dipilih secara eksplisit. CPU inference didukung, tetapi dapat sangat lambat; benchmark sebelum dipakai produksi."
-  UV_TORCH_BACKEND=cpu "$UV_BIN" pip install --python "$PYTHON" torch torchaudio
+  [ "$ALLOW_CPU" = "1" ] || fail "GPU NVIDIA tidak terlihat di container. Jika memang ingin mencoba CPU, jalankan: bash scripts/setup-video-studio-linux.sh --allow-cpu"
+  info "Memasang PyTorch CPU. VoxCPM2 dapat berjalan sangat lambat tanpa GPU."
+  "$UV_BIN" pip install --python "$PYTHON" torch torchaudio --index-url "https://download.pytorch.org/whl/cpu"
 fi
 
 info "Memasang adapter VoxCPM2 pada commit yang dipin di requirements.txt..."
@@ -143,25 +169,20 @@ info "Memasang adapter VoxCPM2 pada commit yang dipin di requirements.txt..."
 "$PYTHON" - <<'PY'
 import sys
 import torch
-print("Python:", sys.version.split()[0])
-print("PyTorch:", torch.__version__)
-print("CUDA available:", torch.cuda.is_available())
+print("[Alvareth setup] Python:", sys.version.split()[0])
+print("[Alvareth setup] PyTorch:", torch.__version__)
+print("[Alvareth setup] CUDA available:", torch.cuda.is_available())
 if torch.cuda.is_available():
-    print("GPU:", torch.cuda.get_device_name(0))
-try:
-    import voxcpm
-    print("VoxCPM import: OK")
-except Exception as exc:
-    print("VoxCPM import failed:", repr(exc))
-    raise
+    print("[Alvareth setup] GPU:", torch.cuda.get_device_name(0))
+import voxcpm
+print("[Alvareth setup] VoxCPM import: OK")
 PY
 
 [ -x "$VENV/bin/hf" ] || fail "Perintah hf tidak terpasang; huggingface-hub CLI tidak ditemukan."
 
 if [ "$WITH_MODELS" -eq 1 ]; then
-  have curl || fail "--with-models membutuhkan curl untuk health check Ollama."
+  info "Menyiapkan Ollama loopback untuk unduhan model..."
   if ! curl -fsS --max-time 2 http://127.0.0.1:11434/api/tags >/dev/null 2>&1; then
-    info "Menyalakan Ollama lokal untuk mengunduh model..."
     mkdir -p "${HOME}/.ollama/models"
     nohup env OLLAMA_HOST=127.0.0.1:11434 OLLAMA_NO_CLOUD=1 \
       OLLAMA_MODELS="${HOME}/.ollama/models" \
@@ -173,7 +194,7 @@ if [ "$WITH_MODELS" -eq 1 ]; then
     sleep 2
   done
   [ "$READY" -eq 1 ] || fail "Ollama tidak siap setelah 120 detik. Log: $LOG_DIR/ollama.log"
-  info "Mengunduh model planner qwen2.5:7b..."
+  info "Mengunduh planner model ${VIDEO_STUDIO_OLLAMA_MODEL:-qwen2.5:7b}..."
   "$DETECTED_OLLAMA" pull "${VIDEO_STUDIO_OLLAMA_MODEL:-qwen2.5:7b}"
   info "Mengunduh bobot VoxCPM2 ke ${MODEL_DIR}..."
   mkdir -p "$MODEL_DIR"
@@ -184,31 +205,17 @@ cat <<SUMMARY
 
 [Alvareth setup] Runtime berhasil disiapkan.
 
-Tambahkan/cek environment berikut pada panel hosting (jika panel meminta path absolut):
-  VIDEO_STUDIO_OLLAMA_BIN=${DETECTED_OLLAMA}
-  VIDEO_STUDIO_OLLAMA_URL=http://127.0.0.1:11434
-  VIDEO_STUDIO_OLLAMA_MODEL=${VIDEO_STUDIO_OLLAMA_MODEL:-qwen2.5:7b}
-  VIDEO_STUDIO_VOXCPM_URL=http://127.0.0.1:7861
-  VIDEO_STUDIO_LOCAL_SERVICES_AUTOSTART=true
-  VOXCPM_MODEL_PATH=${MODEL_DIR}
-  VOXCPM_DEVICE=auto
+VIDEO_STUDIO_OLLAMA_BIN=${DETECTED_OLLAMA}
+VIDEO_STUDIO_OLLAMA_URL=http://127.0.0.1:11434
+VIDEO_STUDIO_OLLAMA_MODEL=${VIDEO_STUDIO_OLLAMA_MODEL:-qwen2.5:7b}
+VIDEO_STUDIO_VOXCPM_URL=http://127.0.0.1:7861
+VIDEO_STUDIO_LOCAL_SERVICES_AUTOSTART=true
+VOXCPM_MODEL_PATH=${MODEL_DIR}
+VOXCPM_DEVICE=auto
 
-Virtualenv:
-  ${PYTHON}
+Virtualenv: ${PYTHON}
+Model directory: ${MODEL_DIR}
+Logs: ${LOG_DIR}
 
-Model directory:
-  ${MODEL_DIR}
-
-Logs:
-  ${LOG_DIR}
-
-Selanjutnya restart bot, lalu kirim:
-  .remotion services
-
-Catatan: --with-models mengunduh bobot besar. Tanpa flag tersebut, binary/dependencies
-sudah disiapkan tetapi model qwen2.5:7b dan VoxCPM2 belum diunduh.
+Restart bot, lalu kirim: .remotion services
 SUMMARY
-
-if ! have nvidia-smi || ! nvidia-smi >/dev/null 2>&1; then
-  echo "[PERINGATAN] Container tidak menampilkan GPU NVIDIA. VoxCPM2 berjalan di CPU dan mungkin tidak praktis untuk produksi."
-fi
