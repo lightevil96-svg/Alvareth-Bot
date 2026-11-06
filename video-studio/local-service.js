@@ -14,9 +14,14 @@ function requestWithoutTimeout(url, options = {}) {
   const target = new URL(url);
   const transport = target.protocol === "https:" ? httpsRequest : httpRequest;
   return new Promise((resolve, reject) => {
+    const headers = { ...(options.headers || {}) };
+    const hasContentLength = Object.keys(headers).some(key => key.toLowerCase() === "content-length");
+    if (options.body !== undefined && options.body !== null && !hasContentLength) {
+      headers["Content-Length"] = Buffer.byteLength(options.body);
+    }
     const request = transport(target, {
       method: options.method || "GET",
-      headers: options.headers,
+      headers,
       signal: options.signal
     }, response => {
       const chunks = [];
