@@ -7,7 +7,8 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { localServiceUrl } from '../video-studio/local-service.js';
+import { localJson, localServiceUrl } from '../video-studio/local-service.js';
+import { resolveRenderTimeout } from '../video-studio/engine/performance.js';
 import { buildLocalServiceEnvironment, getLocalVideoServiceConfig, isVoxCPMReady, startLocalVideoServices } from '../video-studio/local-services.js';
 import { planVideoPrompt } from '../video-studio/prompt/planner.js';
 import { prepareVoiceover } from '../video-studio/media/voiceover.js';
@@ -110,6 +111,25 @@ test('local service children receive only an allowlisted environment, never bot 
 test('local policy rejects hosted endpoints, credentials and redirect destinations', () => {
   for (const url of ['https://api.openai.com', 'http://localhost', 'http://127.0.0.1.evil.test', 'http://user:pass@127.0.0.1', 'file:///tmp/x']) assert.throws(() => localServiceUrl(url));
   assert.equal(localServiceUrl('http://127.0.0.1:7861', '/health'), 'http://127.0.0.1:7861/health');
+});
+
+test('local inference HTTP requests can wait for a slow response without a deadline', async t => {
+  let completed = false;
+  const base = await server(t, (_req, res) => {
+    setTimeout(() => {
+      completed = true;
+      res.end(JSON.stringify({ ready: true }));
+    }, 250);
+  });
+  const startedAt = Date.now();
+  const result = await localJson(base, {}, null);
+  assert.deepEqual(result, { ready: true });
+  assert.equal(completed, true);
+  assert.ok(Date.now() - startedAt >= 200);
+});
+
+test('Remotion frame readiness uses a practically unbounded delayRender timeout', () => {
+  assert.equal(resolveRenderTimeout(), 2147483647);
 });
 test('planner accepts ChatGPT storyboard JSON without a local inference service', () => {
   const plan = planVideoPrompt(JSON.stringify({
