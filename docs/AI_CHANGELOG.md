@@ -4,7 +4,7 @@
 - **Root cause:** provider readiness checked file existence but did not reuse the runtime's exact-byte SHA-256/model-policy validator or verify the reference placeholder.
 - **Fix:** readiness now validates each configured API workflow with `validateReviewedWorkflow`; video/image/music workflows stay unavailable until their exact bytes are approved. Character reference additionally requires both reviewed image and video workflows and the `{{REFERENCE_IMAGE}}` placeholder in the video graph. The ComfyUI live health check remains separate.
 - **Files:** `video-studio/whatsapp.js`, `plugins/owner/remotion.js`, `tests/remotion-whatsapp.test.js`, `README.md`, `docs/REMOTION_WHATSAPP_LINUX.md`, `AI_CONTEXT.md`.
-- **Tests:** added readiness regressions for unapproved hashes, missing video workflow, and missing reference placeholder. GitHub Actions result pending after commit; real ComfyUI inference and model compatibility remain unverified.
+- **Tests:** readiness regressions for unapproved hashes, missing video workflow, and missing reference placeholder passed in GitHub Actions on commit `8f54ee1`: JavaScript syntax checks, Video Studio regression suite, mock Python voice-service contract, JSX compilation, and real fixture MP4 render/decode. Real ComfyUI inference, model compatibility, live VoxCPM2 inference, VPS render, and WhatsApp delivery remain unverified.
 
 ## 2026-11-06 — Explicit local service start and VoxCPM2 loading diagnostics
 
