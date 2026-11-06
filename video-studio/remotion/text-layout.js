@@ -6,6 +6,7 @@ export function normalizeDisplayText(value) {
   return String(value == null ? "" : value)
     .normalize("NFC")
     .replace(/\u00a0/g, " ")
+    .replace(/Dibuat\s*oleh\s*ALVARETHBOT/giu, match => match[0] === "D" ? "Dibuat oleh ALVARETHBOT" : "dibuat oleh ALVARETHBOT")
     .replace(/Dibuat\s*oleh/giu, match => match[0] === "D" ? "Dibuat oleh" : "dibuat oleh")
     .replace(/[ \t]+/g, " ")
     .replace(/ *\n */g, "\n")
