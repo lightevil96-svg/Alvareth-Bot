@@ -1,3 +1,13 @@
+## 2026-11-06 — Remove Ollama and move storyboard authoring to ChatGPT
+
+- **Request:** remove the local Ollama planner; the owner will ask ChatGPT to author a production-ready storyboard and paste it into `.remotion`.
+- **Architecture:** `planVideoPrompt()` no longer makes HTTP requests. It accepts only a JSON object with `schemaVersion: 1`, validates the original brief and scenes, then normalizes it. Plain-language input is rejected with a link to `prompt-remotion.md`.
+- **WhatsApp:** menu, input session, guide, and services text now describe ChatGPT JSON intake. Ollama health checks and readiness rows are removed. Input allowance is 24,000 characters.
+- **Stability:** scene duration fitting no longer compresses narration/reading below its estimated minimum; too-short target durations and narration longer than 20 seconds per scene fail clearly.
+- **Documentation:** added repository-root `prompt-remotion.md` with the current schema, enum allowlists, capability boundaries, stability rules, and a complete Indonesian fox-story example. Updated README, environment example, Linux setup, skill policy, license audit, and prompt-engineering contract.
+- **Compatibility note:** `POST /api/video-studio/plan` now also expects the JSON storyboard string in its `prompt` field. Any external LightJurnal frontend that sends free-form natural language must be updated separately.
+- **Verification status:** regression tests were updated in this commit, but they have not yet been executed on the production VPS. No VPS deployment, main-branch merge, or live WhatsApp render is claimed.
+
 ## 2026-11-06 — Local Remotion pipeline and verified integration contracts
 
 - Request: continue feat/remotion-whatsapp-linux without hosted AI, implement VoxCPM2 and synchronized SFX.
