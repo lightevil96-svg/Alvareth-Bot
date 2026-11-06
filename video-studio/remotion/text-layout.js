@@ -1,6 +1,6 @@
 import { measureText } from "@remotion/layout-utils";
 
-const FONT_FAMILY = "Arial";
+const FONT_FAMILY = "Inter, Arial, sans-serif";
 
 function fallbackTextWidth(text, fontSize) {
   const units = Array.from(text).reduce((sum, character) => {
