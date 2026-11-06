@@ -66,7 +66,6 @@ export function formatRemotionJob(job) {
 }
 
 export function getRemotionProviderReadiness(env = {}, fileExists = () => false, runtime = {}) {
-  const plannerKey = Boolean(env.VIDEO_STUDIO_OLLAMA_MODEL);
   const voiceover = Boolean(env.VIDEO_STUDIO_VOXCPM_URL);
   const videoWorkflow = String(env.VIDEO_STUDIO_COMFYUI_VIDEO_WORKFLOW_FILE || "").trim();
   const imageWorkflow = String(env.VIDEO_STUDIO_COMFYUI_IMAGE_WORKFLOW_FILE || "").trim();
@@ -78,11 +77,6 @@ export function getRemotionProviderReadiness(env = {}, fileExists = () => false,
   };
 
   return [
-    {
-      name: "AI prompt planner",
-      configured: plannerKey,
-      detail: plannerKey ? "Model Ollama lokal dikonfigurasi." : "Default Ollama qwen2.5:7b; jalankan service lokal terlebih dahulu."
-    },
     {
       name: "Remotion + FFmpeg",
       configured: Boolean(runtime.remotionInstalled && runtime.ffmpegInstalled),
