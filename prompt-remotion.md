@@ -55,7 +55,7 @@ Alur runtime saat ini:
 - `kicker` idealnya 1–3 kata dan maksimal sekitar 24 karakter; `highlight` idealnya 1–4 kata dan maksimal sekitar 28 karakter.
 - `points` maksimal 4 butir; idealnya maksimal 45 karakter per butir. Satu butir hanya memuat satu informasi.
 - Hindari paragraf panjang, huruf kapital penuh untuk kalimat panjang, pengulangan headline di subtext, serta menaruh seluruh voice-over sebagai teks layar.
-- Jika credit brand ditampilkan, set root field `brandCredit: true`. Jangan memasukkan `Dibuatoleh ALVARETHBOT` ke `text`, `subtext`, atau footage. Remotion akan menampilkan credit terpisah sebagai overlay dengan jarak kata yang benar. Jangan meminta model AI footage menggambar tulisan. Jika model tidak sengaja menaruh frasa tersebut di field teks scene, normalizer akan memindahkannya ke overlay dan membersihkan teks scene.
+- Jika credit brand ditampilkan, set root field `brandCredit: true`. Jangan memasukkan `Dibuatoleh ALVARETHBOT` ke `text`, `subtext`, `narration`, `visualDescription`, `aiVideoPrompt`, atau `characterBible`. Remotion menampilkan credit terpisah sebagai tiga elemen teks dengan jarak yang eksplisit. Jangan meminta model AI footage menggambar tulisan. Jika model tidak sengaja menaruh frasa tersebut di field teks scene, normalizer akan memindahkannya ke overlay dan membersihkan teks scene.
 - Runtime mengukur dan membungkus headline sesuai lebar layar, tetapi model tetap wajib membuat teks ringkas agar komposisi tidak padat.
 - Untuk `data-chart`, `diagram`, `app-mockup`, dan `waveform`, visual ditempatkan di sisi kanan dan headline/subtext di sisi kiri. Jangan menaruh teks penting di area visual atau membuat label diagram terlalu panjang.
 - `narration` maksimal 1.200 karakter per scene, tetapi untuk video pendek sebaiknya jauh lebih ringkas.
@@ -67,7 +67,7 @@ Alur runtime saat ini:
 - Pilih satu bahasa visual yang konsisten: glassmorphism/translucent glass, chrome metal, claymation, neon emissive, atau soft matte 3D. Hindari mencampur semuanya dalam satu video.
 - Gunakan `threeDObject` untuk memilih bentuk hero. Satu objek utama lebih kuat daripada banyak objek kecil yang berebut perhatian.
 - Arahkan pencahayaan tiga titik, material yang sesuai, depth, orbit kamera yang halus, partikel seperlunya, dan ruang kosong untuk teks.
-- Untuk gaya yang sedang populer di short-form, utamakan 3D product hero, glossy chrome, translucent glass, clay-like characters, dan isometric miniature worlds. Adaptasikan ke topik; jangan meniru karakter atau merek berhak cipta.
+- Untuk gaya short-form yang sedang populer, utamakan 3D product hero, glossy chrome, translucent glass, clay-style objects, neon accents, dan isometric miniature dioramas. Pilih satu gaya material yang konsisten; jangan mengklaim karakter 3D kompleks jika model/rig karakter tidak tersedia.
 - Jangan meminta AI video menghasilkan headline, subtitle, logo, atau credit. Pisahkan footage dan overlay teks.
 
 ### Konsistensi visual
