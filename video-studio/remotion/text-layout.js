@@ -2,16 +2,30 @@ import { measureText } from "@remotion/layout-utils";
 
 const FONT_FAMILY = "Arial";
 
+function fallbackTextWidth(text, fontSize) {
+  const units = Array.from(text).reduce((sum, character) => {
+    if (/\s/u.test(character)) return sum + 0.32;
+    if (/[ilI.,:;'!|]/u.test(character)) return sum + 0.28;
+    if (/[MW@#%&]/u.test(character)) return sum + 0.82;
+    if (/[A-Z0-9]/u.test(character)) return sum + 0.62;
+    return sum + 0.54;
+  }, 0);
+  return units * fontSize;
+}
+
 function measuredWidth(value, fontSize, fontWeight, letterSpacing) {
   const text = String(value || "");
   if (!text) return 0;
-  const measured = measureText({
+  if (typeof document === "undefined") {
+    return fallbackTextWidth(text, fontSize) + Math.max(0, Array.from(text).length - 1) * letterSpacing;
+  }
+  return measureText({
     text,
     fontFamily: FONT_FAMILY,
     fontSize,
-    fontWeight
+    fontWeight,
+    letterSpacing: String(letterSpacing) + "px"
   }).width;
-  return measured + Math.max(0, Array.from(text).length - 1) * letterSpacing;
 }
 
 function splitLongWord(word, maxWidth, fontSize, fontWeight, letterSpacing) {
