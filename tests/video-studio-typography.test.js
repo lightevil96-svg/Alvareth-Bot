@@ -1,6 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { fitTextBlock } from "../video-studio/remotion/text-layout.js";
+import { fitTextBlock, normalizeDisplayText } from "../video-studio/remotion/text-layout.js";
+
+test("repairs the joined Indonesian phrase before rendering", () => {
+  assert.equal(normalizeDisplayText("Dibuatoleh ALVARETHBOT"), "Dibuat oleh ALVARETHBOT");
+  assert.equal(normalizeDisplayText("dibuatoleh ALVARETHBOT"), "dibuat oleh ALVARETHBOT");
+  const layout = fitTextBlock("Dibuatoleh ALVARETHBOT", 900, {
+    maxFontSize: 48,
+    minFontSize: 24,
+    maxLines: 2,
+    letterSpacing: 0
+  });
+  assert.equal(layout.text, "Dibuat oleh ALVARETHBOT");
+});
 
 test("short scene headlines keep a large readable size", () => {
   const layout = fitTextBlock("Rumi dan Cahaya Hutan", 1200, {
