@@ -90,6 +90,8 @@ function providerReadiness() {
     existsSync(join(process.cwd(), "node_modules", "remotion", "package.json"));
   const ffmpegInstalled = hasBinary("ffmpeg") && hasBinary("ffprobe");
   const approvedHashes = String(process.env.VIDEO_STUDIO_COMFYUI_REVIEWED_SHA256 || "");
+  const voiceConfig = getLocalVideoServiceConfig();
+  const voxCPMInstalled = existsSync(voiceConfig.pythonPath) && existsSync(join(voiceConfig.modelPath, "config.json"));
   const edgePython = resolveEdgeTtsPythonPath();
   let edgeTtsInstalled = false;
   try {
@@ -110,7 +112,7 @@ function providerReadiness() {
   return getRemotionProviderReadiness(
     process.env,
     path => existsSync(path),
-    { remotionInstalled: rendererInstalled, ffmpegInstalled, workflowCheck, referenceWorkflowCheck, edgeTtsInstalled, voiceSettings: getVoiceSettings() }
+    { remotionInstalled: rendererInstalled, ffmpegInstalled, workflowCheck, referenceWorkflowCheck, edgeTtsInstalled, voxCPMInstalled, voiceSettings: getVoiceSettings() }
   );
 }
 
