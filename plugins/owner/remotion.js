@@ -472,11 +472,11 @@ function activeJobs() {
 async function startPromptJob(prompt, chat, fallbackConn) {
   const cleanPrompt = String(prompt || "").trim();
   if (cleanPrompt.length < 8) {
-    await sendText(chat, "JSON storyboard terlalu singkat. Tempel objek JSON lengkap dari ChatGPT.", fallbackConn);
+    await sendText(chat, "JSON storyboard terlalu singkat. Tempel objek JSON lengkap dari model AI pilihan kamu.", fallbackConn);
     return;
   }
   if (cleanPrompt.length > MAX_PROMPT_CHARS) {
-    await sendText(chat, "JSON storyboard maksimal " + MAX_PROMPT_CHARS + " karakter. Minta ChatGPT membuat output yang lebih ringkas.", fallbackConn);
+    await sendText(chat, "JSON storyboard maksimal " + MAX_PROMPT_CHARS + " karakter. Minta model AI membuat output yang lebih ringkas.", fallbackConn);
     return;
   }
 
@@ -496,7 +496,7 @@ async function startPromptJob(prompt, chat, fallbackConn) {
   preparing.add(chat);
   await sendText(
     chat,
-    "🧩 *Memeriksa storyboard ChatGPT*\n" +
+    "🧩 *Memeriksa storyboard dari model AI pilihan kamu*\n" +
     "Memvalidasi struktur JSON, scene, durasi narasi, visual, dan batas render.\n" +
     "Setelah lolos validasi, video langsung masuk antrean produksi.",
     fallbackConn
@@ -506,6 +506,7 @@ async function startPromptJob(prompt, chat, fallbackConn) {
     // Storyboard JSON is supplied externally; VoxCPM2 starts later when narration is prepared.
     const plan = await planVideoPrompt(cleanPrompt);
     const project = compileVideoPlan(plan);
+    project.voiceSettings = getVoiceSettings();
     const job = createVideoJob(project);
     ensureJobWatcher(job.id, chat, fallbackConn);
 
@@ -830,9 +831,9 @@ async function showServices(m, conn, argument = "") {
   );
   lines.push(
     "",
-    "Storyboard dibuat di ChatGPT secara terpisah; bot hanya memvalidasi JSON dan tidak menjalankan planner AI lokal.",
-    "Untuk memasang runtime narasi, gunakan .remotion install (GPU) atau .remotion install cpu (CPU). Pantau dengan .remotion install status.",
-    "Untuk menyalakan VoxCPM2 sebelum membuat video: .remotion services start voice.",
+    "Storyboard dibuat dengan model AI pilihan kamu di luar bot; minta model tersebut membaca prompt-remotion.md. Bot hanya memvalidasi JSON dan menjalankan render.",
+    "Provider voice default adalah Edge TTS online. Pasang dengan .remotion voice install; tidak perlu GPU atau model lokal.",
+    "VoxCPM2 tetap tersedia sebagai opsi lokal melalui .remotion voice provider voxcpm2. Untuk menyalakannya: .remotion services start voice.",
     "Footage AI, character reference, dan musik AI memerlukan ComfyUI lokal serta workflow API JSON yang sudah diaudit dan SHA-256-nya disetujui; fitur ini tidak dipasang oleh installer inti.",
     "SFX dibuat lokal. Musik tidak dipaksakan. Kesehatan service belum membuktikan hasil video.",
     "Reference image dapat meningkatkan konsistensi karakter, tetapi tidak menjamin identitas identik pada semua scene."
@@ -842,10 +843,10 @@ async function showServices(m, conn, argument = "") {
 async function showGuide(m) {
   return m.reply(
     "🧠 *PANDUAN PROMPT REMOTION*\n\n" +
-    "Storyboard harus dibuat di ChatGPT, lalu dikirim sebagai JSON. Bot tidak lagi menyusun brief teks biasa.\n" +
+    "Gunakan model AI apa pun yang kamu pilih. Minta model membaca panduan GitHub di atas dan menghasilkan JSON storyboard. Bot tidak menjalankan AI planner; bot hanya memvalidasi JSON.\n" +
     "Buka panduan lengkap: https://github.com/lightevil96-svg/Alvareth-Bot/blob/main/prompt-remotion.md\n\n" +
-    "1. Kirim brief video ke ChatGPT dengan mengikuti panduan tersebut.\n" +
-    "2. Minta satu objek JSON lengkap dengan schemaVersion: 1.\n" +
+    "1. Kirim link panduan di atas ke model AI pilihan kamu dan minta model membaca seluruh panduan.\n" +
+    "2. Berikan brief video dan minta satu objek JSON lengkap dengan schemaVersion: 1.\n" +
     "3. Salin seluruh JSON, lalu ketik .remotion generate dan tempel JSON itu.\n\n" +
     "Batas input 24.000 karakter; 1–60 scene; maksimal 20 detik per scene dan 300 detik total. Brief teks biasa tidak diproses."
   );
@@ -857,6 +858,7 @@ async function handleCommand(m, { conn, usedPrefix, text }) {
   if (parsed.action === "hardware") return showHardware(m);
   if (parsed.action === "servicesMenu") return showServicesMenu(m, conn, usedPrefix);
   if (parsed.action === "installMenu") return showInstallMenu(m, conn, usedPrefix);
+  if (parsed.action === "voice") return handleVoiceCommand(m, conn, usedPrefix, parsed.argument);
   if (parsed.action === "generate") {
     if (parsed.prompt) {
       void startPromptJob(parsed.prompt, m.chat, conn);
@@ -866,7 +868,7 @@ async function handleCommand(m, { conn, usedPrefix, text }) {
     sessions.set(m.chat, { createdAt: Date.now(), sender: m.sender, ttl });
     return m.reply(
       "🎬 *KIRIM STORYBOARD JSON*\n\n" +
-      "Tempel JSON storyboard yang sudah dibuat ChatGPT sesuai panduan prompt-remotion.md.\n" +
+      "Tempel JSON storyboard yang dibuat model AI pilihan kamu sesuai panduan prompt-remotion.md.\n" +
       "Jangan kirim brief biasa di sesi ini. Bot hanya memvalidasi JSON dan menjalankan render.\n\n" +
       "Sesi input berlaku " + Math.round(ttl / 60000) + " menit. Ketik .remotion cancel untuk membatalkan."
     );
