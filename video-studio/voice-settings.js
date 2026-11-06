@@ -32,6 +32,7 @@ function clampSuffix(value, suffix, min, max, fallback) {
 }
 
 export function normalizeVoiceSettings(input = {}) {
+  input = input && typeof input === "object" && !Array.isArray(input) ? input : {};
   const provider = ["edge-tts", "voxcpm2"].includes(input.provider)
     ? input.provider
     : DEFAULT_VOICE_SETTINGS.provider;
