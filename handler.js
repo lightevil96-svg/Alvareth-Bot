@@ -705,6 +705,24 @@ if (typeof global.__alvarethRemotionPromptHandler === 'function') {
   }
 }
 
+
+// An active owner-only .edit JSON session consumes the owner's next plain-text
+// message before normal plugins or automatic replies can process it.
+if (typeof global.__alvarethEditPromptHandler === 'function') {
+    try {
+        const consumedByEdit = await global.__alvarethEditPromptHandler(m, {
+            conn: this,
+            isROwner,
+            isOwner
+        })
+        if (consumedByEdit) return
+    } catch (editError) {
+        console.error('[EDIT:WA] Prompt session error:', editError?.stack || editError)
+        await sendErrorReport(this, m, editError, 'owner/edit.js', 'prompt-session')
+        return
+    }
+}
+
         // Group allowlist gate: when enabled, silently ignore every message from
         // groups that are not explicitly approved. Private chats remain available
         // so the owner can manage the list even when no group is approved.
