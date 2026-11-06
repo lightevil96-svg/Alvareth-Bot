@@ -59,9 +59,14 @@ async function menu(m, conn, prefix) {
     await conn.sendMessage(m.chat, {
       text: "🧠 *ALVARETH HERMES MAINTENANCE AGENT*\n\nAsisten teknisi untuk mengaudit kode, menganalisis error, dan menyusun patch. Perubahan kode produksi selalu memerlukan persetujuan owner.\n\n🔒 Owner only • File runtime dan kredensial dilindungi.",
       footer: "Alvareth Bot • Hermes Agent",
-      title: "Hermes Maintenance",
-      buttonText: "Pilih fitur",
-      sections: [{ title: "Fitur utama", rows }]
+      optionText: "Pilih fitur",
+      optionTitle: "Hermes Maintenance",
+      nativeFlow: [{
+        text: "Hermes Maintenance",
+        sections: [{ title: "Fitur utama", rows }],
+        icon: "document"
+      }],
+      interactiveAsTemplate: false
     }, { quoted: m });
   } catch {
     return m.reply(fallback);
