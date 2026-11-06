@@ -137,7 +137,8 @@ test('planner accepts ChatGPT storyboard JSON without a local inference service'
 
 test('the published ChatGPT fox storyboard example matches the runtime schema', () => {
   const guide = readFileSync(new URL('../prompt-remotion.md', import.meta.url), 'utf8');
-  const blocks = [...guide.matchAll(/\\`\\`\\`json\\s*([\\s\\S]*?)\\`\\`\\`/gi)];
+  const fence = String.fromCharCode(96).repeat(3);
+  const blocks = [...guide.matchAll(new RegExp(fence + 'json\\s*([\\s\\S]*?)' + fence, 'gi'))];
   assert.ok(blocks.length >= 2, 'guide should include schema and full example JSON');
   const plan = planVideoPrompt(blocks.at(-1)[1]);
   assert.equal(plan.title, 'Rumi dan Cahaya Hutan');
