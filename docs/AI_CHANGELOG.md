@@ -5,7 +5,8 @@
 - **Konfigurasi:** menghapus VIDEO_STUDIO_API_KEY, VIDEO_STUDIO_ALLOWED_ORIGINS, VIDEO_STUDIO_TUNNEL_TOKEN, VIDEO_STUDIO_TUNNEL_TOKEN_FILE, CLOUDFLARED_BIN, dan VIDEO_STUDIO_TUNNEL dari .env.example. PORT sekarang didokumentasikan hanya untuk health-check hosting.
 - **Keamanan dan operasi:** tidak perlu Cloudflare Zero Trust, public hostname, reverse proxy, browser API key, tunnel token, atau proses cloudflared. Plugin owner-only .remotion tetap menjadi satu-satunya antarmuka produksi.
 - **Catatan migrasi:** variabel lama di .env server tidak lagi dibaca oleh kode dan boleh dihapus; token file lama ~/.alvareth-bot-data/video-studio/tunnel-token, API key lama ~/.alvareth-bot-data/video-studio/api-key, dan binary ~/.alvareth-bot-data/bin/cloudflared dapat dihapus manual. DNS/tunnel resource pada akun Cloudflare tidak dapat dihapus dari commit GitHub dan harus dihapus terpisah bila memang ingin dibersihkan.
-- **Verifikasi:** perubahan ini harus memastikan tidak ada import aktif ke modul API/tunnel dan command test tidak lagi memanggil tes cloudflared; tes render/WhatsApp live tetap hanya dapat dibuktikan di server pengguna.
+- **CI correction:** workflow awal masih memanggil syntax-check untuk api.js/tunnel.js yang sudah dihapus; workflow diperbarui agar hanya memeriksa modul WhatsApp/local-service yang aktif dan tidak menjalankan tes cloudflared. Menambahkan syntax-check server.js.
+- **Verifikasi:** tes render/WhatsApp live tetap hanya dapat dibuktikan di server pengguna.
 
 ## 2026-11-06 — Local Remotion pipeline and verified integration contracts
 
