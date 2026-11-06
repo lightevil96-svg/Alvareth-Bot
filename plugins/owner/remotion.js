@@ -1,12 +1,13 @@
-import { startLocalVideoServices } from "../../video-studio/local-services.js";
+import { startLocalVideoServices, getLocalVideoServiceConfig } from "../../video-studio/local-services.js";
 import { localJson, localServiceUrl } from "../../video-studio/local-service.js";
 import { validateReviewedWorkflow } from "../../video-studio/media/comfyui.js";
 import { readVideoStudioInstallerStatus, startVideoStudioInstaller } from "../../video-studio/installer.js";
 import { existsSync, readFileSync } from "node:fs";
-import { arch, cpus, freemem, platform, totalmem } from "node:os";
+import { arch, cpus, freemem, homedir, platform, totalmem } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { planVideoPrompt } from "../../video-studio/prompt/planner.js";
+import { getVoiceSettings, updateVoiceSettings, EDGE_TTS_VOICES, VOXCPM_STYLES } from "../../video-studio/voice-settings.js";
 import { compileVideoPlan } from "../../video-studio/prompt/compile.js";
 import {
   startVideoQueue,
@@ -82,6 +83,12 @@ function providerReadiness() {
     existsSync(join(process.cwd(), "node_modules", "remotion", "package.json"));
   const ffmpegInstalled = hasBinary("ffmpeg") && hasBinary("ffprobe");
   const approvedHashes = String(process.env.VIDEO_STUDIO_COMFYUI_REVIEWED_SHA256 || "");
+  const voiceConfig = getLocalVideoServiceConfig();
+  const edgePython = process.env.VIDEO_STUDIO_EDGE_TTS_PYTHON || voiceConfig.pythonPath;
+  let edgeTtsInstalled = false;
+  try {
+    edgeTtsInstalled = spawnSync(edgePython, ["-c", "import edge_tts"], { stdio: "ignore", timeout: 8000, windowsHide: true }).status === 0;
+  } catch {}
   const workflowCheck = path => {
     const content = readFileSync(path, "utf8");
     validateReviewedWorkflow(content, approvedHashes);
@@ -97,7 +104,7 @@ function providerReadiness() {
   return getRemotionProviderReadiness(
     process.env,
     path => existsSync(path),
-    { remotionInstalled: rendererInstalled, ffmpegInstalled, workflowCheck, referenceWorkflowCheck }
+    { remotionInstalled: rendererInstalled, ffmpegInstalled, workflowCheck, referenceWorkflowCheck, edgeTtsInstalled, voiceSettings: getVoiceSettings() }
   );
 }
 
@@ -212,7 +219,8 @@ async function showMenu(m, conn, usedPrefix = ".") {
       rows: [
         remotionMenuRow(usedPrefix, "⚙️ Kelola layanan", "Cek status dan mulai VoxCPM2.", "services-menu"),
         remotionMenuRow(usedPrefix, "⬇️ Instalasi engine", "Pilih GPU otomatis, CPU, atau cek progres.", "install-menu"),
-        remotionMenuRow(usedPrefix, "🖥️ Spesifikasi server", "Periksa CPU, RAM, storage, dan GPU.", "hardware")
+        remotionMenuRow(usedPrefix, "🖥️ Spesifikasi server", "Periksa CPU, RAM, storage, dan GPU.", "hardware"),
+        remotionMenuRow(usedPrefix, "🗣️ Pengaturan voice", "Pilih provider, suara, kecepatan, pitch, dan karakter narator.", "voice")
       ]
     }
   ];
@@ -229,6 +237,7 @@ async function showMenu(m, conn, usedPrefix = ".") {
     "• " + usedPrefix + "remotion cancel",
     "",
     "• " + usedPrefix + "remotion hardware",
+    "• " + usedPrefix + "remotion voice",
     "",
     "*Layanan:*",
     "• " + usedPrefix + "remotion services",
@@ -252,7 +261,7 @@ async function showServicesMenu(m, conn, usedPrefix = ".") {
   const sections = [{
     title: "Layanan lokal",
     rows: [
-      remotionMenuRow(usedPrefix, "🔎 Periksa semua layanan", "Cek Remotion, VoxCPM2, ComfyUI dan workflow.", "services"),
+      remotionMenuRow(usedPrefix, "🔎 Periksa semua layanan", "Cek Edge TTS, VoxCPM2, ComfyUI dan workflow.", "services"),
       remotionMenuRow(usedPrefix, "🗣️ Mulai VoxCPM2", "Aktifkan voice-over lokal dan tunggu model siap.", "services start voice"),
       remotionMenuRow(usedPrefix, "↩️ Kembali ke menu", "Kembali ke menu utama Remotion.")
     ]
@@ -265,7 +274,7 @@ async function showServicesMenu(m, conn, usedPrefix = ".") {
   ].join("\n");
   return sendNativeMenu(m, conn, {
     title: "Layanan lokal",
-    description: "Pilih pemeriksaan atau nyalakan VoxCPM2. Memulai VoxCPM2 dapat membutuhkan waktu untuk memuat model.",
+    description: "Periksa Edge TTS online atau nyalakan VoxCPM2 jika provider lokal dipilih.",
     sections,
     fallback
   });
