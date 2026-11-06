@@ -55,6 +55,7 @@ Alur runtime saat ini:
 - `kicker` idealnya 1–3 kata dan maksimal sekitar 24 karakter; `highlight` idealnya 1–4 kata dan maksimal sekitar 28 karakter.
 - `points` maksimal 4 butir; idealnya maksimal 45 karakter per butir. Satu butir hanya memuat satu informasi.
 - Hindari paragraf panjang, huruf kapital penuh untuk kalimat panjang, pengulangan headline di subtext, serta menaruh seluruh voice-over sebagai teks layar.
+- Jika credit brand ditampilkan, tulis persis `Dibuat oleh ALVARETHBOT` dengan spasi antar-kata yang jelas. Jangan menempelkan kata, dan jangan meminta model AI footage menggambar tulisan; credit harus menjadi teks overlay yang dirender oleh Remotion.
 - Runtime mengukur dan membungkus headline sesuai lebar layar, tetapi model tetap wajib membuat teks ringkas agar komposisi tidak padat.
 - Untuk `data-chart`, `diagram`, `app-mockup`, dan `waveform`, visual ditempatkan di sisi kanan dan headline/subtext di sisi kiri. Jangan menaruh teks penting di area visual atau membuat label diagram terlalu panjang.
 - `narration` maksimal 1.200 karakter per scene, tetapi untuk video pendek sebaiknya jauh lebih ringkas.
