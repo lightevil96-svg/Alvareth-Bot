@@ -342,7 +342,8 @@ async function showVoiceMenu(m, conn, usedPrefix = ".", notice = "") {
         remotionMenuRow(usedPrefix, "Warm", "Hangat dan bersahabat.", "voice style warm"),
         remotionMenuRow(usedPrefix, "Energetic", "Lebih hidup dan ekspresif.", "voice style energetic"),
         remotionMenuRow(usedPrefix, "Calm", "Tenang dan lembut.", "voice style calm"),
-        remotionMenuRow(usedPrefix, "Storytelling", "Intonasi penceritaan lebih ekspresif.", "voice style storytelling")
+        remotionMenuRow(usedPrefix, "Storytelling", "Intonasi penceritaan lebih ekspresif.", "voice style storytelling"),
+        remotionMenuRow(usedPrefix, "↩️ Reset pengaturan", "Kembalikan provider dan suara ke default.", "voice reset")
       ]
     }
   ];
