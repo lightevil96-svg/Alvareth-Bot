@@ -1,3 +1,14 @@
+## 2026-11-06 — Add owner-only Hermes Agent maintenance bridge
+
+- **Request:** make it easier for the owner to inspect, debug, and tidy the Alvareth WhatsApp bot using Hermes Agent.
+- **Architecture:** added plugins/owner/hermes.js and lib/hermes-agent.js. The bridge invokes the locally configured Hermes CLI from the existing Alvareth process and reuses its current Baileys chat; it does not start or pair a second WhatsApp gateway.
+- **Commands:** .hermes menu, status, audit, ask, patch, pending, apply, undo, discard, verify, reset, and setup. Audit/ask inspect source; patch produces a reviewable unified diff.
+- **Safety:** super-owner-only checks; one concurrent task; no shell interpolation; child environment allowlist excludes Alvareth credentials; Hermes receives file/web/search/clarify tools but no terminal or code-execution toolset. HERMES_WRITE_SAFE_ROOT confines file writes to a temporary proposal workspace.
+- **Patch workflow:** proposed diffs are path-validated and stored pending owner approval. Applying requires a separate .hermes apply command, Git checkout, clean target files, backup, git apply --check, and JavaScript syntax checks. Undo is available while the patch context still matches. No automatic commit, push, or deploy.
+- **Configuration/docs:** added HERMES_BIN, HERMES_HOME, HERMES_TIMEOUT_MS, and HERMES_MAX_PROMPT_CHARS to .env.example; setup and safety details are in docs/HERMES_AGENT.md.
+- **Tests:** added tests/hermes-agent.test.js for command parsing, environment isolation, path/patch validation, apply/undo, subprocess arguments, output redaction, and message chunking. npm test now includes the new regression suite.
+- **Deployment caveat:** Hermes must be installed/configured separately in the same server/container and service user. GitHub CI cannot verify the user's VPS, model credentials, inference provider, or live WhatsApp response.
+
 ## 2026-11-06 — Remove Ollama and move storyboard authoring to ChatGPT
 
 - **Request:** remove the local Ollama planner; the owner will ask ChatGPT to author a production-ready storyboard and paste it into .remotion.
