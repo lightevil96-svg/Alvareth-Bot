@@ -36,6 +36,7 @@ test("routes status, history, guide, services, cancel and resend actions", () =>
   assert.equal(parseRemotionCommand("services").action, "services");
   assert.equal(parseRemotionCommand("services-menu").action, "servicesMenu");
   assert.equal(parseRemotionCommand("install-menu").action, "installMenu");
+  assert.equal(parseRemotionCommand("hardware").action, "hardware");
   assert.deepEqual(parseRemotionCommand("services start voice"), { action: "services", argument: "start voice" });
   assert.deepEqual(parseRemotionCommand("services start planner"), { action: "services", argument: "start planner" });
   assert.deepEqual(parseRemotionCommand("install"), { action: "install", argument: "" });
@@ -150,7 +151,7 @@ test("plugin rejects every non-owner action and binds prompt sessions to their i
   assert.equal(sent.length,0);
   await handler(m,{conn,text:'',isROwner:true,usedPrefix:'!'});
   const mainSections = sent[0][1].nativeFlow[0].sections;
-  assert.deepEqual(mainSections.map(section => section.rows.length), [6, 2]);
+  assert.deepEqual(mainSections.map(section => section.rows.length), [6, 3]);
   const mainIds = mainSections.flatMap(section => section.rows.map(row => row.id));
   assert.deepEqual(mainIds, [
     "!remotion generate",
@@ -160,7 +161,8 @@ test("plugin rejects every non-owner action and binds prompt sessions to their i
     "!remotion guide",
     "!remotion cancel",
     "!remotion services-menu",
-    "!remotion install-menu"
+    "!remotion install-menu",
+    "!remotion hardware"
   ]);
   await handler(m,{conn,text:"services-menu",isROwner:true,usedPrefix:"!"});
   const serviceIds = sent.at(-1)[1].nativeFlow[0].sections.flatMap(section=>section.rows.map(row=>row.id));
@@ -186,7 +188,9 @@ test("plugin rejects every non-owner action and binds prompt sessions to their i
   assert.equal(global.__alvarethRemotionSessions.has(m.chat),true);
   await handler(m,{conn,text:'cancel',isROwner:true});
   assert.equal(global.__alvarethRemotionSessions.has(m.chat),false);
-  for (const text of ['status','history','send','guide','install status']) await handler(m,{conn,text,isROwner:true});
+  for (const text of ['status','history','send','guide','install status','hardware']) await handler(m,{conn,text,isROwner:true});
+  assert.ok(replies.some(text=>/SPESIFIKASI SERVER REMOTION/.test(text)));
+  assert.ok(replies.some(text=>/RAM:/.test(text)));
   assert.ok(replies.some(text=>/Belum ada proses instalasi/.test(text)));
   assert.ok(replies.some(text=>/Riwayat video masih kosong/.test(text)));
 });

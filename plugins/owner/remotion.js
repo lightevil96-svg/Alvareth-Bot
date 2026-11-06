@@ -3,6 +3,7 @@ import { localJson, localServiceUrl } from "../../video-studio/local-service.js"
 import { validateReviewedWorkflow } from "../../video-studio/media/comfyui.js";
 import { readVideoStudioInstallerStatus, startVideoStudioInstaller } from "../../video-studio/installer.js";
 import { existsSync, readFileSync } from "node:fs";
+import { arch, cpus, freemem, platform, totalmem } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { planVideoPrompt } from "../../video-studio/prompt/planner.js";
@@ -138,6 +139,62 @@ function remotionMenuRow(usedPrefix, title, description, command = "") {
   };
 }
 
+async function showHardware(m) {
+  const cpuList = cpus();
+  const cpuModel = cpuList[0]?.model || "Tidak terdeteksi";
+  const totalRam = (totalmem() / (1024 ** 3)).toFixed(1);
+  const freeRam = (freemem() / (1024 ** 3)).toFixed(1);
+
+  let disk = "Tidak dapat dibaca";
+  const diskResult = spawnSync("df", ["-hP", process.cwd()], {
+    encoding: "utf8",
+    timeout: 5000,
+    windowsHide: true
+  });
+  if (diskResult.status === 0) {
+    const lines = String(diskResult.stdout || "").trim().split(/\r?\n/);
+    const columns = String(lines.at(-1) || "").trim().split(/\s+/);
+    if (columns.length >= 6) {
+      disk = columns[3] + " tersedia dari " + columns[1] + " (" + columns[4] + " terpakai)";
+    }
+  }
+
+  let gpu = "";
+  const nvidia = spawnSync("nvidia-smi", ["--query-gpu=name,memory.total", "--format=csv,noheader"], {
+    encoding: "utf8",
+    timeout: 5000,
+    windowsHide: true
+  });
+  if (nvidia.status === 0 && String(nvidia.stdout || "").trim()) {
+    gpu = "NVIDIA terdeteksi: " + String(nvidia.stdout).trim().split(/\r?\n/).join("; ");
+  } else {
+    const pci = spawnSync("lspci", [], {
+      encoding: "utf8",
+      timeout: 5000,
+      windowsHide: true
+    });
+    const displayDevices = pci.status === 0
+      ? String(pci.stdout || "").split(/\r?\n/).filter(line => /(VGA compatible controller|3D controller|Display controller)/i.test(line))
+      : [];
+    gpu = displayDevices.length
+      ? "Perangkat grafis PCI: " + displayDevices.join("; ") + ". Belum tentu mendukung CUDA/NVIDIA."
+      : "NVIDIA GPU belum terdeteksi melalui nvidia-smi. GPU lain atau GPU passthrough belum dapat dipastikan.";
+  }
+
+  return m.reply([
+    "🖥️ *SPESIFIKASI SERVER REMOTION*",
+    "",
+    "*CPU:* " + cpuModel,
+    "*Logical CPU:* " + cpuList.length + " thread",
+    "*RAM:* " + totalRam + " GB total • " + freeRam + " GB tersedia saat ini",
+    "*Storage:* " + disk,
+    "*GPU:* " + gpu,
+    "*OS / Arsitektur:* " + platform() + " / " + arch(),
+    "",
+    "Catatan: kapasitas RAM dan storage tidak membuktikan adanya GPU. Installer GPU membutuhkan NVIDIA yang terlihat oleh nvidia-smi; jika tidak terdeteksi, pilih mode CPU secara sadar."
+  ].join("\n"));
+}
+
 async function showMenu(m, conn, usedPrefix = ".") {
   const sections = [
     {
@@ -155,7 +212,8 @@ async function showMenu(m, conn, usedPrefix = ".") {
       title: "Engine & layanan lokal",
       rows: [
         remotionMenuRow(usedPrefix, "⚙️ Kelola layanan", "Cek status, mulai VoxCPM2 dan Ollama.", "services-menu"),
-        remotionMenuRow(usedPrefix, "⬇️ Instalasi engine", "Pilih GPU otomatis, CPU, atau cek progres.", "install-menu")
+        remotionMenuRow(usedPrefix, "⬇️ Instalasi engine", "Pilih GPU otomatis, CPU, atau cek progres.", "install-menu"),
+        remotionMenuRow(usedPrefix, "🖥️ Spesifikasi server", "Periksa CPU, RAM, storage, dan GPU.", "hardware")
       ]
     }
   ];
@@ -170,6 +228,8 @@ async function showMenu(m, conn, usedPrefix = ".") {
     "• " + usedPrefix + "remotion send [ID]",
     "• " + usedPrefix + "remotion guide",
     "• " + usedPrefix + "remotion cancel",
+    "",
+    "• " + usedPrefix + "remotion hardware",
     "",
     "*Layanan:*",
     "• " + usedPrefix + "remotion services",
@@ -640,6 +700,7 @@ async function handleCommand(m, { conn, usedPrefix, text }) {
   const parsed = parseRemotionCommand(text);
 
   if (parsed.action === "menu") return showMenu(m, conn, usedPrefix);
+  if (parsed.action === "hardware") return showHardware(m);
   if (parsed.action === "servicesMenu") return showServicesMenu(m, conn, usedPrefix);
   if (parsed.action === "installMenu") return showInstallMenu(m, conn, usedPrefix);
   if (parsed.action === "generate") {
