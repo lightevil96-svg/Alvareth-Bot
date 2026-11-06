@@ -35,3 +35,15 @@ Not complete initially: planner used hosted OpenAI-compatible/API-Faa; narration
 VoxCPM2 installation/model loading/synthesis performance, Indonesian pronunciation, real forced alignment accuracy, speaker continuity, ComfyUI model and license selection, live WhatsApp callbacks/uploads/reconnect delivery, production VPS render and audio/visual review. Full requested prompt→AI voice→WhatsApp scenario is provided by scripts/remotion-smoke.js but cannot be honestly marked passed here without services/models/session. Runtime queue is single-process, not a distributed job queue. Watcher notifications are not persisted across restarts; owner can inspect/resend through status/history/send.
 
 See REMOTION_WHATSAPP_LINUX.md for exact setup and acceptance commands. No VPS deployment or main merge performed.
+
+
+## Follow-up revision — external ChatGPT storyboard input (2026-11-06)
+
+The original audit above describes the then-current local Ollama planner. That implementation has been superseded on `feat/remotion-whatsapp-linux`:
+
+- Ollama planner HTTP calls, model configuration, readiness checks, and `.env.example` settings have been removed.
+- The owner authors storyboard JSON in ChatGPT using repository-root `prompt-remotion.md`; the bot only parses, normalizes, validates, compiles, and renders it.
+- The parser requires `schemaVersion: 1`, `sourcePrompt`, and `scenes[]`; plain-language input is rejected. Maximum WhatsApp storyboard payload is 24,000 characters.
+- Scene duration fitting now rejects a requested total shorter than the minimum time needed for narration and reading, instead of compressing speech below that estimate.
+- This follow-up changes the shared `POST /api/video-studio/plan` contract to JSON-only. An external LightJurnal frontend that still submits natural-language prompts needs a separate update.
+- Source changes and regression tests are committed to the feature branch. They are not evidence of successful production VPS deployment, actual VoxCPM2 synthesis, ComfyUI generation, or live WhatsApp delivery.
