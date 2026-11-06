@@ -341,7 +341,7 @@ const Scene = ({ scene, index, total, durationFrames, transitionInFrames }) => {
     zIndex: 2
   };
   const Renderer = getSceneRenderer(visualType);
-  const specialVisual = Renderer && visualType !== "kinetic" ? <Renderer scene={scene} accent={accent} foreground={foreground} /> : null;
+  const specialVisual = Renderer && visualType !== "kinetic" && !(illustrated && scene.footageSrc) ? <Renderer scene={scene} accent={accent} foreground={foreground} /> : null;
   const kinetic = visualType === "kinetic";
   const grade = ({ warm: "saturate(1.08) sepia(.12) contrast(1.05)", cool: "saturate(.88) hue-rotate(8deg) contrast(1.05)", film: "saturate(.82) contrast(1.1) brightness(.96)", vivid: "saturate(1.25) contrast(1.06)", mono: "grayscale(1) contrast(1.08)", neutral: "saturate(.92) contrast(1.04)" })[scene.colorGrade] || "saturate(.92) contrast(1.04)";
   return <AbsoluteFill style={{ background: scene.footageSrc ? "#111827" : "linear-gradient(135deg, " + background + ", " + accent + "24)", color: foreground, overflow: "hidden", fontFamily: "Inter, Arial, sans-serif", opacity: transitionOpacity, clipPath, transform: "translate3d(" + (transitionX * width / 100) + "px," + (transitionY * height / 100) + "px,0) scale(" + transitionScale + ")" }}>
