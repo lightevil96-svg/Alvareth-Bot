@@ -60,7 +60,8 @@ export function resolveOffthreadVideoThreads(cores = getContainerResources().cpu
 // Remotion uses this for an individual delayRender() frame wait, not the total job duration.
  // Use the maximum signed 32-bit timer value (~24.8 days) so slow frames are not cut off.
 export function resolveRenderTimeout() {
-  return 2_147_483_647;
+  // Leave headroom for Remotion's internal timer offset to avoid Node's 32-bit overflow.
+  return 2_147_000_000;
 }
 
 export function resolveH264Bitrate({ width, height, fps }) {
