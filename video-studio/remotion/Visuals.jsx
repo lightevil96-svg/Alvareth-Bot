@@ -1,4 +1,5 @@
 import React from "react";
+import { fitTextBlock } from "./text-layout.js";
 import {
   AbsoluteFill,
   OffthreadVideo,
@@ -42,16 +43,32 @@ export const BackgroundEffects = ({ type = "orbs", accent = "#68DDB8", intensity
   </AbsoluteFill>;
 };
 
-export const KineticTypography = ({ text = "", highlight = "", accent = "#68DDB8" }) => {
+export const KineticTypography = ({
+  text = "",
+  highlight = "",
+  accent = "#68DDB8",
+  maxWidthPx,
+  maxFontSize,
+  minFontSize = 28,
+  maxLines = 5
+}) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
-  const words = String(text).split(/\s+/).filter(Boolean);
-  const fontSize = Math.min(width * 0.115, height * 0.09, 116);
-  return <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "center", gap: "0.08em 0.22em", textAlign: "center", padding: "0 3%", lineHeight: 1.05 }}>
+  const availableWidth = Math.max(180, Number(maxWidthPx) || width * 0.88);
+  const preferredSize = Math.min(Number(maxFontSize) || width * 0.115, height * 0.09, 116);
+  const layout = React.useMemo(() => fitTextBlock(text, availableWidth, {
+    maxFontSize: preferredSize,
+    minFontSize,
+    maxLines,
+    fontWeight: 850,
+    letterSpacing: -1.4
+  }), [text, availableWidth, preferredSize, minFontSize, maxLines]);
+  const words = layout.text.replace(/\n/g, " ").split(/\s+/).filter(Boolean);
+  return <div style={{ display: "flex", width: availableWidth, maxWidth: "100%", minWidth: 0, flexWrap: "wrap", alignItems: "center", justifyContent: "center", gap: "0.08em 0.2em", textAlign: "center", padding: "0 1%", lineHeight: 1.08, boxSizing: "border-box" }}>
     {words.map((word, index) => {
       const progress = spring({ frame: Math.max(0, frame - index * 3), fps, config: { damping: 15, stiffness: 155, mass: 0.62 } });
       const emphasized = highlight && word.replace(/[.,!?;:]/g, "").toLowerCase() === String(highlight).toLowerCase();
-      return <span key={index} style={{ display: "inline-block", opacity: progress, transform: "translateY(" + (1 - progress) * 42 + "px) scale(" + (0.78 + progress * 0.22) + ")", color: emphasized ? accent : "inherit", fontSize, fontWeight: emphasized ? 950 : 850, letterSpacing: "-0.055em", textShadow: "0 12px 35px rgba(0,0,0,.24)" }}>{word}</span>;
+      return <span key={index} style={{ display: "inline-block", maxWidth: "100%", opacity: progress, transform: "translateY(" + (1 - progress) * 42 + "px) scale(" + (0.78 + progress * 0.22) + ")", color: emphasized ? accent : "inherit", fontSize: layout.fontSize, fontWeight: emphasized ? 950 : 850, letterSpacing: "-0.045em", overflowWrap: "anywhere", textShadow: "0 12px 35px rgba(0,0,0,.24)" }}>{word}</span>;
     })}
   </div>;
 };
@@ -62,7 +79,7 @@ export const DataChartScene = ({ scene = {}, accent = "#68DDB8", foreground = "#
   const data = Array.isArray(scene.chartData) ? scene.chartData.slice(0, 8) : [];
   if (!data.length) return null;
   const max = Math.max(1, ...data.map(item => Math.max(0, Number(item.value) || 0)));
-  return <div style={{ position: "absolute", right: "7%", bottom: "17%", width: "48%", padding: "22px 24px", borderRadius: 24, background: "rgba(8,14,24,.78)", border: "1px solid rgba(255,255,255,.15)", boxShadow: "0 24px 70px rgba(0,0,0,.22)", color: foreground }}>
+  return <div style={{ position: "absolute", right: "6%", top: "24%", width: "42%", maxWidth: 520, padding: "18px 20px", borderRadius: 24, background: "rgba(8,14,24,.78)", border: "1px solid rgba(255,255,255,.15)", boxShadow: "0 24px 70px rgba(0,0,0,.22)", color: foreground }}>
     {scene.chartTitle ? <div style={{ fontSize: Math.max(14, width * 0.017), fontWeight: 800, marginBottom: 18 }}>{scene.chartTitle}</div> : null}
     <div style={{ display: "grid", gap: 13 }}>
       {data.map((item, index) => {
@@ -92,7 +109,7 @@ export const DiagramScene = ({ scene = {}, accent = "#68DDB8", foreground = "#ff
     y: Number.isFinite(Number(node.y)) ? clamp(Number(node.y), 15, 85) : nodes.length === 1 ? 50 : index % 2 ? 66 : 34
   }));
   const byId = new Map(positions.map(node => [node.id, node]));
-  return <div style={{ position: "absolute", left: "7%", right: "7%", bottom: "13%", height: "45%", borderRadius: 24, background: "rgba(7,14,24,.70)", border: "1px solid rgba(255,255,255,.13)", overflow: "hidden" }}>
+  return <div style={{ position: "absolute", right: "6%", top: "22%", width: "42%", height: "56%", borderRadius: 24, background: "rgba(7,14,24,.70)", border: "1px solid rgba(255,255,255,.13)", overflow: "hidden" }}>
     <svg viewBox="0 0 1000 500" width="100%" height="100%" preserveAspectRatio="none" style={{ position: "absolute", inset: 0 }}>
       {edges.map((edge, index) => {
         const from = byId.get(edge.from);
@@ -104,7 +121,7 @@ export const DiagramScene = ({ scene = {}, accent = "#68DDB8", foreground = "#ff
     </svg>
     {positions.map((node, index) => {
       const progress = spring({ frame: Math.max(0, frame - index * 6), fps: 30, config: { damping: 16, stiffness: 110 } });
-      return <div key={node.id} style={{ position: "absolute", left: node.x + "%", top: node.y + "%", transform: "translate(-50%,-50%) scale(" + progress + ")", minWidth: "15%", maxWidth: "27%", padding: "12px 16px", borderRadius: 14, background: "rgba(255,255,255,.12)", border: "1px solid " + accent + "aa", color: foreground, textAlign: "center", fontSize: 14, fontWeight: 800, boxShadow: "0 8px 28px rgba(0,0,0,.22)" }}>{node.label}</div>;
+      return <div key={node.id} style={{ position: "absolute", left: node.x + "%", top: node.y + "%", transform: "translate(-50%,-50%) scale(" + progress + ")", minWidth: "20%", maxWidth: "32%", boxSizing: "border-box", padding: "10px 12px", borderRadius: 14, background: "rgba(255,255,255,.12)", border: "1px solid " + accent + "aa", color: foreground, textAlign: "center", fontSize: "clamp(11px, 1.2vw, 15px)", lineHeight: 1.2, fontWeight: 800, overflowWrap: "anywhere", wordBreak: "normal", boxShadow: "0 8px 28px rgba(0,0,0,.22)" }}>{node.label}</div>;
     })}
   </div>;
 };
@@ -133,7 +150,7 @@ export const AppMockupScene = ({ scene = {}, accent = "#68DDB8" }) => {
 export const WaveformScene = ({ accent = "#68DDB8" }) => {
   const frame = useCurrentFrame();
   const bars = Array.from({ length: 36 }, (_, index) => 14 + Math.abs(Math.sin((frame + index * 11) / 9) * Math.cos(index / 4)) * 78);
-  return <div style={{ position: "absolute", left: "10%", right: "10%", bottom: "18%", height: "24%", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.65%" }}>
+  return <div style={{ position: "absolute", right: "6%", top: "31%", width: "42%", height: "38%", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.65%" }}>
     {bars.map((height, index) => <div key={index} style={{ width: "2%", height: height + "%", borderRadius: 99, background: accent, opacity: 0.38 + (index % 5) * 0.12, boxShadow: "0 0 16px " + accent + "55" }} />)}
   </div>;
 };
