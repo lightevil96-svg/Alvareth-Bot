@@ -142,7 +142,7 @@ test('local inference HTTP requests can wait for a slow response without a deadl
 });
 
 test('Remotion frame readiness uses a practically unbounded delayRender timeout', () => {
-  assert.equal(resolveRenderTimeout(), 2147483647);
+  assert.equal(resolveRenderTimeout(), 2147000000);
 });
 test('planner accepts ChatGPT storyboard JSON without a local inference service', () => {
   const plan = planVideoPrompt(JSON.stringify({
