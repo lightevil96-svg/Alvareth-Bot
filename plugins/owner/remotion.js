@@ -206,18 +206,18 @@ async function showMenu(m, conn, usedPrefix = ".") {
     {
       title: "Produksi video",
       rows: [
-        remotionMenuRow(usedPrefix, "🎬 Buat video", "Tempel storyboard JSON yang disusun ChatGPT.", "generate"),
+        remotionMenuRow(usedPrefix, "🎬 Buat video", "Tempel storyboard JSON dari model AI pilihan kamu.", "generate"),
         remotionMenuRow(usedPrefix, "📊 Status render", "Lihat antrean dan progres.", "status"),
         remotionMenuRow(usedPrefix, "📁 Riwayat video", "Lihat pekerjaan dan ID hasil.", "history"),
         remotionMenuRow(usedPrefix, "📤 Kirim MP4 terakhir", "Kirim ulang hasil yang selesai.", "send"),
-        remotionMenuRow(usedPrefix, "🧠 Panduan prompt", "Panduan ChatGPT membuat JSON storyboard yang valid.", "guide"),
+        remotionMenuRow(usedPrefix, "🧠 Panduan prompt", "Panduan membuat JSON storyboard dengan model AI pilihan kamu.", "guide"),
         remotionMenuRow(usedPrefix, "✖️ Batalkan input", "Batalkan sesi prompt yang menunggu.", "cancel")
       ]
     },
     {
       title: "Engine & layanan lokal",
       rows: [
-        remotionMenuRow(usedPrefix, "⚙️ Kelola layanan", "Cek status dan mulai VoxCPM2.", "services-menu"),
+        remotionMenuRow(usedPrefix, "⚙️ Kelola layanan", "Cek Edge TTS online, VoxCPM2, dan layanan video.", "services-menu"),
         remotionMenuRow(usedPrefix, "⬇️ Instalasi engine", "Pilih GPU otomatis, CPU, atau cek progres.", "install-menu"),
         remotionMenuRow(usedPrefix, "🖥️ Spesifikasi server", "Periksa CPU, RAM, storage, dan GPU.", "hardware"),
         remotionMenuRow(usedPrefix, "🗣️ Pengaturan voice", "Pilih provider, suara, kecepatan, pitch, dan karakter narator.", "voice")
@@ -587,6 +587,7 @@ async function watchJob(jobId, chat, fallbackConn) {
         "Durasi: " + job.durationSeconds + " detik",
         "AI footage: " + (Number(job.aiFootageCount) || 0) + " scene",
         "Voice-over: " + (job.voiceoverEnabled ? "aktif" : "tidak aktif"),
+        job.voiceoverEnabled ? "Model suara: " + (job.voiceModel || "TTS") + " • " + (job.voiceName || "-") : "",
         "Musik AI: " + (job.aiMusicEnabled ? "aktif" : "tidak aktif"),
         "ID: " + jobId,
         warnings.length ? "Catatan: " + warnings.join(" | ").slice(0, 500) : ""
@@ -780,6 +781,9 @@ async function showServices(m, conn, argument = "") {
       );
     }
 
+    if (getVoiceSettings().provider === "edge-tts") {
+      return m.reply("Edge TTS online tidak memerlukan service lokal. Pastikan paket sudah terpasang dengan .remotion voice install. Untuk memakai VoxCPM2, ubah provider melalui .remotion voice.");
+    }
     const service = "voxcpm";
     const label = "VoxCPM2";
     const waitMs = Infinity;
