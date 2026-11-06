@@ -197,10 +197,51 @@ test('voice adapter probes and decodes actual WAV fixture; aligns scenes to inte
   const project = validateVideoProject({ fps: 24, voiceSettings: { provider: 'voxcpm2' }, scenes: [{ text: 'Halo', narration: 'Halo', duration: 2.4 }, { text: 'Dua', narration: 'Halo', duration: 2.4 }] });
   const result = await prepareVoiceover(project, 'contract-test');
   assert.equal(result.voiceoverTracks.length, 2);
-  assert.equal(result.scenes[1].startSeconds, 58 / 24);
-  assert.equal(result.captions[1].words[0].startSeconds, 58 / 24 + .1);
+  assert.equal(result.scenes[0].duration, 30 / 24);
+  assert.equal(result.scenes[1].startSeconds, 30 / 24);
+  assert.equal(result.captions[1].words[0].startSeconds, 30 / 24 + .1);
   assert.equal(result.voiceoverTracks[0].durationSeconds, 1);
 });
+test('each narrated scene duration follows its own measured TTS audio length', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'voxcpm-scene-duration-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  t.after(() => rm(new URL('../video-studio/remotion/public/generated/duration-test', import.meta.url), { recursive: true, force: true }));
+  execFileSync('ffmpeg', ['-v','error','-f','lavfi','-i','sine=frequency=440:duration=0.7','-ar','48000',join(dir,'short.wav')]);
+  execFileSync('ffmpeg', ['-v','error','-f','lavfi','-i','sine=frequency=520:duration=2.1','-ar','48000',join(dir,'long.wav')]);
+  const shortAudio = await readFile(join(dir,'short.wav'));
+  const longAudio = await readFile(join(dir,'long.wav'));
+  const base = await server(t, (req, res) => {
+    let body = '';
+    req.setEncoding('utf8');
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      const request = JSON.parse(body);
+      const audio = request.text === 'Pendek' ? shortAudio : longAudio;
+      res.setHeader('content-type', 'application/json');
+      res.end(JSON.stringify({
+        provider: 'VoxCPM2',
+        audio_base64: audio.toString('base64'),
+        words: [{ text: request.text, start: .1, end: .5 }]
+      }));
+    });
+  });
+  env(t, 'VIDEO_STUDIO_VOXCPM_URL', base);
+  const project = validateVideoProject({
+    fps: 30,
+    voiceSettings: { provider: 'voxcpm2' },
+    scenes: [
+      { text: 'Narasi pendek', narration: 'Pendek', duration: 8 },
+      { text: 'Narasi lebih panjang', narration: 'Narasi yang lebih panjang', duration: 8 }
+    ]
+  });
+  const result = await prepareVoiceover(project, 'duration-test');
+  assert.equal(result.voiceoverTracks[0].durationSeconds, .7);
+  assert.equal(result.voiceoverTracks[1].durationSeconds, 2.1);
+  assert.equal(result.scenes[0].duration, 38 / 30);
+  assert.equal(result.scenes[1].duration, 71 / 30);
+  assert.equal(result.scenes[1].startSeconds, 38 / 30);
+});
+
 test('required narration fails clearly when VoxCPM2 is missing; explicit silent mode works', async t => {
   env(t, 'VIDEO_STUDIO_VOXCPM_URL', 'http://127.0.0.1:9'); env(t, 'VIDEO_STUDIO_VOICE_REQUIRED', 'true');
   const project = validateVideoProject({ voiceSettings: { provider: 'voxcpm2' }, scenes: [{ text: 'Halo', narration: 'Halo dunia', duration: 3 }] });
