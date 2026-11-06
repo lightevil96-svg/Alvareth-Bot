@@ -32,6 +32,15 @@ const ALLOWED = {
 function cleanText(value, maxLength) {
   return String(value == null ? "" : value).replace(/\u0000/g, "").trim().slice(0, maxLength);
 }
+function hasBrandCredit(value) {
+  return /dibuat\s*oleh\s*alvarethbot/i.test(String(value == null ? "" : value));
+}
+function stripBrandCredit(value, maxLength) {
+  return cleanText(value, maxLength)
+    .replace(/dibuat\s*oleh\s*alvarethbot/giu, "")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+}
 function pick(value, choices, fallback) {
   return choices.includes(value) ? value : fallback;
 }
@@ -137,6 +146,10 @@ export function normalizeVideoPlan(raw, sourcePrompt) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("Storyboard AI tidak berbentuk objek.");
   const rawScenes = Array.isArray(raw.scenes) ? raw.scenes : [];
   if (rawScenes.length < 1 || rawScenes.length > 60) throw new Error("Storyboard harus berisi 1 sampai 60 scene.");
+  const brandCredit = raw.brandCredit === true || hasBrandCredit(raw.brandCredit) || rawScenes.some(scene =>
+    [scene && scene.text, scene && scene.onScreenText, scene && scene.kicker, scene && scene.highlight, scene && scene.subtext]
+      .some(hasBrandCredit)
+  );
   const prompt = cleanText(sourcePrompt, 6000);
   const category = pick(raw.category, ALLOWED.category, "explainer");
   const palette = PALETTES[category === "product" ? 2 : category === "finance" ? 4 : category === "story" ? 1 : category === "educational" ? 3 : 0];
@@ -179,7 +192,9 @@ export function normalizeVideoPlan(raw, sourcePrompt) {
   } : null;
   let scenes = rawScenes.map((source, index) => {
     const scene = source && typeof source === "object" ? source : {};
-    const text = cleanText(scene.text || scene.onScreenText, 180);
+    const rawSceneText = cleanText(scene.text || scene.onScreenText, 180);
+    const cleanedSceneText = stripBrandCredit(rawSceneText, 180);
+    const text = cleanedSceneText || (hasBrandCredit(rawSceneText) ? (index === rawScenes.length - 1 ? "Terima kasih" : title) : "");
     if (!text) throw new Error("Teks utama scene " + (index + 1) + " kosong.");
     const background = /^#[0-9a-f]{6}$/i.test(String(scene.background || "")) ? scene.background : (raw.palette && /^#[0-9a-f]{6}$/i.test(String(raw.palette.background || "")) ? raw.palette.background : palette.background);
     const accent = /^#[0-9a-f]{6}$/i.test(String(scene.accent || "")) ? scene.accent : (raw.palette && /^#[0-9a-f]{6}$/i.test(String(raw.palette.accent || "")) ? raw.palette.accent : palette.accent);
@@ -190,7 +205,7 @@ export function normalizeVideoPlan(raw, sourcePrompt) {
     }
     const modelDuration = Number(scene.durationSeconds || scene.duration);
     const durationSeconds = Math.min(20, Math.max(2.4, Number.isFinite(modelDuration) && modelDuration > 0 ? Math.max(estimate, modelDuration) : estimate));
-    const points = Array.isArray(scene.points) ? scene.points.slice(0, 4).map(point => cleanText(point, 90)).filter(Boolean) : [];
+    const points = Array.isArray(scene.points) ? scene.points.slice(0, 4).map(point => stripBrandCredit(point, 90)).filter(Boolean) : [];
     return {
       id: cleanText(scene.id, 40) || "scene-" + String(index + 1).padStart(2, "0"),
       purpose: cleanText(scene.purpose, 50) || "story",
@@ -199,10 +214,10 @@ export function normalizeVideoPlan(raw, sourcePrompt) {
       motif: pick(scene.motif, ALLOWED.motif, ["rings", "wave", "grid", "orbit", "bars", "ribbon", "spark"][index % 7]),
       motion: pick(scene.motion, ALLOWED.motion, ["fade-up", "scale-in", "slide-left", "reveal", "float"][index % 5]),
       transition: pick(scene.transition, ALLOWED.transition, index === 0 ? "fade" : "wipe"),
-      kicker: cleanText(scene.kicker, 60),
+      kicker: stripBrandCredit(scene.kicker, 60),
       text,
-      highlight: cleanText(scene.highlight, 70),
-      subtext: cleanText(scene.subtext, 220),
+      highlight: stripBrandCredit(scene.highlight, 70),
+      subtext: stripBrandCredit(scene.subtext, 220),
       points,
       narration,
       visualDescription: cleanText(scene.visualDescription, 400),
@@ -221,8 +236,8 @@ export function normalizeVideoPlan(raw, sourcePrompt) {
       diagramNodes: Array.isArray(scene.diagramNodes) ? scene.diagramNodes.slice(0, 7).map((item, nodeIndex) => ({ id: cleanText(item && item.id, 32) || "node-" + (nodeIndex + 1), label: cleanText(item && item.label, 64), x: Number.isFinite(Number(item && item.x)) ? Number(item.x) : null, y: Number.isFinite(Number(item && item.y)) ? Number(item.y) : null })).filter(item => item.label) : [],
       diagramEdges: Array.isArray(scene.diagramEdges) ? scene.diagramEdges.slice(0, 10).map(item => ({ from: cleanText(item && item.from, 32), to: cleanText(item && item.to, 32), label: cleanText(item && item.label, 48) })).filter(item => item.from && item.to) : [],
       appMockup: scene.appMockup && typeof scene.appMockup === "object" ? { title: cleanText(scene.appMockup.title, 80), rows: Array.isArray(scene.appMockup.rows) ? scene.appMockup.rows.slice(0, 5).map(item => cleanText(item, 64)).filter(Boolean) : [], cta: cleanText(scene.appMockup.cta, 48) } : null,
-      notifications: Array.isArray(scene.notifications) ? scene.notifications.slice(0, 3).map(item => ({ sender: cleanText(item && item.sender, 48), text: cleanText(item && item.text, 120), delaySeconds: Math.max(0, Math.min(18, Number(item && item.delaySeconds) || 0)), durationSeconds: Math.max(0.8, Math.min(8, Number(item && item.durationSeconds) || 2.6)) })).filter(item => item.text) : [],
-      callouts: Array.isArray(scene.callouts) ? scene.callouts.slice(0, 3).map(item => ({ text: cleanText(item && item.text, 90), position: pick(item && item.position, ["top", "center", "bottom"], "bottom"), delaySeconds: Math.max(0, Math.min(18, Number(item && item.delaySeconds) || 0)), durationSeconds: Math.max(0.8, Math.min(8, Number(item && item.durationSeconds) || 2)) })).filter(item => item.text) : [],
+      notifications: Array.isArray(scene.notifications) ? scene.notifications.slice(0, 3).map(item => ({ sender: cleanText(item && item.sender, 48), text: stripBrandCredit(item && item.text, 120), delaySeconds: Math.max(0, Math.min(18, Number(item && item.delaySeconds) || 0)), durationSeconds: Math.max(0.8, Math.min(8, Number(item && item.durationSeconds) || 2.6)) })).filter(item => item.text) : [],
+      callouts: Array.isArray(scene.callouts) ? scene.callouts.slice(0, 3).map(item => ({ text: stripBrandCredit(item && item.text, 90), position: pick(item && item.position, ["top", "center", "bottom"], "bottom"), delaySeconds: Math.max(0, Math.min(18, Number(item && item.delaySeconds) || 0)), durationSeconds: Math.max(0.8, Math.min(8, Number(item && item.durationSeconds) || 2)) })).filter(item => item.text) : [],
       soundIntensity: Math.max(0, Math.min(1, Number(scene.soundIntensity ?? 0.55))),
       background,
       accent,
@@ -247,7 +262,7 @@ export function normalizeVideoPlan(raw, sourcePrompt) {
     captionStyle,
     musicDirection: cleanText(raw.musicDirection, 240),
     soundEffects: raw.soundEffects !== false,
-    brandCredit: raw.brandCredit === true || /dibuat\s*oleh\s*alvarethbot/i.test(cleanText(raw.brandCredit, 80)),
+    brandCredit,
     creativeBrief,
     visualBible,
     characterBible,
