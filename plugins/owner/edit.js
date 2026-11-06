@@ -14,7 +14,6 @@ import {
 } from "../../video-edit/schema.js";
 import {
   enqueueEditJob,
-  getEditJob,
   getEditOutput,
   listEditJobs,
   editStoragePaths
@@ -181,7 +180,7 @@ async function sendNativeMenu(m, conn, title, description, sections, fallback) {
 async function showMainMenu(m, conn, prefix) {
   const session = getSession(m);
   const source = session
-    ? "Video siap diproses • " + (session.sizeBytes / 1024 / 1024).toFixed(1) + " MB"
+    ? "Video siap diproses • " + session.sourceName + " • " + (session.sizeBytes / 1024 / 1024).toFixed(1) + " MB"
     : "Kirim video dengan caption " + prefix + "edit atau reply video dengan perintah " + prefix + "edit.";
   const sections = [
     {

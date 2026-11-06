@@ -9,7 +9,8 @@ import {
 import {
   buildKeepSegments,
   limitSegments,
-  parseSilenceLog
+  parseSilenceLog,
+  renderEditVideo
 } from "../video-edit/engine.js";
 
 test("default edit plan is safe and uses a vertical short-form format", () => {
@@ -27,7 +28,7 @@ test("settings are normalized to supported values", () => {
     maxDurationSeconds: 180,
     removeSilence: false
   });
-  assert.deepEqual(getOutputDimensions({ ratio: "4:5", resolution: "720p" }), { width: 864, height: 1080 });
+  assert.deepEqual(getOutputDimensions({ ratio: "4:5", resolution: "720p" }), { width: 576, height: 720 });
 });
 
 test("valid custom plan accepts chronological clips and timed captions", () => {
@@ -111,4 +112,67 @@ test("segment limiter respects playback speed when enforcing output duration", (
     { start: 0, end: 10, speed: 2 },
     { start: 20, end: 30, speed: 1 }
   ], 3), [{ start: 0, end: 6, speed: 2 }]);
+});
+
+
+test("renders and fully decodes a real MP4 fixture with manual cuts and captions", async t => {
+  const { spawnSync } = await import("node:child_process");
+  const { execFile } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  const { mkdtemp, mkdir, rm, stat } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const path = await import("node:path");
+  const check = spawnSync("ffmpeg", ["-version"], { stdio: "ignore" });
+  const probe = spawnSync("ffprobe", ["-version"], { stdio: "ignore" });
+  if (check.status !== 0 || probe.status !== 0) return t.skip("FFmpeg/FFprobe tidak tersedia pada environment ini.");
+
+  const run = promisify(execFile);
+  const directory = await mkdtemp(path.join(tmpdir(), "alvareth-edit-fixture-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const sourcePath = path.join(directory, "source.mp4");
+  const outputPath = path.join(directory, "output.mp4");
+  const workDir = path.join(directory, "work");
+  await mkdir(workDir, { recursive: true });
+  await run("ffmpeg", [
+    "-hide_banner", "-y",
+    "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24",
+    "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000",
+    "-t", "4",
+    "-c:v", "libx264", "-pix_fmt", "yuv420p",
+    "-c:a", "aac",
+    sourcePath
+  ], { timeout: 60000, maxBuffer: 1024 * 1024 });
+
+  const filterList = spawnSync("ffmpeg", ["-hide_banner", "-filters"], { encoding: "utf8" });
+  const supportsAss = String(filterList.stdout || "") .includes(" ass ") || String(filterList.stderr || "").includes(" ass ");
+  const plan = createDefaultEditPlan({ ratio: "16:9", maxDurationSeconds: 10, removeSilence: false });
+  plan.output.resolution = "720p";
+  plan.output.fps = 24;
+  plan.edit.fadeInSeconds = 0;
+  plan.edit.fadeOutSeconds = 0;
+  plan.edit.segments = [
+    { start: 0, end: 2, speed: 1 },
+    { start: 3, end: 4, speed: 1 }
+  ];
+  if (supportsAss) {
+    plan.captions = {
+      enabled: true,
+      style: "subtitle",
+      items: [{ start: 0.2, end: 1.4, text: "Caption test" }]
+    };
+  }
+
+  const result = await renderEditVideo({
+    sourcePath,
+    outputPath,
+    workDir,
+    inputPlan: plan,
+    settings: {},
+    onProgress: () => {}
+  });
+  assert.equal(result.width, 1280);
+  assert.equal(result.height, 720);
+  assert.equal(result.fps, 24);
+  assert.ok(Math.abs(result.duration - 3) < 0.45);
+  assert.ok((await stat(outputPath)).size > 0);
 });

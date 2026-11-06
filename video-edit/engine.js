@@ -374,6 +374,9 @@ export async function renderEditVideo({
     const segments = buildKeepSegments(plan, source.duration, silenceIntervals);
     const duration = segments.reduce((sum, item) => sum + (item.end - item.start) / item.speed, 0);
     if (duration < 1) throw new Error("Hasil edit terlalu pendek. Pilih segmen dengan durasi minimal 1 detik.");
+    if (plan.captions.enabled && plan.captions.items.some(item => item.end > duration + 0.05)) {
+      throw new Error("Waktu akhir caption melebihi durasi timeline hasil edit. Sesuaikan captions.items dengan durasi output setelah pemotongan.");
+    }
     const dimensions = getOutputDimensions(plan.output);
     const captionsPath = await writeCaptionsFile(workDir, plan, dimensions);
     const music = await resolveMusicAsset(plan.audio.musicAsset);

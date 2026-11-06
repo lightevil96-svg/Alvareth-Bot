@@ -176,6 +176,10 @@ export function validateEditPlan(input, options = {}) {
     return { start, end, text };
   });
 
+  if (captionsEnabled && !captionItems.length) {
+    throw new Error("captions.enabled true memerlukan minimal satu item caption bertiming.");
+  }
+
   const normalize = boundedBoolean(audio.normalize, true, "audio.normalize");
   const originalVolume = boundedNumber(audio.originalVolume, 1, 0, 2, "audio.originalVolume");
   const musicVolume = boundedNumber(audio.musicVolume, 0, 0, 0.5, "audio.musicVolume");
