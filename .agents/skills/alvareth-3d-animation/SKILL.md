@@ -53,7 +53,7 @@ Choose one primary object per scene: `orb`, `cube`, `torus`, `rings`, `crystal`,
 
 - Wrap every 3D scene in `<ThreeCanvas width={width} height={height}>`.
 - Animate only from `useCurrentFrame()` and `useVideoConfig()`; never use `useFrame()`, wall-clock time, CSS animation, timers, or unseeded randomness.
-- Choose the Chromium WebGL backend for the host: `angle` on desktop/GPU hosts, `angle-egl` on Linux GPU hosts, and `swangle` on CPU-only Linux hosts. The renderer accepts an explicit `VIDEO_STUDIO_WEBGL_RENDERER` override.
+- Use ANGLE (`gl: "angle"`) as the default headless WebGL backend; it is required by the verified CI renderer. Use `angle-egl` only on Linux hosts with working EGL/GPU support. Treat `swangle` as an opt-in fallback and verify it on the target host before enabling. Override with `VIDEO_STUDIO_WEBGL_RENDERER`.
 - Keep the 3D canvas behind typography. Do not render headings, captions, logos, or brand credits inside the Three.js scene.
 - Keep the object in a clear visual area and preserve mobile-safe text margins.
 - Use intentional three-point lighting, appropriate roughness/metalness, restrained camera orbit, depth, and one dominant subject.
