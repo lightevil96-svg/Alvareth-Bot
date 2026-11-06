@@ -1,5 +1,3 @@
 # Audited upstream Python API and Apache-2.0 code; install inside a dedicated venv.
 voxcpm @ git+https://github.com/OpenBMB/VoxCPM.git@4b8dd4440d33396b3f429201f8af0529b4d2c601
 # Optional alignment: pip install stable-ts==2.19.1 (MIT), then supply local .pt checkpoint.
-# Free online Microsoft Edge Neural TTS adapter; no local model or API key.
-edge-tts==7.3.1
