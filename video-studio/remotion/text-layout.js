@@ -2,6 +2,16 @@ import { measureText } from "@remotion/layout-utils";
 
 const FONT_FAMILY = "Inter, Arial, sans-serif";
 
+export function normalizeDisplayText(value) {
+  return String(value == null ? "" : value)
+    .normalize("NFC")
+    .replace(/\u00a0/g, " ")
+    .replace(/Dibuat\s*oleh/giu, match => match[0] === "D" ? "Dibuat oleh" : "dibuat oleh")
+    .replace(/[ \t]+/g, " ")
+    .replace(/ *\n */g, "\n")
+    .trim();
+}
+
 function fallbackTextWidth(text, fontSize) {
   const units = Array.from(text).reduce((sum, character) => {
     if (/\s/u.test(character)) return sum + 0.32;
@@ -79,13 +89,13 @@ function wrapAtSize(value, maxWidth, fontSize, fontWeight, letterSpacing) {
 }
 
 export function fitTextBlock(value, maxWidth, options = {}) {
-  const text = String(value || "").trim();
+  const text = normalizeDisplayText(value);
   const width = Math.max(80, Number(maxWidth) || 80);
   const maxFontSize = Math.max(12, Number(options.maxFontSize) || 88);
   const minFontSize = Math.max(10, Math.min(maxFontSize, Number(options.minFontSize) || 28));
   const maxLines = Math.max(1, Math.floor(Number(options.maxLines) || 4));
   const fontWeight = options.fontWeight || 850;
-  const letterSpacing = Number.isFinite(Number(options.letterSpacing)) ? Number(options.letterSpacing) : -0.6;
+  const letterSpacing = Number.isFinite(Number(options.letterSpacing)) ? Number(options.letterSpacing) : 0;
   let selected = null;
 
   for (let fontSize = maxFontSize; fontSize >= minFontSize; fontSize -= 2) {
