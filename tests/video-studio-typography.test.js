@@ -7,7 +7,7 @@ test("repairs the joined Indonesian phrase before rendering", () => {
   assert.equal(normalizeDisplayText("dibuatoleh ALVARETHBOT"), "dibuat oleh ALVARETHBOT");
   assert.equal(normalizeDisplayText("DibuatolehALVARETHBOT"), "Dibuat oleh ALVARETHBOT");
   assert.equal(normalizeDisplayText("Dibuatoleh   ALVARETHBOT"), "Dibuat oleh ALVARETHBOT");
-  assert.equal(normalizeDisplayText("DIBUATOLEHALVARETHBOT"), "DIBUAT oleh ALVARETHBOT");
+  assert.equal(normalizeDisplayText("DIBUATOLEHALVARETHBOT"), "Dibuat oleh ALVARETHBOT");
   const layout = fitTextBlock("Dibuatoleh ALVARETHBOT", 900, {
     maxFontSize: 48,
     minFontSize: 24,
