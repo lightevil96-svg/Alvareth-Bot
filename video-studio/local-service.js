@@ -7,7 +7,7 @@ export function localServiceUrl(value, path = "") {
   if (!['http:', 'https:'].includes(url.protocol) || !['127.0.0.1', '[::1]'].includes(url.hostname) || url.username || url.password || url.search || url.hash) {
     throw new Error('Layanan media harus memakai alamat loopback numerik (127.0.0.1 atau [::1]), tanpa kredensial.');
   }
-  return new URL(path.replace(/^\\//, ''), url.href.replace(/\\/?$/, '/')).href;
+  return new URL(path.replace(/^\//, ''), url.href.replace(/\/?$/, '/')).href;
 }
 
 function requestWithoutTimeout(url, options = {}) {
