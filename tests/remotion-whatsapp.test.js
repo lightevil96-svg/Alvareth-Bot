@@ -207,6 +207,10 @@ test("plugin rejects every non-owner action and binds prompt sessions to their i
   const cinematicSettings = JSON.parse(await readFile(dir + "/video-studio/voice-settings.json", "utf8"));
   assert.equal(cinematicSettings.provider, "voxcpm2");
   assert.equal(cinematicSettings.voxStyle, "cinematic");
+  await handler(m,{conn,text:"voice model id-ID-ArdiNeural",isROwner:true,usedPrefix:"!"});
+  const edgeVoiceSettings = JSON.parse(await readFile(dir + "/video-studio/voice-settings.json", "utf8"));
+  assert.equal(edgeVoiceSettings.provider, "edge-tts");
+  assert.equal(edgeVoiceSettings.voice, "id-ID-ArdiNeural");
   await handler(m,{conn,text:"",isROwner:true,usedPrefix:"!"});
   assert.deepEqual(sent.at(-1)[1].nativeFlow[0].sections.map(section => section.rows.length), [6, 2, 3]);
   await handler(m,{conn,text:"voice provider voxcpm2",isROwner:true,usedPrefix:"!"});
