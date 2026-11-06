@@ -384,9 +384,9 @@ async function installEdgeTts(m) {
   const useUv = uvProbe.status === 0 || existsSync(localUv);
   const edgeVenv = join(process.cwd(), ".venv-edge-tts");
   const edgePython = join(edgeVenv, "bin", "python");
-  let pythonPath = existsSync(edgePython) ? edgePython : config.pythonPath;
+  let pythonPath = existsSync(edgePython) ? edgePython : "";
 
-  if (!existsSync(pythonPath) && useUv) {
+  if (!pythonPath && useUv) {
     const pythonInstall = spawnSync(uv, ["python", "install", "3.11"], {
       encoding: "utf8", timeout: 180000, maxBuffer: 2 * 1024 * 1024, windowsHide: true
     });
@@ -401,15 +401,17 @@ async function installEdgeTts(m) {
     }
     pythonPath = edgePython;
   }
-  if (!existsSync(pythonPath)) {
+  if (!pythonPath && existsSync(config.pythonPath)) pythonPath = config.pythonPath;
+  if (!pythonPath || !existsSync(pythonPath)) {
     return m.reply("Python belum tersedia. Edge TTS bisa memakai virtualenv ringan tanpa GPU, tetapi binary uv belum ditemukan. Jalankan .remotion install untuk memasang uv, lalu ulangi .remotion voice install.");
   }
 
+  const edgeRequirements = join(process.cwd(), "video-studio", "services", "edge_tts", "requirements.txt");
   const result = useUv
-    ? spawnSync(uv, ["pip", "install", "--python", pythonPath, "edge-tts==7.3.1"], {
+    ? spawnSync(uv, ["pip", "install", "--python", pythonPath, "-r", edgeRequirements], {
         encoding: "utf8", timeout: 180000, maxBuffer: 2 * 1024 * 1024, windowsHide: true
       })
-    : spawnSync(pythonPath, ["-m", "pip", "install", "edge-tts==7.3.1"], {
+    : spawnSync(pythonPath, ["-m", "pip", "install", "-r", edgeRequirements], {
         encoding: "utf8", timeout: 180000, maxBuffer: 2 * 1024 * 1024, windowsHide: true
       });
   if (result.error || result.status !== 0) {
