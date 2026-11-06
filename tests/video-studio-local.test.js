@@ -144,7 +144,7 @@ test('local inference HTTP requests can wait for a slow response without a deadl
 test('Remotion frame readiness uses a practically unbounded delayRender timeout', () => {
   assert.equal(resolveRenderTimeout(), 2147000000);
 });
-test('storyboard parser accepts externally authored JSON without a local inference service', () => {
+test('storyboard parser accepts JSON authored by any external AI without a local inference service', () => {
   const plan = parseStoryboardInput(JSON.stringify({
     schemaVersion: 1,
     sourcePrompt: 'Buat video promosi kopi lokal tanpa musik.',
@@ -194,7 +194,7 @@ test('voice adapter probes and decodes actual WAV fixture; aligns scenes to inte
   const bytes = await readFile(join(dir,'fixture.wav'));
   const base = await server(t, (_req, res) => res.end(JSON.stringify({ provider: 'VoxCPM2', audio_base64: bytes.toString('base64'), words: [{ text: 'Halo', start: .1, end: .8 }] })));
   env(t, 'VIDEO_STUDIO_VOXCPM_URL', base);
-  const project = validateVideoProject({ fps: 24, scenes: [{ text: 'Halo', narration: 'Halo', duration: 2.4 }, { text: 'Dua', narration: 'Halo', duration: 2.4 }] });
+  const project = validateVideoProject({ fps: 24, voiceSettings: { provider: 'voxcpm2' }, scenes: [{ text: 'Halo', narration: 'Halo', duration: 2.4 }, { text: 'Dua', narration: 'Halo', duration: 2.4 }] });
   const result = await prepareVoiceover(project, 'contract-test');
   assert.equal(result.voiceoverTracks.length, 2);
   assert.equal(result.scenes[1].startSeconds, 58 / 24);
@@ -203,7 +203,7 @@ test('voice adapter probes and decodes actual WAV fixture; aligns scenes to inte
 });
 test('required narration fails clearly when VoxCPM2 is missing; explicit silent mode works', async t => {
   env(t, 'VIDEO_STUDIO_VOXCPM_URL', 'http://127.0.0.1:9'); env(t, 'VIDEO_STUDIO_VOICE_REQUIRED', 'true');
-  const project = validateVideoProject({ scenes: [{ text: 'Halo', narration: 'Halo dunia', duration: 3 }] });
+  const project = validateVideoProject({ voiceSettings: { provider: 'voxcpm2' }, scenes: [{ text: 'Halo', narration: 'Halo dunia', duration: 3 }] });
   await assert.rejects(prepareVideoMedia(project, 'missing-test'), /VoxCPM2/);
   env(t, 'VIDEO_STUDIO_VOICE_REQUIRED', 'false');
   const silent = await prepareVideoMedia(project, 'missing-test');
