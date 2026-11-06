@@ -3,24 +3,28 @@
 > **Tujuan:** orientasi singkat untuk AI/developer yang melanjutkan proyek.
 > **Repository:** https://github.com/lightevil96-svg/Alvareth-Bot
 > **Branch produksi:** `main`
-> **Ditinjau:** 2026-11-05
+> **Ditinjau:** 2026-11-06
 >
 > Baca `AGENTS.md` terlebih dahulu, lalu file ini dan `docs/AI_CHANGELOG.md`. Catatan membantu orientasi, tetapi kode saat ini tetap menjadi sumber kebenaran.
 
 ## Pembaruan terbaru
 
-- 2026-11-06: Added explicit `.remotion services start voice/planner`, VoxCPM2 loading wait, early process-exit diagnostics, and a direct ComfyUI health check. Core installer still does not provision ComfyUI models/workflows.
+- 2026-11-06: Added repository-root `prompt-remotion.md`, a strict ChatGPT guide with the current JSON schema, enum allowlists, capability limits, and a complete Indonesian story example. WhatsApp accepts up to 24,000 characters; plain-language briefs are intentionally rejected.
+- 2026-11-06: Planner is now an offline JSON parser/normalizer only. It has no Ollama, Qwen, or ChatGPT API dependency. The shared /api/video-studio/plan contract now expects a ChatGPT-authored JSON string; an external LightJurnal frontend sending prose needs a separate update.
+- 2026-11-06: Scene duration fitting rejects targets shorter than estimated narration/reading time instead of compressing speech. Ollama installer/bootstrap, local service management, environment settings, and obsolete archive extractor were removed; VoxCPM2-only installation and hardware diagnostics remain.
+
+- 2026-11-06: Removed the Ollama/Qwen planner and all Ollama provisioning from production `main`. Storyboard authoring now happens manually in ChatGPT; the bot accepts only JSON with `schemaVersion: 1` and validates/compiles it. See `prompt-remotion.md`.
 - 2026-11-06: ComfyUI readiness now requires exact workflow SHA-256 approval; character reference also requires reviewed image/video workflows and the `{{REFERENCE_IMAGE}}` placeholder.
 - 2026-11-06: GitHub Actions passed on `8f54ee1`: JavaScript syntax, Video Studio regression, mocked VoxCPM2 service contract, Remotion JSX compile, and fixture MP4 render/decode. Real VPS inference/render and WhatsApp delivery remain unverified.
 
 - 2026-11-06: Video Studio ditetapkan WhatsApp-only. Remote LightJurnal API dan Cloudflare Tunnel dihapus: server.js hanya mempertahankan health/ping hosting, tidak ada route /api/video-studio, cloudflared, API key, maupun token tunnel. Satu-satunya kontrol produksi adalah owner-only .remotion; MP4 dikirim ke chat WhatsApp asal.
 
 - 2026-11-06: Follow-up CI fixes the planner base URL and VoxCPM2 transport diagnostics; see the latest changelog entry.
-- 2026-11-06: Local Ollama/VoxCPM2 child processes now inherit only allowlisted runtime/model/CUDA variables; bot credentials are excluded. Regression test added.
+- 2026-11-06: The VoxCPM2 child process inherits only allowlisted runtime/model/CUDA variables; bot credentials are excluded. No Ollama process is launched.
 
-- 2026-11-06: Remotion readiness now distinguishes missing Ollama binary, VoxCPM2 virtualenv, model weights, and stopped services. Owner-only `.remotion install` provisions local runtimes and model weights in the background; `.remotion install cpu` is an explicit slow CPU path; `.remotion install status` reads persistent setup state/logs. VPS hardware suitability and real MP4 verification remain separate.
+- 2026-11-06: Remotion readiness now checks VoxCPM2 virtualenv/model weights and optional ComfyUI workflows. Owner-only `.remotion install` provisions VoxCPM2 runtime/model in the background; `.remotion install cpu` is an explicit slow CPU path; `.remotion install status` reads persistent setup state/logs. Hardware diagnostics remain in the owner menu.
 
-- 2026-11-06: Branch feat/remotion-whatsapp-linux migrates media to loopback Ollama + VoxCPM2, fixes audio serialization/timing, adds event SFX and authorization regression tests. See docs/REMOTION_AUDIT_2026-11-06.md for actual verification; earlier hosted-provider entries below are historical and superseded.
+- 2026-11-06: Earlier feature-branch commits introduced the Ollama planner but are not the production architecture. Current `main` removes it and preserves the newer hardware diagnostics and installer. Do not merge the diverged feature branch blindly.
 
 - 2026-11-05: Branch `feat/remotion-whatsapp-linux` menambahkan fitur owner-only `.remotion` pada WhatsApp. Plugin `plugins/owner/remotion.js` memakai Video Studio planner/compiler/queue/renderer yang sudah ada, menu native-flow dengan fallback teks, prompt session, status/progres, riwayat, resend, provider readiness, dan uploader MP4 disk-streaming. Prompt session di-route sebelum plugin normal hanya untuk owner yang memulai sesi.
 
