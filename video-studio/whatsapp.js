@@ -71,7 +71,16 @@ export function formatRemotionJob(job) {
 
 export function getRemotionProviderReadiness(env = {}, fileExists = () => false, runtime = {}) {
   const voiceUrl = String(env.VIDEO_STUDIO_VOXCPM_URL || "http://127.0.0.1:7861").trim();
-  const voiceover = Boolean(voiceUrl);
+  const edgeTtsInstalled = runtime.edgeTtsInstalled === true;
+  const voiceSettings = runtime.voiceSettings || { provider: "edge-tts", voice: "id-ID-GadisNeural" };
+  const activeProvider = voiceSettings.provider === "voxcpm2" ? "voxcpm2" : "edge-tts";
+  const voiceReady = activeProvider === "edge-tts" ? edgeTtsInstalled : Boolean(voiceUrl);
+  const voiceDetail = activeProvider === "edge-tts"
+    ? (edgeTtsInstalled
+      ? "Provider aktif: Edge TTS online; model " + String(voiceSettings.voice || "id-ID-GadisNeural") + ". Tidak perlu memuat model lokal."
+      : "Provider aktif: Edge TTS online, tetapi paket edge-tts belum terpasang. Jalankan .remotion voice install.")
+    : "Provider aktif: VoxCPM2 lokal di " + voiceUrl + "; model 2B dapat lambat pada CPU.";
+
   const videoWorkflow = String(env.VIDEO_STUDIO_COMFYUI_VIDEO_WORKFLOW_FILE || "").trim();
   const imageWorkflow = String(env.VIDEO_STUDIO_COMFYUI_IMAGE_WORKFLOW_FILE || "").trim();
   const musicWorkflow = String(env.VIDEO_STUDIO_COMFYUI_MUSIC_WORKFLOW_FILE || "").trim();
@@ -149,8 +158,20 @@ export function getRemotionProviderReadiness(env = {}, fileExists = () => false,
     },
     {
       name: "Voice-over + subtitle sinkron",
-      configured: voiceover,
-      detail: "Endpoint " + voiceUrl + (env.VIDEO_STUDIO_VOXCPM_URL ? "" : " (default)") + "; bot dapat menjalankan adapter lokal otomatis jika virtualenv dan model tersedia."
+      configured: voiceReady,
+      detail: voiceDetail
+    },
+    {
+      name: "Edge TTS online",
+      configured: edgeTtsInstalled,
+      detail: edgeTtsInstalled
+        ? "Paket Edge TTS tersedia; sintesis menggunakan layanan online gratis dan word-boundary timing."
+        : "Belum terpasang. Jalankan .remotion voice install; tidak memerlukan model GPU."
+    },
+    {
+      name: "VoxCPM2 lokal (opsional)",
+      configured: Boolean(voiceUrl),
+      detail: "Endpoint lokal: " + voiceUrl + ". Dipakai hanya jika provider dipilih ke VoxCPM2."
     },
     {
       name: "AI video footage",
