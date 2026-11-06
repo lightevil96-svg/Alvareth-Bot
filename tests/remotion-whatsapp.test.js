@@ -110,6 +110,7 @@ test("plugin rejects every non-owner action and binds prompt sessions to their i
   assert.equal(sent[0][1].nativeFlow[0].sections[0].rows[0].id,'!remotion generate');
   await handler(m,{conn,text:'generate',isROwner:true});
   assert.equal(global.__alvarethRemotionSessions.get(m.chat).sender,'owner-a');
+  assert.match(replies.at(-1),/JSON storyboard/);
   assert.equal(await global.__alvarethRemotionPromptHandler({...m,sender:'intruder',text:'Buatkan video kopi'},{conn,isROwner:false}),false);
   assert.equal(await global.__alvarethRemotionPromptHandler({...m,sender:'owner-b',text:'Buatkan video kopi'},{conn,isROwner:true}),false);
   await handler({...m,sender:'owner-b'},{conn,text:'cancel',isROwner:true});
@@ -118,4 +119,5 @@ test("plugin rejects every non-owner action and binds prompt sessions to their i
   assert.equal(global.__alvarethRemotionSessions.has(m.chat),false);
   for (const text of ['status','history','send','guide']) await handler(m,{conn,text,isROwner:true});
   assert.ok(replies.some(text=>/Riwayat video masih kosong/.test(text)));
+  assert.ok(replies.some(text=>/prompt-remotion\\.md/.test(text)));
 });
