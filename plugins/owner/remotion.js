@@ -291,8 +291,10 @@ async function showVoiceMenu(m, conn, usedPrefix = ".", notice = "") {
   const settings = getVoiceSettings();
   const edgeReady = providerReadiness().find(item => item.name === "Edge TTS online")?.configured === true;
   const providerLabel = settings.provider === "edge-tts" ? "Edge TTS online (gratis)" : "VoxCPM2 lokal";
-  const voiceLabel = EDGE_TTS_VOICES[settings.voice] || settings.voice;
   const styleLabel = settings.voxStyle || "warm";
+  const voiceLabel = settings.provider === "edge-tts"
+    ? (EDGE_TTS_VOICES[settings.voice] || settings.voice)
+    : "VoxCPM2 • gaya " + styleLabel;
   const sections = [
     {
       title: "Provider / model",
@@ -303,7 +305,7 @@ async function showVoiceMenu(m, conn, usedPrefix = ".", notice = "") {
       ]
     },
     {
-      title: "Suara Bahasa Indonesia",
+      title: "Voice Edge TTS Bahasa Indonesia",
       rows: [
         remotionMenuRow(usedPrefix, "👩 Gadis Neural", "Suara perempuan Indonesia.", "voice model id-ID-GadisNeural"),
         remotionMenuRow(usedPrefix, "👨 Ardi Neural", "Suara laki-laki Indonesia.", "voice model id-ID-ArdiNeural")
