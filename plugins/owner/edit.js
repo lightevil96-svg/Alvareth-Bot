@@ -133,7 +133,7 @@ async function receiveVideo(m, conn, payloadOverride = null) {
     sender: String(m.sender || ""),
     chat: String(m.chat || ""),
     sourcePath,
-    sourceName: String(payload.info.media?.fileName || "WhatsApp video").slice(0, 100),
+    sourceName: String(payload.info.media?.fileName || "WhatsApp video").replace(/[\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 100),
     mime,
     sizeBytes: buffer.length,
     createdAt: Date.now(),
