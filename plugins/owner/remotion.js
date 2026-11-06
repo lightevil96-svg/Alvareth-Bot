@@ -279,6 +279,168 @@ async function showServicesMenu(m, conn, usedPrefix = ".") {
     fallback
   });
 }
+async function showVoiceMenu(m, conn, usedPrefix = ".", notice = "") {
+  const settings = getVoiceSettings();
+  const edgeReady = providerReadiness().find(item => item.name === "Edge TTS online")?.configured === true;
+  const providerLabel = settings.provider === "edge-tts" ? "Edge TTS online (gratis)" : "VoxCPM2 lokal";
+  const voiceLabel = EDGE_TTS_VOICES[settings.voice] || settings.voice;
+  const styleLabel = settings.voxStyle || "warm";
+  const sections = [
+    {
+      title: "Provider / model",
+      rows: [
+        remotionMenuRow(usedPrefix, "☁️ Edge TTS online", "Microsoft Neural voice, gratis, tanpa model GPU.", "voice provider edge-tts"),
+        remotionMenuRow(usedPrefix, "🖥️ VoxCPM2 lokal", "Model lokal 2B; dapat lambat pada CPU.", "voice provider voxcpm2"),
+        remotionMenuRow(usedPrefix, "⬇️ Pasang Edge TTS", "Instal adapter ringan tanpa mengunduh model suara.", "voice install")
+      ]
+    },
+    {
+      title: "Suara Bahasa Indonesia",
+      rows: [
+        remotionMenuRow(usedPrefix, "👩 Gadis Neural", "Suara perempuan Indonesia.", "voice model id-ID-GadisNeural"),
+        remotionMenuRow(usedPrefix, "👨 Ardi Neural", "Suara laki-laki Indonesia.", "voice model id-ID-ArdiNeural")
+      ]
+    },
+    {
+      title: "Kecepatan narasi",
+      rows: [
+        remotionMenuRow(usedPrefix, "🐢 Lebih lambat (-10%)", "Tempo lebih santai.", "voice rate -10%"),
+        remotionMenuRow(usedPrefix, "⏺️ Normal", "Kecepatan standar.", "voice rate +0%"),
+        remotionMenuRow(usedPrefix, "⚡ Lebih cepat (+10%)", "Tempo lebih cepat.", "voice rate +10%")
+      ]
+    },
+    {
+      title: "Pitch suara",
+      rows: [
+        remotionMenuRow(usedPrefix, "Pitch rendah (-10 Hz)", "Nada suara lebih rendah.", "voice pitch -10Hz"),
+        remotionMenuRow(usedPrefix, "Pitch normal", "Nada suara standar.", "voice pitch +0Hz"),
+        remotionMenuRow(usedPrefix, "Pitch tinggi (+10 Hz)", "Nada suara lebih tinggi.", "voice pitch +10Hz")
+      ]
+    },
+    {
+      title: "Volume narator",
+      rows: [
+        remotionMenuRow(usedPrefix, "Volume rendah (-10%)", "Kurangi volume suara.", "voice volume -10%"),
+        remotionMenuRow(usedPrefix, "Volume normal", "Volume standar.", "voice volume +0%"),
+        remotionMenuRow(usedPrefix, "Volume tinggi (+10%)", "Naikkan volume suara.", "voice volume +10%")
+      ]
+    },
+    {
+      title: "Karakter narator VoxCPM2",
+      rows: [
+        remotionMenuRow(usedPrefix, "Natural", "Artikulasi jelas dan natural.", "voice style natural"),
+        remotionMenuRow(usedPrefix, "Warm", "Hangat dan bersahabat.", "voice style warm"),
+        remotionMenuRow(usedPrefix, "Energetic", "Lebih hidup dan ekspresif.", "voice style energetic"),
+        remotionMenuRow(usedPrefix, "Calm", "Tenang dan lembut.", "voice style calm"),
+        remotionMenuRow(usedPrefix, "Storytelling", "Intonasi penceritaan lebih ekspresif.", "voice style storytelling")
+      ]
+    }
+  ];
+  const description = [
+    notice,
+    "Provider aktif: " + providerLabel,
+    "Voice: " + voiceLabel,
+    "Kecepatan: " + settings.rate + " • Pitch: " + settings.pitch + " • Volume: " + settings.volume,
+    "Karakter VoxCPM2: " + styleLabel,
+    "Status Edge TTS: " + (edgeReady ? "siap" : "belum terpasang; pilih Pasang Edge TTS"),
+    "Pengaturan berlaku untuk video baru; job yang sudah masuk antrean tidak berubah."
+  ].filter(Boolean).join("\n");
+  const fallback = [
+    "🗣️ *PENGATURAN VOICE REMOTION*",
+    description,
+    "",
+    "• " + usedPrefix + "remotion voice provider edge-tts",
+    "• " + usedPrefix + "remotion voice provider voxcpm2",
+    "• " + usedPrefix + "remotion voice model id-ID-GadisNeural",
+    "• " + usedPrefix + "remotion voice model id-ID-ArdiNeural",
+    "• " + usedPrefix + "remotion voice rate +10%",
+    "• " + usedPrefix + "remotion voice pitch +10Hz",
+    "• " + usedPrefix + "remotion voice volume +10%",
+    "• " + usedPrefix + "remotion voice install",
+    "• " + usedPrefix + "remotion voice reset"
+  ].join("\n");
+  return sendNativeMenu(m, conn, {
+    title: "Pengaturan voice",
+    description,
+    sections,
+    fallback
+  });
+}
+
+async function installEdgeTts(m) {
+  const config = getLocalVideoServiceConfig();
+  if (!existsSync(config.pythonPath)) {
+    return m.reply(
+      "Python runtime Remotion belum tersedia. Jalankan .remotion install sekali untuk menyiapkan Python, lalu ulangi .remotion voice install."
+    );
+  }
+  const home = String(process.env.HOME || homedir());
+  const localUv = join(home, ".local", "bin", "uv");
+  const uvProbe = spawnSync("uv", ["--version"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 5000, windowsHide: true });
+  const uv = uvProbe.status === 0 ? "uv" : localUv;
+  const useUv = uvProbe.status === 0 || existsSync(localUv);
+  const result = useUv
+    ? spawnSync(uv, ["pip", "install", "--python", config.pythonPath, "edge-tts==7.2.7"], {
+        encoding: "utf8", timeout: 180000, maxBuffer: 2 * 1024 * 1024, windowsHide: true
+      })
+    : spawnSync(config.pythonPath, ["-m", "pip", "install", "edge-tts==7.2.7"], {
+        encoding: "utf8", timeout: 180000, maxBuffer: 2 * 1024 * 1024, windowsHide: true
+      });
+  if (result.error || result.status !== 0) {
+    const detail = String(result.stderr || result.stdout || result.error?.message || "installer gagal").slice(-1200);
+    return m.reply("❌ Instalasi Edge TTS gagal:\n" + detail);
+  }
+  const check = spawnSync(config.pythonPath, ["-c", "import edge_tts; print(getattr(edge_tts, '__version__', 'ready'))"], {
+    encoding: "utf8", timeout: 10000, windowsHide: true
+  });
+  if (check.status !== 0) return m.reply("❌ Paket terpasang tetapi pemeriksaan import Edge TTS gagal:\n" + String(check.stderr || "").slice(-800));
+  return m.reply(
+    "✅ *Edge TTS siap digunakan.*\nVersi: " + String(check.stdout || "ready").trim() +
+    "\nProvider ini memakai layanan suara online, tidak memerlukan model GPU atau API key. Pilih .remotion voice provider edge-tts."
+  );
+}
+
+async function handleVoiceCommand(m, conn, usedPrefix = ".", argument = "") {
+  const parts = String(argument || "").trim().split(/\s+/).filter(Boolean);
+  const key = String(parts[0] || "").toLowerCase();
+  const value = parts.slice(1).join(" ").trim();
+  if (!key) return showVoiceMenu(m, conn, usedPrefix);
+  if (key === "install") return installEdgeTts(m);
+  if (key === "reset") {
+    updateVoiceSettings({
+      provider: "edge-tts",
+      voice: "id-ID-GadisNeural",
+      rate: "+0%",
+      pitch: "+0Hz",
+      volume: "+0%",
+      voxStyle: "warm"
+    });
+    return showVoiceMenu(m, conn, usedPrefix, "✅ Pengaturan voice dikembalikan ke default.");
+  }
+  let patch;
+  if (key === "provider" && ["edge-tts", "voxcpm2"].includes(value)) patch = { provider: value };
+  else if (key === "model" && Object.hasOwn(EDGE_TTS_VOICES, value)) patch = { voice: value };
+  else if (key === "style" && Object.hasOwn(VOXCPM_STYLES, value)) patch = { voxStyle: value };
+  else if (key === "rate" && /^[+-]\d{1,2}%$/.test(value)) patch = { rate: value };
+  else if (key === "pitch" && /^[+-]\d{1,2}Hz$/i.test(value)) patch = { pitch: value };
+  else if (key === "volume" && /^[+-]\d{1,2}%$/.test(value)) patch = { volume: value };
+  else {
+    return m.reply(
+      "Format pengaturan voice:\n" +
+      "• .remotion voice\n" +
+      "• .remotion voice provider edge-tts|voxcpm2\n" +
+      "• .remotion voice model id-ID-GadisNeural|id-ID-ArdiNeural\n" +
+      "• .remotion voice rate +10%|-10%|+0%\n" +
+      "• .remotion voice pitch +10Hz|-10Hz|+0Hz\n" +
+      "• .remotion voice volume +10%|-10%|+0%\n" +
+      "• .remotion voice style natural|warm|energetic|calm|storytelling\n" +
+      "• .remotion voice install|reset"
+    );
+  }
+  const updated = updateVoiceSettings(patch);
+  return showVoiceMenu(m, conn, usedPrefix, "✅ Pengaturan diperbarui. Provider aktif: " + updated.provider + ".");
+}
+
 async function showInstallMenu(m, conn, usedPrefix = ".") {
   const sections = [{
     title: "Instalasi engine lokal",
