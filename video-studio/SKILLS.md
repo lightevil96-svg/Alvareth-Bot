@@ -1,6 +1,6 @@
 # Current skills policy
 
-Keep the existing official Remotion 4.0.540 skills; do not run blind refresh against latest. Use remotion-best-practices, remotion-markup, remotion-render and alvareth-editorial-quality for this pipeline. Project-local rules override upstream examples that suggest hosted voice or unlicensed remote sound assets.
+Keep the existing official Remotion 4.0.540 skills; do not run blind refresh against latest. Use remotion-best-practices, remotion-markup, remotion-render and alvareth-editorial-quality for this pipeline. For 3D briefs, also load alvareth-3d-animation and remotion-markup/3d.md; for typography/captions, use measuring-text and remotion-captions. Project-local rules override upstream examples that suggest hosted voice or unlicensed remote sound assets.
 
 Added alvareth-editorial-quality: three MIT editorial references selected from gitethanwoo/video-editing with LICENSE and pinned provenance. No external scripts or Gemini functionality installed. Full audit: ../docs/REMOTION_LOCAL_LICENSES.md.
 
