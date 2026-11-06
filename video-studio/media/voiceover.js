@@ -1,6 +1,8 @@
 import { localServiceUrl, localJson } from "../local-service.js";
 import { startLocalVideoServices } from "../local-services.js";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import { getVoiceSettings, VOXCPM_STYLES } from "../voice-settings.js";
 import { mkdir, writeFile } from "fs/promises";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
@@ -136,7 +138,144 @@ export function buildEstimatedCaptionGroups(text, offsetSeconds, durationSeconds
   return groups;
 }
 
-// The /speech contract belongs to our Python wrapper, not to upstream VoxCPM.
+const VIDEO_STUDIO_DIR = join(dirname(fileURLToPath(import.meta.url)), "..");
+const EDGE_TTS_SCRIPT = join(VIDEO_STUDIO_DIR, "services", "edge_tts", "synthesize.py");
+
+function edgeTtsPythonPath() {
+  return String(
+    process.env.VIDEO_STUDIO_EDGE_TTS_PYTHON ||
+    process.env.VIDEO_STUDIO_VOXCPM_PYTHON ||
+    join(VIDEO_STUDIO_DIR, "..", ".venv-voxcpm", "bin", "python")
+  );
+}
+
+function runEdgeTts(text, settings, jobId, sceneNumber) {
+  return new Promise((resolve, reject) => {
+    const python = edgeTtsPythonPath();
+    if (python.includes("/") && !existsSync(python)) {
+      reject(new Error("Python Edge TTS belum tersedia. Jalankan .remotion voice install."));
+      return;
+    }
+    if (!existsSync(EDGE_TTS_SCRIPT)) {
+      reject(new Error("Adapter Edge TTS tidak ditemukan: " + EDGE_TTS_SCRIPT));
+      return;
+    }
+
+    console.log("[REMOTION:EDGE-TTS] Job " + jobId + " | scene " + sceneNumber + ": menghubungkan ke layanan suara online.");
+    const child = spawn(python, [EDGE_TTS_SCRIPT], {
+      stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true
+    });
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+
+    const fail = error => {
+      if (settled) return;
+      settled = true;
+      reject(error instanceof Error ? error : new Error(String(error)));
+    };
+
+    child.stdout.on("data", chunk => {
+      stdout += chunk.toString("utf8");
+      if (stdout.length > 32 * 1024 * 1024) {
+        child.kill();
+        fail(new Error("Respons Edge TTS melebihi batas ukuran 32 MB."));
+      }
+    });
+    child.stderr.on("data", chunk => {
+      stderr += chunk.toString("utf8");
+      if (stderr.length > 12000) stderr = stderr.slice(-12000);
+      const lines = stderr.split(/\r?\n/);
+      stderr = lines.pop() || "";
+      for (const line of lines) {
+        if (line.trim()) console.log("[REMOTION:EDGE-TTS] " + line.trim());
+      }
+    });
+    child.once("error", error => fail(new Error("Tidak dapat menjalankan Python Edge TTS: " + error.message)));
+    child.once("close", code => {
+      if (settled) return;
+      const tail = stderr.trim();
+      if (tail) console.log("[REMOTION:EDGE-TTS] " + tail.split(/\r?\n/).at(-1));
+      if (code !== 0) {
+        const detail = (tail || stdout || "proses berhenti tanpa detail").slice(-900);
+        const installHint = /No module named ['"]edge_tts['"]/.test(detail)
+          ? " Paket belum terpasang; jalankan .remotion voice install."
+          : "";
+        fail(new Error("Edge TTS online gagal: " + detail + installHint));
+        return;
+      }
+      try {
+        const result = JSON.parse(stdout.trim());
+        if (result.provider !== "EdgeTTS" || typeof result.audio_base64 !== "string") {
+          throw new Error("Respons Edge TTS tidak memiliki audio yang valid.");
+        }
+        settled = true;
+        resolve(result);
+      } catch (error) {
+        fail(new Error("Respons Edge TTS tidak dapat dibaca: " + error.message));
+      }
+    });
+
+    child.stdin.on("error", error => {
+      if (error.code !== "EPIPE") fail(new Error("Gagal mengirim teks ke Edge TTS: " + error.message));
+    });
+    child.stdin.end(JSON.stringify({
+      text,
+      voice: settings.voice,
+      rate: settings.rate,
+      pitch: settings.pitch,
+      volume: settings.volume
+    }));
+  });
+}
+
+export function buildWordBoundaryCaptionGroups(words, offsetSeconds = 0, durationSeconds = Infinity, maxWords = 5) {
+  const groups = [];
+  const limit = Math.max(1, Math.min(8, Math.floor(Number(maxWords) || 5)));
+  let current = [];
+  const flush = () => {
+    if (!current.length) return;
+    groups.push({
+      startSeconds: current[0].startSeconds,
+      endSeconds: current[current.length - 1].endSeconds,
+      words: current
+    });
+    current = [];
+  };
+  for (const word of Array.isArray(words) ? words : []) {
+    const text = clean(word?.text, 120);
+    const start = Number(word?.start);
+    const end = Number(word?.end);
+    if (!text || !Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start || start >= durationSeconds) continue;
+    const item = {
+      text,
+      startSeconds: offsetSeconds + start,
+      endSeconds: offsetSeconds + Math.min(durationSeconds, end)
+    };
+    current.push(item);
+    if (current.length >= limit || /[.!?…]["')\]]?$/u.test(text)) flush();
+  }
+  flush();
+  return groups;
+}
+
+function isValidWordAlignment(words, duration) {
+  if (!Array.isArray(words) || !words.length) return false;
+  let lastStart = -0.001;
+  return words.every(word => {
+    const start = Number(word?.start);
+    const end = Number(word?.end);
+    const ok = typeof word?.text === "string" && word.text.trim() &&
+      Number.isFinite(start) && Number.isFinite(end) &&
+      start >= lastStart && end > start && end <= duration + 0.1;
+    if (ok) lastStart = start;
+    return ok;
+  });
+}
+
+// The provider is selected per job. Edge TTS is the fast online default;
+// VoxCPM2 remains available as an optional local model.
 export async function prepareVoiceover(project, jobId) {
   if (!/^[a-zA-Z0-9_-]+$/.test(jobId)) throw new Error("ID job tidak valid.");
   const hasNarration = (Array.isArray(project.scenes) ? project.scenes : []).some(scene =>
@@ -144,19 +283,27 @@ export async function prepareVoiceover(project, jobId) {
   );
   if (!hasNarration) return { scenes: project.scenes || [], voiceoverTracks: [], captions: [], warnings: [] };
 
-  const base = process.env.VIDEO_STUDIO_VOXCPM_URL || "http://127.0.0.1:7861";
-  if (new URL(base).origin === "http://127.0.0.1:7861") {
-    // Wait until the local model is ready; cold CPU loading has no fixed deadline.
-    console.log("[REMOTION:VOICE] Menunggu VoxCPM2 siap (tanpa batas waktu)...");
-    const services = await startLocalVideoServices({ services: ["voxcpm"], waitMs: Infinity });
-    if (!services.voxcpm?.ready) throw new Error(services.voxcpm?.detail || "Service VoxCPM2 lokal belum siap.");
+  const settings = project.voiceSettings || getVoiceSettings();
+  const provider = settings.provider || "edge-tts";
+  if (!["edge-tts", "voxcpm2"].includes(provider)) throw new Error("Provider voice tidak dikenal: " + provider);
+
+  let endpoint = "";
+  if (provider === "voxcpm2") {
+    const base = process.env.VIDEO_STUDIO_VOXCPM_URL || "http://127.0.0.1:7861";
+    if (new URL(base).origin === "http://127.0.0.1:7861") {
+      console.log("[REMOTION:VOICE] Menunggu VoxCPM2 siap (tanpa batas waktu)...");
+      const services = await startLocalVideoServices({ services: ["voxcpm"], waitMs: Infinity });
+      if (!services.voxcpm?.ready) throw new Error(services.voxcpm?.detail || "Service VoxCPM2 lokal belum siap.");
+    }
+    endpoint = localServiceUrl(base, "speech");
   }
-  const endpoint = localServiceUrl(base, "speech");
+
   const folder = join(PUBLIC_DIR, "generated", jobId);
   await mkdir(folder, { recursive: true });
   const scenes = [], voiceoverTracks = [], captions = [], warnings = [];
   const fps = project.fps || 30;
   let cursorFrames = 0;
+
   for (const [index, scene] of project.scenes.entries()) {
     const text = clean(scene.narration, 1200);
     let durationFrames = Math.round(scene.duration * fps);
@@ -164,45 +311,74 @@ export async function prepareVoiceover(project, jobId) {
     if (text) {
       let response;
       const synthesisStartedAt = Date.now();
-      console.log("[REMOTION:VOICE] Job " + jobId + " | scene " + (index + 1) + "/" + project.scenes.length + ": sintesis dimulai (" + text.length + " karakter).");
+      console.log(
+        "[REMOTION:VOICE] Job " + jobId + " | scene " + (index + 1) + "/" + project.scenes.length +
+        ": provider=" + (provider === "edge-tts" ? "Microsoft Edge Neural TTS" : "VoxCPM2") +
+        "; " + text.length + " karakter."
+      );
       try {
-        // Use a raw local HTTP request with no deadline: CPU inference can take many minutes.
-        response = await localJson(endpoint, {
-          method: "POST", headers: { "content-type": "application/json" },
-          body: JSON.stringify({ text, language: project.language || "id" })
-        }, null);
+        if (provider === "edge-tts") {
+          response = await runEdgeTts(text, settings, jobId, index + 1);
+        } else {
+          response = await localJson(endpoint, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              text,
+              language: project.language || "id",
+              voice_description: VOXCPM_STYLES[settings.voxStyle] || VOXCPM_STYLES.warm
+            })
+          }, null);
+        }
       } catch (error) {
-        throw new Error("VoxCPM2 lokal tidak dapat dihubungi atau gagal menyintesis audio: " + String(error?.message || error).slice(0, 220));
+        throw new Error(
+          (provider === "edge-tts" ? "Edge TTS online gagal menyintesis audio: " : "VoxCPM2 lokal gagal menyintesis audio: ") +
+          String(error?.message || error).slice(0, 600)
+        );
       }
-      if (response.provider !== "VoxCPM2" || typeof response.audio_base64 !== "string") throw new Error("Respons bukan audio VoxCPM2.");
+
+      const expectedProvider = provider === "edge-tts" ? "EdgeTTS" : "VoxCPM2";
+      if (response.provider !== expectedProvider || typeof response.audio_base64 !== "string") {
+        throw new Error("Respons audio bukan berasal dari provider " + expectedProvider + ".");
+      }
       const audio = Buffer.from(response.audio_base64, "base64");
-      if (audio.length < 44 || audio.length > 8 * 1024 * 1024 || audio.toString('ascii', 0, 4) !== 'RIFF' || audio.toString('ascii', 8, 12) !== 'WAVE') throw new Error("Audio VoxCPM2 bukan WAV yang valid.");
-      const filename = "voice-" + index + ".wav";
+      if (audio.length < 44 || audio.length > 8 * 1024 * 1024) throw new Error("Ukuran audio voice-over tidak valid.");
+      const audioFormat = provider === "edge-tts" ? "mp3" : "wav";
+      if (audioFormat === "wav" && (audio.toString("ascii", 0, 4) !== "RIFF" || audio.toString("ascii", 8, 12) !== "WAVE")) {
+        throw new Error("Audio VoxCPM2 bukan WAV yang valid.");
+      }
+      const filename = "voice-" + index + "." + audioFormat;
       const path = join(folder, filename);
       await writeFile(path, audio);
-      const info = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_format', '-show_streams', '-of', 'json', path], { timeout: 15000, maxBuffer: 1024 * 1024 }));
+      const info = JSON.parse(execFileSync("ffprobe", ["-v", "error", "-show_format", "-show_streams", "-of", "json", path], {
+        timeout: 15000,
+        maxBuffer: 1024 * 1024
+      }));
       const duration = Number(info.format?.duration);
-      if (!info.streams?.some(stream => stream.codec_type === 'audio') || !Number.isFinite(duration) || duration <= 0 || duration > 19.7) throw new Error("Narasi terlalu panjang atau audio rusak; ringkas scene (maksimal 19,7 detik bicara).");
-      execFileSync('ffmpeg', ['-v', 'error', '-xerror', '-i', path, '-f', 'null', '-'], { timeout: 15000, stdio: 'pipe' });
-      console.log("[REMOTION:VOICE] Job " + jobId + " | scene " + (index + 1) + "/" + project.scenes.length + ": WAV siap dalam " + ((Date.now() - synthesisStartedAt) / 1000).toFixed(1) + " dtk; durasi audio " + duration.toFixed(2) + " dtk; ukuran " + audio.length + " byte.");
+      if (!info.streams?.some(stream => stream.codec_type === "audio") || !Number.isFinite(duration) || duration <= 0 || duration > 19.7) {
+        throw new Error("Narasi terlalu panjang atau audio rusak; ringkas scene (maksimal 19,7 detik bicara).");
+      }
+      execFileSync("ffmpeg", ["-v", "error", "-xerror", "-i", path, "-f", "null", "-"], {
+        timeout: 15000,
+        stdio: "pipe"
+      });
+      console.log(
+        "[REMOTION:VOICE] Job " + jobId + " | scene " + (index + 1) + "/" + project.scenes.length +
+        ": audio siap dalam " + ((Date.now() - synthesisStartedAt) / 1000).toFixed(1) +
+        " dtk; durasi " + duration.toFixed(2) + " dtk; ukuran " + audio.length + " byte."
+      );
+
       durationFrames = Math.max(durationFrames, Math.ceil((duration + 0.25) * fps));
       voiceoverTracks.push({ src: "generated/" + jobId + "/" + filename, startSeconds, durationSeconds: duration });
       const words = Array.isArray(response.words) ? response.words : [];
-      let lastEnd = 0;
-      const valid = words.length && words.every(word => {
-        const ok = typeof word.text === 'string' && word.text.trim() && Number.isFinite(word.start) && Number.isFinite(word.end) && word.start >= lastEnd && word.end > word.start && word.end <= duration + 0.05;
-        lastEnd = word.end; return ok;
-      });
-      if (valid) {
-        for (let i = 0; i < words.length; i += 5) {
-          const group = words.slice(i, i + 5).map(word => ({ text: word.text, startSeconds: startSeconds + word.start, endSeconds: startSeconds + Math.min(duration, word.end) }));
-          captions.push({ startSeconds: group[0].startSeconds, endSeconds: group.at(-1).endSeconds, words: group });
-        }
+      if (isValidWordAlignment(words, duration)) {
+        captions.push(...buildWordBoundaryCaptionGroups(words, startSeconds, duration, 5));
       } else {
         captions.push(...buildEstimatedCaptionGroups(text, startSeconds, duration, 5));
-        if (!warnings.includes("Alignment kata lokal tidak tersedia; subtitle menggunakan timing estimasi dari durasi audio.")) {
-          warnings.push("Alignment kata lokal tidak tersedia; subtitle menggunakan timing estimasi dari durasi audio.");
-        }
+        const warning = provider === "edge-tts"
+          ? "Edge TTS tidak mengirim word-boundary; subtitle memakai timing estimasi."
+          : "Alignment kata VoxCPM2 tidak tersedia; subtitle memakai timing estimasi.";
+        if (!warnings.includes(warning)) warnings.push(warning);
       }
     }
     if (durationFrames > 20 * fps) throw new Error("Narasi melebihi batas scene.");
