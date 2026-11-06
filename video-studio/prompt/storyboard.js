@@ -147,7 +147,7 @@ export function normalizeVideoPlan(raw, sourcePrompt) {
   const rawScenes = Array.isArray(raw.scenes) ? raw.scenes : [];
   if (rawScenes.length < 1 || rawScenes.length > 60) throw new Error("Storyboard harus berisi 1 sampai 60 scene.");
   const brandCredit = raw.brandCredit === true || hasBrandCredit(raw.brandCredit) || rawScenes.some(scene =>
-    [scene && scene.text, scene && scene.onScreenText, scene && scene.kicker, scene && scene.highlight, scene && scene.subtext]
+    [scene && scene.text, scene && scene.onScreenText, scene && scene.kicker, scene && scene.highlight, scene && scene.subtext, scene && scene.narration, scene && scene.visualDescription, scene && scene.aiVideoPrompt]
       .some(hasBrandCredit)
   );
   const prompt = cleanText(sourcePrompt, 6000);
@@ -198,7 +198,7 @@ export function normalizeVideoPlan(raw, sourcePrompt) {
     if (!text) throw new Error("Teks utama scene " + (index + 1) + " kosong.");
     const background = /^#[0-9a-f]{6}$/i.test(String(scene.background || "")) ? scene.background : (raw.palette && /^#[0-9a-f]{6}$/i.test(String(raw.palette.background || "")) ? raw.palette.background : palette.background);
     const accent = /^#[0-9a-f]{6}$/i.test(String(scene.accent || "")) ? scene.accent : (raw.palette && /^#[0-9a-f]{6}$/i.test(String(raw.palette.accent || "")) ? raw.palette.accent : palette.accent);
-    const narration = cleanText(scene.narration, 1200);
+    const narration = stripBrandCredit(scene.narration, 1200);
     const estimate = estimateDuration({ ...scene, text, narration });
     if (estimate > 20) {
       throw new Error("Narasi atau teks scene " + (index + 1) + " terlalu panjang untuk batas 20 detik. Ringkas scene tersebut.");
@@ -220,9 +220,9 @@ export function normalizeVideoPlan(raw, sourcePrompt) {
       subtext: stripBrandCredit(scene.subtext, 220),
       points,
       narration,
-      visualDescription: cleanText(scene.visualDescription, 400),
+      visualDescription: stripBrandCredit(scene.visualDescription, 400),
       generateAiFootage: scene.generateAiFootage === true,
-      aiVideoPrompt: cleanText(scene.aiVideoPrompt, 1800),
+      aiVideoPrompt: stripBrandCredit(scene.aiVideoPrompt, 1800),
       visualType: pick(scene.visualType, ALLOWED.visualType, scene.layout === "stat" ? "data-chart" : scene.layout === "steps" ? "diagram" : "cinematic"),
       threeDStyle: pick(scene.threeDStyle, ALLOWED.threeDStyle, "glass"),
       threeDObject: pick(scene.threeDObject, ALLOWED.threeDObject, "orb"),
