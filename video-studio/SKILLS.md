@@ -4,4 +4,4 @@ Keep the existing official Remotion 4.0.540 skills; do not run blind refresh aga
 
 Added alvareth-editorial-quality: three MIT editorial references selected from gitethanwoo/video-editing with LICENSE and pinned provenance. No external scripts or Gemini functionality installed. Full audit: ../docs/REMOTION_LOCAL_LICENSES.md.
 
-Skills do not run inside Ollama automatically. Quality comes from implemented schema, composition, audio timing and reviewed renders, not skill count.
+Skills are coding-time references, not runtime prompt planners. ChatGPT is used manually outside the bot; quality comes from the validated JSON schema, composition, audio timing, and reviewed renders, not skill count.
