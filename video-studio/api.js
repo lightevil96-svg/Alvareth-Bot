@@ -52,8 +52,11 @@ export function mountVideoStudioApi(app) {
     status: "ok",
     configured: apiKey.length >= 32,
     media: {
-      voiceover: Boolean((process.env.VIDEO_STUDIO_ELEVENLABS_API_KEY || process.env.ELEVENLABS_API_KEY) && process.env.VIDEO_STUDIO_ELEVENLABS_VOICE_ID),
-      stockFootage: Boolean(process.env.VIDEO_STUDIO_PEXELS_API_KEY),
+      voiceover: Boolean(String(process.env.VIDEO_STUDIO_VOXCPM_URL || "http://127.0.0.1:7861").trim()),
+      voiceProvider: "VoxCPM2",
+      voiceoverMode: "local",
+      stockFootage: false,
+      soundEffects: true,
       aiVideo: Boolean(process.env.VIDEO_STUDIO_COMFYUI_VIDEO_WORKFLOW_FILE),
       aiMusic: Boolean(process.env.VIDEO_STUDIO_COMFYUI_MUSIC_WORKFLOW_FILE)
     }

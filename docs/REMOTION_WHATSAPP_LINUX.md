@@ -110,12 +110,13 @@ Ollama memakai URL paket resmi `https://ollama.com/download/ollama-linux-amd64.t
 
 ## Automatic local service startup
 
-The bot now attempts to start the local services when you run `.remotion services` or generate a video. It starts `ollama serve` only when the Ollama binary is installed and the loopback endpoint is not responding. It starts the VoxCPM2 adapter only when the Python virtualenv, adapter file and local VoxCPM2 model are present. It does not install packages, download model weights, or call a hosted provider.
+The bot starts local services only when the production step needs them: Ollama for storyboard planning, then VoxCPM2 when narration is present. This avoids loading the 7B planner and 2B TTS model together during a redundant preflight. `.remotion services` is status-only and does not load models. Runtime startup never installs packages, downloads model weights, or calls a hosted provider. VoxCPM2 cold-start wait defaults to 10 minutes and can be adjusted with `VIDEO_STUDIO_VOXCPM_STARTUP_TIMEOUT_MS`.
 
 Defaults:
 - Ollama: `http://127.0.0.1:11434`, model `qwen2.5:7b`.
 - VoxCPM2: `http://127.0.0.1:7861`, Python `.venv-voxcpm/bin/python`, model directory `$HOME/alvareth-models/VoxCPM2`.
 - `VIDEO_STUDIO_LOCAL_SERVICES_AUTOSTART=true`; set it to `false` to disable process startup.
+- `VIDEO_STUDIO_VOXCPM_STARTUP_TIMEOUT_MS=600000`; maximum wait for VoxCPM2 to load its local model (10 minutes by default).
 - `VOXCPM_DEVICE` may be `cuda` or `cpu`; leave it blank to detect CUDA through the installed PyTorch.
 
 For a rootless/Pterodactyl installation, use the bootstrap above rather than the Debian `python3 -m venv` commands. It can also download both models when run with `--with-models`. If downloading models separately, use the full Ollama path if `~/.local/bin` is not on the panel's PATH:

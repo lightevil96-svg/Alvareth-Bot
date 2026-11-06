@@ -30,7 +30,6 @@ export function compileVideoPlan(plan) {
       points: scene.points,
       narration: scene.narration,
       visualDescription: scene.visualDescription,
-      stockSearchQuery: scene.stockSearchQuery,
       generateAiFootage: scene.generateAiFootage,
       aiVideoPrompt: scene.aiVideoPrompt,
       visualType: scene.visualType,

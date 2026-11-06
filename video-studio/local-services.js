@@ -154,7 +154,7 @@ function processExitDetail(state) {
   return (state.pid ? " Proses sudah dimulai (PID " + state.pid + "); service mungkin masih memuat model." : " Proses sudah diminta untuk berjalan; service mungkin masih memuat model.") + log;
 }
 
-async function inspectOllama(config, env, waitMs) {
+async function inspectOllama(config, env, waitMs, startAllowed = config.autoStart) {
   let endpoint;
   try { endpoint = localServiceUrl(config.ollamaUrl, "api/tags"); }
   catch (error) {
@@ -163,7 +163,7 @@ async function inspectOllama(config, env, waitMs) {
 
   let probe = await requestJson(endpoint);
   let launch = null;
-  if (!probe.reachable && config.autoStart) {
+  if (!probe.reachable && startAllowed) {
     if (!commandWorks(config.ollamaBin, ["--version"])) {
       return {
         ready: false, reachable: false, model: config.ollamaModel,
@@ -178,10 +178,12 @@ async function inspectOllama(config, env, waitMs) {
     if (launch.started || launch.alreadyManaged) {
       probe = await waitForService(endpoint, data => Boolean(data), waitMs);
     }
-  } else if (!probe.reachable && !config.autoStart) {
+  } else if (!probe.reachable && !startAllowed) {
     return {
       ready: false, reachable: false, model: config.ollamaModel,
-      detail: "Ollama tidak merespons. Autostart dimatikan; jalankan perintah ollama serve pada server."
+      detail: config.autoStart
+        ? "Ollama belum berjalan. Pemeriksaan status tidak memuat model; .remotion generate akan menyalakan layanan otomatis."
+        : "Ollama tidak merespons. Autostart dimatikan; jalankan perintah ollama serve pada server."
     };
   }
 
@@ -233,7 +235,7 @@ function detectPythonDevice(pythonPath, env) {
   return "cpu";
 }
 
-async function inspectVoxCPM(config, env, waitMs) {
+async function inspectVoxCPM(config, env, waitMs, startAllowed = config.autoStart) {
   let endpoint;
   try { endpoint = localServiceUrl(config.voxUrl, "health"); }
   catch (error) {
@@ -242,7 +244,7 @@ async function inspectVoxCPM(config, env, waitMs) {
 
   let probe = await requestJson(endpoint);
   let launch = null;
-  if (!probe.reachable && config.autoStart) {
+  if (!probe.reachable && startAllowed) {
     if (!existsSync(config.pythonPath) || !commandWorks(config.pythonPath)) {
       return {
         ready: false, reachable: false,
@@ -271,10 +273,12 @@ async function inspectVoxCPM(config, env, waitMs) {
     if (launch.started || launch.alreadyManaged) {
       probe = await waitForService(endpoint, isVoxCPMReady, waitMs);
     }
-  } else if (!probe.reachable && !config.autoStart) {
+  } else if (!probe.reachable && !startAllowed) {
     return {
       ready: false, reachable: false,
-      detail: "VoxCPM2 tidak merespons. Autostart dimatikan; jalankan adapter Python di video-studio/services/voxcpm/server.py."
+      detail: config.autoStart
+        ? "VoxCPM2 belum berjalan. Pemeriksaan status tidak memuat model; layanan akan dimulai saat video membutuhkan narasi."
+        : "VoxCPM2 tidak merespons. Autostart dimatikan; jalankan adapter Python di video-studio/services/voxcpm/server.py."
     };
   }
 
@@ -296,12 +300,13 @@ async function inspectVoxCPM(config, env, waitMs) {
   };
 }
 
-export async function startLocalVideoServices({ env = process.env, services = ["ollama", "voxcpm"], waitMs = 0 } = {}) {
+export async function startLocalVideoServices({ env = process.env, services = ["ollama", "voxcpm"], waitMs = 0, start = true } = {}) {
   const config = getLocalVideoServiceConfig(env);
+  const startAllowed = start && config.autoStart;
   const result = {};
   const tasks = [];
-  if (services.includes("ollama")) tasks.push(inspectOllama(config, env, waitMs).then(value => { result.ollama = value; }));
-  if (services.includes("voxcpm")) tasks.push(inspectVoxCPM(config, env, waitMs).then(value => { result.voxcpm = value; }));
+  if (services.includes("ollama")) tasks.push(inspectOllama(config, env, waitMs, startAllowed).then(value => { result.ollama = value; }));
+  if (services.includes("voxcpm")) tasks.push(inspectVoxCPM(config, env, waitMs, startAllowed).then(value => { result.voxcpm = value; }));
   await Promise.all(tasks);
   return result;
 }

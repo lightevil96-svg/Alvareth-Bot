@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildCaptionGroups, splitVoiceoverChunks } from "../video-studio/media/voiceover.js";
+import { buildCaptionGroups, buildEstimatedCaptionGroups, splitVoiceoverChunks } from "../video-studio/media/voiceover.js";
 import { validateVideoProject } from "../video-studio/validate.js";
 import { applyComfyWorkflowVariables } from "../video-studio/media/comfyui.js";
 
@@ -16,6 +16,14 @@ test("groups character-level TTS alignment into timed subtitle phrases", () => {
   assert.deepEqual(groups[0].words.map(word => word.text), ["Halo", "dunia."]);
   assert.equal(groups[0].startSeconds, 1.5);
   assert.ok(groups[0].endSeconds > 2.4);
+});
+
+test("creates fallback subtitle timing from measured audio duration when no local aligner is installed", () => {
+  const groups = buildEstimatedCaptionGroups("Halo, ini Alvareth. Video dibuat otomatis.", 2, 4, 4);
+  assert.ok(groups.length >= 2);
+  assert.equal(groups[0].startSeconds, 2);
+  assert.equal(groups.at(-1).endSeconds, 6);
+  assert.ok(groups.every(group => group.words.length <= 4 && group.words.every(word => word.endSeconds > word.startSeconds)));
 });
 
 test("splits voiceover into scene-aligned provider requests", () => {

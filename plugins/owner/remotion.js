@@ -207,11 +207,8 @@ async function startPromptJob(prompt, chat, fallbackConn) {
   );
 
   try {
-    const local = await startLocalVideoServices({ waitMs: 2500 });
-    if (!local.ollama?.ready) throw new Error("Ollama belum siap: " + (local.ollama?.detail || "service/model belum tersedia."));
-    if (process.env.VIDEO_STUDIO_VOICE_REQUIRED !== "false" && !local.voxcpm?.ready) {
-      throw new Error("VoxCPM2 belum siap: " + (local.voxcpm?.detail || "service/model belum tersedia."));
-    }
+    // Ollama is started by the planner. VoxCPM2 starts later, only when
+    // narration is prepared, so both large models are not preloaded together.
     const plan = await planVideoPrompt(cleanPrompt);
     const project = compileVideoPlan(plan);
     const job = createVideoJob(project);
@@ -398,7 +395,8 @@ async function showHistory(m) {
 
 async function showServices(m) {
   const statuses = providerReadiness();
-  const live = await startLocalVideoServices({ waitMs: 2000 });
+  // Status is observational: do not load two large models just to inspect them.
+  const live = await startLocalVideoServices({ waitMs: 0, start: false });
   statuses.push(
     { name: "Ollama pemeriksaan langsung", configured: Boolean(live.ollama?.ready), detail: live.ollama?.detail || "Status Ollama tidak tersedia." },
     { name: "VoxCPM2 pemeriksaan langsung", configured: Boolean(live.voxcpm?.ready), detail: live.voxcpm?.detail || "Status VoxCPM2 tidak tersedia." }

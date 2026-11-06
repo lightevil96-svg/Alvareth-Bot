@@ -101,12 +101,56 @@ export function buildCaptionGroups(alignment, offsetSeconds = 0, maxWords = 4) {
   return groups;
 }
 
+// Fallback captions need no second model: distribute words across the measured
+// WAV duration using syllable/punctuation weights. Timings are approximate and
+// are used only when the optional local aligner is absent.
+export function buildEstimatedCaptionGroups(text, offsetSeconds, durationSeconds, maxWords = 5) {
+  const tokens = clean(text, 1200).match(/\S+/gu) || [];
+  const offset = Number(offsetSeconds);
+  const duration = Number(durationSeconds);
+  if (!tokens.length || !Number.isFinite(offset) || offset < 0 || !Number.isFinite(duration) || duration <= 0) return [];
+  const weights = tokens.map(token => {
+    const letters = token.replace(/[^\p{L}\p{N}]/gu, "");
+    const syllables = (letters.match(/[aiueo]+/giu) || []).length;
+    const punctuation = /[.!?…]$/u.test(token) ? 1.2 : /[,;:]$/u.test(token) ? 0.5 : 0;
+    return Math.max(1, letters.length * 0.42 + syllables * 0.62 + punctuation);
+  });
+  const totalWeight = weights.reduce((sum, value) => sum + value, 0);
+  const limit = Math.max(1, Math.min(8, Math.floor(Number(maxWords) || 5)));
+  const groups = [];
+  let consumed = 0;
+  let current = [];
+  const flush = () => {
+    if (!current.length) return;
+    groups.push({ startSeconds: current[0].startSeconds, endSeconds: current[current.length - 1].endSeconds, words: current });
+    current = [];
+  };
+  tokens.forEach((token, index) => {
+    const startSeconds = offset + duration * consumed / totalWeight;
+    consumed += weights[index];
+    const endSeconds = index === tokens.length - 1 ? offset + duration : offset + duration * consumed / totalWeight;
+    current.push({ text: token, startSeconds, endSeconds });
+    if (current.length >= limit || /[.!?…]$/u.test(token)) flush();
+  });
+  flush();
+  return groups;
+}
+
 // The /speech contract belongs to our Python wrapper, not to upstream VoxCPM.
 export async function prepareVoiceover(project, jobId) {
   if (!/^[a-zA-Z0-9_-]+$/.test(jobId)) throw new Error("ID job tidak valid.");
+  const hasNarration = (Array.isArray(project.scenes) ? project.scenes : []).some(scene =>
+    clean(scene?.narration || [scene?.text, scene?.subtext].filter(Boolean).join(". "), 4000)
+  );
+  if (!hasNarration) return { scenes: project.scenes || [], voiceoverTracks: [], captions: [], warnings: [] };
+
   const base = process.env.VIDEO_STUDIO_VOXCPM_URL || "http://127.0.0.1:7861";
   if (new URL(base).origin === "http://127.0.0.1:7861") {
-    const services = await startLocalVideoServices({ services: ["voxcpm"], waitMs: 3000 });
+    // Cold CPU model loading can take minutes; don't fail after a 3-second probe.
+    const startupTimeout = Math.max(30000, Math.min(1800000,
+      Number(process.env.VIDEO_STUDIO_VOXCPM_STARTUP_TIMEOUT_MS) || 600000
+    ));
+    const services = await startLocalVideoServices({ services: ["voxcpm"], waitMs: startupTimeout });
     if (!services.voxcpm?.ready) throw new Error(services.voxcpm?.detail || "Service VoxCPM2 lokal belum siap.");
   }
   const endpoint = localServiceUrl(base, "speech");
@@ -152,7 +196,12 @@ export async function prepareVoiceover(project, jobId) {
           const group = words.slice(i, i + 5).map(word => ({ text: word.text, startSeconds: startSeconds + word.start, endSeconds: startSeconds + Math.min(duration, word.end) }));
           captions.push({ startSeconds: group[0].startSeconds, endSeconds: group.at(-1).endSeconds, words: group });
         }
-      } else if (!warnings.length) warnings.push("Alignment kata lokal tidak tersedia/valid; subtitle kata dinonaktifkan, narasi tetap sinkron per scene.");
+      } else {
+        captions.push(...buildEstimatedCaptionGroups(text, startSeconds, duration, 5));
+        if (!warnings.includes("Alignment kata lokal tidak tersedia; subtitle menggunakan timing estimasi dari durasi audio.")) {
+          warnings.push("Alignment kata lokal tidak tersedia; subtitle menggunakan timing estimasi dari durasi audio.");
+        }
+      }
     }
     if (durationFrames > 20 * fps) throw new Error("Narasi melebihi batas scene.");
     scenes.push({ ...scene, startSeconds, duration: durationFrames / fps });

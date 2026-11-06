@@ -112,7 +112,7 @@ export async function prepareAiFootage(project, jobId) {
       scenes[item.index].cameraMotion = "static";
       generatedCount++;
     } catch (error) {
-      warnings.push("AI footage scene " + (item.index + 1) + " gagal; footage stok atau motion graphics digunakan: " + clean(error.message, 160));
+      warnings.push("AI footage scene " + (item.index + 1) + " gagal; motion graphics Remotion digunakan: " + clean(error.message, 160));
     }
   }
   return { scenes, generatedCount, warnings };
