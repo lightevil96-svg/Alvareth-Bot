@@ -62,7 +62,7 @@ export function parseJsonResponse(value) {
   const candidate = fenceStart >= 0 && fenceEnd > fenceStart ? text.slice(fenceStart + 3, fenceEnd).replace(/^json\s*/i, "").trim() : text;
   const start = candidate.indexOf("{");
   const end = candidate.lastIndexOf("}");
-  if (start < 0 || end <= start) throw new Error("JSON storyboard tidak ditemukan. Tempel objek JSON yang dibuat ChatGPT.");
+  if (start < 0 || end <= start) throw new Error("JSON storyboard tidak ditemukan. Tempel objek JSON yang dibuat model AI pilihan.");
   try {
     return JSON.parse(candidate.slice(start, end + 1));
   } catch {
@@ -254,12 +254,12 @@ export function normalizeVideoPlan(raw, sourcePrompt) {
 export function parseStoryboardInput(input) {
   const rawText = String(input == null ? "" : input).replace(/\x00/g, "").trim();
   if (rawText.length < 8) {
-    const error = new Error("Tempel JSON storyboard lengkap yang dibuat ChatGPT.");
+    const error = new Error("Tempel JSON storyboard lengkap yang dibuat model AI pilihan.");
     error.statusCode = 400;
     throw error;
   }
   if (rawText.length > 24000) {
-    const error = new Error("JSON storyboard melebihi batas 24.000 karakter. Minta ChatGPT membuat storyboard yang lebih ringkas.");
+    const error = new Error("JSON storyboard melebihi batas 24.000 karakter. Minta model AI pilihan membuat storyboard yang lebih ringkas.");
     error.statusCode = 413;
     throw error;
   }
@@ -269,7 +269,7 @@ export function parseStoryboardInput(input) {
     raw = parseJsonResponse(rawText);
   } catch {
     const error = new Error(
-      "Input harus berupa JSON storyboard dari ChatGPT, bukan brief teks biasa. " +
+      "Input harus berupa JSON storyboard dari model AI pilihan, bukan brief teks biasa. " +
       "Gunakan panduan prompt-remotion.md atau ketik .remotion guide."
     );
     error.statusCode = 400;
