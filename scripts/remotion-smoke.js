@@ -7,6 +7,7 @@ import { compileVideoPlan } from '../video-studio/prompt/compile.js';
 import { prepareVideoMedia } from '../video-studio/media/pipeline.js';
 import { renderVideoProject } from '../video-studio/renderer.js';
 import { validateVideoProject } from '../video-studio/validate.js';
+import { getVoiceSettings } from '../video-studio/voice-settings.js';
 const fixture = process.argv.includes('--fixture');
 const prompt = 'Buat video promosi kopi lokal untuk Reels, narasi bahasa Indonesia, gaya premium hangat, teks singkat dan efek suara halus, tanpa musik. Jangan buat klaim harga atau kesehatan.';
 const out = resolve(process.env.REMOTION_SMOKE_DIR || '/tmp/alvareth-remotion-smoke');
@@ -17,8 +18,9 @@ const plan = fixture ? normalizeVideoPlan({title:'Kopi Lokal',ratio:'9:16',fps:2
 let project=compileVideoPlan(plan);
 if (!fixture) {
   process.env.VIDEO_STUDIO_VOICE_REQUIRED='true';
+  project.voiceSettings = getVoiceSettings();
   project=validateVideoProject(await prepareVideoMedia(project,'production-smoke'));
-  if (!project.voiceoverTracks.length) throw new Error('Smoke test requires actual VoxCPM2 speech');
+  if (!project.voiceoverTracks.length) throw new Error('Smoke test requires actual speech from the selected TTS provider');
 }
 await writeFile(join(out,'plan.json'),JSON.stringify({fixture,prompt,plan},null,2));
 await renderVideoProject(project,join(out,'smoke.mp4'));
@@ -26,5 +28,5 @@ const probe=JSON.parse(execFileSync('ffprobe',['-v','error','-show_streams','-sh
 execFileSync('ffmpeg',['-v','error','-xerror','-i',join(out,'smoke.mp4'),'-f','null','-'],{timeout:60000});
 const video=probe.streams.find(s=>s.codec_type==='video'), audio=probe.streams.find(s=>s.codec_type==='audio');
 if (video?.codec_name!=='h264'||video.width!==project.width||video.height!==project.height||!audio) throw new Error('Unexpected output streams');
-await writeFile(join(out,'verification.json'),JSON.stringify({fixture,voiceover:project.voiceoverTracks.length>0,probe},null,2));
-console.log(JSON.stringify({output:join(out,'smoke.mp4'),fixture,voiceover:project.voiceoverTracks.length>0,duration:probe.format.duration}));
+await writeFile(join(out,'verification.json'),JSON.stringify({fixture,voiceover:project.voiceoverTracks.length>0,voiceSettings:project.voiceSettings,probe},null,2));
+console.log(JSON.stringify({output:join(out,'smoke.mp4'),fixture,voiceover:project.voiceoverTracks.length>0,voiceSettings:project.voiceSettings,duration:probe.format.duration}));
