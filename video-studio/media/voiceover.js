@@ -142,8 +142,10 @@ const VIDEO_STUDIO_DIR = join(dirname(fileURLToPath(import.meta.url)), "..");
 const EDGE_TTS_SCRIPT = join(VIDEO_STUDIO_DIR, "services", "edge_tts", "synthesize.py");
 
 function edgeTtsPythonPath() {
+  const edgeVenvPython = join(VIDEO_STUDIO_DIR, "..", ".venv-edge-tts", "bin", "python");
   return String(
     process.env.VIDEO_STUDIO_EDGE_TTS_PYTHON ||
+    (existsSync(edgeVenvPython) ? edgeVenvPython : "") ||
     process.env.VIDEO_STUDIO_VOXCPM_PYTHON ||
     join(VIDEO_STUDIO_DIR, "..", ".venv-voxcpm", "bin", "python")
   );
