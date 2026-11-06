@@ -35,3 +35,16 @@ Not complete initially: planner used hosted OpenAI-compatible/API-Faa; narration
 VoxCPM2 installation/model loading/synthesis performance, Indonesian pronunciation, real forced alignment accuracy, speaker continuity, ComfyUI model and license selection, live WhatsApp callbacks/uploads/reconnect delivery, production VPS render and audio/visual review. Full requested prompt→AI voice→WhatsApp scenario is provided by scripts/remotion-smoke.js but cannot be honestly marked passed here without services/models/session. Runtime queue is single-process, not a distributed job queue. Watcher notifications are not persisted across restarts; owner can inspect/resend through status/history/send.
 
 See REMOTION_WHATSAPP_LINUX.md for exact setup and acceptance commands. No VPS deployment or main merge performed.
+
+
+## Follow-up revision — external ChatGPT storyboard input on main (2026-11-06)
+
+The original audit above records the earlier local Ollama implementation. That implementation has now been removed from production branch main:
+
+- Ollama planner HTTP calls, Qwen model configuration/download, readiness checks, process manager, WhatsApp service actions, installer/bootstrap steps, and the obsolete archive extractor have been removed.
+- The owner authors storyboard JSON in ChatGPT using repository-root prompt-remotion.md. The bot only parses, normalizes, validates, compiles, and renders it.
+- The parser requires schemaVersion: 1, sourcePrompt, and scenes[]. Plain-language input is rejected; the WhatsApp payload limit is 24,000 characters.
+- Scene duration fitting rejects a requested total shorter than the minimum estimated narration/reading time.
+- The VoxCPM2 installer, optional reviewed ComfyUI workflow checks, and newer server hardware diagnostics remain in main.
+- POST /api/video-studio/plan now expects a JSON storyboard string. An external LightJurnal frontend that still submits natural-language prompts requires a separate update.
+- GitHub Actions must be checked for the latest main commit. This source change is not evidence of successful production VPS deployment, actual VoxCPM2 synthesis, ComfyUI generation, or live WhatsApp delivery.
