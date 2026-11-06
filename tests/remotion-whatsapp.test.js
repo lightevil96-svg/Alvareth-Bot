@@ -139,7 +139,7 @@ test("recognizes configured voice and ComfyUI workflow files", () => {
 
 // Actual plugin invocation with a fake transport: not a live WhatsApp test.
 test("plugin rejects every non-owner action and binds prompt sessions to their initiator", async t => {
-  const { mkdtemp, rm } = await import('node:fs/promises');
+  const { mkdtemp, rm, readFile } = await import('node:fs/promises');
   const { tmpdir } = await import('node:os');
   const dir = await mkdtemp(tmpdir() + '/remotion-wa-');
   const old = process.env.ALVARETH_DATA_DIR;
@@ -175,6 +175,10 @@ test("plugin rejects every non-owner action and binds prompt sessions to their i
   assert.ok(voiceIds.includes("!remotion voice provider edge-tts"));
   assert.ok(voiceIds.includes("!remotion voice model id-ID-GadisNeural"));
   assert.ok(voiceIds.includes("!remotion voice rate +10%"));
+  await handler(m,{conn,text:"voice provider voxcpm2",isROwner:true,usedPrefix:"!"});
+  const savedVoiceSettings = JSON.parse(await readFile(dir + "/video-studio/voice-settings.json", "utf8"));
+  assert.equal(savedVoiceSettings.provider, "voxcpm2");
+  await handler(m,{conn,text:"voice reset",isROwner:true,usedPrefix:"!"});
   await handler(m,{conn,text:"services-menu",isROwner:true,usedPrefix:"!"});
   const serviceIds = sent.at(-1)[1].nativeFlow[0].sections.flatMap(section=>section.rows.map(row=>row.id));
   assert.deepEqual(serviceIds, [
