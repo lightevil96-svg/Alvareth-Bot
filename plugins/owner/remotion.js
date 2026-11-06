@@ -919,7 +919,7 @@ global.__alvarethRemotionPromptHandler = async (m, context = {}) => {
     return true;
   }
   if (prompt.length < 8) {
-    await sendText(m.chat, "Input terlalu singkat. Tempel JSON storyboard lengkap dari ChatGPT atau mulai ulang dengan .remotion generate.", context.conn);
+    await sendText(m.chat, "Input terlalu singkat. Tempel JSON storyboard lengkap dari model AI pilihan atau mulai ulang dengan .remotion generate.", context.conn);
     return true;
   }
 
