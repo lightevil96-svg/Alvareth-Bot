@@ -6,7 +6,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { arch, cpus, freemem, homedir, platform, totalmem } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
-import { planVideoPrompt } from "../../video-studio/prompt/planner.js";
+import { parseStoryboardInput } from "../../video-studio/prompt/storyboard.js";
 import { getVoiceSettings, updateVoiceSettings, EDGE_TTS_VOICES, VOXCPM_STYLES } from "../../video-studio/voice-settings.js";
 import { compileVideoPlan } from "../../video-studio/prompt/compile.js";
 import {
@@ -504,7 +504,7 @@ async function startPromptJob(prompt, chat, fallbackConn) {
 
   try {
     // Storyboard JSON is supplied externally; VoxCPM2 starts later when narration is prepared.
-    const plan = await planVideoPrompt(cleanPrompt);
+    const plan = parseStoryboardInput(cleanPrompt);
     const project = compileVideoPlan(plan);
     project.voiceSettings = getVoiceSettings();
     const job = createVideoJob(project);
