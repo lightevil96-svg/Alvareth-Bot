@@ -77,14 +77,20 @@ function hasBinary(name) {
   }
 }
 
+function resolveEdgeTtsPythonPath() {
+  const custom = String(process.env.VIDEO_STUDIO_EDGE_TTS_PYTHON || "").trim();
+  if (custom) return custom;
+  const edgeVenvPython = join(process.cwd(), ".venv-edge-tts", "bin", "python");
+  return existsSync(edgeVenvPython) ? edgeVenvPython : getLocalVideoServiceConfig().pythonPath;
+}
+
 function providerReadiness() {
   const rendererInstalled =
     existsSync(join(process.cwd(), "node_modules", "@remotion", "renderer", "package.json")) &&
     existsSync(join(process.cwd(), "node_modules", "remotion", "package.json"));
   const ffmpegInstalled = hasBinary("ffmpeg") && hasBinary("ffprobe");
   const approvedHashes = String(process.env.VIDEO_STUDIO_COMFYUI_REVIEWED_SHA256 || "");
-  const voiceConfig = getLocalVideoServiceConfig();
-  const edgePython = process.env.VIDEO_STUDIO_EDGE_TTS_PYTHON || voiceConfig.pythonPath;
+  const edgePython = resolveEdgeTtsPythonPath();
   let edgeTtsInstalled = false;
   try {
     edgeTtsInstalled = spawnSync(edgePython, ["-c", "import edge_tts"], { stdio: "ignore", timeout: 8000, windowsHide: true }).status === 0;
@@ -369,33 +375,52 @@ async function showVoiceMenu(m, conn, usedPrefix = ".", notice = "") {
 
 async function installEdgeTts(m) {
   const config = getLocalVideoServiceConfig();
-  if (!existsSync(config.pythonPath)) {
-    return m.reply(
-      "Python runtime Remotion belum tersedia. Jalankan .remotion install sekali untuk menyiapkan Python, lalu ulangi .remotion voice install."
-    );
-  }
   const home = String(process.env.HOME || homedir());
   const localUv = join(home, ".local", "bin", "uv");
   const uvProbe = spawnSync("uv", ["--version"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 5000, windowsHide: true });
   const uv = uvProbe.status === 0 ? "uv" : localUv;
   const useUv = uvProbe.status === 0 || existsSync(localUv);
+  const edgeVenv = join(process.cwd(), ".venv-edge-tts");
+  const edgePython = join(edgeVenv, "bin", "python");
+  let pythonPath = existsSync(edgePython) ? edgePython : config.pythonPath;
+
+  if (!existsSync(pythonPath) && useUv) {
+    const pythonInstall = spawnSync(uv, ["python", "install", "3.11"], {
+      encoding: "utf8", timeout: 180000, maxBuffer: 2 * 1024 * 1024, windowsHide: true
+    });
+    if (pythonInstall.error || pythonInstall.status !== 0) {
+      return m.reply("❌ Python ringan untuk Edge TTS gagal disiapkan:\n" + String(pythonInstall.stderr || pythonInstall.stdout || pythonInstall.error?.message || "").slice(-1000));
+    }
+    const venvCreate = spawnSync(uv, ["venv", "--python", "3.11", edgeVenv], {
+      encoding: "utf8", timeout: 60000, maxBuffer: 1024 * 1024, windowsHide: true
+    });
+    if (venvCreate.error || venvCreate.status !== 0) {
+      return m.reply("❌ Virtualenv Edge TTS gagal dibuat:\n" + String(venvCreate.stderr || venvCreate.stdout || venvCreate.error?.message || "").slice(-1000));
+    }
+    pythonPath = edgePython;
+  }
+  if (!existsSync(pythonPath)) {
+    return m.reply("Python belum tersedia. Edge TTS bisa memakai virtualenv ringan tanpa GPU, tetapi binary uv belum ditemukan. Jalankan .remotion install untuk memasang uv, lalu ulangi .remotion voice install.");
+  }
+
   const result = useUv
-    ? spawnSync(uv, ["pip", "install", "--python", config.pythonPath, "edge-tts==7.3.1"], {
+    ? spawnSync(uv, ["pip", "install", "--python", pythonPath, "edge-tts==7.3.1"], {
         encoding: "utf8", timeout: 180000, maxBuffer: 2 * 1024 * 1024, windowsHide: true
       })
-    : spawnSync(config.pythonPath, ["-m", "pip", "install", "edge-tts==7.3.1"], {
+    : spawnSync(pythonPath, ["-m", "pip", "install", "edge-tts==7.3.1"], {
         encoding: "utf8", timeout: 180000, maxBuffer: 2 * 1024 * 1024, windowsHide: true
       });
   if (result.error || result.status !== 0) {
     const detail = String(result.stderr || result.stdout || result.error?.message || "installer gagal").slice(-1200);
     return m.reply("❌ Instalasi Edge TTS gagal:\n" + detail);
   }
-  const check = spawnSync(config.pythonPath, ["-c", "import edge_tts; print(getattr(edge_tts, '__version__', 'ready'))"], {
+  const check = spawnSync(pythonPath, ["-c", "import edge_tts; print(getattr(edge_tts, '__version__', 'ready'))"], {
     encoding: "utf8", timeout: 10000, windowsHide: true
   });
   if (check.status !== 0) return m.reply("❌ Paket terpasang tetapi pemeriksaan import Edge TTS gagal:\n" + String(check.stderr || "").slice(-800));
   return m.reply(
     "✅ *Edge TTS siap digunakan.*\nVersi: " + String(check.stdout || "ready").trim() +
+    "\nVirtualenv: " + pythonPath +
     "\nProvider ini memakai layanan suara online, tidak memerlukan model GPU atau API key. Pilih .remotion voice provider edge-tts."
   );
 }
