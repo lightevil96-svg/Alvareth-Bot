@@ -191,5 +191,5 @@ test("plugin rejects every non-owner action and binds prompt sessions to their i
   assert.ok(replies.some(text=>/RAM:/.test(text)));
   assert.ok(replies.some(text=>/Belum ada proses instalasi/.test(text)));
   assert.ok(replies.some(text=>/Riwayat video masih kosong/.test(text)));
-  assert.ok(replies.some(text=>/prompt-remotion\\.md/.test(text)));
+  assert.ok(replies.some(text=>/prompt-remotion\.md/.test(text)));
 });
