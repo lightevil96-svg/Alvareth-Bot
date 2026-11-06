@@ -22,7 +22,8 @@ Alur runtime saat ini:
 
 - **model AI eksternal:** menyusun storyboard. Bot tidak memanggil API model bahasa, Ollama, atau layanan inferensi lain.
 - **Parser/normalizer/compiler:** menerima JSON, menerapkan default aman, membatasi enum, menghitung durasi, dan mengubah storyboard menjadi payload Remotion.
-- **Voice-over:** provider default adalah Edge TTS online melalui paket `edge-tts`, menggunakan suara Neural Bahasa Indonesia dan word-boundary timing. Provider ini gratis digunakan tanpa API key atau model GPU, tetapi merupakan klien tidak resmi terhadap layanan Edge online sehingga ketersediaan dan kebijakannya dapat berubah. VoxCPM2 tetap tersedia sebagai opsi lokal yang lebih berat dan dapat lebih lambat pada CPU. Provider dan suara dipilih melalui `.remotion voice`.
+- **Voice-over:** provider Edge TTS online tersedia gratis tanpa API key, tetapi merupakan klien tidak resmi terhadap layanan Edge online sehingga ketersediaan dan kebijakannya dapat berubah. VoxCPM2 adalah opsi lokal open-source Apache-2.0 yang mendukung Bahasa Indonesia; model 2B perlu diunduh dan membutuhkan resource komputasi. Provider, suara, dan karakter narator dipilih melalui `.remotion voice`.
+- **Style visual:** preset tersimpan dan dipilih melalui `.remotion style`. Preset aktif diterapkan runtime setelah storyboard dinormalisasi; preset mengatur bahasa visual, palet, efek, motif, kamera, transisi, dan renderer tanpa mengubah isi cerita, fakta, atau CTA. Default pertama adalah `Cinematic 2.5D Explainer`; preset lain tersedia melalui menu `.remotion style`.
 - **Subtitle:** `captionStyle` menentukan gaya caption. Edge TTS mengirim metadata `WordBoundary` sehingga timing kata dapat diambil langsung dari hasil sintesis. Jika metadata tidak tersedia, runtime memperkirakan timing caption dari durasi audio terukur dan bobot kata/tanda baca; hasilnya perkiraan, bukan forced alignment. VoxCPM2 memakai alignment lokal hanya jika aligner opsional dikonfigurasi.
 - **AI footage:** opsional melalui workflow ComfyUI lokal yang sudah ditinjau. Default pipeline hanya memilih maksimal **2 scene** untuk AI video (dapat diubah operator, maksimum 4). Setiap klip yang dihasilkan dibatasi 3–8 detik. Workflow yang tidak dikonfigurasi berarti footage AI tidak dibuat.
 - **Character reference:** satu referensi karakter dapat dibuat jika image workflow ComfyUI aktif dan workflow video memakai placeholder `{{REFERENCE_IMAGE}}`. Ini membantu kontinuitas, tetapi tidak menjamin karakter identik di semua frame/klip.
@@ -72,7 +73,7 @@ Alur runtime saat ini:
 
 ### Konsistensi visual
 
-- Tetapkan satu gaya visual melalui `visualBible`: art style, palet, pencahayaan, bahasa kamera, tekstur, dan aturan komposisi.
+- Tetapkan satu gaya visual melalui `visualBible`: art style, palet, pencahayaan, bahasa kamera, tekstur, dan aturan komposisi. Jika preset `Cinematic 2.5D Explainer` aktif, buat `visualDescription` konkret dengan subjek, lingkungan, objek utama, dan lapisan foreground/background agar renderer ilustrasi dapat memilih elemen yang relevan.
 - Gunakan palet yang sama atau harmonis di seluruh scene. Warna `background` dan `accent` wajib berupa HEX enam digit seperti `#142A36`.
 - Tetapkan motif, motion, transisi, dan sound cue dari daftar yang diizinkan. Jangan membuat nama preset baru.
 - Setiap scene harus memiliki satu aksi/ide visual utama. Hindari banyak aksi yang saling bertabrakan dalam satu klip.

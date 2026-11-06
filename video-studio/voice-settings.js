@@ -12,7 +12,8 @@ export const VOXCPM_STYLES = Object.freeze({
   warm: "A warm, friendly Indonesian narrator with gentle expression and natural pacing.",
   energetic: "An energetic Indonesian narrator with lively emphasis, clear diction and controlled excitement.",
   calm: "A calm Indonesian narrator with a relaxed pace, soft delivery and clear articulation.",
-  storytelling: "An expressive Indonesian storyteller with varied intonation, emotional phrasing and natural pauses."
+  storytelling: "An expressive Indonesian storyteller with varied intonation, emotional phrasing and natural pauses.",
+  cinematic: "A mature Indonesian male cinematic narrator with a warm low-mid register, resonant tone, measured pace, confident storytelling, clear diction and restrained emotional emphasis."
 });
 
 export const DEFAULT_VOICE_SETTINGS = Object.freeze({
