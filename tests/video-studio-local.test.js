@@ -168,7 +168,7 @@ test('storyboard parser accepts JSON authored by any external AI without a local
   assert.equal(plan.scenes.length, 1);
 });
 
-test('the published ChatGPT fox storyboard example matches the runtime schema', () => {
+test('the published external-AI fox storyboard example matches the runtime schema', () => {
   const guide = readFileSync(new URL('../prompt-remotion.md', import.meta.url), 'utf8');
   const fence = String.fromCharCode(96).repeat(3);
   const blocks = [...guide.matchAll(new RegExp(fence + 'json\\s*([\\s\\S]*?)' + fence, 'gi'))];
@@ -179,10 +179,10 @@ test('the published ChatGPT fox storyboard example matches the runtime schema', 
   assert.equal(plan.targetDurationSeconds, 30);
 });
 
-test('storyboard parser rejects plain-language briefs and directs owners to the ChatGPT JSON guide', () => {
+test('storyboard parser rejects plain-language briefs and directs owners to the external-AI JSON guide', () => {
   assert.throws(
     () => parseStoryboardInput('Buat video promosi kopi lokal, tanpa musik.'),
-    /JSON storyboard dari ChatGPT/
+    /JSON storyboard dari model AI/
   );
 });
 
