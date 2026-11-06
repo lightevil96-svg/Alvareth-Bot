@@ -10,6 +10,8 @@ Bot tidak menjalankan Ollama, Qwen, API model bahasa, atau LLM lokal untuk menyu
 
 Node.js 22+, Python 3.10+ (3.11 recommended), FFmpeg/FFprobe, Chromium dependencies, dan ruang disk untuk model serta hasil render. GPU CUDA sangat membantu VoxCPM2 dan generasi visual; CPU dapat dipilih secara eksplisit, tetapi throughput/RAM harus diuji. Jangan menganggap render CPU atau AI footage akan real-time. Jalankan satu proses bot untuk antrean berbasis filesystem ini; jangan menjalankan beberapa replica yang berbagi jobs.json.
 
+Procedural 3D scenes use the pinned `@remotion/three`, `@react-three/fiber`, and `three` dependencies installed by `npm install`; they do not require ComfyUI. The renderer defaults to software WebGL (`swangle`) for CPU-only VPS and CI. If the host has a supported GPU, set `VIDEO_STUDIO_WEBGL_RENDERER=angle-egl` to use it; GPU acceleration can improve 3D throughput. Software WebGL is slower, so test a short 3D fixture before producing long videos.
+
 ## Install in an existing checkout
 
 Preserve .env, sessions, and database. If the checkout has local edits, resolve them before switching branches. Do not overwrite .env with the example.
