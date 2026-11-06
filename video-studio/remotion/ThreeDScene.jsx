@@ -44,8 +44,14 @@ const HeroObject = ({ type, style, accent, frame, scale = 1 }) => {
   if (type === "rings") {
     return <group position={[0, bob, 0]} rotation={[rotation * 0.6, rotation, rotation * 0.25]} scale={scale * pulse}>
       <mesh rotation={[0.8, 0.2, 0]}><torusGeometry args={[1.05, 0.12, 24, 120]} />{material}</mesh>
-      <mesh rotation={[1.55, 0.75, 0]}><torusGeometry args={[0.78, 0.075, 20, 100]}><meshStandardMaterial color="#ffffff" metalness={0.75} roughness={0.22} /></torusGeometry></mesh>
-      <mesh rotation={[0.2, 1.25, 0]}><torusGeometry args={[1.28, 0.035, 12, 120]}><meshStandardMaterial color={accent} metalness={0.55} roughness={0.24} emissive={accent} emissiveIntensity={0.25} /></torusGeometry></mesh>
+      <mesh rotation={[1.55, 0.75, 0]}>
+        <torusGeometry args={[0.78, 0.075, 20, 100]} />
+        <meshStandardMaterial color="#ffffff" metalness={0.75} roughness={0.22} />
+      </mesh>
+      <mesh rotation={[0.2, 1.25, 0]}>
+        <torusGeometry args={[1.28, 0.035, 12, 120]} />
+        <meshStandardMaterial color={accent} metalness={0.55} roughness={0.24} emissive={accent} emissiveIntensity={0.25} />
+      </mesh>
       <mesh><icosahedronGeometry args={[0.46, 2]} />{material}</mesh>
     </group>;
   }
