@@ -1,4 +1,5 @@
 import { SFX_SECONDS } from "../engine/sound-design.js";
+import { fitTextBlock } from "./text-layout.js";
 import React from "react";
 import {
   AbsoluteFill,
@@ -169,13 +170,59 @@ const Scene = ({ scene, index, total, durationFrames, transitionInFrames }) => {
   const visualType = scene.visualType || "editorial";
   const hasSideVisual = ["data-chart", "diagram", "app-mockup", "waveform"].includes(visualType);
   const alignLeft = layout === "editorial" || layout === "split" || hasSideVisual;
-  const textLength = String(scene.text || "").length;
   const fontScale = height >= 1600 ? 1 : 0.82;
-  const baseFontSize = Math.max(42, Math.min(98, 98 - textLength * 0.42)) * fontScale;
   const contentWidth = hasSideVisual ? "47%" : layout === "split" ? "62%" : layout === "editorial" ? "86%" : "90%";
+  const contentWidthRatio = hasSideVisual ? 0.47 : layout === "split" ? 0.62 : layout === "editorial" ? 0.86 : 0.9;
+  const contentWidthPx = Math.max(180, width * 0.84 * contentWidthRatio);
+  const headlineLayout = React.useMemo(() => fitTextBlock(scene.text, contentWidthPx, {
+    maxFontSize: 92 * fontScale,
+    minFontSize: 28,
+    maxLines: hasSideVisual ? 6 : layout === "stat" ? 3 : 5,
+    fontWeight: 850,
+    letterSpacing: -1.4
+  }), [scene.text, contentWidthPx, fontScale, hasSideVisual, layout]);
+  const kickerLayout = React.useMemo(() => fitTextBlock(scene.kicker, contentWidthPx, {
+    maxFontSize: 18 * fontScale,
+    minFontSize: 12,
+    maxLines: 1,
+    fontWeight: 800,
+    letterSpacing: 1.5
+  }), [scene.kicker, contentWidthPx, fontScale]);
+  const subtextLayout = React.useMemo(() => fitTextBlock(scene.subtext, contentWidthPx, {
+    maxFontSize: 27 * fontScale,
+    minFontSize: 17,
+    maxLines: 4,
+    fontWeight: 450,
+    letterSpacing: 0
+  }), [scene.subtext, contentWidthPx, fontScale]);
+  const highlightLayout = React.useMemo(() => fitTextBlock(scene.highlight, contentWidthPx - 28, {
+    maxFontSize: 22 * fontScale,
+    minFontSize: 15,
+    maxLines: 2,
+    fontWeight: 800,
+    letterSpacing: 0
+  }), [scene.highlight, contentWidthPx, fontScale]);
+  const statHighlightLayout = React.useMemo(() => fitTextBlock(scene.highlight, contentWidthPx, {
+    maxFontSize: Math.min(118 * fontScale, contentWidthPx * 0.28),
+    minFontSize: 32,
+    maxLines: 1,
+    fontWeight: 900,
+    letterSpacing: -2
+  }), [scene.highlight, contentWidthPx, fontScale]);
+  const pointLayouts = React.useMemo(() => (Array.isArray(scene.points) ? scene.points : []).map(point =>
+    fitTextBlock(point, Math.max(120, contentWidthPx - 54), {
+      maxFontSize: 22 * fontScale,
+      minFontSize: 16,
+      maxLines: 2,
+      fontWeight: 650,
+      letterSpacing: 0
+    })
+  ), [scene.points, contentWidthPx, fontScale]);
   const contentStyle = {
     width: contentWidth,
     maxWidth: hasSideVisual ? "50%" : layout === "split" ? "68%" : "100%",
+    minWidth: 0,
+    boxSizing: "border-box",
     textAlign: alignLeft ? "left" : "center",
     opacity: transitionOpacity,
     transform: "translate3d(" + x + "px," + y + "px,0) scale(" + scale + ")",
@@ -198,21 +245,21 @@ const Scene = ({ scene, index, total, durationFrames, transitionInFrames }) => {
     {specialVisual}
     <div style={{ position: "absolute", inset: "8%", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: alignLeft ? "flex-start" : "center" }}>
       <div style={contentStyle}>
-        {scene.kicker ? <div style={{ color: accent, fontSize: 18 * fontScale, fontWeight: 800, letterSpacing: 4, textTransform: "uppercase", marginBottom: 28 }}>{scene.kicker}</div> : null}
+        {scene.kicker ? <div style={{ color: accent, fontSize: kickerLayout.fontSize, fontWeight: 800, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 22, whiteSpace: "pre-line", overflowWrap: "anywhere" }}>{kickerLayout.text}</div> : null}
         {layout === "quote" ? <div style={{ color: accent, fontSize: 110 * fontScale, fontWeight: 900, lineHeight: 0.65, marginBottom: 20 }}>“</div> : null}
-        {layout === "stat" && scene.highlight ? <div style={{ color: accent, fontSize: 118 * fontScale, fontWeight: 900, lineHeight: 0.98, marginBottom: 18, letterSpacing: -5 }}>{scene.highlight}</div> : null}
+        {layout === "stat" && scene.highlight ? <div style={{ color: accent, fontSize: statHighlightLayout.fontSize, lineHeight: 0.98, fontWeight: 900, marginBottom: 18, letterSpacing: -2 * fontScale, whiteSpace: "pre-line", overflowWrap: "anywhere" }}>{statHighlightLayout.text}</div> : null}
         {kinetic
-          ? <KineticTypography text={scene.text} highlight={scene.highlight} accent={accent} />
-          : <div style={{ fontSize: baseFontSize, lineHeight: 1.04, fontWeight: 850, letterSpacing: -2.4 * fontScale, whiteSpace: "pre-wrap", overflowWrap: "anywhere", textShadow: lightBackground ? "none" : "0 8px 35px rgba(0,0,0,.22)" }}>{scene.text}</div>}
-        {scene.highlight && layout !== "stat" && !kinetic ? <div style={{ display: "inline-block", marginTop: 18, padding: "8px 16px", borderRadius: 999, color: foreground, background: accent, fontSize: 22 * fontScale, fontWeight: 800 }}>{scene.highlight}</div> : null}
-        {scene.subtext ? <div style={{ marginTop: 26, maxWidth: 850, color: foreground, opacity: 0.82, fontSize: 27 * fontScale, lineHeight: 1.42, fontWeight: 450 }}>{scene.subtext}</div> : null}
-        {scene.points && scene.points.length ? <div style={{ display: "grid", gap: 12, marginTop: 28, maxWidth: 820, textAlign: "left" }}>
-          {scene.points.map((point, pointIndex) => <div key={pointIndex} style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 22 * fontScale, fontWeight: 650 }}>
-            <span style={{ display: "grid", placeItems: "center", width: 34, height: 34, borderRadius: "50%", background: accent, color: "#172033", fontSize: 15, flex: "0 0 auto" }}>{pointIndex + 1}</span>
-            <span>{point}</span>
+          ? <KineticTypography text={scene.text} highlight={scene.highlight} accent={accent} maxWidthPx={contentWidthPx} maxFontSize={headlineLayout.fontSize} minFontSize={headlineLayout.fontSize} maxLines={headlineLayout.lineCount} />
+          : <div style={{ maxWidth: "100%", minWidth: 0, fontSize: headlineLayout.fontSize, lineHeight: 1.08, fontWeight: 850, letterSpacing: -1.4 * fontScale, whiteSpace: "pre-line", overflowWrap: "anywhere", wordBreak: "normal", textShadow: lightBackground ? "none" : "0 8px 35px rgba(0,0,0,.22)" }}>{headlineLayout.text}</div>}
+        {scene.highlight && layout !== "stat" && !kinetic ? <div style={{ display: "inline-block", maxWidth: "100%", boxSizing: "border-box", marginTop: 18, padding: "8px 16px", borderRadius: 16, color: foreground, background: accent, fontSize: highlightLayout.fontSize, lineHeight: 1.2, fontWeight: 800, whiteSpace: "pre-line", overflowWrap: "anywhere" }}>{highlightLayout.text}</div> : null}
+        {scene.subtext ? <div style={{ marginTop: 22, maxWidth: "100%", minWidth: 0, color: foreground, opacity: 0.84, fontSize: subtextLayout.fontSize, lineHeight: 1.38, fontWeight: 450, whiteSpace: "pre-line", overflowWrap: "anywhere" }}>{subtextLayout.text}</div> : null}
+        {pointLayouts.length ? <div style={{ display: "grid", gap: 12, marginTop: 24, maxWidth: "100%", textAlign: "left" }}>
+          {pointLayouts.map((point, pointIndex) => <div key={pointIndex} style={{ display: "flex", alignItems: "flex-start", gap: 12, minWidth: 0, fontSize: point.fontSize, lineHeight: 1.24, fontWeight: 650 }}>
+            <span style={{ display: "grid", placeItems: "center", width: 32, height: 32, borderRadius: "50%", background: accent, color: "#172033", fontSize: 14, flex: "0 0 auto" }}>{pointIndex + 1}</span>
+            <span style={{ minWidth: 0, overflowWrap: "anywhere", whiteSpace: "pre-line" }}>{point.text}</span>
           </div>)}
         </div> : null}
-        {layout === "outro" && scene.highlight ? <div style={{ marginTop: 34, display: "inline-flex", alignItems: "center", gap: 12, padding: "14px 22px", borderRadius: 999, background: accent, color: "#172033", fontSize: 21 * fontScale, fontWeight: 850 }}>{scene.highlight} <span>↗</span></div> : null}
+        {layout === "outro" && scene.highlight ? <div style={{ marginTop: 30, display: "inline-flex", alignItems: "center", gap: 12, maxWidth: "100%", boxSizing: "border-box", padding: "12px 18px", borderRadius: 16, background: accent, color: "#172033", fontSize: highlightLayout.fontSize, lineHeight: 1.2, fontWeight: 850, whiteSpace: "pre-line", overflowWrap: "anywhere" }}>{highlightLayout.text} <span>↗</span></div> : null}
       </div>
     </div>
     <FaceBubble src={scene.facecamSrc} position={scene.facecamPosition} durationInFrames={durationFrames} />
@@ -238,19 +285,20 @@ const CaptionOverlay = ({ captions = [], style = "tiktok", position = "bottom" }
   if (!activeGroup || !Array.isArray(activeGroup.words)) return null;
   const activeWord = activeGroup.words.findIndex(word => time >= word.startSeconds && time <= word.endSeconds);
   const visibleWords = style === "typewriter" && activeWord >= 0 ? activeGroup.words.slice(0, activeWord + 1) : activeGroup.words;
-  const fontSize = width >= 1600 ? 42 : width >= 1000 ? 34 : 25;
-  const bottom = position === "top" ? undefined : position === "center" ? "45%" : height * 0.145;
-  const top = position === "top" ? "12%" : undefined;
+  const fontSize = Math.max(22, Math.min(40, width * 0.032));
   const cleanSubtitle = style === "subtitle";
-  return <AbsoluteFill style={{ justifyContent: "flex-end", alignItems: "center", paddingBottom: bottom, paddingTop: top, pointerEvents: "none", zIndex: 30 }}>
-    <div style={{ maxWidth: width * 0.88, display: "flex", flexWrap: "wrap", justifyContent: "center", alignItems: "center", gap: "3px 8px", padding: cleanSubtitle ? "8px 12px" : "12px 20px", borderRadius: cleanSubtitle ? 8 : 16, background: cleanSubtitle ? "rgba(0,0,0,.62)" : "rgba(8,12,20,.82)", border: cleanSubtitle ? "none" : "1px solid rgba(255,255,255,.14)", boxShadow: "0 12px 34px rgba(0,0,0,.24)", textAlign: "center" }}>
+  const justifyContent = position === "top" ? "flex-start" : position === "center" ? "center" : "flex-end";
+  const paddingTop = position === "top" ? height * 0.12 : 0;
+  const paddingBottom = position === "bottom" ? height * 0.145 : 0;
+  return <AbsoluteFill style={{ justifyContent, alignItems: "center", paddingBottom, paddingTop, paddingLeft: width * 0.04, paddingRight: width * 0.04, boxSizing: "border-box", pointerEvents: "none", zIndex: 30 }}>
+    <div style={{ width: "fit-content", maxWidth: width * 0.88, boxSizing: "border-box", display: "flex", flexWrap: "wrap", justifyContent: "center", alignItems: "center", gap: "4px 8px", padding: cleanSubtitle ? "9px 14px" : "11px 18px", borderRadius: cleanSubtitle ? 10 : 16, background: cleanSubtitle ? "rgba(0,0,0,.66)" : "rgba(8,12,20,.84)", border: cleanSubtitle ? "none" : "1px solid rgba(255,255,255,.16)", boxShadow: "0 10px 28px rgba(0,0,0,.22)", textAlign: "center" }}>
       {visibleWords.map((word, index) => {
         const active = index === activeWord;
-        const wave = style === "wave" ? Math.sin(frame / 3 + index * 0.9) * 6 : 0;
-        const pop = style === "pop" && active ? 1.12 : 1;
+        const wave = style === "wave" ? Math.sin(frame / 3 + index * 0.9) * 5 : 0;
+        const pop = style === "pop" && active ? 1.08 : 1;
         const activeBackground = style === "highlight" && active ? "#FFE36E" : "transparent";
         const color = active && ["tiktok", "karaoke", "pop", "wave"].includes(style) ? "#FFE36E" : active && style === "highlight" ? "#172033" : "#FFFFFF";
-        return <span key={index} style={{ color, background: activeBackground, borderRadius: 6, padding: activeBackground === "transparent" ? 0 : "2px 6px", fontSize, lineHeight: 1.22, fontWeight: 900, transform: "translateY(" + wave + "px) scale(" + pop + ")", textShadow: "0 2px 12px rgba(0,0,0,.4)" }}>{word.text}</span>;
+        return <span key={index} style={{ display: "inline-block", maxWidth: "100%", color, background: activeBackground, borderRadius: 6, padding: activeBackground === "transparent" ? 0 : "2px 6px", fontSize, lineHeight: 1.2, fontWeight: 850, letterSpacing: "-0.01em", whiteSpace: "pre-wrap", overflowWrap: "anywhere", transform: "translateY(" + wave + "px) scale(" + pop + ")", textShadow: "0 2px 12px rgba(0,0,0,.4)" }}>{word.text}</span>;
       })}
     </div>
   </AbsoluteFill>;
