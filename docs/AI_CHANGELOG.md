@@ -4,9 +4,9 @@
 - **Implementation:** added `.disk` / `.disk scan` for filesystem and top-level directory usage; `.disk clean` creates a five-minute preview; `.disk confirm` deletes only ordinary files older than 24 hours from the dedicated WhatsApp temporary-media directory and Remotion generated-assets directory; `.disk cancel` discards the preview.
 - **Safety:** owner-only at both plugin metadata and handler level. The cleaner rejects filesystem roots and paths containing the project/data root, skips symlinks and recent files, revalidates candidate paths at deletion time, and never traverses arbitrary directories. WhatsApp sessions, databases, configuration, model weights, node_modules, logs, backups, and MP4 renders are not cleanup targets.
 - **Files:** `plugins/owner/disk.js`, `lib/disk-cleaner.js`, `tests/disk-cleaner.test.js`, and `package.json`.
-- **Tests:** added to `npm test`; test execution and GitHub Actions result are pending at the time of this entry.
+- **Tests:** `Disk Manager regression` passed on commit `24e22b4` (syntax checks plus safe cleanup boundary tests); repository-wide JavaScript syntax workflow is still running. The new test is also included in `npm test`.
 - **Not verified:** actual 15 GB disk composition, VPS disk quota, live WhatsApp command delivery, and production cleanup behavior. The report only scans the bot working directory; filesystem totals include other data on the same mount.
-- **Operational note:** after deployment/restart, run `.disk scan`, then `.disk clean` and review the preview before sending `.disk confirm`. This feature deliberately will not promise to reclaim the full 15 GB because only known disposable temporary files are eligible.
+- **Operational note:** disk scans use asynchronous `df`/`du` subprocesses so they do not block the WhatsApp event loop. After deployment/restart, run `.disk scan`, then `.disk clean` and review the preview before sending `.disk confirm`. This feature deliberately will not promise to reclaim the full 15 GB because only known disposable temporary files are eligible.
 
 ## 2026-11-06 — Remove Ollama and move storyboard authoring to ChatGPT
 
