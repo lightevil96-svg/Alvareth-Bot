@@ -8,21 +8,13 @@ import { localServiceUrl } from "./local-service.js";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const DATA_DIR = process.env.ALVARETH_DATA_DIR ? resolve(process.env.ALVARETH_DATA_DIR) : join(homedir(), ".alvareth-bot-data");
 const MANAGED = global.__alvarethVideoLocalServices || (global.__alvarethVideoLocalServices = new Map());
-const DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434";
 const DEFAULT_VOXCPM_URL = "http://127.0.0.1:7861";
-const DEFAULT_OLLAMA_MODEL = "qwen2.5:7b";
 
 export function getLocalVideoServiceConfig(env = process.env) {
-  const ollamaUrl = String(env.VIDEO_STUDIO_OLLAMA_URL || DEFAULT_OLLAMA_URL).trim();
   const voxUrl = String(env.VIDEO_STUDIO_VOXCPM_URL || DEFAULT_VOXCPM_URL).trim();
   const modelPath = resolve(String(env.VOXCPM_MODEL_PATH || join(homedir(), "alvareth-models", "VoxCPM2")));
   const pythonPath = resolve(String(env.VIDEO_STUDIO_VOXCPM_PYTHON || join(ROOT, ".venv-voxcpm", "bin", "python")));
-  const userLocalOllama = join(homedir(), ".local", "bin", "ollama");
-  const ollamaBin = String(env.VIDEO_STUDIO_OLLAMA_BIN || (existsSync(userLocalOllama) ? userLocalOllama : "ollama")).trim();
   return {
-    ollamaUrl,
-    ollamaBin,
-    ollamaModel: String(env.VIDEO_STUDIO_OLLAMA_MODEL || DEFAULT_OLLAMA_MODEL).trim(),
     voxUrl,
     modelPath,
     pythonPath,
@@ -38,10 +30,11 @@ const COMMON_SERVICE_ENV = [
   "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"
 ];
 
-export function buildLocalServiceEnvironment(kind, env = process.env, overrides = {}) {
-  const specific = kind === "ollama"
-    ? ["OLLAMA_MODELS", "OLLAMA_KEEP_ALIVE", "OLLAMA_NUM_PARALLEL", "OLLAMA_MAX_LOADED_MODELS", "OLLAMA_FLASH_ATTENTION", "OLLAMA_KV_CACHE_TYPE", "OLLAMA_CONTEXT_LENGTH"]
-    : ["TORCH_HOME", "HF_HOME", "HUGGINGFACE_HUB_CACHE", "TRANSFORMERS_CACHE", "VOXCPM_VOICE_DESCRIPTION", "VOXCPM_ALIGNMENT_MODEL_PATH", "VOXCPM_ALIGNMENT_DEVICE"];
+export function buildLocalServiceEnvironment(_kind, env = process.env, overrides = {}) {
+  const specific = [
+    "TORCH_HOME", "HF_HOME", "HUGGINGFACE_HUB_CACHE", "TRANSFORMERS_CACHE",
+    "VOXCPM_VOICE_DESCRIPTION", "VOXCPM_ALIGNMENT_MODEL_PATH", "VOXCPM_ALIGNMENT_DEVICE"
+  ];
   const result = {};
   for (const key of [...COMMON_SERVICE_ENV, ...specific]) {
     if (env[key] !== undefined && env[key] !== "") result[key] = env[key];
@@ -49,11 +42,6 @@ export function buildLocalServiceEnvironment(kind, env = process.env, overrides 
   if (!result.PATH && process.env.PATH) result.PATH = process.env.PATH;
   if (!result.HOME) result.HOME = homedir();
   return { ...result, ...overrides };
-}
-
-export function isOllamaModelReady(payload, model = DEFAULT_OLLAMA_MODEL) {
-  const models = Array.isArray(payload?.models) ? payload.models : [];
-  return models.some(item => [item?.name, item?.model].some(name => String(name || "").trim() === model));
 }
 
 export function isVoxCPMReady(payload) {
@@ -161,68 +149,6 @@ function managedProcessStopped(name) {
   return Boolean(state && (state.error || state.exitCode !== null));
 }
 
-async function inspectOllama(config, env, waitMs, startAllowed = config.autoStart) {
-  let endpoint;
-  try { endpoint = localServiceUrl(config.ollamaUrl, "api/tags"); }
-  catch (error) {
-    return { ready: false, reachable: false, model: config.ollamaModel, detail: "URL Ollama tidak valid: " + error.message };
-  }
-
-  let probe = await requestJson(endpoint);
-  let launch = null;
-  if (!probe.reachable && startAllowed) {
-    if (!commandWorks(config.ollamaBin, ["--version"])) {
-      return {
-        ready: false, reachable: false, model: config.ollamaModel,
-        detail: "Binary Ollama belum ditemukan. Jalankan .remotion install untuk memasang Ollama dan model " + config.ollamaModel + "."
-      };
-    }
-    const url = new URL(config.ollamaUrl);
-    launch = launchManaged("Ollama", config.ollamaBin, ["serve"], buildLocalServiceEnvironment("ollama", env, {
-      OLLAMA_HOST: url.host,
-      OLLAMA_NO_CLOUD: "1"
-    }));
-    if (launch.started || launch.alreadyManaged) {
-      probe = await waitForService(endpoint, data => Boolean(data), waitMs, () =>
-        Boolean(launch?.state && (launch.state.error || launch.state.exitCode !== null))
-      );
-    }
-  } else if (!probe.reachable && !startAllowed) {
-    const installed = commandWorks(config.ollamaBin, ["--version"]);
-    return {
-      ready: false, reachable: false, model: config.ollamaModel,
-      detail: !installed
-        ? "Binary Ollama belum terpasang. Gunakan .remotion install untuk memasang runtime dan model lokal."
-        : config.autoStart
-          ? "Binary Ollama sudah ada, tetapi service belum berjalan. Saat membuat video, bot akan mencoba menyalakannya otomatis."
-          : "Ollama tidak merespons. Autostart dimatikan; jalankan ollama serve pada server."
-    };
-  }
-
-  if (!probe.reachable) {
-    return {
-      ready: false, reachable: false, model: config.ollamaModel,
-      detail: "Service Ollama belum dapat dihubungi di " + config.ollamaUrl + "." + processExitDetail(launch?.state)
-    };
-  }
-  if (!probe.ok) {
-    return {
-      ready: false, reachable: true, model: config.ollamaModel,
-      detail: "Ollama merespons HTTP " + probe.status + (probe.error ? ": " + probe.error : ".")
-    };
-  }
-  if (!isOllamaModelReady(probe.data, config.ollamaModel)) {
-    return {
-      ready: false, reachable: true, model: config.ollamaModel,
-      detail: "Ollama aktif, tetapi model " + config.ollamaModel + " belum tersedia. Jalankan .remotion install untuk mengunduh model planner lokal."
-    };
-  }
-  return {
-    ready: true, reachable: true, model: config.ollamaModel,
-    detail: "Ollama aktif dan model " + config.ollamaModel + " siap digunakan."
-  };
-}
-
 function readVoxModelConfig(modelPath) {
   const configPath = join(modelPath, "config.json");
   if (!existsSync(configPath)) return { ok: false, detail: "Model VoxCPM2 belum ditemukan di " + modelPath + ". Unduh sekali dengan: hf download openbmb/VoxCPM2 --local-dir " + modelPath };
@@ -327,12 +253,11 @@ async function inspectVoxCPM(config, env, waitMs, startAllowed = config.autoStar
   };
 }
 
-export async function startLocalVideoServices({ env = process.env, services = ["ollama", "voxcpm"], waitMs = 0, start = true } = {}) {
+export async function startLocalVideoServices({ env = process.env, services = ["voxcpm"], waitMs = 0, start = true } = {}) {
   const config = getLocalVideoServiceConfig(env);
   const startAllowed = start && config.autoStart;
   const result = {};
   const tasks = [];
-  if (services.includes("ollama")) tasks.push(inspectOllama(config, env, waitMs, startAllowed).then(value => { result.ollama = value; }));
   if (services.includes("voxcpm")) tasks.push(inspectVoxCPM(config, env, waitMs, startAllowed).then(value => { result.voxcpm = value; }));
   await Promise.all(tasks);
   return result;
