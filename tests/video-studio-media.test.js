@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { buildCaptionGroups, buildEstimatedCaptionGroups, splitVoiceoverChunks } from "../video-studio/media/voiceover.js";
 import { validateVideoProject } from "../video-studio/validate.js";
 import { applyComfyWorkflowVariables } from "../video-studio/media/comfyui.js";
+import { sanitizeAiVideoPrompt } from "../video-studio/media/ai-video.js";
 
 test("groups character-level TTS alignment into timed subtitle phrases", () => {
   const characters = Array.from("Halo dunia.");
@@ -88,4 +89,13 @@ test("injects a generated character reference image into an image-to-video workf
   });
   assert.equal(applied["10"].inputs.image, "characters/job-123/reference.png");
   assert.equal(applied["11"].inputs.text, "A small fox walks through the forest.");
+});
+
+
+test("keeps brand credit out of AI-generated footage prompts", () => {
+  const prompt = sanitizeAiVideoPrompt("A premium product hero shot. Dibuatoleh ALVARETHBOT. Slow camera push-in.");
+  assert.match(prompt, /premium product hero shot/i);
+  assert.match(prompt, /slow camera push-in/i);
+  assert.doesNotMatch(prompt, /dibuat|alvarethbot/i);
+  assert.equal(sanitizeAiVideoPrompt("DibuatolehALVARETHBOT"), "");
 });
