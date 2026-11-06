@@ -35,6 +35,8 @@ test("routes status, history, guide, services, cancel and resend actions", () =>
   assert.equal(parseRemotionCommand("panduan").action, "guide");
   assert.equal(parseRemotionCommand("services").action, "services");
   assert.equal(parseRemotionCommand("services-menu").action, "servicesMenu");
+  assert.deepEqual(parseRemotionCommand("voice"), { action: "voice", argument: "" });
+  assert.deepEqual(parseRemotionCommand("voice provider edge-tts"), { action: "voice", argument: "provider edge-tts" });
   assert.equal(parseRemotionCommand("install-menu").action, "installMenu");
   assert.equal(parseRemotionCommand("hardware").action, "hardware");
   assert.deepEqual(parseRemotionCommand("services start voice"), { action: "services", argument: "start voice" });
@@ -70,12 +72,15 @@ test("formats job details without exposing file paths", () => {
 test("reports optional media providers as unconfigured without secrets", () => {
   const status = getRemotionProviderReadiness({}, () => false, {
     remotionInstalled: true,
-    ffmpegInstalled: true
+    ffmpegInstalled: true,
+    edgeTtsInstalled: true,
+    voiceSettings: { provider: "edge-tts", voice: "id-ID-GadisNeural" }
   });
   assert.equal(status.find(item => item.name === "Remotion + FFmpeg").configured, true);
   assert.equal(status.some(item => /Ollama|AI prompt planner/i.test(item.name + " " + item.detail)), false);
   assert.equal(status.find(item => item.name === "Voice-over + subtitle sinkron").configured, true);
-  assert.match(status.find(item => item.name === "Voice-over + subtitle sinkron").detail, /127.0.0.1:7861/);
+  assert.match(status.find(item => item.name === "Voice-over + subtitle sinkron").detail, /id-ID-GadisNeural/);
+  assert.equal(status.find(item => item.name === "Edge TTS online").configured, true);
   assert.equal(status.find(item => item.name === "AI video footage").configured, false);
   assert.equal(status.find(item => item.name === "Character reference image").configured, false);
 });
@@ -142,14 +147,14 @@ test("plugin rejects every non-owner action and binds prompt sessions to their i
   const replies=[], sent=[];
   const m={chat:'test-chat',sender:'owner-a',reply:async text=>replies.push(text)};
   const conn={sendMessage:async (...args)=>sent.push(args)};
-  for (const text of ['', 'generate', 'status', 'history', 'send id', 'services', 'services start voice', 'install', 'install status', 'guide', 'cancel', 'buatkan video kopi']) {
+  for (const text of ['', 'generate', 'status', 'history', 'send id', 'services', 'services start voice', 'install', 'install status', 'guide', 'voice', 'cancel', 'buatkan video kopi']) {
     await handler(m,{conn,text,isROwner:false});
     assert.match(replies.at(-1),/hanya untuk owner/);
   }
   assert.equal(sent.length,0);
   await handler(m,{conn,text:'',isROwner:true,usedPrefix:'!'});
   const mainSections = sent[0][1].nativeFlow[0].sections;
-  assert.deepEqual(mainSections.map(section => section.rows.length), [6, 3]);
+  assert.deepEqual(mainSections.map(section => section.rows.length), [6, 4]);
   const mainIds = mainSections.flatMap(section => section.rows.map(row => row.id));
   assert.deepEqual(mainIds, [
     "!remotion generate",
@@ -160,8 +165,14 @@ test("plugin rejects every non-owner action and binds prompt sessions to their i
     "!remotion cancel",
     "!remotion services-menu",
     "!remotion install-menu",
-    "!remotion hardware"
+    "!remotion hardware",
+    "!remotion voice"
   ]);
+  await handler(m,{conn,text:"voice",isROwner:true,usedPrefix:"!"});
+  const voiceIds = sent.at(-1)[1].nativeFlow[0].sections.flatMap(section=>section.rows.map(row=>row.id));
+  assert.ok(voiceIds.includes("!remotion voice provider edge-tts"));
+  assert.ok(voiceIds.includes("!remotion voice model id-ID-GadisNeural"));
+  assert.ok(voiceIds.includes("!remotion voice rate +10%"));
   await handler(m,{conn,text:"services-menu",isROwner:true,usedPrefix:"!"});
   const serviceIds = sent.at(-1)[1].nativeFlow[0].sections.flatMap(section=>section.rows.map(row=>row.id));
   assert.deepEqual(serviceIds, [
@@ -186,7 +197,7 @@ test("plugin rejects every non-owner action and binds prompt sessions to their i
   assert.equal(global.__alvarethRemotionSessions.has(m.chat),true);
   await handler(m,{conn,text:'cancel',isROwner:true});
   assert.equal(global.__alvarethRemotionSessions.has(m.chat),false);
-  for (const text of ['status','history','send','guide','install status','hardware']) await handler(m,{conn,text,isROwner:true});
+  for (const text of ['status','history','send','guide','install status','hardware','voice']) await handler(m,{conn,text,isROwner:true});
   assert.ok(replies.some(text=>/SPESIFIKASI SERVER REMOTION/.test(text)));
   assert.ok(replies.some(text=>/RAM:/.test(text)));
   assert.ok(replies.some(text=>/Belum ada proses instalasi/.test(text)));
