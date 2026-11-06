@@ -2,7 +2,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { parseStoryboardInput, normalizeVideoPlan } from '../video-studio/prompt/storyboard.js';
+import { normalizeVideoPlan } from '../video-studio/prompt/storyboard.js';
 import { compileVideoPlan } from '../video-studio/prompt/compile.js';
 import { prepareVideoMedia } from '../video-studio/media/pipeline.js';
 import { renderVideoProject } from '../video-studio/renderer.js';
@@ -12,9 +12,9 @@ const fixture = process.argv.includes('--fixture');
 const prompt = 'Buat video promosi kopi lokal untuk Reels, narasi bahasa Indonesia, gaya premium hangat, teks singkat dan efek suara halus, tanpa musik. Jangan buat klaim harga atau kesehatan.';
 const out = resolve(process.env.REMOTION_SMOKE_DIR || '/tmp/alvareth-remotion-smoke');
 await mkdir(out, {recursive:true});
-const plan = fixture ? normalizeVideoPlan({title:'Kopi Lokal',ratio:'9:16',fps:24,musicStyle:'none',scenes:[
-  {text:'Awali dengan aroma',subtext:'Kopi lokal • momen sederhana',durationSeconds:3,layout:'hero',motion:'scale-in',soundCue:'pop',background:'#17130F',accent:'#E4B77D',backgroundEffect:'orbs'},
-  {text:'Nikmati jedanya',subtext:'Temukan rasa pilihanmu',durationSeconds:3,layout:'outro',transition:'wipe',soundCue:'whoosh',background:'#17130F',accent:'#E4B77D',callouts:[{text:'Kopi lokal',position:'top-right',delaySeconds:1,durationSeconds:1}]}]},prompt) : await parseStoryboardInput(prompt);
+const plan = normalizeVideoPlan({title:'Kopi Lokal',ratio:'9:16',fps:24,musicStyle:'none',scenes:[
+  {text:'Awali dengan aroma',subtext:'Kopi lokal • momen sederhana',narration:'Kopi lokal menghadirkan aroma yang menemani momen sederhana.',durationSeconds:4,layout:'hero',motion:'scale-in',soundCue:'pop',background:'#17130F',accent:'#E4B77D',backgroundEffect:'orbs'},
+  {text:'Nikmati jedanya',subtext:'Temukan rasa pilihanmu',narration:'Nikmati jedanya, dan temukan rasa pilihanmu.',durationSeconds:4,layout:'outro',transition:'wipe',soundCue:'whoosh',background:'#17130F',accent:'#E4B77D',callouts:[{text:'Kopi lokal',position:'top-right',delaySeconds:1,durationSeconds:1}]}]},prompt);
 let project=compileVideoPlan(plan);
 if (!fixture) {
   process.env.VIDEO_STUDIO_VOICE_REQUIRED='true';
