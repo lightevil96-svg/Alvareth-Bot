@@ -43,7 +43,7 @@ export async function renderVideoProject(project, outputPath, onProgress = () =>
     captionPosition: project.captionPosition || "bottom"
   };
   const uses3D = project.scenes.some(scene => scene.visualType === "3d");
-  const requestedGl = String(process.env.VIDEO_STUDIO_WEBGL_RENDERER || "swangle").trim();
+  const requestedGl = String(process.env.VIDEO_STUDIO_WEBGL_RENDERER || "angle").trim();
   const supportedGl = ["angle", "angle-egl", "egl", "swiftshader", "swangle", "vulkan"];
   const chromiumOptions = uses3D ? { gl: supportedGl.includes(requestedGl) ? requestedGl : "swangle" } : {};
   const composition = await selectComposition({ serveUrl, id: "LightJurnalVideo", inputProps, chromiumOptions });
