@@ -33,12 +33,12 @@ def load_models():
         ALIGNER = StableTSAligner(model_name=alignment_path,
             device=os.getenv("VOXCPM_ALIGNMENT_DEVICE", "cpu"), language="id")
 
-def synthesize(text, language="id"):
+def synthesize(text, language="id", voice_description=None):
     import numpy as np
     import soundfile as sf
     if language not in ("id", "en"):
         language = "id"  # TTS infers language; this is only an alignment hint.
-    style = os.getenv("VOXCPM_VOICE_DESCRIPTION", "A warm clear narrator, natural pace and calm expression")
+    style = str(voice_description or os.getenv("VOXCPM_VOICE_DESCRIPTION", "A warm clear narrator, natural pace and calm expression"))[:240]
     started_at = time.monotonic()
     print(f"[VoxCPM2] Sintesis dimulai: {len(text)} karakter, device={os.getenv('VOXCPM_DEVICE', 'cpu')}, inference_timesteps=10.", flush=True)
     wav = np.asarray(MODEL.generate(text=f"({style}){text}", cfg_value=2.0,
@@ -111,7 +111,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(429, {"error": "VoxCPM2 busy; only one inference at a time"})
         try:
             print(f"[VoxCPM2] Request diterima: {len(text.strip())} karakter; mulai inferensi.", flush=True)
-            result = synthesize(text.strip(), body.get("language", "id"))
+            result = synthesize(text.strip(), body.get("language", "id"), body.get("voice_description"))
             try:
                 self.reply(200, result)
                 print(f"[VoxCPM2] WAV terkirim: {len(result.get('audio_base64', ''))} karakter base64.", flush=True)
