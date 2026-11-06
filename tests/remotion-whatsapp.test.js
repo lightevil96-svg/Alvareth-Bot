@@ -127,7 +127,8 @@ test("recognizes configured voice and ComfyUI workflow files", () => {
     VIDEO_STUDIO_COMFYUI_MUSIC_WORKFLOW_FILE: "/srv/workflows/music.json"
   }, path => ["/srv/workflows/video.json", "/srv/workflows/image.json", "/srv/workflows/music.json"].includes(path), {
     remotionInstalled: true,
-    ffmpegInstalled: true
+    ffmpegInstalled: true,
+    voiceSettings: { provider: "voxcpm2" }
   });
   assert.equal(status.find(item => item.name === "Voice-over + subtitle sinkron").configured, true);
   assert.equal(status.find(item => item.name === "AI video footage").configured, true);
