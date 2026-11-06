@@ -53,7 +53,7 @@ Alvareth memeriksa pembaruan GitHub sendiri setelah bot aktif; owner tidak perlu
 - `.update` tetap tersedia untuk pemeriksaan manual. Gunakan `AUTO_UPDATE_ENABLED=false` untuk menonaktifkan update otomatis, `AUTO_UPDATE_BRANCH` untuk mengganti branch, atau `AUTO_UPDATE_INTERVAL_MINUTES` untuk mengubah interval (default 10 menit).
 - `ALVARETH_GITHUB_TOKEN` opsional untuk meningkatkan batas GitHub API; simpan hanya di environment server, jangan pernah di-commit.
 
-Jika ada perubahan lokal pada file yang juga berubah di GitHub, updater akan mempertahankan file tersebut dan mencatat konflik di log, bukan menimpanya. Pembaruan otomatis membutuhkan izin tulis pada folder instalasi dan akses jaringan ke GitHub.
+Jika ada perubahan lokal pada file yang juga berubah di GitHub, updater normal akan mempertahankan file tersebut dan mencatat konflik, bukan menimpanya. Jika kamu memang ingin versi GitHub menggantikan file konflik, owner dapat menjalankan `.update force`. Sebelum menimpa atau menghapus konflik, updater membuat backup file asli beserta manifest SHA-256 di `ALVARETH_DATA_DIR/update-backups/` (default: `~/.alvareth-bot-data/update-backups/`). Mode paksa tetap hanya memproses file yang berubah pada commit GitHub; `.env`, sesi WhatsApp, database, `node_modules`, symlink, dan file di luar daftar perubahan tetap dilindungi. Backup wajib berhasil dibuat sebelum file proyek diubah. Pembaruan otomatis membutuhkan izin tulis pada folder instalasi dan akses jaringan ke GitHub.
 - `npm test` menjalankan pemeriksaan sintaks pada file entry dan beberapa modul utama. GitHub Actions juga menjalankan pemeriksaan sintaks terhadap seluruh file JavaScript.
 
 ## Menjalankan dengan PM2

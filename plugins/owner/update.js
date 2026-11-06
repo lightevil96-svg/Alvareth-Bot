@@ -497,6 +497,86 @@ async function writeUpdatedFile(destination, buffer, mode) {
   await fs.rename(tempPath, destination)
 }
 
+
+async function createConflictBackup({
+  root,
+  headSha,
+  baseSha,
+  items,
+  backupDirectory = path.join(STATE_DIRECTORY, "update-backups")
+}) {
+  if (!Array.isArray(items) || items.length === 0) return null;
+
+  const projectRoot = path.resolve(root);
+  const backupParent = path.resolve(backupDirectory);
+  const relativeBackupParent = path.relative(projectRoot, backupParent).split(path.sep).join("/");
+  const backupInsideProject = backupParent === projectRoot ||
+    (!relativeBackupParent.startsWith("../") && relativeBackupParent !== ".." && !path.isAbsolute(relativeBackupParent));
+  if (backupInsideProject && (backupParent === projectRoot || !protectedPath(relativeBackupParent))) {
+    throw new Error(
+      "Lokasi backup berada di jalur proyek yang dapat ditimpa updater. " +
+      "Atur ALVARETH_DATA_DIR ke folder di luar repository atau ke direktori data yang dilindungi."
+    );
+  }
+
+  await fs.mkdir(backupParent, { recursive: true, mode: 0o700 });
+  await fs.chmod(backupParent, 0o700).catch(() => {});
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const backupRoot = await fs.mkdtemp(
+    path.join(backupParent, timestamp + "-" + String(headSha).slice(0, 12) + "-")
+  );
+  await fs.chmod(backupRoot, 0o700).catch(() => {});
+
+  const manifest = {
+    schema: 1,
+    repository: REPOSITORY,
+    branch: BRANCH,
+    baseSha,
+    headSha,
+    createdAt: new Date().toISOString(),
+    fileCount: 0,
+    files: []
+  };
+
+  try {
+    for (const item of items) {
+      const rel = normalizeRepoPath(item.path);
+      if (!rel || protectedPath(rel)) {
+        throw new Error("Path backup tidak valid atau termasuk file terlindungi: " + String(item.path));
+      }
+      if (!Buffer.isBuffer(item.buffer)) {
+        throw new Error("Isi file lokal untuk backup tidak tersedia: " + rel);
+      }
+
+      const backupPath = path.resolve(backupRoot, "files", ...rel.split("/"));
+      if (!backupPath.startsWith(path.resolve(backupRoot) + path.sep)) {
+        throw new Error("Path backup keluar dari direktori backup: " + rel);
+      }
+      await fs.mkdir(path.dirname(backupPath), { recursive: true, mode: 0o700 });
+      await fs.writeFile(backupPath, item.buffer, { flag: "wx", mode: 0o600 });
+      manifest.files.push({
+        path: rel,
+        backupPath: path.relative(backupRoot, backupPath).split(path.sep).join("/"),
+        sha256: sha256(item.buffer),
+        originalMode: Number.isInteger(item.mode) ? item.mode : 0o644,
+        reason: String(item.reason || "local-conflict")
+      });
+    }
+
+    manifest.fileCount = manifest.files.length;
+    await fs.writeFile(
+      path.join(backupRoot, "manifest.json"),
+      JSON.stringify(manifest, null, 2) + "\n",
+      { flag: "wx", mode: 0o600 }
+    );
+    return backupRoot;
+  } catch (error) {
+    await fs.rm(backupRoot, { recursive: true, force: true }).catch(() => {});
+    throw new Error("Backup perubahan lokal gagal dibuat; tidak ada file proyek yang ditimpa. " +
+      String(error?.message || error));
+  }
+}
+
 function buildChangedPathList(files) {
   const changes = new Map()
   for (const file of files) {
@@ -517,8 +597,26 @@ function buildChangedPathList(files) {
   return [...changes.values()]
 }
 
-async function handleUpdate(m, { isOwner }) {
-  if (!isOwner) throw '❌ Perintah ini khusus owner bot.'
+
+function resolveUpdateMode({ text, args } = {}) {
+  const requestedMode = String(
+    Array.isArray(args) && args.length ? args[0] : (text || "")
+  ).trim().toLowerCase();
+  return {
+    requestedMode,
+    forceMode: requestedMode === "force",
+    valid: !requestedMode || requestedMode === "force"
+  };
+}
+
+async function handleUpdate(m, context = {}) {
+  const { isOwner } = context;
+  if (!isOwner) throw '❌ Perintah ini khusus owner bot.';
+  const updateMode = resolveUpdateMode(context);
+  if (!updateMode.valid) {
+    return m.reply("Perintah update:\n• .update — update aman, file lokal yang berubah dipertahankan\n• .update force — backup lalu timpa hanya file konflik yang berubah di GitHub");
+  }
+  const forceMode = updateMode.forceMode;
   if (global.__alvarethUpdateRunning) {
     return m.reply('⏳ Update sedang berjalan, tunggu sampai selesai.')
   }
@@ -562,6 +660,8 @@ async function handleUpdate(m, { isOwner }) {
     const plans = []
     const conflicts = []
     const ignored = []
+    const forcedBackups = []
+    const forcedPaths = []
     let dependencyFilesChanged = false
 
     // Fetch baseline versions before writing anything. A file is replaced only
@@ -599,7 +699,14 @@ async function handleUpdate(m, { isOwner }) {
 
       const local = await inspectLocalFile(root, rel)
       if (local.unsafe) {
-        conflicts.push(rel + ' (tujuan berupa symlink atau bukan file biasa)')
+        const reason = rel + ' (tujuan berupa symlink atau bukan file biasa)'
+        if (forceMode) {
+          throw new Error(
+            'Mode paksa dihentikan karena menemukan path yang tidak aman: ' + reason +
+            '. Path ini tidak akan diikuti atau ditimpa.'
+          )
+        }
+        conflicts.push(reason)
         continue
       }
 
@@ -616,7 +723,18 @@ async function handleUpdate(m, { isOwner }) {
       if (change.action === 'delete') {
         if (!local.exists) continue
         if (!baseBuffer || localHash !== baseHash) {
-          conflicts.push(rel + ' (file lokal berubah; tidak dihapus)')
+          if (forceMode) {
+            forcedBackups.push({
+              path: rel,
+              buffer: local.buffer,
+              mode: local.mode,
+              reason: 'upstream-delete-conflicts-with-local'
+            })
+            forcedPaths.push(rel)
+            plans.push({ action: 'delete', path: rel, destination: local.destination })
+          } else {
+            conflicts.push(rel + ' (file lokal berubah; tidak dihapus)')
+          }
           continue
         }
         plans.push({ action: 'delete', path: rel, destination: local.destination })
@@ -624,10 +742,11 @@ async function handleUpdate(m, { isOwner }) {
       }
 
       if (!local.exists) {
-        if (baseBuffer) {
+        if (baseBuffer && !forceMode) {
           conflicts.push(rel + ' (file lokal yang ada pada baseline telah hilang; tidak dibuat ulang)')
           continue
         }
+        if (baseBuffer && forceMode) forcedPaths.push(rel + ' (dipulihkan; file lokal sebelumnya tidak ada)')
         plans.push({
           action: 'write',
           path: rel,
@@ -640,8 +759,17 @@ async function handleUpdate(m, { isOwner }) {
       }
 
       if (!baseBuffer || localHash !== baseHash) {
-        conflicts.push(rel + ' (ada perubahan lokal; dipertahankan)')
-        continue
+        if (!forceMode) {
+          conflicts.push(rel + ' (ada perubahan lokal; dipertahankan)')
+          continue
+        }
+        forcedBackups.push({
+          path: rel,
+          buffer: local.buffer,
+          mode: local.mode,
+          reason: baseBuffer ? 'local-file-modified-since-baseline' : 'local-file-collides-with-upstream-addition'
+        })
+        forcedPaths.push(rel)
       }
 
       plans.push({
@@ -652,6 +780,18 @@ async function handleUpdate(m, { isOwner }) {
         mode: local.mode || (remoteEntry.unixPermissions ? (remoteEntry.unixPermissions & 0o777) : 0o644)
       })
       if (isDependencyFile(rel)) dependencyFilesChanged = true
+    }
+
+    // Create and verify a complete backup before changing any conflicted local file.
+    // The backup directory is outside replaceable paths (or inside the updater-protected data directory) and remains available for manual recovery.
+    let backupDirectory = null
+    if (forcedBackups.length) {
+      backupDirectory = await createConflictBackup({
+        root,
+        headSha,
+        baseSha,
+        items: forcedBackups
+      })
     }
 
     // Commit only paths recorded in the GitHub compare result. Unrelated files
@@ -692,6 +832,20 @@ async function handleUpdate(m, { isOwner }) {
     await saveState(conflicts.length ? baseSha : headSha)
 
     const sections = []
+    if (forceMode) {
+      sections.push(
+        'Mode paksa aktif: hanya file yang berubah pada commit GitHub diproses; file terlindungi dan file di luar daftar perubahan tidak disentuh.'
+      )
+      if (forcedPaths.length) {
+        sections.push('Disinkronkan paksa (' + forcedPaths.length + '):\n' +
+          forcedPaths.slice(0, 25).map(file => '• ' + file).join('\n'))
+      }
+      if (backupDirectory) {
+        sections.push('Backup file lokal tersimpan di:\n' + backupDirectory)
+      } else {
+        sections.push('Tidak ada konflik lokal yang memerlukan backup.')
+      }
+    }
     if (plans.some(plan => plan.action === 'write')) {
       const written = plans.filter(plan => plan.action === 'write').map(plan => plan.path)
       sections.push('Diubah/ditambahkan (' + written.length + '):\n' +
@@ -715,10 +869,13 @@ async function handleUpdate(m, { isOwner }) {
     const restartText = restartNeeded
       ? '\n\n🔄 File yang berhasil diterapkan sudah siap. Bot akan restart sekarang.'
       : '\n\nTidak ada file yang ditulis ulang.'
+    const safetyText = forceMode
+      ? '\n\n🔒 Mode paksa hanya menimpa/menghapus file yang tercatat berubah pada commit GitHub setelah backup. .env, sesi WhatsApp, database, node_modules, dan file di luar daftar perubahan tetap dilindungi.'
+      : '\n\n🔒 Hanya file yang berubah pada commit GitHub yang diproses. File lokal yang berbeda dari baseline tidak ditimpa; sesi, .env, database, node_modules, dan file lain di luar daftar perubahan tetap dilindungi.'
     await m.reply(
-      '✅ Pemeriksaan update selesai.\n\n' + summary +
+      (forceMode ? '✅ Pembaruan paksa selesai.\n\n' : '✅ Pemeriksaan update selesai.\n\n') + summary +
       (totalListed > 40 ? '\n...daftar dipotong.' : '') +
-      '\n\n🔒 Hanya file yang berubah pada commit GitHub yang diproses. File lokal yang berbeda dari baseline tidak ditimpa; sesi, .env, database, node_modules, dan file lain di luar daftar perubahan tetap dilindungi.' +
+      safetyText +
       restartText
     )
 
@@ -740,7 +897,7 @@ async function handleUpdate(m, { isOwner }) {
 }
 
 const handler = handleUpdate
-handler.help = ['update']
+handler.help = ['update', 'update force']
 handler.tags = ['owner']
 handler.command = /^update$/i
 handler.owner = true

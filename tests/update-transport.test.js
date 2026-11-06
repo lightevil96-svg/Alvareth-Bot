@@ -4,6 +4,8 @@ import { readFile, mkdtemp, rm, writeFile, mkdir, rename, unlink } from 'node:fs
 import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import * as fs from 'node:fs/promises'
+import crypto from 'node:crypto'
 
 const source = await readFile(new URL('../plugins/owner/update.js', import.meta.url), 'utf8')
 
@@ -143,4 +145,124 @@ test('public API authorization is optional and no token is hardcoded', () => {
   assert.match(source, /if \(!shouldUseGitFallback\(error\)\) throw error/)
   assert.match(source, /const tempDir = await fs\.mkdtemp/)
   assert.match(source, /await fs\.rm\(tempDir, \{ recursive: true, force: true \}\)/)
+})
+
+
+test('force-update backup stores local conflict bytes and a recovery manifest before overwrite', async t => {
+  const sandbox = await mkdtemp(path.join(tmpdir(), 'alvareth-force-backup-'))
+  const projectRoot = path.join(sandbox, 'project')
+  const backupParent = path.join(sandbox, 'persistent-data', 'update-backups')
+  const localPath = path.join(projectRoot, 'plugins', 'owner', 'remotion.js')
+  await mkdir(path.dirname(localPath), { recursive: true })
+  const localBytes = Buffer.from('local-only implementation\n')
+  await writeFile(localPath, localBytes)
+  t.after(() => rm(sandbox, { recursive: true, force: true }))
+
+  const normalizeCode = extract('function normalizeRepoPath(', '\nasync function fetchJson(')
+  const protectedCode = extract('function protectedPath(', '\nfunction normalizeRepoPath(')
+  const backupCode = extract('async function createConflictBackup(', '\nfunction buildChangedPathList(')
+  const normalizeRepoPath = new Function('path', protectedCode + '\n' + normalizeCode + '\nreturn normalizeRepoPath')(path)
+  const protectedPath = new Function(protectedCode + '\nreturn protectedPath')()
+  const createBackup = new Function('deps', [
+    'const { fs, path, STATE_DIRECTORY, REPOSITORY, BRANCH, sha256, normalizeRepoPath, protectedPath } = deps',
+    backupCode,
+    'return createConflictBackup'
+  ].join('\n'))({
+    fs,
+    path,
+    STATE_DIRECTORY: path.join(sandbox, 'default-state'),
+    REPOSITORY: 'lightevil96-svg/Alvareth-Bot',
+    BRANCH: 'main',
+    sha256: buffer => crypto.createHash('sha256').update(buffer).digest('hex'),
+    normalizeRepoPath,
+    protectedPath
+  })
+
+  const backupRoot = await createBackup({
+    root: projectRoot,
+    headSha: 'b'.repeat(40),
+    baseSha: 'a'.repeat(40),
+    backupDirectory: backupParent,
+    items: [{
+      path: 'plugins/owner/remotion.js',
+      buffer: localBytes,
+      mode: 0o644,
+      reason: 'local-file-modified-since-baseline'
+    }]
+  })
+
+  assert.equal(
+    await readFile(path.join(backupRoot, 'files', 'plugins', 'owner', 'remotion.js'), 'utf8'),
+    'local-only implementation\n'
+  )
+  const manifest = JSON.parse(await readFile(path.join(backupRoot, 'manifest.json'), 'utf8'))
+  assert.equal(manifest.fileCount, 1)
+  assert.equal(manifest.files[0].path, 'plugins/owner/remotion.js')
+  assert.equal(manifest.files[0].reason, 'local-file-modified-since-baseline')
+  assert.equal(
+    manifest.files[0].sha256,
+    crypto.createHash('sha256').update(localBytes).digest('hex')
+  )
+  assert.equal(await readFile(localPath, 'utf8'), 'local-only implementation\n')
+  assert.ok(!backupRoot.startsWith(projectRoot + path.sep))
+})
+
+test('force-update backup may live in the protected bot data directory but not a replaceable project path', async t => {
+  const sandbox = await mkdtemp(path.join(tmpdir(), 'alvareth-force-location-'))
+  const projectRoot = path.join(sandbox, 'project')
+  await mkdir(projectRoot, { recursive: true })
+  t.after(() => rm(sandbox, { recursive: true, force: true }))
+
+  const normalizeCode = extract('function normalizeRepoPath(', '\nasync function fetchJson(')
+  const protectedCode = extract('function protectedPath(', '\nfunction normalizeRepoPath(')
+  const backupCode = extract('async function createConflictBackup(', '\nfunction buildChangedPathList(')
+  const normalizeRepoPath = new Function('path', protectedCode + '\n' + normalizeCode + '\nreturn normalizeRepoPath')(path)
+  const protectedPath = new Function(protectedCode + '\nreturn protectedPath')()
+  const createBackup = new Function('deps', [
+    'const { fs, path, STATE_DIRECTORY, REPOSITORY, BRANCH, sha256, normalizeRepoPath, protectedPath } = deps',
+    backupCode,
+    'return createConflictBackup'
+  ].join('\n'))({
+    fs, path,
+    STATE_DIRECTORY: path.join(projectRoot, '.alvareth-bot-data'),
+    REPOSITORY: 'lightevil96-svg/Alvareth-Bot',
+    BRANCH: 'main',
+    sha256: buffer => crypto.createHash('sha256').update(buffer).digest('hex'),
+    normalizeRepoPath,
+    protectedPath
+  })
+
+  const bytes = Buffer.from('preserve this')
+  const protectedBackup = await createBackup({
+    root: projectRoot,
+    headSha: 'c'.repeat(40),
+    baseSha: 'b'.repeat(40),
+    items: [{ path: 'plugins/owner/update.js', buffer: bytes, mode: 0o644 }]
+  })
+  assert.ok(protectedBackup.startsWith(path.join(projectRoot, '.alvareth-bot-data')))
+
+  await assert.rejects(
+    createBackup({
+      root: projectRoot,
+      headSha: 'd'.repeat(40),
+      baseSha: 'c'.repeat(40),
+      backupDirectory: path.join(projectRoot, 'src', 'backup'),
+      items: [{ path: 'plugins/owner/update.js', buffer: bytes, mode: 0o644 }]
+    }),
+    /Lokasi backup berada di jalur proyek/
+  )
+})
+
+
+test('manual updater accepts safe mode and explicit force mode only', () => {
+  const modeCode = extract('function resolveUpdateMode(', '\nasync function handleUpdate(')
+  const resolveUpdateMode = new Function(modeCode + '\nreturn resolveUpdateMode')()
+  assert.deepEqual(resolveUpdateMode({ args: [], text: '' }), {
+    requestedMode: '', forceMode: false, valid: true
+  })
+  assert.deepEqual(resolveUpdateMode({ args: ['force'], text: 'force' }), {
+    requestedMode: 'force', forceMode: true, valid: true
+  })
+  assert.equal(resolveUpdateMode({ args: ['FORCE'] }).forceMode, true)
+  assert.equal(resolveUpdateMode({ args: ['hard-reset'] }).valid, false)
 })

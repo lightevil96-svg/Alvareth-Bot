@@ -1,3 +1,10 @@
+## 2026-11-06 — Owner-only forced update with local conflict backups
+
+- Added `.update force` for explicit synchronization when an upstream-changed file conflicts with local edits.
+- Before overwriting or deleting conflicting files, the updater copies each original file into a timestamped backup directory under `ALVARETH_DATA_DIR/update-backups/` and writes a manifest with original path, mode, reason, and SHA-256.
+- Forced updates still process only paths present in the GitHub commit comparison. `.env`, WhatsApp sessions, databases, `node_modules`, unsafe symlinks, and unrelated local files remain protected.
+- Backup creation is mandatory and must complete before any project file is changed. If backup storage is inside the project, it must be under an updater-protected data path; otherwise the force operation aborts.
+- Normal `.update` behavior remains conservative and unchanged: conflicting local files are preserved.
 ## 2026-11-06 — Owner WhatsApp installer for local Ollama/Qwen and VoxCPM2
 
 - **Gap found:** a rootless Linux bootstrap script already existed, but it was only documented as a shell command. No WhatsApp action invoked it. `.remotion services` was intentionally status-only; it did not provision binaries, Python packages, or model weights.
