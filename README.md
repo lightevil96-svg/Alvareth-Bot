@@ -166,6 +166,25 @@ Repository ini mewarisi struktur dan sebagian kode dari source sebelumnya. Perta
 Sebelum mengubah kode, AI/developer wajib membaca [`AGENTS.md`](AGENTS.md), [`AI_CONTEXT.md`](AI_CONTEXT.md), dan [`docs/AI_CHANGELOG.md`](docs/AI_CHANGELOG.md). Setiap perubahan bermakna harus memperbarui changelog dan ringkasan terbaru di `AI_CONTEXT.md` dalam PR yang sama. Ikuti aturan keamanan, jalankan tes yang relevan, dan laporkan dengan jujur apa yang sudah serta belum diverifikasi.
 
 
+
+
+## Hermes Agent — maintenance assistant for WhatsApp owner
+
+Alvareth can connect to the Nous Research Hermes Agent through its local CLI. This lets the owner audit the bot, ask repository-aware technical questions, generate reviewable code patches, and run the project test suite without opening an editor for every investigation.
+
+- `.hermes` opens the maintenance menu.
+- `.hermes audit` audits plugins, routing, security, and reliability.
+- `.hermes ask <question>` asks about the current source code.
+- `.hermes patch <path> <instruction>` prepares a unified diff for review.
+- `.hermes apply <id>` applies an approved patch after path, local-change, backup, and syntax checks.
+- `.hermes undo <id>` reverses an applied patch when its context still matches.
+- `.hermes verify` runs the npm test suite.
+
+Hermes must be installed and configured separately in the same server/container. The bridge reuses Alvareth's existing Baileys connection; do not pair a second Hermes WhatsApp gateway to the same number. The agent receives file/web/search tools but no terminal or shell access, and its patch writes are confined to a temporary workspace until the owner explicitly applies a reviewed patch.
+
+Setup, environment variables, limitations, and security details: [docs/HERMES_AGENT.md](docs/HERMES_AGENT.md).
+
+
 ## Remotion Video Studio — WhatsApp-only
 
 Alvareth Video Studio dioperasikan melalui WhatsApp oleh owner. Produksi berjalan di server bot sendiri dan MP4 dikirim kembali ke chat asal. Tidak ada kebutuhan website render eksternal, Cloudflare Tunnel, atau token tunnel/API untuk alur ini.
