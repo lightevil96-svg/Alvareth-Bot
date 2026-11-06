@@ -93,12 +93,12 @@ export async function prepareAiFootage(project, jobId) {
         identity ? "FIXED CHARACTER IDENTITY (do not alter): " + identity : "",
         visualDirection ? "VISUAL STYLE: " + visualDirection : "",
         "SCENE ACTION AND SHOT: " + scenePrompt,
-        "Preserve the same character design and visual style. No subtitles, logos, or watermarks."
+        "Preserve the same character design and visual style. Render clean visual footage only; no readable text, typography, letters, numbers, labels, captions, logos, signatures, credits, or watermarks. All titles and brand credits are added later as Remotion overlays."
       ].filter(Boolean).join("\n"), 1800);
       const result = await generateComfyAsset({
         kind: "video",
         prompt,
-        negativePrompt: "text, subtitles, watermark, logo, distorted faces, extra limbs, low quality, flicker, abrupt camera shake",
+        negativePrompt: "text, typography, letters, words, numbers, labels, captions, signatures, credits, brand names, logo, watermark, UI, distorted faces, extra limbs, low quality, flicker, abrupt camera shake",
         jobId,
         filename: "ai-video-" + String(item.index + 1).padStart(2, "0"),
         ratio: project.ratio,
