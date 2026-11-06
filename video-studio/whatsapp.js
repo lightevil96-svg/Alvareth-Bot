@@ -74,12 +74,15 @@ export function getRemotionProviderReadiness(env = {}, fileExists = () => false,
   const edgeTtsInstalled = runtime.edgeTtsInstalled === true;
   const voiceSettings = runtime.voiceSettings || { provider: "edge-tts", voice: "id-ID-GadisNeural" };
   const activeProvider = voiceSettings.provider === "voxcpm2" ? "voxcpm2" : "edge-tts";
-  const voiceReady = activeProvider === "edge-tts" ? edgeTtsInstalled : Boolean(voiceUrl);
+  const voxCPMInstalled = runtime.voxCPMInstalled === true;
+  const voiceReady = activeProvider === "edge-tts" ? edgeTtsInstalled : voxCPMInstalled;
   const voiceDetail = activeProvider === "edge-tts"
     ? (edgeTtsInstalled
       ? "Provider aktif: Edge TTS online; model " + String(voiceSettings.voice || "id-ID-GadisNeural") + ". Tidak perlu memuat model lokal."
       : "Provider aktif: Edge TTS online, tetapi paket edge-tts belum terpasang. Jalankan .remotion voice install.")
-    : "Provider aktif: VoxCPM2 lokal di " + voiceUrl + "; model 2B dapat lambat pada CPU.";
+    : (voxCPMInstalled
+      ? "Provider aktif: VoxCPM2 lokal di " + voiceUrl + "; model 2B dapat lambat pada CPU."
+      : "Provider aktif: VoxCPM2 lokal, tetapi runtime atau bobot model belum terpasang. Jalankan .remotion install.");
 
   const videoWorkflow = String(env.VIDEO_STUDIO_COMFYUI_VIDEO_WORKFLOW_FILE || "").trim();
   const imageWorkflow = String(env.VIDEO_STUDIO_COMFYUI_IMAGE_WORKFLOW_FILE || "").trim();
@@ -170,8 +173,10 @@ export function getRemotionProviderReadiness(env = {}, fileExists = () => false,
     },
     {
       name: "VoxCPM2 lokal (opsional)",
-      configured: Boolean(voiceUrl),
-      detail: "Endpoint lokal: " + voiceUrl + ". Dipakai hanya jika provider dipilih ke VoxCPM2."
+      configured: voxCPMInstalled,
+      detail: voxCPMInstalled
+        ? "Endpoint lokal: " + voiceUrl + ". Dipakai hanya jika provider dipilih ke VoxCPM2."
+        : "Runtime atau bobot VoxCPM2 belum terdeteksi; opsi lokal belum siap."
     },
     {
       name: "AI video footage",
