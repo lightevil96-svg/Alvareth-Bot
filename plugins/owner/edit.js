@@ -116,6 +116,15 @@ async function receiveVideo(m, conn, payloadOverride = null) {
   if (!payload) return null;
   const maxBytesRaw = Number(process.env.ALVARETH_EDIT_MAX_INPUT_BYTES || DEFAULT_MAX_INPUT_BYTES);
   const maxBytes = Number.isSafeInteger(maxBytesRaw) && maxBytesRaw > 0 ? maxBytesRaw : DEFAULT_MAX_INPUT_BYTES;
+  const declaredSizeRaw = payload.info.media?.fileLength ?? payload.info.media?.fileLengthBytes ?? payload.info.media?.fileLengthInBytes;
+  const declaredSize = typeof declaredSizeRaw?.toNumber === "function" ? declaredSizeRaw.toNumber() : Number(declaredSizeRaw);
+  if (Number.isFinite(declaredSize) && declaredSize > maxBytes) {
+    throw new Error("Ukuran video yang dilaporkan WhatsApp melebihi batas .edit sebesar " + (maxBytes / 1024 / 1024).toFixed(0) + " MB.");
+  }
+  const declaredDuration = Number(payload.info.media?.seconds);
+  if (Number.isFinite(declaredDuration) && declaredDuration > 900) {
+    throw new Error("Durasi video sumber melebihi batas .edit sebesar 15 menit.");
+  }
   const buffer = await downloadVideoPayload(m, conn, payload);
   if (buffer.length > maxBytes) {
     throw new Error("Ukuran video " + (buffer.length / 1024 / 1024).toFixed(1) +
@@ -141,6 +150,10 @@ async function receiveVideo(m, conn, payloadOverride = null) {
     settings: normalizeEditSettings({})
   };
   sessions.set(key, session);
+  session.expiryTimer = setTimeout(() => {
+    if (sessions.get(key) === session) void clearSession(key);
+  }, SESSION_TTL_MS + 1000);
+  session.expiryTimer.unref?.();
   console.log("[EDIT] Video diterima", JSON.stringify({
     chat: session.chat,
     sender: session.sender,

@@ -176,3 +176,72 @@ test("renders and fully decodes a real MP4 fixture with manual cuts and captions
   assert.ok(Math.abs(result.duration - 3) < 0.45);
   assert.ok((await stat(outputPath)).size > 0);
 });
+
+
+test("queue copies its source before returning, so session replacement cannot break an active render", async t => {
+  const { spawnSync, execFile } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  const { mkdtemp, mkdir, rm, stat } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const path = await import("node:path");
+  const check = spawnSync("ffmpeg", ["-version"], { stdio: "ignore" });
+  const probe = spawnSync("ffprobe", ["-version"], { stdio: "ignore" });
+  if (check.status !== 0 || probe.status !== 0) return t.skip("FFmpeg/FFprobe tidak tersedia pada environment ini.");
+
+  const run = promisify(execFile);
+  const directory = await mkdtemp(path.join(tmpdir(), "alvareth-edit-queue-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const sourcePath = path.join(directory, "source.mp4");
+  await mkdir(directory, { recursive: true });
+  await run("ffmpeg", [
+    "-hide_banner", "-y",
+    "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24",
+    "-f", "lavfi", "-i", "sine=frequency=330:sample_rate=48000",
+    "-t", "2",
+    "-c:v", "libx264", "-pix_fmt", "yuv420p",
+    "-c:a", "aac",
+    sourcePath
+  ], { timeout: 60000, maxBuffer: 1024 * 1024 });
+
+  const { enqueueEditJob, getEditOutput } = await import("../video-edit/queue.js");
+  const plan = createDefaultEditPlan({ ratio: "16:9", maxDurationSeconds: 10, removeSilence: false });
+  plan.output.resolution = "720p";
+  plan.output.fps = 24;
+  plan.edit.fadeInSeconds = 0;
+  plan.edit.fadeOutSeconds = 0;
+
+  let resolveComplete;
+  let rejectFailed;
+  const finished = new Promise((resolve, reject) => {
+    resolveComplete = resolve;
+    rejectFailed = reject;
+  });
+  const job = await enqueueEditJob({
+    sourcePath,
+    sender: "queue-test-owner",
+    chat: "queue-test-chat",
+    plan,
+    settings: {},
+    onComplete: resolveComplete,
+    onError: current => rejectFailed(new Error(current.error || "Queue render failed"))
+  });
+  await rm(sourcePath, { force: true });
+  let timeout;
+  try {
+    const current = await Promise.race([
+      finished,
+      new Promise((_, reject) => {
+        timeout = setTimeout(() => reject(new Error("Queue render timed out in regression test.")), 60000);
+        timeout.unref?.();
+      })
+    ]);
+    assert.equal(current.id, job.id);
+    assert.equal(current.status, "completed");
+    const output = await getEditOutput(job.id, "queue-test-owner");
+    assert.ok(output);
+    assert.ok((await stat(output.path)).size > 0);
+    await rm(output.path, { force: true });
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+});
