@@ -71,7 +71,7 @@ export function mountVideoStudioApi(app) {
       const plan = await planVideoPrompt(req.body && req.body.prompt)
       return res.json({ plan })
     } catch (error) {
-      return res.status(Number(error && error.statusCode) || 502).json({ error: error && error.message || "AI gagal menyusun storyboard." })
+      return res.status(Number(error && error.statusCode) || 502).json({ error: error && error.message || "Storyboard JSON gagal divalidasi." })
     }
   })
   app.post("/api/video-studio/jobs", (req, res) => {
