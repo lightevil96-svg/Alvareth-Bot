@@ -380,10 +380,10 @@ async function installEdgeTts(m) {
   const uv = uvProbe.status === 0 ? "uv" : localUv;
   const useUv = uvProbe.status === 0 || existsSync(localUv);
   const result = useUv
-    ? spawnSync(uv, ["pip", "install", "--python", config.pythonPath, "edge-tts==7.2.7"], {
+    ? spawnSync(uv, ["pip", "install", "--python", config.pythonPath, "edge-tts==7.3.1"], {
         encoding: "utf8", timeout: 180000, maxBuffer: 2 * 1024 * 1024, windowsHide: true
       })
-    : spawnSync(config.pythonPath, ["-m", "pip", "install", "edge-tts==7.2.7"], {
+    : spawnSync(config.pythonPath, ["-m", "pip", "install", "edge-tts==7.3.1"], {
         encoding: "utf8", timeout: 180000, maxBuffer: 2 * 1024 * 1024, windowsHide: true
       });
   if (result.error || result.status !== 0) {
