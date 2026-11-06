@@ -27,7 +27,7 @@ import {
   getRemotionProviderReadiness
 } from "../../video-studio/whatsapp.js";
 
-const MAX_PROMPT_CHARS = 6000;
+const MAX_PROMPT_CHARS = 24000;
 const DEFAULT_SESSION_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_POLL_INTERVAL_MS = 6000;
 const DEFAULT_WATCH_TIMEOUT_MS = 30 * 60 * 1000;
@@ -36,7 +36,7 @@ const watchers = global.__alvarethRemotionWatchers || (global.__alvarethRemotion
 
 startVideoQueue();
 
-const planning = global.__alvarethRemotionPlanning || (global.__alvarethRemotionPlanning = new Set());
+const preparing = global.__alvarethRemotionPreparing || (global.__alvarethRemotionPreparing = new Set());
 
 function positiveInt(value, fallback, min, max) {
   const parsed = Number(value);
@@ -200,18 +200,18 @@ async function showMenu(m, conn, usedPrefix = ".") {
     {
       title: "Produksi video",
       rows: [
-        remotionMenuRow(usedPrefix, "🎬 Buat video", "Kirim brief; AI menyusun produksi.", "generate"),
+        remotionMenuRow(usedPrefix, "🎬 Buat video", "Tempel storyboard JSON yang disusun ChatGPT.", "generate"),
         remotionMenuRow(usedPrefix, "📊 Status render", "Lihat antrean dan progres.", "status"),
         remotionMenuRow(usedPrefix, "📁 Riwayat video", "Lihat pekerjaan dan ID hasil.", "history"),
         remotionMenuRow(usedPrefix, "📤 Kirim MP4 terakhir", "Kirim ulang hasil yang selesai.", "send"),
-        remotionMenuRow(usedPrefix, "🧠 Panduan prompt", "Lihat contoh brief video.", "guide"),
+        remotionMenuRow(usedPrefix, "🧠 Panduan prompt", "Panduan ChatGPT membuat JSON storyboard yang valid.", "guide"),
         remotionMenuRow(usedPrefix, "✖️ Batalkan input", "Batalkan sesi prompt yang menunggu.", "cancel")
       ]
     },
     {
       title: "Engine & layanan lokal",
       rows: [
-        remotionMenuRow(usedPrefix, "⚙️ Kelola layanan", "Cek status, mulai VoxCPM2 dan Ollama.", "services-menu"),
+        remotionMenuRow(usedPrefix, "⚙️ Kelola layanan", "Cek status dan mulai VoxCPM2.", "services-menu"),
         remotionMenuRow(usedPrefix, "⬇️ Instalasi engine", "Pilih GPU otomatis, CPU, atau cek progres.", "install-menu"),
         remotionMenuRow(usedPrefix, "🖥️ Spesifikasi server", "Periksa CPU, RAM, storage, dan GPU.", "hardware")
       ]
@@ -234,7 +234,6 @@ async function showMenu(m, conn, usedPrefix = ".") {
     "*Layanan:*",
     "• " + usedPrefix + "remotion services",
     "• " + usedPrefix + "remotion services start voice",
-    "• " + usedPrefix + "remotion services start planner",
     "",
     "*Instalasi:*",
     "• " + usedPrefix + "remotion install",
@@ -244,7 +243,7 @@ async function showMenu(m, conn, usedPrefix = ".") {
 
   return sendNativeMenu(m, conn, {
     title: "Remotion Video Studio",
-    description: "Akses produksi video, riwayat, pengiriman MP4, layanan AI lokal, dan instalasi engine dari satu menu.",
+    description: "Akses produksi video, riwayat, pengiriman MP4, layanan lokal, diagnostik server, dan instalasi engine dari satu menu.",
     sections,
     fallback
   });
@@ -254,9 +253,8 @@ async function showServicesMenu(m, conn, usedPrefix = ".") {
   const sections = [{
     title: "Layanan lokal",
     rows: [
-      remotionMenuRow(usedPrefix, "🔎 Periksa semua layanan", "Cek Ollama, VoxCPM2, ComfyUI dan workflow.", "services"),
+      remotionMenuRow(usedPrefix, "🔎 Periksa semua layanan", "Cek Remotion, VoxCPM2, ComfyUI dan workflow.", "services"),
       remotionMenuRow(usedPrefix, "🗣️ Mulai VoxCPM2", "Aktifkan voice-over lokal dan tunggu model siap.", "services start voice"),
-      remotionMenuRow(usedPrefix, "🧠 Mulai Ollama", "Aktifkan model planner Qwen lokal.", "services start planner"),
       remotionMenuRow(usedPrefix, "↩️ Kembali ke menu", "Kembali ke menu utama Remotion.")
     ]
   }];
@@ -264,17 +262,15 @@ async function showServicesMenu(m, conn, usedPrefix = ".") {
     "⚙️ *LAYANAN REMOTION*",
     "• " + usedPrefix + "remotion services",
     "• " + usedPrefix + "remotion services start voice",
-    "• " + usedPrefix + "remotion services start planner",
     "• " + usedPrefix + "remotion"
   ].join("\n");
   return sendNativeMenu(m, conn, {
     title: "Layanan lokal",
-    description: "Pilih pemeriksaan atau nyalakan service lokal. Memulai VoxCPM2 dapat membutuhkan waktu untuk memuat model.",
+    description: "Pilih pemeriksaan atau nyalakan VoxCPM2. Memulai VoxCPM2 dapat membutuhkan waktu untuk memuat model.",
     sections,
     fallback
   });
 }
-
 async function showInstallMenu(m, conn, usedPrefix = ".") {
   const sections = [{
     title: "Instalasi engine lokal",
@@ -306,16 +302,16 @@ function activeJobs() {
 async function startPromptJob(prompt, chat, fallbackConn) {
   const cleanPrompt = String(prompt || "").trim();
   if (cleanPrompt.length < 8) {
-    await sendText(chat, "Prompt terlalu singkat. Jelaskan ide videonya minimal beberapa kata.", fallbackConn);
+    await sendText(chat, "JSON storyboard terlalu singkat. Tempel objek JSON lengkap dari ChatGPT.", fallbackConn);
     return;
   }
   if (cleanPrompt.length > MAX_PROMPT_CHARS) {
-    await sendText(chat, "Prompt maksimal " + MAX_PROMPT_CHARS + " karakter. Ringkas brief lalu kirim ulang.", fallbackConn);
+    await sendText(chat, "JSON storyboard maksimal " + MAX_PROMPT_CHARS + " karakter. Minta ChatGPT membuat output yang lebih ringkas.", fallbackConn);
     return;
   }
 
   const maxActive = positiveInt(process.env.VIDEO_STUDIO_WA_MAX_ACTIVE_JOBS, 2, 1, 5);
-  if (planning.size) return sendText(chat, "Planner sedang menyusun storyboard. Tunggu proses sebelumnya selesai.", fallbackConn);
+  if (preparing.size) return sendText(chat, "Storyboard lain sedang divalidasi. Tunggu proses sebelumnya selesai.", fallbackConn);
   const currentJobs = activeJobs();
   if (currentJobs.length >= maxActive) {
     await sendText(
@@ -327,18 +323,17 @@ async function startPromptJob(prompt, chat, fallbackConn) {
     return;
   }
 
-  planning.add(chat);
+  preparing.add(chat);
   await sendText(
     chat,
-    "🧠 *AI Director mulai bekerja*\n" +
-    "Sedang memahami brief, menyusun alur cerita, menentukan scene, visual, gerakan, dan arahan audio.\n" +
-    "Kamu tidak perlu mengatur FPS, rasio, warna, atau durasi scene secara manual.",
+    "🧩 *Memeriksa storyboard ChatGPT*\n" +
+    "Memvalidasi struktur JSON, scene, durasi narasi, visual, dan batas render.\n" +
+    "Setelah lolos validasi, video langsung masuk antrean produksi.",
     fallbackConn
   );
 
   try {
-    // Ollama is started by the planner. VoxCPM2 starts later, only when
-    // narration is prepared, so both large models are not preloaded together.
+    // Storyboard JSON is supplied externally; VoxCPM2 starts later when narration is prepared.
     const plan = await planVideoPrompt(cleanPrompt);
     const project = compileVideoPlan(plan);
     const job = createVideoJob(project);
@@ -362,11 +357,11 @@ async function startPromptJob(prompt, chat, fallbackConn) {
       chat,
       "❌ *Video belum dapat diproses*\n" +
       String(error?.message || error).slice(0, 900) +
-      "\n\nPeriksa .remotion services untuk melihat provider yang belum siap.",
+      "\n\nPastikan JSON mengikuti prompt-remotion.md. Jika storyboard valid tetapi audio atau footage gagal, cek .remotion services.",
       fallbackConn
     );
   } finally {
-    planning.delete(chat);
+    preparing.delete(chat);
   }
 }
 
@@ -560,13 +555,11 @@ async function installLocalEngine(m, conn, argument = "") {
     );
   }
 
-  const ollamaUrl = String(process.env.VIDEO_STUDIO_OLLAMA_URL || "http://127.0.0.1:11434").trim();
   const voxUrl = String(process.env.VIDEO_STUDIO_VOXCPM_URL || "http://127.0.0.1:7861").trim();
-  if (ollamaUrl !== "http://127.0.0.1:11434" || voxUrl !== "http://127.0.0.1:7861") {
+  if (voxUrl !== "http://127.0.0.1:7861") {
     return m.reply(
-      "Installer otomatis saat ini menyiapkan endpoint lokal default:\n" +
-      "Ollama: http://127.0.0.1:11434\nVoxCPM2: http://127.0.0.1:7861\n\n" +
-      "Konfigurasi VIDEO_STUDIO_OLLAMA_URL atau VIDEO_STUDIO_VOXCPM_URL kamu berbeda. Sesuaikan endpoint ke default tersebut atau siapkan service sesuai endpoint yang sudah dikonfigurasi."
+      "Installer otomatis menyiapkan endpoint VoxCPM2 lokal default http://127.0.0.1:7861. " +
+      "VIDEO_STUDIO_VOXCPM_URL kamu berbeda; sesuaikan endpoint atau siapkan service secara manual."
     );
   }
 
@@ -607,7 +600,7 @@ async function installLocalEngine(m, conn, argument = "") {
   return m.reply(
     "🚀 *PEMASANGAN ENGINE REMOTION DIMULAI*\n" +
     hardware + "\n\n" +
-    "Installer akan memasang Ollama, Python 3.11, PyTorch, adapter VoxCPM2, lalu mengunduh model Qwen dan VoxCPM2. Proses berjalan di background dan log tersimpan di server.\n\n" +
+    "Installer akan memasang Python 3.11, PyTorch, adapter VoxCPM2, lalu mengunduh bobot model VoxCPM2. Proses berjalan di background dan log tersimpan di server.\n\n" +
     "Ketik .remotion install status untuk memantau. Jangan hapus atau restart file instalasi saat proses berjalan."
   );
 }
@@ -616,20 +609,17 @@ async function showServices(m, conn, argument = "") {
   const requested = String(argument || "").trim().toLowerCase().split(/\s+/).filter(Boolean);
   if (requested.length) {
     if (requested[0] !== "start" || requested.length !== 2 ||
-        !["voice", "voxcpm", "tts", "planner", "ollama"].includes(requested[1])) {
+        !["voice", "voxcpm", "tts"].includes(requested[1])) {
       return m.reply(
         "Format pemeriksaan layanan:\n" +
         "• .remotion services — cek status tanpa memuat model\n" +
-        "• .remotion services start voice — mulai adapter VoxCPM2\n" +
-        "• .remotion services start planner — mulai Ollama"
+        "• .remotion services start voice — mulai adapter VoxCPM2"
       );
     }
 
-    const service = ["voice", "voxcpm", "tts"].includes(requested[1]) ? "voxcpm" : "ollama";
-    const label = service === "voxcpm" ? "VoxCPM2" : "Ollama";
-    const waitMs = service === "voxcpm"
-      ? positiveInt(process.env.VIDEO_STUDIO_VOXCPM_STARTUP_TIMEOUT_MS, 600000, 30000, 1800000)
-      : 30000;
+    const service = "voxcpm";
+    const label = "VoxCPM2";
+    const waitMs = positiveInt(process.env.VIDEO_STUDIO_VOXCPM_STARTUP_TIMEOUT_MS, 600000, 30000, 1800000);
     await m.reply("⏳ Memulai " + label + " lokal. Bot akan mengirim hasil pemeriksaan setelah service siap atau gagal.");
     void startLocalVideoServices({ services: [service], waitMs, start: true }).then(result => {
       const state = result[service];
@@ -647,11 +637,12 @@ async function showServices(m, conn, argument = "") {
 
   const statuses = providerReadiness();
   // Status is observational: do not load large models just to inspect them.
-  const live = await startLocalVideoServices({ waitMs: 0, start: false });
-  statuses.push(
-    { name: "Ollama pemeriksaan langsung", configured: Boolean(live.ollama?.ready), detail: live.ollama?.detail || "Status Ollama tidak tersedia." },
-    { name: "VoxCPM2 pemeriksaan langsung", configured: Boolean(live.voxcpm?.ready), detail: live.voxcpm?.detail || "Status VoxCPM2 tidak tersedia." }
-  );
+  const live = await startLocalVideoServices({ services: ["voxcpm"], waitMs: 0, start: false });
+  statuses.push({
+    name: "VoxCPM2 pemeriksaan langsung",
+    configured: Boolean(live.voxcpm?.ready),
+    detail: live.voxcpm?.detail || "Status VoxCPM2 tidak tersedia."
+  });
 
   const comfyUrl = process.env.VIDEO_STUDIO_COMFYUI_URL || "http://127.0.0.1:8188";
   try {
@@ -677,25 +668,26 @@ async function showServices(m, conn, argument = "") {
   );
   lines.push(
     "",
-    "Untuk memasang runtime dan model lokal, gunakan .remotion install (GPU) atau .remotion install cpu (CPU). Pantau dengan .remotion install status.",
-    "Untuk menyalakan VoxCPM2 sebelum membuat video: .remotion services start voice. Untuk Ollama: .remotion services start planner.",
+    "Storyboard dibuat di ChatGPT secara terpisah; bot hanya memvalidasi JSON dan tidak menjalankan planner AI lokal.",
+    "Untuk memasang runtime narasi, gunakan .remotion install (GPU) atau .remotion install cpu (CPU). Pantau dengan .remotion install status.",
+    "Untuk menyalakan VoxCPM2 sebelum membuat video: .remotion services start voice.",
     "Footage AI, character reference, dan musik AI memerlukan ComfyUI lokal serta workflow API JSON yang sudah diaudit dan SHA-256-nya disetujui; fitur ini tidak dipasang oleh installer inti.",
     "SFX dibuat lokal. Musik tidak dipaksakan. Kesehatan service belum membuktikan hasil video.",
     "Reference image dapat meningkatkan konsistensi karakter, tetapi tidak menjamin identitas identik pada semua scene."
   );
   return m.reply("⚙️ *KESIAPAN REMOTION DI SERVER LINUX*\n\n" + lines.join("\n\n"));
 }
-
 async function showGuide(m) {
   return m.reply(
     "🧠 *PANDUAN PROMPT REMOTION*\n\n" +
-    "Tulis seperti memberi brief kepada sutradara video. Tidak perlu mengatur teknis render.\n\n" +
-    "*Contoh:*\n" +
-    "Buat video cinematic 35 detik tentang seekor rubah kecil yang tersesat di hutan saat hujan. Gunakan gaya animasi 3D yang hangat, karakter utama berpenampilan konsisten, alur emosional dari takut menjadi berani, kamera sinematik, narasi Bahasa Indonesia, subtitle sinkron, musik orkestra lembut, dan efek suara alam. Akhiri dengan pesan tentang keberanian.\n\n" +
-    "*Tips:* sebutkan topik, penonton, suasana, karakter, pesan utama, dan platform jika memang penting. AI akan menentukan scene, tempo, rasio, warna, gerakan, dan transisi."
+    "Storyboard harus dibuat di ChatGPT, lalu dikirim sebagai JSON. Bot tidak lagi menyusun brief teks biasa.\n" +
+    "Buka panduan lengkap: https://github.com/lightevil96-svg/Alvareth-Bot/blob/main/prompt-remotion.md\n\n" +
+    "1. Kirim brief video ke ChatGPT dengan mengikuti panduan tersebut.\n" +
+    "2. Minta satu objek JSON lengkap dengan schemaVersion: 1.\n" +
+    "3. Salin seluruh JSON, lalu ketik .remotion generate dan tempel JSON itu.\n\n" +
+    "Batas input 24.000 karakter; 1–60 scene; maksimal 20 detik per scene dan 300 detik total. Brief teks biasa tidak diproses."
   );
 }
-
 async function handleCommand(m, { conn, usedPrefix, text }) {
   const parsed = parseRemotionCommand(text);
 
@@ -711,9 +703,9 @@ async function handleCommand(m, { conn, usedPrefix, text }) {
     const ttl = positiveInt(process.env.VIDEO_STUDIO_WA_PROMPT_TTL_MS, DEFAULT_SESSION_TTL_MS, 60000, 3600000);
     sessions.set(m.chat, { createdAt: Date.now(), sender: m.sender, ttl });
     return m.reply(
-      "🎬 *KIRIM PROMPT VIDEO*\n\n" +
-      "Ceritakan video yang ingin dibuat. Jelaskan ide, karakter, suasana, gaya visual, dan pesan yang ingin disampaikan.\n" +
-      "Tidak perlu mengatur FPS, resolusi, warna, atau durasi setiap scene.\n\n" +
+      "🎬 *KIRIM STORYBOARD JSON*\n\n" +
+      "Tempel JSON storyboard yang sudah dibuat ChatGPT sesuai panduan prompt-remotion.md.\n" +
+      "Jangan kirim brief biasa di sesi ini. Bot hanya memvalidasi JSON dan menjalankan render.\n\n" +
       "Sesi input berlaku " + Math.round(ttl / 60000) + " menit. Ketik .remotion cancel untuk membatalkan."
     );
   }
@@ -759,7 +751,7 @@ global.__alvarethRemotionPromptHandler = async (m, context = {}) => {
     return true;
   }
   if (prompt.length < 8) {
-    await sendText(m.chat, "Prompt terlalu singkat. Kirim brief yang lebih jelas atau mulai ulang dengan .remotion generate.", context.conn);
+    await sendText(m.chat, "Input terlalu singkat. Tempel JSON storyboard lengkap dari ChatGPT atau mulai ulang dengan .remotion generate.", context.conn);
     return true;
   }
 
