@@ -5,6 +5,13 @@ function clean(value, max = 500) {
   return String(value == null ? "" : value).replace(/[\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
 }
 
+export function sanitizeAiVideoPrompt(value) {
+  return clean(value, 1800)
+    .replace(/Dibuat\\s*oleh\\s*ALVARETH\\s*BOT/giu, " ")
+    .replace(/\\s+/g, " ")
+    .trim();
+}
+
 export async function prepareAiFootage(project, jobId) {
   if (!isComfyConfigured("video")) return { scenes: project.scenes, generatedCount: 0, warnings: [] };
   const maxScenes = Math.max(1, Math.min(4, Number(process.env.VIDEO_STUDIO_COMFYUI_MAX_VIDEO_SCENES) || 2));
@@ -88,13 +95,13 @@ export async function prepareAiFootage(project, jobId) {
         visual.texture ? "texture " + clean(visual.texture, 60) : "",
         visual.compositionRules ? "composition " + clean(visual.compositionRules, 90) : ""
       ].filter(Boolean).join("; ").slice(0, 300);
-      const scenePrompt = clean(item.scene.aiVideoPrompt || item.scene.visualDescription || item.scene.text, 800);
-      const prompt = clean([
+      const scenePrompt = sanitizeAiVideoPrompt(item.scene.aiVideoPrompt || item.scene.visualDescription || item.scene.text).slice(0, 800);
+      const prompt = sanitizeAiVideoPrompt([
         identity ? "FIXED CHARACTER IDENTITY (do not alter): " + identity : "",
         visualDirection ? "VISUAL STYLE: " + visualDirection : "",
         "SCENE ACTION AND SHOT: " + scenePrompt,
         "Preserve the same character design and visual style. Render clean visual footage only; no readable text, typography, letters, numbers, labels, captions, logos, signatures, credits, or watermarks. All titles and brand credits are added later as Remotion overlays."
-      ].filter(Boolean).join("\n"), 1800);
+      ].filter(Boolean).join("\n"));
       const result = await generateComfyAsset({
         kind: "video",
         prompt,
