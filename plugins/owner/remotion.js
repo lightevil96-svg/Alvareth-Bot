@@ -389,6 +389,7 @@ async function installEdgeTts(m, conn) {
     windowsHide: true
   });
   global.__alvarethEdgeTtsInstallRunning = true;
+  let installerFinished = false;
 
   const pipeLogs = (stream, label) => {
     let pending = "";
@@ -411,10 +412,14 @@ async function installEdgeTts(m, conn) {
   );
 
   child.once("error", error => {
+    if (installerFinished) return;
+    installerFinished = true;
     global.__alvarethEdgeTtsInstallRunning = false;
     void sendText(m.chat, "❌ Installer Edge TTS tidak dapat dijalankan: " + String(error?.message || error).slice(0, 500), conn);
   });
   child.once("close", code => {
+    if (installerFinished) return;
+    installerFinished = true;
     global.__alvarethEdgeTtsInstallRunning = false;
     if (code !== 0) {
       void sendText(m.chat, "❌ *Instalasi Edge TTS gagal* (exit " + code + "). Periksa indikator [REMOTION:EDGE-TTS-INSTALL] pada terminal.", conn);
