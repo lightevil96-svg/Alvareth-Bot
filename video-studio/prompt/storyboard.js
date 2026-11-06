@@ -22,7 +22,7 @@ const ALLOWED = {
   soundCue: ["none", "whoosh", "pop", "impact", "swish", "click", "chime", "thump", "sparkle", "riser"],
   visualType: ["cinematic", "kinetic", "editorial", "data-chart", "diagram", "app-mockup", "waveform", "3d"],
   threeDStyle: ["glass", "chrome", "clay", "neon", "soft"],
-  threeDObject: ["orb", "cube", "torus", "rings", "crystal", "cluster"],
+  threeDObject: ["orb", "cube", "torus", "rings", "crystal", "cluster", "isometric"],
   backgroundEffect: ["none", "orbs", "particles", "grid", "waves", "dots", "vignette"],
   cameraMotion: ["static", "push-in", "pull-out", "pan-left", "pan-right", "tilt-up", "tilt-down", "drift"],
   colorGrade: ["neutral", "warm", "cool", "film", "vivid", "mono"],
