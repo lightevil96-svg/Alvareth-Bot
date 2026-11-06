@@ -146,11 +146,9 @@ export async function prepareVoiceover(project, jobId) {
 
   const base = process.env.VIDEO_STUDIO_VOXCPM_URL || "http://127.0.0.1:7861";
   if (new URL(base).origin === "http://127.0.0.1:7861") {
-    // Cold CPU model loading can take minutes; don't fail after a 3-second probe.
-    const startupTimeout = Math.max(30000, Math.min(1800000,
-      Number(process.env.VIDEO_STUDIO_VOXCPM_STARTUP_TIMEOUT_MS) || 600000
-    ));
-    const services = await startLocalVideoServices({ services: ["voxcpm"], waitMs: startupTimeout });
+    // Wait until the local model is ready; cold CPU loading has no fixed deadline.
+    console.log("[REMOTION:VOICE] Menunggu VoxCPM2 siap (tanpa batas waktu)...");
+    const services = await startLocalVideoServices({ services: ["voxcpm"], waitMs: Infinity });
     if (!services.voxcpm?.ready) throw new Error(services.voxcpm?.detail || "Service VoxCPM2 lokal belum siap.");
   }
   const endpoint = localServiceUrl(base, "speech");
@@ -165,11 +163,14 @@ export async function prepareVoiceover(project, jobId) {
     const startSeconds = cursorFrames / fps;
     if (text) {
       let response;
+      const synthesisStartedAt = Date.now();
+      console.log("[REMOTION:VOICE] Job " + jobId + " | scene " + (index + 1) + "/" + project.scenes.length + ": sintesis dimulai (" + text.length + " karakter).");
       try {
+        // Use a raw local HTTP request with no deadline: CPU inference can take many minutes.
         response = await localJson(endpoint, {
           method: "POST", headers: { "content-type": "application/json" },
           body: JSON.stringify({ text, language: project.language || "id" })
-        }, Math.max(30000, Math.min(1800000, Number(process.env.VIDEO_STUDIO_VOXCPM_TIMEOUT_MS) || 600000)));
+        }, null);
       } catch (error) {
         throw new Error("VoxCPM2 lokal tidak dapat dihubungi atau gagal menyintesis audio: " + String(error?.message || error).slice(0, 220));
       }
@@ -183,6 +184,7 @@ export async function prepareVoiceover(project, jobId) {
       const duration = Number(info.format?.duration);
       if (!info.streams?.some(stream => stream.codec_type === 'audio') || !Number.isFinite(duration) || duration <= 0 || duration > 19.7) throw new Error("Narasi terlalu panjang atau audio rusak; ringkas scene (maksimal 19,7 detik bicara).");
       execFileSync('ffmpeg', ['-v', 'error', '-xerror', '-i', path, '-f', 'null', '-'], { timeout: 15000, stdio: 'pipe' });
+      console.log("[REMOTION:VOICE] Job " + jobId + " | scene " + (index + 1) + "/" + project.scenes.length + ": WAV siap dalam " + ((Date.now() - synthesisStartedAt) / 1000).toFixed(1) + " dtk; durasi audio " + duration.toFixed(2) + " dtk; ukuran " + audio.length + " byte.");
       durationFrames = Math.max(durationFrames, Math.ceil((duration + 0.25) * fps));
       voiceoverTracks.push({ src: "generated/" + jobId + "/" + filename, startSeconds, durationSeconds: duration });
       const words = Array.isArray(response.words) ? response.words : [];
