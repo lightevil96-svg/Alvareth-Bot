@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { fitTextBlock } from "../video-studio/remotion/text-layout.js";
 
 test("short scene headlines keep a large readable size", () => {
-  const layout = fitTextBlock("Rumi dan Cahaya Hutan", 760, {
+  const layout = fitTextBlock("Rumi dan Cahaya Hutan", 1200, {
     maxFontSize: 92,
     minFontSize: 28,
     maxLines: 4,
