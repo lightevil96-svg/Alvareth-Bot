@@ -118,17 +118,9 @@ Defaults:
 - `VIDEO_STUDIO_LOCAL_SERVICES_AUTOSTART=true`; set it to `false` to disable process startup.
 - `VOXCPM_DEVICE` may be `cuda` or `cpu`; leave it blank to detect CUDA through the installed PyTorch.
 
-Install/pull the Ollama model once:
+For a rootless/Pterodactyl installation, use the bootstrap above rather than the Debian `python3 -m venv` commands. It can also download both models when run with `--with-models`. If downloading models separately, use the full Ollama path if `~/.local/bin` is not on the panel's PATH:
 ```bash
-ollama pull qwen2.5:7b
-```
-
-Prepare VoxCPM2 once (install a PyTorch build matching the VPS GPU/driver before installing the pinned adapter requirements):
-```bash
-python3 -m venv .venv-voxcpm
-.venv-voxcpm/bin/pip install --upgrade pip
-.venv-voxcpm/bin/pip install -r video-studio/services/voxcpm/requirements.txt
-mkdir -p "$HOME/alvareth-models/VoxCPM2"
+~/.local/bin/ollama pull qwen2.5:7b
 .venv-voxcpm/bin/hf download openbmb/VoxCPM2 --local-dir "$HOME/alvareth-models/VoxCPM2"
 ```
 

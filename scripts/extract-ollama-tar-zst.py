@@ -22,7 +22,9 @@ root.mkdir(parents=True, exist_ok=True)
 def checked_path(name: str) -> Path:
     normalized = posixpath.normpath(name)
     pure = PurePosixPath(normalized)
-    if pure.is_absolute() or normalized in ("", ".") or ".." in pure.parts:
+    if normalized in ("", "."):
+        return root
+    if pure.is_absolute() or ".." in pure.parts:
         raise ValueError(f"Unsafe archive member path: {name!r}")
     target = (root / Path(*pure.parts)).resolve()
     if target != root and root not in target.parents:
@@ -38,7 +40,7 @@ def check_link(member: tarfile.TarInfo, normalized_name: str) -> None:
     else:
         return
     pure = PurePosixPath(link)
-    if pure.is_absolute() or ".." in pure.parts:
+    if pure.is_absolute():
         raise ValueError(f"Unsafe archive link: {member.name!r} -> {member.linkname!r}")
     target = (root / Path(*pure.parts)).resolve()
     if target != root and root not in target.parents:
@@ -52,6 +54,10 @@ try:
         for member in archive:
             normalized = posixpath.normpath(member.name)
             checked_path(member.name)
+            if normalized in ("", "."):
+                if member.isdir():
+                    continue
+                raise ValueError(f"Unexpected archive root entry: {member.name!r}")
             if member.issym() or member.islnk():
                 check_link(member, normalized)
             elif not (member.isfile() or member.isdir()):
