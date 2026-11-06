@@ -119,5 +119,5 @@ test("plugin rejects every non-owner action and binds prompt sessions to their i
   assert.equal(global.__alvarethRemotionSessions.has(m.chat),false);
   for (const text of ['status','history','send','guide']) await handler(m,{conn,text,isROwner:true});
   assert.ok(replies.some(text=>/Riwayat video masih kosong/.test(text)));
-  assert.ok(replies.some(text=>/prompt-remotion\\.md/.test(text)));
+  assert.ok(replies.some(text=>/prompt-remotion\.md/.test(text)));
 });
