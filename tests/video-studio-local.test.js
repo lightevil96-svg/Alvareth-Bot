@@ -2,12 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { localServiceUrl } from '../video-studio/local-service.js';
-import { buildLocalServiceEnvironment, getLocalVideoServiceConfig, isOllamaModelReady, isVoxCPMReady } from '../video-studio/local-services.js';
+import { buildLocalServiceEnvironment, getLocalVideoServiceConfig, isOllamaModelReady, isVoxCPMReady, startLocalVideoServices } from '../video-studio/local-services.js';
 import { planVideoPrompt } from '../video-studio/prompt/planner.js';
 import { prepareVoiceover } from '../video-studio/media/voiceover.js';
 import { prepareVideoMedia } from '../video-studio/media/pipeline.js';
@@ -41,6 +41,55 @@ test('local services have usable loopback defaults and validate model health pay
   assert.equal(isVoxCPMReady({ provider: 'VoxCPM2', ready: true }), true);
   assert.equal(isVoxCPMReady({ provider: 'VoxCPM2', ready: false }), false);
 });
+test('VoxCPM health waits for a model that has bound its port but is still loading', async t => {
+  let calls = 0;
+  const base = await server(t, (_req, res) => {
+    calls++;
+    res.setHeader('content-type', 'application/json');
+    if (calls < 3) {
+      res.writeHead(503);
+      res.end(JSON.stringify({ provider: 'VoxCPM2', ready: false }));
+    } else {
+      res.end(JSON.stringify({ provider: 'VoxCPM2', ready: true }));
+    }
+  });
+  const result = await startLocalVideoServices({
+    env: { VIDEO_STUDIO_VOXCPM_URL: base },
+    services: ['voxcpm'],
+    waitMs: 3000,
+    start: true
+  });
+  assert.equal(result.voxcpm.ready, true);
+  assert.ok(calls >= 3);
+});
+
+test('status-only VoxCPM diagnostics include the previous process exit and private log path', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'voxcpm-status-'));
+  const modelPath = join(root, 'VoxCPM2');
+  const managed = global.__alvarethVideoLocalServices;
+  const previous = managed.get('VoxCPM2');
+  await mkdir(modelPath, { recursive: true });
+  await writeFile(join(modelPath, 'config.json'), JSON.stringify({ architecture: 'voxcpm2' }));
+  managed.set('VoxCPM2', { pid: 1234, exitCode: 1, error: null, logPath: join(root, 'voxcpm2.log') });
+  t.after(async () => {
+    await rm(root, { recursive: true, force: true });
+    if (previous === undefined) managed.delete('VoxCPM2'); else managed.set('VoxCPM2', previous);
+  });
+  const result = await startLocalVideoServices({
+    env: {
+      HOME: root,
+      VOXCPM_MODEL_PATH: modelPath,
+      VIDEO_STUDIO_VOXCPM_PYTHON: process.execPath,
+      VIDEO_STUDIO_VOXCPM_URL: 'http://127.0.0.1:0'
+    },
+    services: ['voxcpm'],
+    waitMs: 0,
+    start: false
+  });
+  assert.match(result.voxcpm.detail, /exit code 1/);
+  assert.match(result.voxcpm.detail, /voxcpm2\.log/);
+});
+
 test('local service children receive only an allowlisted environment, never bot credentials', () => {
   const source = {
     PATH: '/usr/bin',

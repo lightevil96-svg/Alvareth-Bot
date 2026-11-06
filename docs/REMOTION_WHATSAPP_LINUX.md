@@ -121,6 +121,9 @@ Perintah tersebut mendeteksi GPU NVIDIA di container, lalu menjalankan installer
 Perintah lain:
 
 - `.remotion install status` — melihat apakah installer berjalan, hasil exit code, dan potongan log terakhir.
+- `.remotion services start voice` — memulai adapter VoxCPM2 dan menunggu model siap tanpa harus mengirim prompt video.
+- `.remotion services start planner` — memulai Ollama secara eksplisit.
+- `.remotion services` tetap hanya memeriksa status; perintah ini tidak memuat model.
 - `.remotion install cpu` — memilih CPU secara eksplisit jika GPU NVIDIA tidak tersedia/di-pass-through. CPU bisa sangat lambat; periksa RAM dan disk sebelum menjalankannya.
 
 Jika tidak ada GPU NVIDIA yang terlihat, `.remotion install` berhenti sebelum mengunduh runtime/model dan meminta pilihan CPU secara eksplisit. Acuan upstream VoxCPM2 2B sekitar 8 GB VRAM; kebutuhan aktual bergantung pada device dan konfigurasi. CPU didukung, tetapi bukan jaminan performa layak untuk produksi.
@@ -130,7 +133,7 @@ Installer ini tidak memasang FFmpeg/FFprobe, Chromium OS libraries, atau depende
 Jangan menjalankan dua instalasi bersamaan atau menghapus folder data/log saat proses berjalan. Setelah exit code 0, jalankan `.remotion services`; Ollama akan dipakai untuk planner, sedangkan adapter VoxCPM2 dimulai otomatis saat video pertama kali membutuhkan narasi.
 ## Automatic local service startup
 
-The bot starts local services only when the production step needs them: Ollama for storyboard planning, then VoxCPM2 when narration is present. This avoids loading the 7B planner and 2B TTS model together during a redundant preflight. `.remotion services` is status-only and does not load models. Runtime startup never installs packages, downloads model weights, or calls a hosted provider. VoxCPM2 cold-start wait defaults to 10 minutes and can be adjusted with `VIDEO_STUDIO_VOXCPM_STARTUP_TIMEOUT_MS`.
+The bot starts local services only when the production step needs them: Ollama for storyboard planning, then VoxCPM2 when narration is present. This avoids loading the 7B planner and 2B TTS model together during a redundant preflight. `.remotion services` is status-only and does not load models. To warm up one service explicitly, use `.remotion services start voice` (VoxCPM2) or `.remotion services start planner` (Ollama); the bot replies after readiness or a startup error. Runtime startup never installs packages, downloads model weights, or calls a hosted provider. VoxCPM2 cold-start wait defaults to 10 minutes and can be adjusted with `VIDEO_STUDIO_VOXCPM_STARTUP_TIMEOUT_MS`. If startup fails, the status message includes the private service log path.
 
 Defaults:
 - Ollama: `http://127.0.0.1:11434`, model `qwen2.5:7b`.
@@ -151,7 +154,7 @@ Service autostart itself is not provisioning; `.remotion install` provisions the
 
 ## Optional ComfyUI
 
-No default visual/music model is silently chosen. Audit model license, node source, all network-capable nodes and memory requirements. Use only non-WAN local workflows. Put approved API-format graphs outside Git secrets/data, calculate `sha256sum /path/to/workflow.json`, and add the exact digest to comma-separated `VIDEO_STUDIO_COMFYUI_REVIEWED_SHA256`. Set the relevant VIDEO_STUDIO_COMFYUI_*_WORKFLOW_FILE and loopback URL. Hash checks pin reviewed bytes; they cannot prove custom-node behavior or detect a renamed banned model. The operator review is necessary.
+The core `.remotion install` command does not install ComfyUI, visual/audio model weights, custom nodes, or workflow files. No default visual/music model is silently chosen. Audit model license, node source, all network-capable nodes and memory requirements. Use only non-WAN local workflows. Put approved API-format graphs outside Git secrets/data, calculate `sha256sum /path/to/workflow.json`, and add the exact digest to comma-separated `VIDEO_STUDIO_COMFYUI_REVIEWED_SHA256`. Set the relevant VIDEO_STUDIO_COMFYUI_*_WORKFLOW_FILE and loopback URL. Hash checks pin reviewed bytes; they cannot prove custom-node behavior or detect a renamed banned model. The operator review is necessary.
 
 Without suitable visual workflows the output is designed motion graphics, not generated character animation/photorealistic footage. Without suitable music, there is no music. SFX are generated locally and require no model.
 

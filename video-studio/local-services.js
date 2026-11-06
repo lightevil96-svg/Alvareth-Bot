@@ -134,14 +134,16 @@ async function requestJson(url, timeoutMs = 1800) {
 
 const sleep = ms => new Promise(resolvePromise => setTimeout(resolvePromise, ms));
 
-async function waitForService(url, isReady, waitMs) {
+async function waitForService(url, isReady, waitMs, shouldStop = () => false) {
   let result = await requestJson(url);
-  if (waitMs <= 0 || (result.reachable && isReady(result.data, result))) return result;
+  if (waitMs <= 0 || (result.reachable && isReady(result.data, result)) || shouldStop()) return result;
   const deadline = Date.now() + waitMs;
   while (Date.now() < deadline) {
+    if (shouldStop()) break;
     await sleep(Math.min(500, Math.max(50, deadline - Date.now())));
     result = await requestJson(url);
     if (result.reachable && isReady(result.data, result)) break;
+    if (shouldStop()) break;
   }
   return result;
 }
@@ -152,6 +154,11 @@ function processExitDetail(state) {
   if (state.error) return " Gagal menjalankan proses: " + state.error + log;
   if (state.exitCode !== null) return " Proses berhenti dengan exit code " + state.exitCode + "; periksa kecocokan dependensi." + log;
   return (state.pid ? " Proses sudah dimulai (PID " + state.pid + "); service mungkin masih memuat model." : " Proses sudah diminta untuk berjalan; service mungkin masih memuat model.") + log;
+}
+
+function managedProcessStopped(name) {
+  const state = MANAGED.get(name);
+  return Boolean(state && (state.error || state.exitCode !== null));
 }
 
 async function inspectOllama(config, env, waitMs, startAllowed = config.autoStart) {
@@ -176,7 +183,9 @@ async function inspectOllama(config, env, waitMs, startAllowed = config.autoStar
       OLLAMA_NO_CLOUD: "1"
     }));
     if (launch.started || launch.alreadyManaged) {
-      probe = await waitForService(endpoint, data => Boolean(data), waitMs);
+      probe = await waitForService(endpoint, data => Boolean(data), waitMs, () =>
+        Boolean(launch?.state && (launch.state.error || launch.state.exitCode !== null))
+      );
     }
   } else if (!probe.reachable && !startAllowed) {
     const installed = commandWorks(config.ollamaBin, ["--version"]);
@@ -274,7 +283,9 @@ async function inspectVoxCPM(config, env, waitMs, startAllowed = config.autoStar
       PYTHONUNBUFFERED: "1"
     }));
     if (launch.started || launch.alreadyManaged) {
-      probe = await waitForService(endpoint, isVoxCPMReady, waitMs);
+      probe = await waitForService(endpoint, isVoxCPMReady, waitMs, () =>
+        Boolean(launch?.state && (launch.state.error || launch.state.exitCode !== null))
+      );
     }
   } else if (!probe.reachable && !startAllowed) {
     const pythonReady = existsSync(config.pythonPath) && commandWorks(config.pythonPath);
@@ -286,9 +297,16 @@ async function inspectVoxCPM(config, env, waitMs, startAllowed = config.autoStar
         : !model.ok
           ? model.detail + " Jalankan .remotion install untuk mengunduh model."
           : config.autoStart
-            ? "Virtualenv dan bobot VoxCPM2 tersedia, tetapi adapter belum berjalan. Bot akan memulainya otomatis saat narasi dibutuhkan."
-            : "VoxCPM2 tidak merespons. Autostart dimatikan; jalankan adapter Python di video-studio/services/voxcpm/server.py."
+            ? "Virtualenv dan bobot VoxCPM2 tersedia, tetapi adapter belum berjalan. Bot akan memulainya otomatis saat narasi dibutuhkan." + processExitDetail(MANAGED.get("VoxCPM2"))
+            : "VoxCPM2 tidak merespons. Autostart dimatikan; jalankan adapter Python di video-studio/services/voxcpm/server.py." + processExitDetail(MANAGED.get("VoxCPM2"))
     };
+  }
+
+  // A previously launched adapter can bind its port before the model finishes loading.
+  // Keep waiting for readiness instead of failing a render on the first HTTP 503.
+  if (!launch && probe.reachable && probe.data?.provider === "VoxCPM2" &&
+      !isVoxCPMReady(probe.data) && startAllowed && waitMs > 0) {
+    probe = await waitForService(endpoint, isVoxCPMReady, waitMs);
   }
 
   if (isVoxCPMReady(probe.data)) {
@@ -297,7 +315,7 @@ async function inspectVoxCPM(config, env, waitMs, startAllowed = config.autoStar
   if (probe.reachable && probe.data?.provider === "VoxCPM2") {
     return {
       ready: false, reachable: true, starting: true,
-      detail: "Server VoxCPM2 merespons tetapi model belum siap. Tunggu proses pemuatan model, lalu cek .remotion services kembali."
+      detail: "Server VoxCPM2 merespons tetapi model belum siap. Tunggu proses pemuatan model, lalu cek .remotion services kembali." + processExitDetail(MANAGED.get("VoxCPM2")),
     };
   }
   if (probe.reachable) {
@@ -305,7 +323,7 @@ async function inspectVoxCPM(config, env, waitMs, startAllowed = config.autoStar
   }
   return {
     ready: false, reachable: false,
-    detail: "Service VoxCPM2 belum dapat dihubungi di " + config.voxUrl + "." + processExitDetail(launch?.state)
+    detail: "Service VoxCPM2 belum dapat dihubungi di " + config.voxUrl + "." + processExitDetail(launch?.state || MANAGED.get("VoxCPM2"))
   };
 }
 

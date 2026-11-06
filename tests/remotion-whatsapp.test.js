@@ -34,6 +34,8 @@ test("routes status, history, guide, services, cancel and resend actions", () =>
   assert.equal(parseRemotionCommand("riwayat").action, "history");
   assert.equal(parseRemotionCommand("panduan").action, "guide");
   assert.equal(parseRemotionCommand("services").action, "services");
+  assert.deepEqual(parseRemotionCommand("services start voice"), { action: "services", argument: "start voice" });
+  assert.deepEqual(parseRemotionCommand("services start planner"), { action: "services", argument: "start planner" });
   assert.deepEqual(parseRemotionCommand("install"), { action: "install", argument: "" });
   assert.deepEqual(parseRemotionCommand("install cpu"), { action: "install", argument: "cpu" });
   assert.deepEqual(parseRemotionCommand("install status"), { action: "install", argument: "status" });
@@ -105,7 +107,7 @@ test("plugin rejects every non-owner action and binds prompt sessions to their i
   const replies=[], sent=[];
   const m={chat:'test-chat',sender:'owner-a',reply:async text=>replies.push(text)};
   const conn={sendMessage:async (...args)=>sent.push(args)};
-  for (const text of ['', 'generate', 'status', 'history', 'send id', 'services', 'install', 'install status', 'guide', 'cancel', 'buatkan video kopi']) {
+  for (const text of ['', 'generate', 'status', 'history', 'send id', 'services', 'services start voice', 'install', 'install status', 'guide', 'cancel', 'buatkan video kopi']) {
     await handler(m,{conn,text,isROwner:false});
     assert.match(replies.at(-1),/hanya untuk owner/);
   }

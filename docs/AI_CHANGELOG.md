@@ -1,3 +1,12 @@
+## 2026-11-06 — Explicit local service start and VoxCPM2 loading diagnostics
+
+- **Symptom:** `.remotion services` correctly stayed status-only, so an installed VoxCPM2 adapter remained stopped until narration was requested. A VoxCPM2 process that had already bound its HTTP port but was still loading returned HTTP 503; the readiness path could report it as not ready immediately instead of waiting. A failed detached process could also leave an unhelpful generic status without its exit code/log path.
+- **Root cause:** there was no explicit owner command to warm up one local service; `inspectVoxCPM` waited only when the port was unreachable, not when the service was reachable-but-loading; status-only diagnostics did not include a previous managed-process failure.
+- **Fix:** added `.remotion services start voice` and `.remotion services start planner` as opt-in single-service startup commands; kept bare `.remotion services` observational. VoxCPM2 readiness now waits through its loading response, detached process failures stop polling early, and status output includes the private service log path/exit code when available. Added a direct loopback ComfyUI `/system_stats` check and clarified that the core installer does not install ComfyUI/workflows.
+- **Files:** `video-studio/local-services.js`, `plugins/owner/remotion.js`, `tests/video-studio-local.test.js`, `tests/remotion-whatsapp.test.js`, `README.md`, `docs/REMOTION_WHATSAPP_LINUX.md`, `AI_CONTEXT.md`.
+- **Tests:** added regressions for VoxCPM2 already-listening/loading readiness, managed-process failure diagnostics, and explicit service command parsing. GitHub Actions result pending after commit; live VoxCPM2 inference, ComfyUI model/workflow execution, VPS render, and WhatsApp delivery remain unverified.
+- **Operational boundary:** no hosted AI, WAN, ElevenLabs, stock provider, or forced music was introduced. ComfyUI footage/image/music remain inactive until a local reviewed workflow and compatible model are installed and configured.
+
 ## 2026-11-06 — Owner-only forced update with local conflict backups
 
 - Added `.update force` for explicit synchronization when an upstream-changed file conflicts with local edits.

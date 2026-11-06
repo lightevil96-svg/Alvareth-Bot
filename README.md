@@ -181,6 +181,8 @@ owner WhatsApp → Ollama/Qwen lokal → storyboard/compiler → antrean render 
 - .remotion &lt;prompt&gt; langsung memulai produksi dari prompt.
 - .remotion status, .remotion history, .remotion send, .remotion guide, dan .remotion services mengelola pekerjaan video.
 - .remotion install memasang runtime dan model lokal melalui installer Linux; .remotion install cpu memilih mode CPU secara eksplisit; .remotion install status menampilkan progres dan log.
+- .remotion services start voice memulai adapter VoxCPM2 secara eksplisit; .remotion services start planner memulai Ollama. Tanpa subperintah start, services hanya memeriksa status dan tidak memuat model.
+- ComfyUI, model footage/image/audio, dan workflow API JSON tidak termasuk installer inti; masing-masing harus dipasang, diaudit, dan dikonfigurasi terpisah.
 
 Semua akses produksi dan instalasi tetap dibatasi untuk owner melalui pemeriksaan plugin. Hasil MP4 dikirim langsung melalui Baileys ke chat WhatsApp yang memulai pekerjaan dan disimpan pada direktori data Video Studio.
 

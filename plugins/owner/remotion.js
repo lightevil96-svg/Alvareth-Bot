@@ -1,4 +1,5 @@
 import { startLocalVideoServices } from "../../video-studio/local-services.js";
+import { localJson, localServiceUrl } from "../../video-studio/local-service.js";
 import { readVideoStudioInstallerStatus, startVideoStudioInstaller } from "../../video-studio/installer.js";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -492,20 +493,74 @@ async function installLocalEngine(m, conn, argument = "") {
   );
 }
 
-async function showServices(m) {
+async function showServices(m, conn, argument = "") {
+  const requested = String(argument || "").trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (requested.length) {
+    if (requested[0] !== "start" || requested.length !== 2 ||
+        !["voice", "voxcpm", "tts", "planner", "ollama"].includes(requested[1])) {
+      return m.reply(
+        "Format pemeriksaan layanan:\n" +
+        "• .remotion services — cek status tanpa memuat model\n" +
+        "• .remotion services start voice — mulai adapter VoxCPM2\n" +
+        "• .remotion services start planner — mulai Ollama"
+      );
+    }
+
+    const service = ["voice", "voxcpm", "tts"].includes(requested[1]) ? "voxcpm" : "ollama";
+    const label = service === "voxcpm" ? "VoxCPM2" : "Ollama";
+    const waitMs = service === "voxcpm"
+      ? positiveInt(process.env.VIDEO_STUDIO_VOXCPM_STARTUP_TIMEOUT_MS, 600000, 30000, 1800000)
+      : 30000;
+    await m.reply("⏳ Memulai " + label + " lokal. Bot akan mengirim hasil pemeriksaan setelah service siap atau gagal.");
+    void startLocalVideoServices({ services: [service], waitMs, start: true }).then(result => {
+      const state = result[service];
+      return sendText(
+        m.chat,
+        (state?.ready ? "✅ " : "❌ ") + "*" + label + "*\n" +
+        (state?.detail || "Status service tidak tersedia."),
+        conn
+      );
+    }).catch(error => {
+      void sendText(m.chat, "❌ Gagal memulai " + label + ": " + String(error?.message || error).slice(0, 300), conn);
+    });
+    return;
+  }
+
   const statuses = providerReadiness();
-  // Status is observational: do not load two large models just to inspect them.
+  // Status is observational: do not load large models just to inspect them.
   const live = await startLocalVideoServices({ waitMs: 0, start: false });
   statuses.push(
     { name: "Ollama pemeriksaan langsung", configured: Boolean(live.ollama?.ready), detail: live.ollama?.detail || "Status Ollama tidak tersedia." },
     { name: "VoxCPM2 pemeriksaan langsung", configured: Boolean(live.voxcpm?.ready), detail: live.voxcpm?.detail || "Status VoxCPM2 tidak tersedia." }
   );
+
+  const comfyUrl = process.env.VIDEO_STUDIO_COMFYUI_URL || "http://127.0.0.1:8188";
+  try {
+    const stats = await localJson(localServiceUrl(comfyUrl, "system_stats"), {}, 3000);
+    const ready = Boolean(stats?.system && Array.isArray(stats?.devices));
+    statuses.push({
+      name: "ComfyUI pemeriksaan langsung",
+      configured: ready,
+      detail: ready
+        ? "ComfyUI merespons di " + comfyUrl + "; workflow dan hash audit tetap harus dikonfigurasi."
+        : "ComfyUI merespons, tetapi payload system_stats tidak sesuai kontrak."
+    });
+  } catch {
+    statuses.push({
+      name: "ComfyUI pemeriksaan langsung",
+      configured: false,
+      detail: "ComfyUI belum dapat dihubungi di " + comfyUrl + ". Installer inti Remotion tidak memasang ComfyUI atau workflow model."
+    });
+  }
+
   const lines = statuses.map(item =>
     (item.configured ? "✅ " : "⚠️ ") + "*" + item.name + "*\n" + item.detail
   );
   lines.push(
     "",
     "Untuk memasang runtime dan model lokal, gunakan .remotion install (GPU) atau .remotion install cpu (CPU). Pantau dengan .remotion install status.",
+    "Untuk menyalakan VoxCPM2 sebelum membuat video: .remotion services start voice. Untuk Ollama: .remotion services start planner.",
+    "Footage AI, character reference, dan musik AI memerlukan ComfyUI lokal serta workflow API JSON yang sudah diaudit dan SHA-256-nya disetujui; fitur ini tidak dipasang oleh installer inti.",
     "SFX dibuat lokal. Musik tidak dipaksakan. Kesehatan service belum membuktikan hasil video.",
     "Reference image dapat meningkatkan konsistensi karakter, tetapi tidak menjamin identitas identik pada semua scene."
   );
@@ -543,7 +598,7 @@ async function handleCommand(m, { conn, usedPrefix, text }) {
   if (parsed.action === "status") return showStatus(m, conn);
   if (parsed.action === "history") return showHistory(m);
   if (parsed.action === "guide") return showGuide(m);
-  if (parsed.action === "services") return showServices(m);
+  if (parsed.action === "services") return showServices(m, conn, parsed.argument);
   if (parsed.action === "install") return installLocalEngine(m, conn, parsed.argument);
   if (parsed.action === "cancel") {
     const ownSession = sessions.get(m.chat)?.sender === m.sender;
