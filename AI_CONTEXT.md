@@ -9,7 +9,7 @@
 
 ## Pembaruan terbaru
 
-- 2026-11-07: Added the owner-only `.hermes` maintenance bridge. It uses the configured local Hermes CLI, structured one-shot output, a restricted toolset, temporary patch proposals, explicit apply/undo, and separate regression tests. See `docs/HERMES_AGENT.md`.
+- 2026-11-07: Added the owner-only `.hermes` maintenance bridge. It uses the configured local Hermes CLI, structured one-shot output, a restricted toolset, temporary patch proposals, explicit apply/undo, focused regression tests, and the full repository `npm test` workflow on Hermes source/test changes. See `docs/HERMES_AGENT.md`.
 - 2026-11-07: Corrected the Hermes regression fixture's JSONL newline generation after the first CI run exposed an escaped-newline bug; production bridge behavior was unchanged.
 
 - 2026-11-06: Added repository-root `prompt-remotion.md`, a strict ChatGPT guide with the current JSON schema, enum allowlists, capability limits, and a complete Indonesian story example. WhatsApp accepts up to 24,000 characters; plain-language briefs are intentionally rejected.

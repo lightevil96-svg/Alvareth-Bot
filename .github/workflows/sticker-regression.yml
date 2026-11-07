@@ -9,6 +9,10 @@ on:
       - 'tests/quoted-media.test.js'
       - 'tests/sticker-engine.test.js'
       - 'package.json'
+      - 'lib/hermes-agent.js'
+      - 'plugins/owner/hermes.js'
+      - 'tests/hermes-agent.test.js'
+      - '.github/workflows/hermes-regression.yml'
       - '.github/workflows/sticker-regression.yml'
   pull_request:
     paths:
@@ -17,6 +21,10 @@ on:
       - 'tests/quoted-media.test.js'
       - 'tests/sticker-engine.test.js'
       - 'package.json'
+      - 'lib/hermes-agent.js'
+      - 'plugins/owner/hermes.js'
+      - 'tests/hermes-agent.test.js'
+      - '.github/workflows/hermes-regression.yml'
       - '.github/workflows/sticker-regression.yml'
 
 jobs:
