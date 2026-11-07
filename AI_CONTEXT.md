@@ -9,6 +9,8 @@
 
 ## Pembaruan terbaru
 
+- 2026-11-07: TikTok downloader now previews photo posts with a three-action menu (download all, select one photo for video, or render all photos as one slideshow with preset/per-slide custom timing). Video posts are FFmpeg re-encoded at the highest available source resolution by default and expose lower non-upscaled output qualities. TikTok auto-download routing remains private-chat by default; groups still require `.enable autodl`. See `docs/AI_CHANGELOG.md`.
+
 - 2026-11-07: Removed `.remotion`, `.hermes`, and `.edit` plus their handlers, render/edit runtimes, dedicated dependencies, environment settings, tests, workflows, and feature-specific documentation/skills. Disk Manager now cleans only WhatsApp temporary media. See `docs/AI_CHANGELOG.md`.
 
 - 2026-11-04: Updater `.update` tidak lagi menganggap batas 300 file dari GitHub REST sebagai daftar lengkap; otomatis memakai Git diff read-only pada repository bare sementara untuk diff penuh, dengan batas pengaman 20.000 file dan output 20 MiB.

@@ -1,3 +1,13 @@
+## 2026-11-07 — TikTok downloader: photo actions, slideshow, and selectable video quality
+
+- **Request:** automatically process TikTok links and provide clear actions for photo posts, one-video slideshow rendering with the original post audio, and selectable output resolutions for video posts.
+- **Root cause:** the existing AutoDL router already recognized TikTok links, but multi-photo posts were sent as an album immediately and only exposed per-photo conversion. There was no one-video slideshow workflow or post-download quality menu. Video normalization could use stream-copy remuxing, so the output resolution could not be selected consistently.
+- **Changes:** photo posts now send a preview followed by a three-option menu: send all original photos, open a per-photo video picker, or create one slideshow MP4. Slideshow supports 1/2/3/5/10-second presets and custom per-photo durations (1–60 seconds each; 300-second total cap), with the TikTok post's audio looped to cover the slideshow when available. Video posts are FFmpeg re-encoded at the highest source resolution by default; the follow-up quality menu offers the source resolution and lower standard tiers only, and selected resolutions are rendered without upscaling. Added bounded photo count/size checks and unit tests for resolution tiers, scaling, and slide-duration validation.
+- **Files:** plugins/downloader/tiktok.js, lib/tiktok-workflow.js, tests/tiktok-workflow.test.js, package.json, .github/workflows/tiktok-regression.yml, AI_CONTEXT.md.
+- **AutoDL behavior:** private chats continue to auto-download TikTok links by default. Group chats retain the existing opt-in requirement (.enable autodl); the central router and other platform downloaders were not changed.
+- **Verification:** npm run test:tiktok is added and wired into npm test; GitHub Actions results will be checked after this commit. Live TikTok provider responses, FFmpeg rendering on the user's host, and WhatsApp interactive-menu delivery are not verified from the repository editor.
+- **Regression lesson:** never upscale a lower-quality TikTok source to advertise a higher resolution; derive the menu from the verified source dimensions, and re-render each selected quality through FFmpeg. Keep all slideshow images and the optional original audio in the same managed ALVARETH_TIKTOK_TMPDIR job directory so cleanup remains bounded.
+
 ## 2026-11-07 — Remove heavy video and Hermes features
 
 - **Request:** remove the owner-only `.remotion`, `.hermes`, and `.edit` features to reduce the bot's runtime and dependency footprint while preserving unrelated commands.

@@ -1,0 +1,30 @@
+name: TikTok downloader regression
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'plugins/downloader/tiktok.js'
+      - 'lib/tiktok-workflow.js'
+      - 'tests/tiktok-workflow.test.js'
+      - 'package.json'
+      - '.github/workflows/tiktok-regression.yml'
+  pull_request:
+    paths:
+      - 'plugins/downloader/tiktok.js'
+      - 'lib/tiktok-workflow.js'
+      - 'tests/tiktok-workflow.test.js'
+      - 'package.json'
+      - '.github/workflows/tiktok-regression.yml'
+
+jobs:
+  tiktok:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check TikTok downloader and workflow regressions
+        run: npm run test:tiktok
