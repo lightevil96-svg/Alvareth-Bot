@@ -259,7 +259,7 @@ const handler = async (m, { conn, text }) => {
 
     return safeReply(
       m,
-      '🎬 Video diterima (' + formatBytes(videoBuffer.length) + ').\\n\\nSekarang kirim file script *.sh* sebagai dokumen di chat yang sama. Bot akan menjalankan script itu dengan video ini dan mengirim hasil render-nya.\\n\\nSesi berlaku 15 menit. Gunakan *.render cancel* jika ingin membatalkan.'
+      '🎬 Video diterima (' + formatBytes(videoBuffer.length) + ').\n\nSekarang kirim file script *.sh* sebagai dokumen di chat yang sama. Bot akan menjalankan script itu dengan video ini dan mengirim hasil render-nya.\n\nSesi berlaku 15 menit. Gunakan *.render cancel* jika ingin membatalkan.'
     )
   } catch (error) {
     if (sessionDirectory) await fs.rm(sessionDirectory, { recursive: true, force: true }).catch(() => {})
@@ -366,7 +366,7 @@ handler.all = async function (m) {
     await safeReply(
       m,
       '❌ Render gagal: ' + safeError(error) +
-      '\\n\\nVideo masih tersimpan selama sesi aktif. Kamu bisa kirim ulang file .sh yang sudah diperbaiki, atau gunakan *.render cancel*.'
+      '\n\nVideo masih tersimpan selama sesi aktif. Kamu bisa kirim ulang file .sh yang sudah diperbaiki, atau gunakan *.render cancel*.'
     )
   }
 }
