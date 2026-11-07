@@ -21,3 +21,10 @@ test("raw JSON session hook checks owner status, sender binding, bot echoes and 
   assert.match(plugin, /hasCommandPrefix\(prompt/);
   assert.match(handler, /global\.__alvarethEditPromptHandler/);
 });
+
+
+test("JSON render queue is awaited before job details are sent to WhatsApp", async () => {
+  const source = await readFile(new URL("../plugins/owner/edit.js", import.meta.url), "utf8");
+  assert.match(source, /const job = await enqueueEditJob\(\{/);
+  assert.match(source, /Mode: .*job\.id/s);
+});
