@@ -19,6 +19,8 @@ test("default edit plan is safe and uses a vertical short-form format", () => {
   assert.equal(plan.output.ratio, "9:16");
   assert.equal(plan.output.maxDurationSeconds, 60);
   assert.equal(plan.audio.musicAsset, "none");
+  assert.equal(plan.output.fitMode, "crop");
+  assert.deepEqual(plan.edit.cameraMoves, []);
   assert.equal(plan.captions.enabled, false);
 });
 
@@ -115,6 +117,42 @@ test("segment limiter respects playback speed when enforcing output duration", (
 });
 
 
+
+test("validator accepts blur background fit and smooth output-timeline camera moves", () => {
+  const base = createDefaultEditPlan({ ratio: "9:16", maxDurationSeconds: 20, removeSilence: false });
+  const plan = validateEditPlan({
+    ...base,
+    output: { ...base.output, fitMode: "blur-background" },
+    edit: {
+      ...base.edit,
+      cameraMoves: [
+        { start: 1, end: 3, zoom: 1.65, focusX: 0.88, focusY: 0.60, easing: "smooth" },
+        { start: 8, end: 10, zoom: 1.45, focusX: 0.5, focusY: 0.5 }
+      ]
+    }
+  }, { sourceDuration: 30 });
+  assert.equal(plan.output.fitMode, "blur-background");
+  assert.equal(plan.edit.cameraMoves.length, 2);
+  assert.equal(plan.edit.cameraMoves[0].easing, "smooth");
+  assert.equal(plan.edit.cameraMoves[1].easing, "smooth");
+});
+
+test("validator rejects unsupported fit modes and invalid camera moves", () => {
+  const base = createDefaultEditPlan({ maxDurationSeconds: 20 });
+  assert.throws(() => validateEditPlan({
+    ...base,
+    output: { ...base.output, fitMode: "stretch" }
+  }), /fitMode/);
+  assert.throws(() => validateEditPlan({
+    ...base,
+    edit: { ...base.edit, cameraMoves: [{ start: 2, end: 4, zoom: 3, focusX: 0.5, focusY: 0.5 }] }
+  }), /zoom harus berupa angka/);
+  assert.throws(() => validateEditPlan({
+    ...base,
+    edit: { ...base.edit, cameraMoves: [{ start: 2, end: 4, zoom: 1.5, focusX: 0.5, focusY: 0.5 }, { start: 3, end: 5, zoom: 1.4, focusX: 0.5, focusY: 0.5 }] }
+  }), /tidak saling tumpang tindih/);
+});
+
 test("renders and fully decodes a real MP4 fixture with manual cuts and captions", async t => {
   const { spawnSync } = await import("node:child_process");
   const { execFile } = await import("node:child_process");
@@ -145,8 +183,10 @@ test("renders and fully decodes a real MP4 fixture with manual cuts and captions
 
   const filterList = spawnSync("ffmpeg", ["-hide_banner", "-filters"], { encoding: "utf8" });
   const supportsAss = String(filterList.stdout || "") .includes(" ass ") || String(filterList.stderr || "").includes(" ass ");
-  const plan = createDefaultEditPlan({ ratio: "16:9", maxDurationSeconds: 10, removeSilence: false });
+  const plan = createDefaultEditPlan({ ratio: "9:16", maxDurationSeconds: 10, removeSilence: false });
   plan.output.resolution = "720p";
+  plan.output.fitMode = "blur-background";
+  plan.edit.cameraMoves = [{ start: 0.3, end: 1.8, zoom: 1.45, focusX: 0.86, focusY: 0.60, easing: "smooth" }];
   plan.output.fps = 24;
   plan.edit.fadeInSeconds = 0;
   plan.edit.fadeOutSeconds = 0;
@@ -170,8 +210,8 @@ test("renders and fully decodes a real MP4 fixture with manual cuts and captions
     settings: {},
     onProgress: () => {}
   });
-  assert.equal(result.width, 1280);
-  assert.equal(result.height, 720);
+  assert.equal(result.width, 720);
+  assert.equal(result.height, 1280);
   assert.equal(result.fps, 24);
   assert.ok(Math.abs(result.duration - 3) < 0.45);
   assert.ok((await stat(outputPath)).size > 0);

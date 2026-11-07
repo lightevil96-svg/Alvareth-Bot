@@ -52,9 +52,9 @@ Treat this as a design reference, not a command to execute from user-supplied JS
 - Decode the final MP4 completely and verify its dimensions, duration, frame rate, and audio/video streams.
 - Review the result on a phone-sized preview. The foreground must be large enough to read; if it becomes too small, consider a deliberate split-screen or a different platform layout rather than cropping important content.
 
-## Important implementation boundary
+## Runtime support
 
-This skill defines the intended editing technique and quality bar. It does not by itself add a selectable option to the WhatsApp .edit runtime. The current raw-video FFmpeg engine must be updated, tested with real landscape fixtures, and exposed through a validated setting such as output.fitMode = "blur-background" before the bot can execute it. Until then, do not claim that .edit already supports this mode.
+The raw-video FFmpeg engine exposes this layout through output.fitMode = "blur-background". It also supports manually authored smooth camera zoom/pan keyframes through edit.cameraMoves. Camera moves use the output timeline after source cuts and are not automatic face or avatar tracking. Keep the full-frame fit as the default view and use brief, purposeful zooms only when the avatar or another visual beat deserves emphasis.
 
 ## Defaults
 

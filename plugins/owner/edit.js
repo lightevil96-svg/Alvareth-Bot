@@ -275,7 +275,7 @@ function parseJsonInput(value) {
 
 async function queuePlan(m, conn, session, inputPlan) {
   try {
-    const job = enqueueEditJob({
+    const job = await enqueueEditJob({
       sourcePath: session.sourcePath,
       sender: m.sender,
       chat: m.chat,
@@ -338,7 +338,7 @@ async function showGuide(m, prefix) {
     "🧠 *PANDUAN PROMPT GPT PLUS — ALVARETH .EDIT*",
     "",
     "Buka panduan lengkap yang berisi prompt siap salin, schema JSON, batas teknis, dan contoh edit:",
-    "https://github.com/lightevil96-svg/Alvareth-Bot/blob/feature/owner-only-edit/docs/EDIT_PROMPT_GUIDE.md",
+    "https://github.com/lightevil96-svg/Alvareth-Bot/blob/main/docs/EDIT_PROMPT_GUIDE.md",
     "",
     "Cara pakai:",
     "1. Upload video sumber ke GPT Plus jika fitur unggah/video tersedia. Jika tidak, berikan transkrip dan timecode; jangan minta GPT menebak timestamp.",
