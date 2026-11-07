@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, writeFile, readFile, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { createRenderSessionKey, getCurrentRenderDocument, isRenderDocumentEvent } from '../lib/render-message.js'
 import {
   normalizeShellScript,
   normalizeArchiveEntryPath,
@@ -266,4 +267,47 @@ test('extracted render package runs from its own directory with the replied vide
   })
   assert.equal(output?.name, 'jumpscare_short.mp4')
   assert.equal(await readFile(output.path, 'utf8'), 'replied-video')
+})
+
+
+test('render message parser detects ZIP documents inside WhatsApp wrappers', () => {
+  const media = {
+    fileName: 'pack.zip',
+    mimetype: 'application/zip',
+    fileLength: 220 * 1024
+  }
+  const message = {
+    mtype: 'ephemeralMessage',
+    rawMessage: {
+      message: {
+        ephemeralMessage: {
+          message: {
+            documentMessage: media
+          }
+        }
+      }
+    }
+  }
+
+  assert.equal(isRenderDocumentEvent(message), true)
+  assert.equal(getCurrentRenderDocument(message), media)
+})
+
+test('render message parser uses direct serialized document metadata as fallback', () => {
+  const media = { fileName: 'pack.zip', mimetype: 'application/zip' }
+  const message = { mtype: 'documentMessage', msg: media }
+  assert.equal(isRenderDocumentEvent(message), true)
+  assert.equal(getCurrentRenderDocument(message), media)
+})
+
+test('render session keys normalize phone aliases and WhatsApp device suffixes', () => {
+  const first = createRenderSessionKey({
+    chat: '6285184063794:12@s.whatsapp.net',
+    senderPN: '+6285184063794'
+  })
+  const second = createRenderSessionKey({
+    chat: '6285184063794@s.whatsapp.net',
+    sender: '6285184063794:4@s.whatsapp.net'
+  })
+  assert.equal(first, second)
 })

@@ -4,6 +4,7 @@ import { homedir } from 'node:os'
 import { fileTypeFromBuffer } from 'file-type'
 import { downloadContentFromMessage } from 'baileys'
 import { getQuotedMediaInfo, downloadQuotedMedia } from '../../lib/simple.js'
+import { createRenderSessionKey as sessionKey, getCurrentRenderDocument as getCurrentDocument, isRenderDocumentEvent } from '../../lib/render-message.js'
 import { sendLocalFile } from '../../lib/whatsapp-file-sender.js'
 import {
   extractRenderArchive,
@@ -29,12 +30,6 @@ const SCRIPT_TIMEOUT_MS = 30 * 60 * 1000
 // Session dipisahkan berdasarkan chat dan pengirim agar paket ZIP pengguna lain
 // tidak pernah dipasangkan dengan video milik owner.
 const pendingSessions = new Map()
-
-function sessionKey(m) {
-  const chat = String(m?.chat || '')
-  const sender = String(m?.senderPN || m?.sender || '')
-  return chat && sender ? chat + '|' + sender : ''
-}
 
 function getRenderRoot() {
   const configured = String(process.env.ALVARETH_RENDER_TMPDIR || '').trim()
@@ -122,13 +117,6 @@ async function pruneExpiredSessions() {
     await removeSession(session)
   }
   return expired
-}
-
-function getCurrentDocument(m) {
-  const type = String(m?.mtype || '').toLowerCase()
-  if (type !== 'documentmessage') return null
-  const media = m?.msg
-  return media && typeof media === 'object' ? media : null
 }
 
 async function downloadDocument(conn, media, options = {}) {
@@ -287,28 +275,61 @@ const handler = async (m, { conn, text }) => {
 }
 
 handler.all = async function (m) {
+  if (!isRenderDocumentEvent(m)) return
+
+  const document = getCurrentDocument(m)
+  const filename = path.basename(String(
+    document?.fileName || document?.file_name || document?.filename || ''
+  ).trim())
+  const mimetype = String(
+    document?.mimetype || document?.mimeType || document?.mime || ''
+  ).toLowerCase()
+  const isZip = isZipDocument(filename, mimetype)
   const key = sessionKey(m)
-  if (!key) return
+
+  if (!key) {
+    if (isZip) {
+      console.warn('[RENDER] ZIP masuk tetapi identitas chat/pengirim tidak terbaca:', {
+        mtype: String(m?.mtype || ''),
+        filename,
+        mimetype
+      })
+      await safeReply(m, '📦 File ZIP terdeteksi, tetapi identitas chat/pengirim tidak terbaca. Coba kirim ulang video dan ZIP di chat yang sama.')
+    }
+    return
+  }
 
   const expired = await pruneExpiredSessions()
   if (expired.includes(key)) {
-    await safeReply(m, 'Sesi render sudah kedaluwarsa. Kirim ulang video, lalu reply dengan *.render*.')
+    if (isZip) {
+      await safeReply(m, '⏳ Sesi render sudah kedaluwarsa. Kirim ulang video, reply dengan *.render*, lalu kirim paket ZIP dalam 15 menit.')
+    }
     return
   }
 
   const session = pendingSessions.get(key)
-  if (!session) return
+  if (!session) {
+    if (isZip) {
+      console.warn('[RENDER] ZIP masuk tanpa sesi aktif:', {
+        mtype: String(m?.mtype || ''),
+        filename,
+        mimetype,
+        activeSessions: pendingSessions.size
+      })
+      await safeReply(m, '📦 ZIP terdeteksi, tetapi sesi render tidak ditemukan atau sudah kedaluwarsa. Kirim ulang video, reply dengan *.render*, kemudian kirim ZIP di chat yang sama.')
+    }
+    return
+  }
 
-  const document = getCurrentDocument(m)
-  if (!document) return
+  if (!document) {
+    return safeReply(m, 'Dokumen terdeteksi, tetapi metadata file tidak dapat dibaca. Kirim ulang pack.zip sebagai dokumen WhatsApp.')
+  }
 
   if (session.processing) {
     return safeReply(m, 'Paket render untuk sesi ini sedang diproses. Tunggu sampai selesai.')
   }
 
-  const filename = path.basename(String(document.fileName || '').trim())
-  const mimetype = String(document.mimetype || '').toLowerCase()
-  if (!isZipDocument(filename, mimetype)) {
+  if (!isZip) {
     return safeReply(m, 'File yang diminta harus berupa paket *.zip* dan dikirim sebagai dokumen. Video masih tersimpan; kirim file ZIP dari Claude.')
   }
 

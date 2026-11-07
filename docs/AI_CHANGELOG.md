@@ -1,3 +1,11 @@
+## 2026-11-08 — Fix ZIP document event detection and session matching
+
+- **Observed issue:** WhatsApp accepted pack.zip as a document, but the bot gave no reply after the upload. The earlier handler returned silently when the serialized message type or session key did not match its narrow assumptions.
+- **Fix:** added lib/render-message.js to read document payloads from both the serialized message and the original raw Baileys payload, including ephemeral/view-once/document-caption wrappers. Session keys now normalize phone-number aliases and device suffixes before lookup.
+- **Diagnostics and user feedback:** ZIP uploads with no active matching session now receive a clear reply instead of being silently ignored. Added safe server logs for ZIP event type, filename, MIME type, and whether a session was found; no full phone/JID is logged.
+- **Regression coverage:** tests cover wrapped document messages, direct serializer fallback, and stable session keys across device suffix/phone-number formats.
+- **Verification:** pending GitHub Actions after this commit. Live WhatsApp/TokoPanel upload test still required.
+
 ## 2026-11-07 — Owner-only WhatsApp .render ZIP package workflow
 
 - **Request:** replace the one-file .sh upload step with the ZIP package supplied by Claude, while keeping the existing video → .render interaction.

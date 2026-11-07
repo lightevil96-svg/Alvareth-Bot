@@ -9,7 +9,7 @@
 
 ## Pembaruan terbaru
 
-- 2026-11-07: Updated owner-only `.render` to accept a Claude `.zip` package after the replied video, safely extract its assets, locate the single `render.sh`, and send the generated video. ZIP extraction has path/symlink/size limits; shell execution remains owner-trusted, not an OS sandbox. See `docs/AI_CHANGELOG.md`.
+- 2026-11-07: Updated owner-only `.render` to accept a Claude `.zip` package after the replied video, safely extract its assets, locate the single `render.sh`, and send the generated video. ZIP extraction has path/symlink/size limits; shell execution remains owner-trusted, not an OS sandbox. 2026-11-08: hardened document-event parsing and session-key normalization after a silent ZIP upload. See `docs/AI_CHANGELOG.md`.
 
 - 2026-11-07: Instagram downloader now tries the maintained local yt-dlp extractor for public Reels, photo/video posts, and carousels before legacy fallbacks. X/Twitter now resolves public status media through FxTwitter/VXTwitter and sends photos, videos, GIFs, and mixed posts according to detected file type. See `docs/AI_CHANGELOG.md`.
 

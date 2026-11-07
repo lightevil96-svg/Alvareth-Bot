@@ -150,7 +150,7 @@ Paket harus berisi tepat satu file bernama **render.sh**. Script dijalankan dari
 
 **Peringatan keamanan:** hanya super-owner yang dapat memulai sesi, dan ZIP harus diunggah dari akun serta chat yang sama. Bot menolak path traversal, symbolic link, dan arsip yang melewati batas ukuran/jumlah file. Namun, render.sh tetap dijalankan oleh Bash sebagai user OS yang menjalankan bot. Environment child process dibatasi dan folder kerja dibuat privat, tetapi ini **bukan sandbox OS**: script tepercaya saja yang boleh diunggah karena tetap dapat mengakses file yang memang dapat diakses user bot. Bot hanya menjalankan satu render.sh; render.bat dan script lain di dalam ZIP tidak dieksekusi.
 
-Folder kerja default berada di **~/.alvareth-bot-data/render-jobs/**; lokasinya dapat diganti dengan **ALVARETH_RENDER_TMPDIR**. Untuk membatalkan sesi yang sedang menunggu ZIP, ketik **.render cancel** di chat yang sama.
+Folder kerja default berada di **~/.alvareth-bot-data/render-jobs/**; lokasinya dapat diganti dengan **ALVARETH_RENDER_TMPDIR**. Untuk membatalkan sesi yang sedang menunggu ZIP, ketik **.render cancel** di chat yang sama. Jika bot tidak merespons setelah ZIP dikirim, periksa log `[RENDER] ZIP masuk` untuk mengetahui apakah dokumen dikenali dan sesi cocok; jika sesi tidak ditemukan, ulangi urutan video → `.render` → ZIP tanpa melewati batas 15 menit.
 
 ## Database dan sesi
 
