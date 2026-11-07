@@ -65,7 +65,8 @@ export function createDefaultEditPlan(settings = {}) {
       ratio: normalized.ratio,
       resolution: "1080p",
       fps: 30,
-      maxDurationSeconds: normalized.maxDurationSeconds
+      maxDurationSeconds: normalized.maxDurationSeconds,
+      fitMode: "crop"
     },
     edit: {
       removeSilence: normalized.removeSilence,
@@ -74,7 +75,8 @@ export function createDefaultEditPlan(settings = {}) {
       keepPaddingSeconds: 0.12,
       fadeInSeconds: 0.15,
       fadeOutSeconds: 0.25,
-      segments: []
+      segments: [],
+      cameraMoves: []
     },
     captions: {
       enabled: false,
@@ -112,8 +114,8 @@ export function validateEditPlan(input, options = {}) {
     throw new Error("output, edit, captions, dan audio harus berupa objek JSON.");
   }
 
-  assertKeys(output, ["ratio", "resolution", "fps", "maxDurationSeconds"], "output");
-  assertKeys(edit, ["removeSilence", "silenceThresholdDb", "minSilenceSeconds", "keepPaddingSeconds", "fadeInSeconds", "fadeOutSeconds", "segments"], "edit");
+  assertKeys(output, ["ratio", "resolution", "fps", "maxDurationSeconds", "fitMode"], "output");
+  assertKeys(edit, ["removeSilence", "silenceThresholdDb", "minSilenceSeconds", "keepPaddingSeconds", "fadeInSeconds", "fadeOutSeconds", "segments", "cameraMoves"], "edit");
   assertKeys(captions, ["enabled", "style", "items"], "captions");
   assertKeys(audio, ["normalize", "originalVolume", "musicAsset", "musicVolume"], "audio");
 
@@ -123,6 +125,8 @@ export function validateEditPlan(input, options = {}) {
   if (!["1080p", "720p"].includes(resolution)) throw new Error("output.resolution hanya mendukung 1080p atau 720p.");
   const fps = output.fps === undefined ? 30 : Number(output.fps);
   if (!FPS_VALUES.has(fps)) throw new Error("output.fps harus 24, 25, 30, 50, atau 60.");
+  const fitMode = output.fitMode === undefined ? "crop" : output.fitMode;
+  if (!["crop", "blur-background"].includes(fitMode)) throw new Error("output.fitMode hanya mendukung crop atau blur-background.");
   const maxDurationSeconds = boundedNumber(
     output.maxDurationSeconds,
     settings.maxDurationSeconds,
@@ -157,6 +161,27 @@ export function validateEditPlan(input, options = {}) {
     }
     previousEnd = end;
     return { start, end, speed };
+  });
+
+  const rawCameraMoves = edit.cameraMoves === undefined ? [] : edit.cameraMoves;
+  if (!Array.isArray(rawCameraMoves) || rawCameraMoves.length > 20) {
+    throw new Error("edit.cameraMoves harus berupa array dengan maksimal 20 gerakan kamera.");
+  }
+  let previousCameraEnd = -1;
+  const cameraMoves = rawCameraMoves.map((item, index) => {
+    if (!isRecord(item)) throw new Error("edit.cameraMoves[" + index + "] harus berupa objek.");
+    assertKeys(item, ["start", "end", "zoom", "focusX", "focusY", "easing"], "edit.cameraMoves[" + index + "]");
+    const start = boundedNumber(item.start, NaN, 0, maxDurationSeconds, "Camera move " + (index + 1) + " start");
+    const end = boundedNumber(item.end, NaN, 0.01, maxDurationSeconds, "Camera move " + (index + 1) + " end");
+    const zoom = boundedNumber(item.zoom, 1.5, 1.05, 2.5, "Camera move " + (index + 1) + " zoom");
+    const focusX = boundedNumber(item.focusX, 0.5, 0, 1, "Camera move " + (index + 1) + " focusX");
+    const focusY = boundedNumber(item.focusY, 0.5, 0, 1, "Camera move " + (index + 1) + " focusY");
+    const easing = item.easing === undefined ? "smooth" : item.easing;
+    if (end - start < 0.4) throw new Error("Camera move " + (index + 1) + " harus berlangsung minimal 0.4 detik agar animasi tidak tersentak.");
+    if (start < previousCameraEnd - 0.001) throw new Error("edit.cameraMoves harus berurutan dan tidak saling tumpang tindih.");
+    if (easing !== "smooth") throw new Error("Camera move " + (index + 1) + " hanya mendukung easing smooth.");
+    previousCameraEnd = end;
+    return { start, end, zoom, focusX, focusY, easing };
   });
 
   const captionsEnabled = boundedBoolean(captions.enabled, false, "captions.enabled");
@@ -195,7 +220,7 @@ export function validateEditPlan(input, options = {}) {
   return {
     schemaVersion: 1,
     title,
-    output: { ratio, resolution, fps, maxDurationSeconds },
+    output: { ratio, resolution, fps, maxDurationSeconds, fitMode },
     edit: {
       removeSilence,
       silenceThresholdDb,
@@ -203,7 +228,8 @@ export function validateEditPlan(input, options = {}) {
       keepPaddingSeconds,
       fadeInSeconds,
       fadeOutSeconds,
-      segments
+      segments,
+      cameraMoves
     },
     captions: { enabled: captionsEnabled, style: captionStyle, items: captionItems },
     audio: { normalize, originalVolume, musicAsset, musicVolume }
