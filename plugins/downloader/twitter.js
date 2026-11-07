@@ -11,7 +11,7 @@ const USER_AGENT = 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, l
 
 async function downloadXMedia(item, index) {
   const mediaUrl = new URL(item.url)
-  if (!/(?:^|\\.)twimg\\.com$/i.test(mediaUrl.hostname)) {
+  if (!/(?:^|\.)twimg\.com$/i.test(mediaUrl.hostname)) {
     throw new Error('Host media X tidak diizinkan.')
   }
 
@@ -52,7 +52,7 @@ function getPostMetadata(payload) {
   const post = payload?.status || payload?.tweet || payload?.data?.status || payload?.data?.tweet || payload || {}
   const author = post.author || {}
   return {
-    text: String(post.text || payload?.text || '').replace(/\\s+/g, ' ').trim(),
+    text: String(post.text || payload?.text || '').replace(/\s+/g, ' ').trim(),
     author: String(author.name || author.screen_name || post.user_name || post.user_screen_name || '').trim()
   }
 }
@@ -160,7 +160,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
         '📦 *Media:* ' + (i + 1) + ' dari ' + result.files.length +
           (result.skipped ? ' (' + result.skipped + ' gagal diambil)' : '')
       ].filter(Boolean)
-      const caption = parts.join('\\n')
+      const caption = parts.join('\n')
       const fileName = 'x-' + status.id + '-' + (i + 1) + '.' + media.ext
       const message = media.type === 'video'
         ? { video: media.buffer, mimetype: media.mime, fileName, caption }
