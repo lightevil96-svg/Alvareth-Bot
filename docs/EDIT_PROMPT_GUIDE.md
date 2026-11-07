@@ -31,13 +31,15 @@ Buat satu objek JSON valid dengan schemaVersion 1 dan hanya gunakan field yang d
 
 Batas teknis:
 - Rasio output: 9:16, 16:9, 1:1, atau 4:5.
+- output.fitMode: crop atau blur-background. Gunakan blur-background untuk mempertahankan seluruh gameplay landscape di video vertikal.
 - Resolusi: 1080p atau 720p.
 - FPS: 24, 25, 30, 50, atau 60.
 - Durasi output: 5 sampai 180 detik.
-- Maksimal 40 segmen sumber dan 200 item caption.
+- Maksimal 40 segmen sumber, 20 gerakan kamera, dan 200 item caption.
 - Timestamp segmen harus dalam detik sejak awal video sumber, berurutan, tidak tumpang tindih, dan tidak melebihi durasi sumber.
 - Kecepatan segmen hanya 0.5 sampai 2.0.
-- Caption menggunakan timestamp timeline output setelah seluruh potongan dan perubahan kecepatan diterapkan.
+- Caption dan cameraMoves menggunakan timestamp timeline output setelah seluruh potongan dan perubahan kecepatan diterapkan.
+- Camera move mendukung zoom 1.05–2.5, focusX/focusY 0–1, dan easing smooth. Ini adalah keyframe manual, bukan face tracking otomatis.
 - Teks caption ringkas, akurat, dan tidak menutupi wajah atau informasi penting.
 - Jangan membuat path file, URL musik, URL SFX, perintah shell, filter FFmpeg, JSX, JavaScript, atau kode lain.
 - Jangan memasukkan URL atau file path ke JSON.
@@ -58,7 +60,8 @@ Schema yang didukung:
         "ratio": "9:16",
         "resolution": "1080p",
         "fps": 30,
-        "maxDurationSeconds": 60
+        "maxDurationSeconds": 60,
+      "fitMode": "blur-background"
       },
       "edit": {
         "removeSilence": true,
@@ -70,6 +73,9 @@ Schema yang didukung:
         "segments": [
           { "start": 2.0, "end": 6.8, "speed": 1.0 },
           { "start": 12.4, "end": 19.0, "speed": 1.0 }
+        ],
+        "cameraMoves": [
+          { "start": 3.0, "end": 5.0, "zoom": 1.6, "focusX": 0.88, "focusY": 0.60, "easing": "smooth" }
         ]
       },
       "captions": {
@@ -95,6 +101,7 @@ Schema yang didukung:
 - resolution: 1080p atau 720p.
 - fps: 24, 25, 30, 50, atau 60.
 - maxDurationSeconds: batas durasi hasil akhir, bukan jaminan bahwa semua sumber akan dipakai.
+- fitMode: crop untuk memenuhi layar dengan pemotongan tengah, atau blur-background untuk menampilkan seluruh video di atas duplikasi latar yang diperbesar dan diburamkan.
 
 ### edit
 - removeSilence: deteksi jeda audio panjang dengan FFmpeg. Ini bukan pemahaman bahasa dan dapat salah menganggap jeda dramatis sebagai silence.
@@ -103,6 +110,7 @@ Schema yang didukung:
 - keepPaddingSeconds: ruang yang tetap dipertahankan di sekitar jeda, 0 sampai 0.5 detik.
 - fadeInSeconds dan fadeOutSeconds: fade visual dan audio, masing-masing 0 sampai 2 detik.
 - segments: potongan manual dari video sumber. start dan end dalam detik sumber; speed 0.5 sampai 2.0. Segmen harus berurutan dan tidak tumpang tindih. Array kosong berarti tidak ada pemilihan momen secara manual.
+- cameraMoves: gerakan kamera manual pada timeline output setelah seluruh segmen digabung. Setiap item memiliki start/end (detik output), zoom (1.05–2.5), focusX/focusY (posisi fokus 0–1), dan easing smooth. Gunakan secukupnya pada momen penting; ini bukan pelacakan wajah otomatis. Gerakan tidak boleh tumpang tindih dan minimal berdurasi 0.4 detik.
 
 ### captions
 - enabled: true atau false.
@@ -132,4 +140,4 @@ Saya ingin video edukasi 35–45 detik untuk Instagram Reels. Pertahankan penjel
 
 ## Batas kemampuan versi pertama
 
-Auto Edit melakukan deteksi jeda audio, pemotongan sederhana, crop tengah sesuai rasio, fade, normalisasi audio, dan encoding MP4. Custom JSON mendukung pemilihan segmen, kecepatan klip, caption bertiming, dan aset musik lokal yang sudah disetujui. Versi ini belum melakukan transkripsi otomatis, face tracking, semantic highlight detection, generative B-roll, atau SFX otomatis. Jangan menjanjikan kemampuan tersebut kepada pengguna.
+Auto Edit melakukan deteksi jeda audio, pemotongan sederhana, crop tengah sesuai rasio, fade, normalisasi audio, dan encoding MP4. Custom JSON mendukung pemilihan segmen, kecepatan klip, blur-background fit, gerakan kamera zoom/pan berbasis keyframe manual, caption bertiming, dan aset musik lokal yang sudah disetujui. Camera moves tidak mendeteksi wajah atau avatar secara otomatis; posisi fokus harus ditentukan dari inspeksi video. Versi ini belum melakukan transkripsi otomatis, semantic highlight detection, generative B-roll, atau SFX otomatis. Jangan menjanjikan kemampuan tersebut kepada pengguna.
