@@ -133,6 +133,21 @@ Untuk menggunakan sesi YouTube milik sendiri, ikuti [panduan ekspor cookies yt-d
 
 AutoDL tidak menjamin unduhan dari konten privat, yang membutuhkan login, yang diblokir penyedia, atau layanan API yang sedang bermasalah. Fitur ini menggunakan downloader yang sudah ada; untuk verifikasi akhir, lakukan tes WhatsApp dari server yang sebenarnya.
 
+## Render video dari WhatsApp dengan script .sh
+
+Fitur owner-only `.render` memakai script shell yang kamu kirim sendiri; bot tidak membuat ulang efek render.
+
+1. Kirim video gameplay ke chat bot.
+2. Reply video tersebut dengan `.render`.
+3. Bot meminta file script `.sh`; kirim file itu sebagai **dokumen** di chat yang sama.
+4. Bot menjalankan script dengan video yang tadi disimpan, lalu mengirim file video hasil render ke WhatsApp.
+
+Untuk kompatibilitas dengan script render yang sebelumnya memakai nama input tetap, folder kerja menyediakan `378541.mp4`, `input.mp4`, dan `video.mp4`. Script juga menerima path video sebagai argumen pertama (`$1`). File hasil harus berupa video baru di folder kerja; nama `jumpscare_short.mp4` diprioritaskan. Sesi menunggu script selama 15 menit, batas video input 300 MB, script 256 KB, output 500 MB, dan waktu eksekusi 30 menit. FFmpeg dan Bash harus tersedia pada server bot. Jika script membutuhkan aset eksternal, aset tersebut harus sudah tersedia di folder kerja atau dibuat oleh script; alur ini menerima video dan satu file `.sh`.
+
+**Peringatan keamanan:** hanya super-owner yang dapat memulai sesi, dan script harus diunggah dari akun serta chat yang sama. Script dijalankan oleh Bash sebagai user OS yang menjalankan bot. Environment child process dibatasi dan folder kerja dibuat privat, tetapi ini **bukan sandbox OS**: script tepercaya saja yang boleh diunggah karena tetap dapat mengakses file yang memang dapat diakses user bot. Jangan menjalankan script dari sumber yang tidak dipercaya.
+
+Folder kerja default berada di `~/.alvareth-bot-data/render-jobs/`; lokasinya dapat diganti dengan `ALVARETH_RENDER_TMPDIR`. Untuk membatalkan sesi yang sedang menunggu script, reply tidak diperlukan: ketik `.render cancel` di chat yang sama.
+
 ## Database dan sesi
 
 Data runtime disimpan di luar checkout Git secara default:

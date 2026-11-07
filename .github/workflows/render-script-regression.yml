@@ -1,0 +1,33 @@
+name: Render script regression
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "lib/render-script.js"
+      - "plugins/owner/render.js"
+      - "tests/render-script.test.js"
+      - "package.json"
+      - ".github/workflows/render-script-regression.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "lib/render-script.js"
+      - "plugins/owner/render.js"
+      - "tests/render-script.test.js"
+      - "package.json"
+      - ".github/workflows/render-script-regression.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  render-script:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run render script regression tests
+        run: npm run test:render
