@@ -6,6 +6,7 @@
 - **Safety:** super-owner-only checks, one concurrent Hermes task, no shell spawn, allowlisted child environment, no inherited Alvareth credentials, file/web/search/clarify tools only, and a temporary `HERMES_WRITE_SAFE_ROOT`. Hermes receives prompts through a private query file and returns structured stream-json events.
 - **Patch workflow:** proposals are path-validated and stored pending owner approval. Applying is a separate explicit command that rejects unsafe paths, symlinks, binary/mode/rename/delete changes, package manifests, and dirty target files; it creates backups, checks `git apply --check`, and syntax-checks JavaScript. Failed syntax checks are rolled back. Undo refuses when patch context no longer matches. No automatic commit, push, or deploy.
 - **Regression coverage:** added `tests/hermes-agent.test.js`, `npm run test:hermes`, and a dedicated GitHub Actions workflow; `npm test` includes the Hermes suite.
+- **CI correction:** the first targeted run exposed an escaped-newline error in the fake Hermes CLI fixture; changed it to emit line breaks with `String.fromCharCode(10)`. This was a test-harness issue, not a production bridge defect.
 - **Not verified:** Hermes CLI installation/configuration on the production VPS, model/provider credentials or inference, live WhatsApp command delivery, and production patch application. These require the owner's server environment.
 
 ## 2026-11-06 — Owner-only WhatsApp Disk Manager

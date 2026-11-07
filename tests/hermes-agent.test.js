@@ -155,7 +155,7 @@ test("Hermes one-shot bridge uses a restricted toolset, query-file, and stream-j
     "const prompt = query >= 0 ? fs.readFileSync(args[query + 1], 'utf8') : '';",
     "const system = {type:'system',subtype:'init',session_id:'session-test-123'};",
     "const result = {type:'result',session_id:'session-test-123',exit_code:0,text:'Mock response: '+prompt,args};",
-    "process.stdout.write(JSON.stringify(system)+'\n'+JSON.stringify(result)+'\n');"
+    "process.stdout.write(JSON.stringify(system)+String.fromCharCode(10)+JSON.stringify(result)+String.fromCharCode(10));"
   ].join("\n");
   await writeFile(fake, fakeScript);
   await chmod(fake, 0o755);
