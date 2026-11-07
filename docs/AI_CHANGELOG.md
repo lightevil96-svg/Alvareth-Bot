@@ -1,3 +1,14 @@
+## 2026-11-07 — Owner-only WhatsApp .render ZIP package workflow
+
+- **Request:** replace the one-file .sh upload step with the ZIP package supplied by Claude, while keeping the existing video → .render interaction.
+- **Package inspection:** the supplied pack.zip contains one pack/render.sh, the required pack/assets/ PNG overlays/mask/border, Poppins-Bold.ttf, optional gen_assets.py, a Windows-only render.bat, and usage notes. The shell script uses relative assets/ paths and defaults to the input filename 378541.mp4; extracting only the shell script would break the render.
+- **Implementation:** .render now accepts a .zip document in the same sender/chat session, extracts the full directory structure with the existing JSZip dependency, locates exactly one render.sh, places the replied video beside it as 378541.mp4, passes that path as $1, executes Bash from the script's own directory, discovers jumpscare_short.mp4, and sends the result. render.bat and gen_assets.py are not executed; the included PNG assets are already generated.
+- **Archive safeguards:** ZIP download 50 MB; at most 200 entries; 100 MB per extracted file; 250 MB total extracted content. Rejects absolute/traversal paths, backslash paths, duplicate names, symlinks, special file types, and ambiguous/missing render.sh. Existing 300 MB input, 500 MB output, 30-minute process timeout, and 15-minute pending session remain.
+- **Security:** the archive and script still come from the super-owner session, but Bash executes render.sh under the bot's OS account. Private per-job directories, minimal child environment, path validation and resource limits are not an OS sandbox; only trusted ZIP packages may be run.
+- **Files:** plugins/owner/render.js, lib/render-script.js, tests/render-script.test.js, README.md, AI_CONTEXT.md, docs/AI_CHANGELOG.md. No new dependency is required; JSZip was already declared in package.json.
+- **Verification:** pending after the new ZIP regression workflow runs. Live WhatsApp upload/download, FFmpeg availability and rendering on the target TokoPanel server remain unverified.
+- **Regression lesson:** render packages may contain relative assets and a wrapper directory. Preserve the archive tree, execute only the single intended render.sh from its parent directory, and do not execute Windows or optional asset-generation scripts automatically.
+
 ## 2026-11-07 — Owner-only WhatsApp .render script workflow
 
 - **Request:** simplify video rendering to the exact two-step interaction: reply to a sent video with `.render`, then upload the `.sh` script when prompted.

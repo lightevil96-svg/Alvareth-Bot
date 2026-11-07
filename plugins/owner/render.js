@@ -6,7 +6,8 @@ import { downloadContentFromMessage } from 'baileys'
 import { getQuotedMediaInfo, downloadQuotedMedia } from '../../lib/simple.js'
 import { sendLocalFile } from '../../lib/whatsapp-file-sender.js'
 import {
-  normalizeShellScript,
+  extractRenderArchive,
+  findRenderScript,
   runRenderScript,
   findRenderOutput
 } from '../../lib/render-script.js'
@@ -18,11 +19,14 @@ const SESSION_TTL_MS = 15 * 60 * 1000
 const STALE_JOB_TTL_MS = 24 * 60 * 60 * 1000
 const MAX_PENDING_SESSIONS = 3
 const MAX_VIDEO_BYTES = 300 * 1024 * 1024
-const MAX_SCRIPT_BYTES = 256 * 1024
+const MAX_ARCHIVE_BYTES = 50 * 1024 * 1024
+const MAX_ARCHIVE_ENTRIES = 200
+const MAX_ARCHIVE_FILE_BYTES = 100 * 1024 * 1024
+const MAX_ARCHIVE_UNPACKED_BYTES = 250 * 1024 * 1024
 const MAX_OUTPUT_BYTES = 500 * 1024 * 1024
 const SCRIPT_TIMEOUT_MS = 30 * 60 * 1000
 
-// Session dipisahkan berdasarkan chat dan pengirim agar file .sh pengguna lain
+// Session dipisahkan berdasarkan chat dan pengirim agar paket ZIP pengguna lain
 // tidak pernah dipasangkan dengan video milik owner.
 const pendingSessions = new Map()
 
@@ -127,22 +131,25 @@ function getCurrentDocument(m) {
   return media && typeof media === 'object' ? media : null
 }
 
-async function downloadDocument(conn, media) {
+async function downloadDocument(conn, media, options = {}) {
+  const maxBytes = Number(options.maxBytes) > 0 ? Number(options.maxBytes) : MAX_ARCHIVE_BYTES
+  const label = String(options.label || 'ZIP')
   let lastError
+
   if (typeof conn?.downloadM === 'function') {
     try {
       const result = await conn.downloadM(media, 'document')
       if (Buffer.isBuffer(result) || result instanceof Uint8Array) {
         const buffer = Buffer.from(result)
-        if (buffer.length > MAX_SCRIPT_BYTES) {
-          const error = new Error('File .sh melebihi batas ' + formatBytes(MAX_SCRIPT_BYTES) + '.')
-          error.code = 'RENDER_SCRIPT_TOO_LARGE'
+        if (buffer.length > maxBytes) {
+          const error = new Error('File ' + label + ' melebihi batas ' + formatBytes(maxBytes) + '.')
+          error.code = 'RENDER_ARCHIVE_TOO_LARGE'
           throw error
         }
         if (buffer.length) return buffer
       }
     } catch (error) {
-      if (error?.code === 'RENDER_SCRIPT_TOO_LARGE') throw error
+      if (error?.code === 'RENDER_ARCHIVE_TOO_LARGE') throw error
       lastError = error
     }
   }
@@ -154,9 +161,9 @@ async function downloadDocument(conn, media) {
     for await (const chunk of stream) {
       const part = Buffer.from(chunk)
       total += part.length
-      if (total > MAX_SCRIPT_BYTES) {
-        const error = new Error('File .sh melebihi batas ' + formatBytes(MAX_SCRIPT_BYTES) + '.')
-        error.code = 'RENDER_SCRIPT_TOO_LARGE'
+      if (total > maxBytes) {
+        const error = new Error('File ' + label + ' melebihi batas ' + formatBytes(maxBytes) + '.')
+        error.code = 'RENDER_ARCHIVE_TOO_LARGE'
         throw error
       }
       chunks.push(part)
@@ -164,12 +171,23 @@ async function downloadDocument(conn, media) {
     const buffer = Buffer.concat(chunks)
     if (buffer.length) return buffer
   } catch (error) {
-    if (error?.code === 'RENDER_SCRIPT_TOO_LARGE') throw error
+    if (error?.code === 'RENDER_ARCHIVE_TOO_LARGE') throw error
     lastError = error
   }
 
-  throw new Error('File script tidak dapat diunduh dari WhatsApp' +
-    (lastError?.message ? ': ' + String(lastError.message).slice(0, 250) : '.') )
+  throw new Error('File ' + label + ' tidak dapat diunduh dari WhatsApp' +
+    (lastError?.message ? ': ' + String(lastError.message).slice(0, 250) : '.'))
+}
+
+function isZipDocument(filename, mimetype) {
+  return /\.zip$/i.test(String(filename || '')) ||
+    /application\/(?:zip|x-zip-compressed)|application\/x-zip/i.test(String(mimetype || ''))
+}
+
+function hasZipSignature(buffer) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 4) return false
+  const signature = buffer.subarray(0, 4).toString('hex')
+  return signature === '504b0304' || signature === '504b0506' || signature === '504b0708'
 }
 
 const handler = async (m, { conn, text }) => {
@@ -181,7 +199,7 @@ const handler = async (m, { conn, text }) => {
 
   if (action === 'cancel') {
     const session = pendingSessions.get(key)
-    if (!session) return safeReply(m, 'Tidak ada sesi render yang menunggu file .sh.')
+    if (!session) return safeReply(m, 'Tidak ada sesi render yang menunggu file ZIP.')
     if (session.processing) return safeReply(m, 'Render sedang berjalan. Tunggu sampai proses selesai.')
     pendingSessions.delete(key)
     await removeSession(session)
@@ -207,7 +225,7 @@ const handler = async (m, { conn, text }) => {
   const isVideo = /^(?:video|ptv)message$/.test(mediaType) || mime.startsWith('video/')
 
   if (!mediaInfo || !isVideo) {
-    return safeReply(m, 'Kirim video ke chat ini, lalu reply video tersebut dengan *.render*. Setelah itu bot akan meminta file script *.sh*.')
+    return safeReply(m, 'Kirim video ke chat ini, lalu reply video tersebut dengan *.render*. Setelah itu bot akan meminta paket render *.zip*.')
   }
 
   const declaredSize = toSafeNumber(mediaInfo.media?.fileLength)
@@ -259,7 +277,7 @@ const handler = async (m, { conn, text }) => {
 
     return safeReply(
       m,
-      '🎬 Video diterima (' + formatBytes(videoBuffer.length) + ').\n\nSekarang kirim file script *.sh* sebagai dokumen di chat yang sama. Bot akan menjalankan script itu dengan video ini dan mengirim hasil render-nya.\n\nSesi berlaku 15 menit. Gunakan *.render cancel* jika ingin membatalkan.'
+      '🎬 Video diterima (' + formatBytes(videoBuffer.length) + ').\n\nSekarang kirim paket render *.zip* sebagai dokumen di chat yang sama. Bot akan mengekstrak aset dan menjalankan render.sh dari dalam paket tersebut.\n\nSesi berlaku 15 menit. Gunakan *.render cancel* jika ingin membatalkan.'
     )
   } catch (error) {
     if (sessionDirectory) await fs.rm(sessionDirectory, { recursive: true, force: true }).catch(() => {})
@@ -284,63 +302,86 @@ handler.all = async function (m) {
   const document = getCurrentDocument(m)
   if (!document) return
 
+  if (session.processing) {
+    return safeReply(m, 'Paket render untuk sesi ini sedang diproses. Tunggu sampai selesai.')
+  }
+
   const filename = path.basename(String(document.fileName || '').trim())
   const mimetype = String(document.mimetype || '').toLowerCase()
-  const isShellScript = /\.sh$/i.test(filename) || /shellscript|x-sh$/i.test(mimetype)
-  if (!isShellScript) {
-    return safeReply(m, 'File yang diminta harus berupa script *.sh*. Video masih tersimpan; kirim file .sh sebagai dokumen.')
-  }
-  if (session.processing) {
-    return safeReply(m, 'Script untuk sesi ini sedang diproses. Tunggu sampai selesai.')
+  if (!isZipDocument(filename, mimetype)) {
+    return safeReply(m, 'File yang diminta harus berupa paket *.zip* dan dikirim sebagai dokumen. Video masih tersimpan; kirim file ZIP dari Claude.')
   }
 
   const declaredSize = toSafeNumber(document.fileLength)
-  if (declaredSize > MAX_SCRIPT_BYTES) {
-    return safeReply(m, 'Ukuran script melebihi batas ' + formatBytes(MAX_SCRIPT_BYTES) + '.')
+  if (declaredSize > MAX_ARCHIVE_BYTES) {
+    return safeReply(m, 'Ukuran ZIP ' + formatBytes(declaredSize) + ' melebihi batas ' + formatBytes(MAX_ARCHIVE_BYTES) + '.')
   }
 
   session.processing = true
   let workDirectory
   try {
-    const scriptBuffer = await downloadDocument(this, document)
-    const scriptSource = normalizeShellScript(scriptBuffer, MAX_SCRIPT_BYTES)
+    const archiveBuffer = await downloadDocument(this, document, {
+      maxBytes: MAX_ARCHIVE_BYTES,
+      label: 'ZIP'
+    })
+    if (!hasZipSignature(archiveBuffer)) {
+      throw new Error('File yang dikirim tidak memiliki signature ZIP yang valid. Kirim ulang arsip .zip dari Claude.')
+    }
 
-    await safeReply(m, '🛠️ Script diterima. Render dimulai; proses dapat memerlukan beberapa menit.')
+    await safeReply(m, '📦 Paket ZIP diterima. Bot sedang memeriksa isi arsip, mengekstrak aset, dan menyiapkan render.')
 
     workDirectory = await fs.mkdtemp(path.join(session.directory, 'run-'))
     await fs.chmod(workDirectory, 0o700).catch(() => {})
-    await fs.mkdir(path.join(workDirectory, '.render-home'), { recursive: true, mode: 0o700 })
-    await fs.mkdir(path.join(workDirectory, '.render-tmp'), { recursive: true, mode: 0o700 })
+    const packageDirectory = path.join(workDirectory, 'package')
+    await fs.mkdir(packageDirectory, { recursive: true, mode: 0o700 })
 
-    // Claude's earlier script used 378541.mp4. Keep that name available, plus
-    // generic aliases and the input path argument for scripts that accept $1.
-    const inputPath = path.join(workDirectory, '378541.mp4')
-    await fs.copyFile(session.videoPath, inputPath)
-    for (const alias of ['input.mp4', 'video.mp4']) {
-      await fs.symlink('378541.mp4', path.join(workDirectory, alias))
+    const extracted = await extractRenderArchive(archiveBuffer, packageDirectory, {
+      maxArchiveBytes: MAX_ARCHIVE_BYTES,
+      maxEntries: MAX_ARCHIVE_ENTRIES,
+      maxFileBytes: MAX_ARCHIVE_FILE_BYTES,
+      maxTotalBytes: MAX_ARCHIVE_UNPACKED_BYTES
+    })
+    const scriptPath = await findRenderScript(packageDirectory)
+    const scriptDirectory = path.dirname(scriptPath)
+
+    // The Claude package expects 378541.mp4 beside render.sh and reads assets/
+    // relative to that same directory. Keep generic aliases for other scripts.
+    const inputPath = path.join(scriptDirectory, '378541.mp4')
+    for (const reservedName of ['378541.mp4', 'input.mp4', 'video.mp4']) {
+      const reservedPath = path.join(scriptDirectory, reservedName)
+      try {
+        await fs.lstat(reservedPath)
+        throw new Error('ZIP memakai nama file input yang dicadangkan: ' + reservedName + '. Hapus file tersebut dari paket.')
+      } catch (error) {
+        if (error?.code !== 'ENOENT') throw error
+      }
     }
 
-    const scriptPath = path.join(workDirectory, 'render.sh')
-    await fs.writeFile(scriptPath, scriptSource, { encoding: 'utf8', mode: 0o700, flag: 'wx' })
+    await fs.copyFile(session.videoPath, inputPath)
+    for (const alias of ['input.mp4', 'video.mp4']) {
+      await fs.symlink('378541.mp4', path.join(scriptDirectory, alias))
+    }
 
     const startedAt = Date.now()
     const processResult = await runRenderScript({
       scriptPath,
-      workingDirectory: workDirectory,
+      workingDirectory: scriptDirectory,
       inputPath,
       timeoutMs: SCRIPT_TIMEOUT_MS
     })
-    console.log('[RENDER] Script selesai:', {
+    console.log('[RENDER] Paket ZIP selesai dijalankan:', {
+      archiveFiles: extracted.files.length,
+      extractedBytes: formatBytes(extracted.totalBytes),
       durationSeconds: Number((processResult.durationMs / 1000).toFixed(1)),
       exitCode: processResult.code
     })
 
-    const output = await findRenderOutput(workDirectory, {
+    const output = await findRenderOutput(scriptDirectory, {
       excludePaths: [scriptPath, inputPath],
       startedAt
     })
     if (!output) {
-      throw new Error('Script selesai, tetapi file video hasil render tidak ditemukan. Simpan hasil sebagai MP4 di folder yang sama dengan render.sh.')
+      throw new Error('Script selesai, tetapi file video hasil render tidak ditemukan. Simpan hasil sebagai file MP4 di folder yang sama dengan render.sh.')
     }
     if (output.size > MAX_OUTPUT_BYTES) {
       throw new Error('Ukuran hasil render ' + formatBytes(output.size) + ' melebihi batas pengiriman ' + formatBytes(MAX_OUTPUT_BYTES) + '.')
@@ -358,7 +399,7 @@ handler.all = async function (m) {
       size: formatBytes(output.size)
     })
   } catch (error) {
-    console.error('[RENDER] Proses render gagal:', error?.stack || error)
+    console.error('[RENDER] Proses render ZIP gagal:', error?.stack || error)
     if (workDirectory) {
       await fs.rm(workDirectory, { recursive: true, force: true }).catch(() => {})
     }
@@ -366,7 +407,7 @@ handler.all = async function (m) {
     await safeReply(
       m,
       '❌ Render gagal: ' + safeError(error) +
-      '\n\nVideo masih tersimpan selama sesi aktif. Kamu bisa kirim ulang file .sh yang sudah diperbaiki, atau gunakan *.render cancel*.'
+      '\n\nVideo masih tersimpan selama sesi aktif. Kamu bisa kirim ulang paket ZIP yang sudah diperbaiki, atau gunakan *.render cancel*.'
     )
   }
 }

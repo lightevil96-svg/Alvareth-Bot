@@ -133,20 +133,24 @@ Untuk menggunakan sesi YouTube milik sendiri, ikuti [panduan ekspor cookies yt-d
 
 AutoDL tidak menjamin unduhan dari konten privat, yang membutuhkan login, yang diblokir penyedia, atau layanan API yang sedang bermasalah. Fitur ini menggunakan downloader yang sudah ada; untuk verifikasi akhir, lakukan tes WhatsApp dari server yang sebenarnya.
 
-## Render video dari WhatsApp dengan script .sh
+## Render video dari WhatsApp dengan paket ZIP
 
-Fitur owner-only `.render` memakai script shell yang kamu kirim sendiri; bot tidak membuat ulang efek render.
+Fitur owner-only **.render** menerima satu paket ZIP dari Claude. Bot mengekstrak seluruh aset, menjalankan **render.sh** yang ada di dalam paket, lalu mengirim video hasilnya ke WhatsApp.
 
 1. Kirim video gameplay ke chat bot.
-2. Reply video tersebut dengan `.render`.
-3. Bot meminta file script `.sh`; kirim file itu sebagai **dokumen** di chat yang sama.
-4. Bot menjalankan script dengan video yang tadi disimpan, lalu mengirim file video hasil render ke WhatsApp.
+2. Reply video tersebut dengan **.render**.
+3. Bot meminta paket render **.zip**; kirim ZIP sebagai **dokumen** di chat yang sama.
+4. Bot memeriksa arsip, mempertahankan struktur folder/aset, menyiapkan video input, menjalankan **render.sh**, lalu mengirim hasil render.
 
-Untuk kompatibilitas dengan script render yang sebelumnya memakai nama input tetap, folder kerja menyediakan `378541.mp4`, `input.mp4`, dan `video.mp4`. Script juga menerima path video sebagai argumen pertama (`$1`). File hasil harus berupa video baru di folder kerja; nama `jumpscare_short.mp4` diprioritaskan. Sesi menunggu script selama 15 menit, batas video input 300 MB, script 256 KB, output 500 MB, dan waktu eksekusi 30 menit. FFmpeg dan Bash harus tersedia pada server bot. Jika script membutuhkan aset eksternal, aset tersebut harus sudah tersedia di folder kerja atau dibuat oleh script; alur ini menerima video dan satu file `.sh`.
+Paket harus berisi tepat satu file bernama **render.sh**. Script dijalankan dari folder tempat render.sh berada sehingga path relatif seperti **assets/vt_mask.png**, **assets/title.png**, dan file aset lain tetap berfungsi. Untuk paket Claude yang saat ini diberikan, bot menaruh video yang dikirim sebagai **378541.mp4** di samping render.sh dan juga memberikan path video sebagai argumen pertama (**$1**). Hasil **jumpscare_short.mp4** akan diprioritaskan saat ditemukan.
 
-**Peringatan keamanan:** hanya super-owner yang dapat memulai sesi, dan script harus diunggah dari akun serta chat yang sama. Script dijalankan oleh Bash sebagai user OS yang menjalankan bot. Environment child process dibatasi dan folder kerja dibuat privat, tetapi ini **bukan sandbox OS**: script tepercaya saja yang boleh diunggah karena tetap dapat mengakses file yang memang dapat diakses user bot. Jangan menjalankan script dari sumber yang tidak dipercaya.
+**Isi paket Claude:** **render.sh** adalah script yang dijalankan. Folder **assets/** dan **Poppins-Bold.ttf** diekstrak apa adanya. **render.bat** tidak dijalankan karena server bot menggunakan Bash/Linux. **gen_assets.py** bersifat opsional untuk membuat ulang gambar caption; file PNG yang dibutuhkan sudah disertakan, sehingga Python dan Pillow tidak diperlukan untuk render normal.
 
-Folder kerja default berada di `~/.alvareth-bot-data/render-jobs/`; lokasinya dapat diganti dengan `ALVARETH_RENDER_TMPDIR`. Untuk membatalkan sesi yang sedang menunggu script, reply tidak diperlukan: ketik `.render cancel` di chat yang sama.
+**Batas proses:** video input 300 MB, file ZIP 50 MB, maksimal 200 item, maksimal 100 MB per file dan 250 MB total hasil ekstraksi, output 500 MB, serta waktu eksekusi 30 menit. Sesi menunggu ZIP selama 15 menit. Bash dan FFmpeg harus tersedia pada server. **START** dan **DUR** tetap dapat diubah di render.sh sebelum ZIP dikirim; efek/caption dan aset lainnya mengikuti isi paket.
+
+**Peringatan keamanan:** hanya super-owner yang dapat memulai sesi, dan ZIP harus diunggah dari akun serta chat yang sama. Bot menolak path traversal, symbolic link, dan arsip yang melewati batas ukuran/jumlah file. Namun, render.sh tetap dijalankan oleh Bash sebagai user OS yang menjalankan bot. Environment child process dibatasi dan folder kerja dibuat privat, tetapi ini **bukan sandbox OS**: script tepercaya saja yang boleh diunggah karena tetap dapat mengakses file yang memang dapat diakses user bot. Bot hanya menjalankan satu render.sh; render.bat dan script lain di dalam ZIP tidak dieksekusi.
+
+Folder kerja default berada di **~/.alvareth-bot-data/render-jobs/**; lokasinya dapat diganti dengan **ALVARETH_RENDER_TMPDIR**. Untuk membatalkan sesi yang sedang menunggu ZIP, ketik **.render cancel** di chat yang sama.
 
 ## Database dan sesi
 
