@@ -17,8 +17,8 @@ function diskMenu(prefix = ".") {
     "• " + prefix + "disk confirm — setujui penghapusan pratinjau",
     "• " + prefix + "disk cancel — batalkan pratinjau",
     "",
-    "Pembersihan hanya menyasar file sementara WhatsApp dan aset sementara Remotion yang tidak berubah selama minimal 24 jam.",
-    "Sesi WhatsApp, database, konfigurasi, model, node_modules, log, backup, dan hasil MP4 tidak disentuh."
+    "Pembersihan hanya menyasar file sementara WhatsApp yang tidak berubah selama minimal 24 jam.",
+    "Sesi WhatsApp, database, konfigurasi, model, node_modules, log, dan backup tidak disentuh."
   ].join("\n");
 }
 
@@ -58,7 +58,7 @@ const handler = async (m, context = {}) => {
       previews.delete(key);
       return m.reply(
         "✅ *TIDAK ADA FILE SEMENTARA LAMA YANG AMAN DIBERSIHKAN*\n\n" +
-        "Folder yang diperiksa: temporary media WhatsApp dan aset sementara Remotion.\n" +
+        "Folder yang diperiksa: temporary media WhatsApp.\n" +
         "File yang lebih baru dari 24 jam sengaja dilewati agar proses aktif tidak terganggu."
       );
     }

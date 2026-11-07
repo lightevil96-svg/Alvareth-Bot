@@ -1,3 +1,12 @@
+## 2026-11-07 — Remove heavy video and Hermes features
+
+- **Request:** remove the owner-only `.remotion`, `.hermes`, and `.edit` features to reduce the bot's runtime and dependency footprint while preserving unrelated commands.
+- **Root cause:** the video studio initialized a render queue and local model/service integration; video editing maintained a separate processing queue; Hermes added a child-process maintenance bridge. The WhatsApp handler also intercepted messages for active Remotion and edit prompt sessions.
+- **Changes:** removed the three command plugins, session-routing hooks, video-studio/video-edit runtimes, Hermes bridge, dedicated npm dependencies/scripts, related tests/workflows/bootstrap scripts/docs, feature-specific environment variables, and video-production agent skills. Updated README/AI guidance and narrowed Disk Manager cleanup to WhatsApp temporary media only.
+- **Verification:** repository changes and deletion scope are prepared on the current `main` tree. GitHub Actions and runtime tests must be checked after the commit; no live WhatsApp/TokoPanel test is claimed here.
+- **Not verified / outside repository:** this change does not uninstall separately provisioned Hermes CLI files, VoxCPM2 model weights, Python virtual environments, Ollama binaries, or other files already stored on the VPS. Those require separate cleanup on the server after confirming their paths.
+- **Regression lesson:** removing a plugin alone is insufficient when `handler.js` has a pre-plugin prompt-session hook; remove the hook and its tests/configuration together. Keep FFmpeg because other retained commands still use media processing.
+
 ## 2026-11-07 — Add owner-only Hermes Agent maintenance bridge
 
 - **Request:** let the Alvareth owner audit, troubleshoot, and prepare safe code-maintenance changes from WhatsApp.

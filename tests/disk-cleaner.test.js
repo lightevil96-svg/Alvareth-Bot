@@ -4,49 +4,41 @@ import { mkdtemp, mkdir, writeFile, utimes, rm, symlink, stat } from "node:fs/pr
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-test("Disk Manager preview and cleanup only remove stale files from allowlisted temp roots", async t => {
+test("Disk Manager preview and cleanup only remove stale files from the WhatsApp temp root", async t => {
   const base = await mkdtemp(path.join(tmpdir(), "alvareth-disk-"));
   const data = path.join(base, "data");
   const waTmp = path.join(data, "tmp");
   const project = path.join(base, "project");
-  const generated = path.join(project, "video-studio", "remotion", "public", "generated");
   await mkdir(waTmp, { recursive: true });
-  await mkdir(generated, { recursive: true });
   await mkdir(path.join(data, "session"), { recursive: true });
   await writeFile(path.join(waTmp, "old-media.bin"), Buffer.alloc(4096));
   await writeFile(path.join(waTmp, "new-media.bin"), Buffer.alloc(128));
-  await writeFile(path.join(generated, "old-render-asset.bin"), Buffer.alloc(2048));
   await writeFile(path.join(data, "session", "creds.json"), "keep-me");
   const old = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
   await utimes(path.join(waTmp, "old-media.bin"), old, old);
-  await utimes(path.join(generated, "old-render-asset.bin"), old, old);
   await symlink(path.join(data, "session", "creds.json"), path.join(waTmp, "session-link")).catch(() => {});
 
   const oldEnv = {
     data: process.env.ALVARETH_DATA_DIR,
     tmp: process.env.ALVARETH_WA_TMPDIR,
-    generated: process.env.ALVARETH_DISK_GENERATED_DIR
   };
   process.env.ALVARETH_DATA_DIR = data;
   process.env.ALVARETH_WA_TMPDIR = waTmp;
-  process.env.ALVARETH_DISK_GENERATED_DIR = generated;
   const moduleUrl = new URL("../lib/disk-cleaner.js?test=" + Date.now(), import.meta.url);
   try {
     const cleaner = await import(moduleUrl);
     const preview = await cleaner.getSafeCleanupPreview();
-    assert.equal(preview.totalFiles, 2);
-    assert.equal(preview.totalBytes, 6144);
+    assert.equal(preview.totalFiles, 1);
+    assert.equal(preview.totalBytes, 4096);
     const result = await cleaner.cleanSafeTempFiles(preview);
-    assert.equal(result.deletedFiles, 2);
-    assert.equal(result.deletedBytes, 6144);
+    assert.equal(result.deletedFiles, 1);
+    assert.equal(result.deletedBytes, 4096);
     await assert.rejects(stat(path.join(waTmp, "old-media.bin")));
-    await assert.rejects(stat(path.join(generated, "old-render-asset.bin")));
     assert.equal((await stat(path.join(waTmp, "new-media.bin"))).size, 128);
     assert.equal(await import("node:fs/promises").then(fs => fs.readFile(path.join(data, "session", "creds.json"), "utf8")), "keep-me");
   } finally {
     oldEnv.data === undefined ? delete process.env.ALVARETH_DATA_DIR : process.env.ALVARETH_DATA_DIR = oldEnv.data;
     oldEnv.tmp === undefined ? delete process.env.ALVARETH_WA_TMPDIR : process.env.ALVARETH_WA_TMPDIR = oldEnv.tmp;
-    oldEnv.generated === undefined ? delete process.env.ALVARETH_DISK_GENERATED_DIR : process.env.ALVARETH_DISK_GENERATED_DIR = oldEnv.generated;
     await rm(base, { recursive: true, force: true });
   }
 });

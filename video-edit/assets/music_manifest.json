@@ -1,5 +1,0 @@
-{
-  "version": 1,
-  "tracks": [],
-  "policy": "Only local tracks with licenseStatus=verified-free may be used. Keep source, license evidence, attribution requirements, and checksum in the manifest before adding an asset. The default library intentionally contains no tracks."
-}

@@ -1,2 +1,0 @@
-# Lightweight online TTS adapter; no local speech model.
-edge-tts==7.3.1

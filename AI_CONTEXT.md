@@ -9,40 +9,11 @@
 
 ## Pembaruan terbaru
 
-- 2026-11-07: Added the owner-only `.hermes` maintenance bridge. It uses the configured local Hermes CLI, structured one-shot output, a restricted toolset, temporary patch proposals, explicit apply/undo, focused regression tests, and the full repository `npm test` workflow on Hermes source/test changes. See `docs/HERMES_AGENT.md`.
-- 2026-11-07: Corrected the Hermes regression fixture's JSONL newline generation after the first CI run exposed an escaped-newline bug; production bridge behavior was unchanged.
-
-- 2026-11-06: Added repository-root `prompt-remotion.md`, a strict ChatGPT guide with the current JSON schema, enum allowlists, capability limits, and a complete Indonesian story example. WhatsApp accepts up to 24,000 characters; plain-language briefs are intentionally rejected.
-- 2026-11-06: Planner is now an offline JSON parser/normalizer only. It has no Ollama, Qwen, or ChatGPT API dependency.
-- 2026-11-06: Scene duration fitting rejects targets shorter than estimated narration/reading time instead of compressing speech. Ollama installer/bootstrap, local service management, environment settings, and obsolete archive extractor were removed; VoxCPM2-only installation and hardware diagnostics remain.
-
-- 2026-11-06: Removed the Ollama/Qwen planner and all Ollama provisioning from production `main`. Storyboard authoring now happens manually in ChatGPT; the bot accepts only JSON with `schemaVersion: 1` and validates/compiles it. See `prompt-remotion.md`.
-- 2026-11-06: ComfyUI readiness now requires exact workflow SHA-256 approval; character reference also requires reviewed image/video workflows and the `{{REFERENCE_IMAGE}}` placeholder.
-- 2026-11-06: GitHub Actions passed on `8f54ee1`: JavaScript syntax, Video Studio regression, mocked VoxCPM2 service contract, Remotion JSX compile, and fixture MP4 render/decode. Real VPS inference/render and WhatsApp delivery remain unverified.
-
-- 2026-11-06: Video Studio ditetapkan WhatsApp-only. Remote LightJurnal API dan Cloudflare Tunnel dihapus: server.js hanya mempertahankan health/ping hosting, tidak ada route /api/video-studio, cloudflared, API key, maupun token tunnel. Satu-satunya kontrol produksi adalah owner-only .remotion; MP4 dikirim ke chat WhatsApp asal.
-
-- 2026-11-06: Follow-up CI fixes the planner base URL and VoxCPM2 transport diagnostics; see the latest changelog entry.
-- 2026-11-06: The VoxCPM2 child process inherits only allowlisted runtime/model/CUDA variables; bot credentials are excluded. No Ollama process is launched.
-
-- 2026-11-06: Remotion readiness now checks VoxCPM2 virtualenv/model weights and optional ComfyUI workflows. Owner-only `.remotion install` provisions VoxCPM2 runtime/model in the background; `.remotion install cpu` is an explicit slow CPU path; `.remotion install status` reads persistent setup state/logs. Hardware diagnostics remain in the owner menu.
-
-- 2026-11-06: Earlier feature-branch commits introduced the Ollama planner but are not the production architecture. Current `main` removes it and preserves the newer hardware diagnostics and installer. Do not merge the diverged feature branch blindly.
-
-- 2026-11-05: Branch `feat/remotion-whatsapp-linux` menambahkan fitur owner-only `.remotion` pada WhatsApp. Plugin `plugins/owner/remotion.js` memakai Video Studio planner/compiler/queue/renderer yang sudah ada, menu native-flow dengan fallback teks, prompt session, status/progres, riwayat, resend, provider readiness, dan uploader MP4 disk-streaming. Prompt session di-route sebelum plugin normal hanya untuk owner yang memulai sesi.
-
-- 2026-11-05: Generator lama FreeTheAI `plugins/ai/aivideo.js` dihapus dan variabel FREETHEAI dibuang dari `.env.example`. Remotion tetap memakai Node.js, Chromium/Remotion, FFmpeg/FFprobe, dan Linux native; Android/Termux tutorial steps tidak dipakai.
-
-
-- 2026-11-05: Skill `alvareth-ai-video-production` dan dokumen `docs/REMOTION_WHATSAPP_LINUX.md` ditambahkan. Tes command helper dan continuity bible dibuat; jalankan npm test, install dependency, serta live WhatsApp/ComfyUI/ElevenLabs/render checks sebelum merge/deploy.
+- 2026-11-07: Removed `.remotion`, `.hermes`, and `.edit` plus their handlers, render/edit runtimes, dedicated dependencies, environment settings, tests, workflows, and feature-specific documentation/skills. Disk Manager now cleans only WhatsApp temporary media. See `docs/AI_CHANGELOG.md`.
 
 - 2026-11-04: Updater `.update` tidak lagi menganggap batas 300 file dari GitHub REST sebagai daftar lengkap; otomatis memakai Git diff read-only pada repository bare sementara untuk diff penuh, dengan batas pengaman 20.000 file dan output 20 MiB.
 
-- 2026-11-04 (historical, retired 2026-11-06): Video Studio pernah memakai named Cloudflare Tunnel video.lightjurnal.my.id. Integrasi tersebut sudah dihapus; jangan menghidupkan kembali cloudflared, token tunnel, atau remote-render API.
-
 - 2026-11-04: Automatic self-update kini dijalankan setelah plugin dimuat (90 detik awal, lalu interval AUTO_UPDATE_INTERVAL_MINUTES); memakai ulang plugins/owner/update.js, menjaga .env/sesi/database/file konflik, memasang dependency berubah, lalu meminta supervisor index.js restart worker. Tidak memerlukan .update atau PM2.
-
-- 2026-11-04: LightJurnal Video Studio tetap prompt-only. Alvareth kini memiliki pipeline opsional ElevenLabs TTS dengan alignment karakter untuk subtitle per kata, Pexels stock-footage retrieval dan atribusi, music ducking, media validation, serta status tahap persiapan media. Fitur TTS memerlukan VIDEO_STUDIO_ELEVENLABS_API_KEY + VIDEO_STUDIO_ELEVENLABS_VOICE_ID; footage memerlukan VIDEO_STUDIO_PEXELS_API_KEY. CI/JSX compile/regression harus lulus; render MP4 live pada VPS dan validasi akun provider belum dilakukan.
 
 ## 1. Gambaran proyek
 
@@ -72,17 +43,6 @@ Alvareth Bot adalah bot WhatsApp Multi-Device berbasis Node.js, ES Modules, Bail
 5. Jalankan `npm test` dan pemeriksaan yang relevan. Untuk perubahan plugin, uji jalur terkait; untuk fitur eksternal, bedakan tes sintaks dari tes API dan tes WhatsApp langsung.
 6. Periksa diff akhir agar perubahan tidak menyertakan rahasia, data runtime, atau file yang tidak terkait.
 7. **Catat setiap perubahan bermakna dalam `docs/AI_CHANGELOG.md` pada commit `main` yang sama/berurutan langsung dengan perubahan kode.** Perbarui bagian “Pembaruan terbaru” di file ini dengan ringkasan satu baris. Catat masalah, akar penyebab, perbaikan, file/commit, tes yang dijalankan, hasil, dan hal yang belum diverifikasi. Jangan mengklaim tes atau perilaku live yang tidak benar-benar diuji.
-
-## Hermes Agent — owner-only maintenance bridge
-
-- `.hermes` is an optional bridge to the Nous Research Hermes Agent CLI, not a second WhatsApp gateway. Alvareth keeps its existing Baileys socket.
-- Install and configure Hermes separately under the same trusted Linux user/container as Node.js. The bot resolves `HERMES_BIN` (default `hermes`) and uses `HERMES_HOME`; provider credentials stay in Hermes, not Alvareth `.env`.
-- `plugins/owner/hermes.js` rechecks `isROwner === true`. `lib/hermes-agent.js` uses `spawn` without a shell, an allowlisted child environment, and `HERMES_WRITE_SAFE_ROOT` set to a temporary workspace.
-- The CLI uses `chat --oneshot --query-file --format stream-json` and only the `file,clarify` toolsets by default. Web/search require `HERMES_ENABLE_WEB_TOOLS=true`; no terminal, shell, code-execution, gateway, or WhatsApp toolset is enabled. Alvareth environment credentials are not inherited by the child process.
-- Hermes file tools apply their built-in denylist to `.env` and selected credential paths. `HERMES_WRITE_SAFE_ROOT` constrains writes, not every possible read; Hermes runs with the bot process's OS permissions, so use a separate unprivileged account/container for hard filesystem isolation.
-- `.hermes audit` and `.hermes ask` are non-mutating. `.hermes patch <path> <instruction>` creates a validated unified diff in a private temporary workspace and queues it for owner review. `.hermes apply <id>` is a separate explicit owner action requiring approved paths, clean target files, backups, `git apply --check`, and JavaScript syntax checks. A syntax failure triggers rollback.
-- `.hermes undo <id>` reverses an applied patch only while its context still matches. `.hermes verify` runs `npm test`. Applying a patch never commits, pushes, or deploys; review `git diff` and test results before committing.
-- Session IDs, pending patches, applied patch copies, and backups live under `ALVARETH_DATA_DIR/hermes/` (default `~/.alvareth-bot-data/hermes/`). Configuration: `HERMES_BIN`, `HERMES_HOME`, `HERMES_TIMEOUT_MS`, and `HERMES_MAX_PROMPT_CHARS`, and opt-in `HERMES_ENABLE_WEB_TOOLS`.
 
 ## 3. Aturan wajib: boleh dan tidak boleh
 
@@ -114,7 +74,6 @@ Alvareth Bot adalah bot WhatsApp Multi-Device berbasis Node.js, ES Modules, Bail
 - **AutoDL:** `lib/auto-download.js` memetakan satu URL dari host yang didukung ke plugin downloader yang ada. `handler.js` memproses pesan biasa sebagai synthetic command hanya saat cocok, tanpa mengubah `m.text` atau melewati cek izin/limit. Chat pribadi aktif secara default (termasuk satu URL teks dari akun WhatsApp yang sama meski `fromMe === true`), grup harus `.enable autodl`; link dari bot sendiri diabaikan. `runAutoDownloadJob` membatasi dua unduhan paralel dengan antrean maksimal delapan. **Router lama** `plugins/anu/_autodl.js` masih menangani layanan tambahan dan kasus TikTok link polos dari akun sendiri, tetapi harus mengabaikan `m.autoDownload` untuk mencegah duplikasi; pemilihan prefix pada router lama memakai `findAutoDownloadPrefix()` dari helper yang sama agar prefix regex/default konsisten. Jangan mengaktifkan dua router pada pesan yang sama atau menambah unduhan di `plugin.all`. `plugins/downloader/tiktok.js` menggunakan teks masuk bila `m.autoDownload` agar quoted media tidak mengganti link yang dideteksi.
 - **Plugin:** plugin dimuat secara rekursif dari `plugins/`. Ikuti konvensi handler yang dipakai file sejenis; periksa izin `handler.group`, `handler.admin`, `handler.botAdmin`, limit, dan format command sebelum mengubahnya.
 - **TikTok search/downloader:** `plugins/search/tiktok.js` memakai helper di `lib/scrape/tikwm.js`. API eksternal bisa membatasi IP/host. Jangan memperlakukan HTTP 403 sebagai kueri kosong; gunakan fallback berbeda dan tetap jelaskan jika semua penyedia gagal. Semua direktori kerja TikTok (video, render foto, dan fallback yt-dlp) harus memakai `ALVARETH_TIKTOK_TMPDIR` bila diatur; jangan membuat jalur sementara tambahan langsung di `os.tmpdir()`.
-- **Video Studio WhatsApp-only:** `plugins/owner/remotion.js` is the only production entrypoint. It checks `isROwner === true`, uses the local planner/compiler/queue/renderer, and sends the completed MP4 to the originating chat through the existing Baileys uploader. `server.js` may expose `/`, `/health`, and `/ping` for hosting monitoring only; it must not mount a Video Studio HTTP API. There is no Cloudflare Tunnel, `cloudflared`, public render endpoint, LightJurnal API key, or tunnel token. Keep the render queue bounded so CPU/memory spikes do not starve Baileys.
 - **Updater saat startup:** `npm start` menjalankan `scripts/start-with-update.js`, yang mengambil update Git secara fast-forward dan memulai versi lokal bila pembaruan gagal. Ini bukan update/deploy VPS jarak jauh. Perubahan updater harus mempertahankan data dan perubahan tracked lokal.
 - **Data persisten:** database default berada di `~/.alvareth-bot-data/database.json`; sesi di `~/.alvareth-bot-data/sessions/`. Lokasi dapat berbeda lewat `ALVARETH_DATA_DIR` dan `WA_SESSION_DIR`. Jangan menghapus salinan lama sebelum migrasi berhasil diverifikasi.
 - **Deploy:** saat ini jangan menganggap tersedia auto-deploy ke VPS hanya karena ada workflow GitHub. Periksa file workflow yang benar-benar ada.
@@ -128,20 +87,7 @@ Perintah dasar:
 
 Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes nyata, commit/PR, serta batasan yang belum diuji. Tes sintaks bukan bukti API pihak ketiga atau pengiriman WhatsApp berhasil.
 
-## Video Studio — prompt-first WhatsApp creative director
-
-- Owner mengirim satu brief natural-language melalui .remotion; planner di video-studio/prompt/planner.js menyusun creative brief/storyboard, lalu video-studio/prompt/compile.js mengompilasinya ke skema Remotion yang tervalidasi.
-- Tidak ada HTTP submit/download API atau browser UI. Semua status, riwayat, kontrol, dan pengiriman hasil terjadi di WhatsApp.
-- Keputusan kreatif diinferensikan: jumlah dan durasi scene, rasio, FPS, palet, layout, motion, transisi, mood musik, dan sound cues. Batas render saat ini 60 scene, 20 detik per scene, dan 300 detik total.
-- video-studio/remotion/Composition.jsx mendukung layout hero/editorial/split/stat/quote/steps/outro, motif geometris animatif, preset motion, indikator progres scene, music fades, dan sound cues yang diizinkan.
-- Jangan menambahkan kembali remote LightJurnal API, Cloudflare Tunnel, atau pengaturan kreatif manual. Pertahankan prompt-first dan owner-only di WhatsApp.
-
-
 ## 6. Pembaruan terbaru
-
-- 2026-11-04 — Video Studio prompt-first pipeline implemented: structured AI planning, safe plan compiler, dynamic scene durations, richer motion-graphics layouts, and read-only storyboard output. Focused regression workflow added; initial helper-export test failure fixed. 13 official Remotion skills plus the custom remotion-professional-editor skill are installed under .agents/skills. The focused Video Studio tests and Remotion JSX entrypoint compilation pass in GitHub Actions; live MP4 rendering, TTS, stock footage, and AI-generated scene footage remain unverified or future capabilities.
-
-- 2026-11-04 — Added LightJurnal remote Video Studio API to the existing optional Alvareth HTTP server. API key auth, strict origin allowlist, JSON project validation, a disk-persisted single-worker queue with bounded history/partial-output cleanup, and Remotion text-motion rendering are implemented. The first LightJurnal UI supports Simple/Professional project modes, professional scene duration/background controls, job status, preview and download; media upload/audio/timeline editing and WhatsApp send are not yet implemented. GitHub Actions JavaScript syntax checks passed on commit d558398; local project validation tests passed 4/4. VPS deployment, dependency installation, HTTPS reverse proxy and live render remain unverified.
 
 - 2026-11-03 — `.clip` and `.download` send every detected video as a WhatsApp video payload regardless of file size or common video container; non-video files remain documents and no automatic document fallback is allowed. Removed the obsolete 64 MiB inline-video threshold and per-feature `forceVideo` flag. `.clip` now scans all advertised YouTube resolutions through metadata first, selects the highest resolution, downloads only that selected stream (with at most one same-resolution alternate if the selected transport is invalid), and invokes Qbyte only once as a bounded fallback after yt-dlp fails. Qbyte fallback downloads only its best metadata-selected video/audio pair and is capped at 256 MiB per stream by default. GitHub Actions npm run test:clip passed 32/32 (run 41636334551), including the regression test for the highest-quality FFmpeg finalizer receiving the selected candidate. Repository-wide JavaScript syntax checks passed (run 41636334438). Live YouTube extraction and WhatsApp delivery on TokoPanel still need verification.
 - 2026-11-03 — `.clip`/`.download` now redirect Node/Baileys `TMPDIR` away from Pterodactyl's default 100 MiB `/tmp` tmpfs to writable server storage (`ALVARETH_WA_TMPDIR` override; default `~/.alvareth-bot-data/tmp`). A pre-import bootstrap, write-access probe, diagnostics, and regression tests cover default, override, fallback, and import order. GitHub Actions `npm run test:media` 16/16 and repository-wide JavaScript syntax checks pass; download-browser and clip-progress regressions also pass. The unrelated sticker workflow could not install native `canvas` because `pixman-1` was missing; its tests did not run. Live Pterodactyl/WhatsApp upload still needs verification.
@@ -217,16 +163,3 @@ Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes n
 ## Diagnostik command image
 - Untuk command `.toreal`/konversi image yang tidak merespons, periksa log `[COMMAND TRACE]` sebelum mengubah API gambar. Trace mencatat prefix aktif dan kandidat plugin yang cocok, tanpa isi media/kredensial.
 - Jika ada kandidat image tetapi tidak ada `[IMAGE] ▶ Mulai`, telusuri tahap plugin loop, status disabled, dan tipe export plugin. Jika `[IMAGE] ▶ Mulai` muncul, lanjutkan ke tahap download/upload/API.
-
-
-## Video Studio — WhatsApp-only deployment (2026-11-06)
-- main.js may start server.js when PORT or Pterodactyl SERVER_PORT is present, but that server is only for /, /health, and /ping hosting checks.
-- The Video Studio HTTP API and Cloudflare Tunnel were removed. No VIDEO_STUDIO_API_KEY, VIDEO_STUDIO_ALLOWED_ORIGINS, VIDEO_STUDIO_TUNNEL_TOKEN, VIDEO_STUDIO_TUNNEL_TOKEN_FILE, CLOUDFLARED_BIN, VIDEO_STUDIO_TUNNEL, public hostname, reverse proxy, or browser credential is required.
-- Use the owner-only .remotion WhatsApp command; completed MP4 is delivered to the originating WhatsApp chat. Old tunnel/API files on the VPS are inert and may be deleted after updating.
-- Do not claim deployment is complete until dependency installation, health check, authenticated limits request, and a real short MP4 render have succeeded on the user's Pterodactyl instance.
-
-Current media invariant: local numerical loopback URLs, redirects rejected, no hosted AI fallback. VoxCPM2 Python source pinned; model must be local. Single bot worker only. SFX time uses Scene startFrame (including transition handle), not speechStartFrame. Validator must retain music/caption metadata and up to 60 voice tracks.
-
-- 2026-11-06: Added a rootless Pterodactyl/Linux bootstrap using uv-managed Python 3.11 and a user-local Ollama binary; setup details are in docs/REMOTION_WHATSAPP_LINUX.md.
-
-- 2026-11-06: Corrected rootless Linux bootstrap to use official Ollama tar.zst, Python streaming extraction, standalone uv release binary, and --allow-cpu flag; see scripts/setup-video-studio-linux.sh.

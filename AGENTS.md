@@ -26,16 +26,5 @@
 3. Add/update regression tests where practical.
 4. Update both AI documentation files in the same branch/PR.
 5. Run checks; inspect their results.
-6. Open a PR with summary, root cause, test results, and remaining limitations.
+6. Commit directly to `main` unless the user explicitly requested a PR; report the commit and verification honestly.
 7. Report links and verification honestly. Do not say a VPS was deployed unless a configured deployment actually ran.
-
-
-## Remotion Agent Skills & prompt-only product rule
-
-- The Remotion renderer is pinned to version 4.0.540. The 13 official skills from remotion-dev/skills are installed under .agents/skills; the project also includes a custom remotion-professional-editor skill. Run npm run skills:remotion to refresh the official pack.
-- Always load remotion-best-practices as the router. For composition work, load remotion-markup; additionally load remotion-captions, remotion-multimedia, remotion-render, remotion-studio, remotion-saas, remotion-maps, remotion-interactivity, remotion-license, or remotion-upgrade when the task calls for them.
-- LightJurnal Video Studio is prompt-only for creative decisions. Do not add user-facing controls for scene duration, background color, palette, FPS, aspect ratio, music mood, transitions, or individual scene construction. Infer these from the natural-language prompt and content. A generated storyboard may be shown as a read-only explanation of the AI's decisions.
-- The renderer creates deterministic motion graphics, uses local Ollama planning and local VoxCPM2 narration, and optionally uses local stable-ts word alignment. Follow docs/REMOTION_WHATSAPP_LINUX.md; no hosted inference or stock fallback. Required narration fails clearly if unavailable. Do not describe it as AI-generated footage, uploaded-media editing, photorealistic video generation, or 3D footage; these are not implemented. A production MP4 render must still be verified on the target VPS.
-- Keep all model credentials in server environment variables. Never send them to LightJurnal or store them in project/job metadata.
-
-- Load alvareth-editorial-quality for timing/output QA. Skills are coding guidance, not runtime capabilities. Preserve the local-only policy and review model licenses individually.
