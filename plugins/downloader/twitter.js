@@ -6,7 +6,6 @@ const API_TIMEOUT_MS = 12000
 const MEDIA_TIMEOUT_MS = 60000
 const MAX_MEDIA_BYTES = 150 * 1024 * 1024
 const MAX_TOTAL_MEDIA_BYTES = 250 * 1024 * 1024
-const MAX_MEDIA_ITEMS = 20
 const USER_AGENT = 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Mobile Safari/537.36'
 
 async function downloadXMedia(item, index) {
@@ -157,7 +156,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
         '*🐦 X Downloader*',
         result.metadata.author ? '👤 *Kreator:* ' + result.metadata.author : '',
         i === 0 && result.metadata.text ? '📝 *Teks:* ' + result.metadata.text.slice(0, 300) : '',
-        '📦 *Media:* ' + (i + 1) + ' dari ' + result.files.length +
+        '📦 *Media:* ' + (i + 1) + ' dari ' + (result.mediaCount || result.files.length) +
           (result.skipped ? ' (' + result.skipped + ' gagal diambil)' : '')
       ].filter(Boolean)
       const caption = parts.join('\n')
