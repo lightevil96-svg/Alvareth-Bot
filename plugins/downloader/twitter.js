@@ -8,9 +8,11 @@ const MAX_MEDIA_BYTES = 150 * 1024 * 1024
 const MAX_TOTAL_MEDIA_BYTES = 250 * 1024 * 1024
 const USER_AGENT = 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Mobile Safari/537.36'
 
-async function downloadXMedia(item, index) {
+async function downloadXMedia(item, index, allowSaveTwitter = false) {
   const mediaUrl = new URL(item.url)
-  if (!/(?:^|\.)twimg\.com$/i.test(mediaUrl.hostname)) {
+  const isXMediaHost = /(?:^|\.)twimg\.com$/i.test(mediaUrl.hostname)
+  const isSaveTwitterHost = allowSaveTwitter && mediaUrl.hostname.toLowerCase() === 'dl.snapcdn.app'
+  if (!isXMediaHost && !isSaveTwitterHost) {
     throw new Error('Host media X tidak diizinkan.')
   }
 
@@ -22,7 +24,7 @@ async function downloadXMedia(item, index) {
     headers: {
       accept: 'video/mp4,video/*,image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
       'user-agent': USER_AGENT,
-      referer: 'https://x.com/'
+      referer: allowSaveTwitter ? 'https://savetwitter.net/id3' : 'https://x.com/'
     },
     validateStatus: status => status >= 200 && status < 300
   })
@@ -133,6 +135,48 @@ async function resolveXMedia(status) {
       failures.push(provider.name + ': ' + message)
       console.warn('[X Downloader] Provider gagal (' + provider.name + '): ' + message.slice(0, 220))
     }
+  }
+
+
+  // Preserve the previous SaveTwitter MP4 route as a last-resort video-only
+  // fallback. Photo posts are resolved by FxTwitter/VXTwitter above.
+  try {
+    const body = new URLSearchParams({
+      q: status.url,
+      lang: 'id',
+      cftoken: ''
+    })
+    const response = await axios.post('https://savetwitter.net/api/ajaxSearch', body, {
+      timeout: API_TIMEOUT_MS,
+      maxContentLength: 4 * 1024 * 1024,
+      headers: {
+        'user-agent': USER_AGENT,
+        'content-type': 'application/x-www-form-urlencoded',
+        'x-requested-with': 'XMLHttpRequest',
+        origin: 'https://savetwitter.net',
+        referer: 'https://savetwitter.net/id3'
+      },
+      validateStatus: code => code >= 200 && code < 300
+    })
+    let payload = response.data
+    if (typeof payload === 'string') {
+      try { payload = JSON.parse(payload) } catch {}
+    }
+    const html = String(payload?.data || '')
+    const best = [...html.matchAll(/href="(https:\/\/dl\.snapcdn\.app\/get\?token=[^"]+)".*?MP4\s*\(([^)]+)\)/g)][0]
+    if (!best?.[1]) throw new Error('SaveTwitter tidak menyediakan file MP4 untuk postingan ini.')
+    const file = await downloadXMedia({ type: 'video', url: best[1] }, 1, true)
+    const title = html.match(/<h3[^>]*>([\s\S]*?)<\/h3>/i)?.[1]
+      ?.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() || ''
+    return {
+      files: [file],
+      mediaCount: 1,
+      skipped: 0,
+      metadata: { text: title, author: '' },
+      provider: 'SaveTwitter legacy'
+    }
+  } catch (error) {
+    failures.push('SaveTwitter legacy: ' + String(error?.message || error))
   }
 
   throw new Error('Semua sumber unduhan X gagal. Pastikan postingan bersifat publik. Detail sumber: ' + failures.join(' | ').slice(0, 700))

@@ -112,4 +112,5 @@ test('Downloader plugins use the new Instagram extractor and X image/video send 
   assert.match(twitter, /extractXMedia/)
   assert.match(twitter, /image:\s*media\.buffer/)
   assert.match(twitter, /video:\s*media\.buffer/)
+  assert.match(twitter, /savetwitter\.net\/api\/ajaxSearch/)
 })
