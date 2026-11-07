@@ -83,7 +83,7 @@ function promptFor(mode, request, patchOutput) {
     "Jangan mengungkap token, API key, nomor pribadi, atau data sesi.",
     "Alvareth sudah memakai Baileys. Jangan membuat gateway WhatsApp kedua atau login nomor yang sama.",
     "Jangan mengklaim tes, perubahan file produksi, commit, push, atau deploy jika tidak dilakukan.",
-    "Tool yang tersedia hanya file, web, search, dan klarifikasi. Tidak tersedia terminal, shell, atau eksekusi kode."
+    "Tool yang tersedia secara default hanya file dan klarifikasi. Web/search dapat diaktifkan owner melalui HERMES_ENABLE_WEB_TOOLS=true. Tidak tersedia terminal, shell, atau eksekusi kode."
   ].join("\n");
   if (mode === "audit") return common + "\n\nAUDIT READ-ONLY:\nPeriksa arsitektur plugin, handler, permission owner, pengelolaan sesi, keamanan, error handling, performa, dan tes. Jangan mengubah file. Berikan maksimal 7 temuan prioritas dengan path file, bukti, risiko, rekomendasi, dan tes regresi. Hindari temuan generik. Fokus owner: " + request;
   if (mode === "patch") return common + "\n\nBUAT PATCH, JANGAN EDIT REPOSITORY:\nTarget: " + request + "\nPeriksa file target dan pemanggil/helper/tes yang relevan. Buat unified diff sekecil mungkin. Jangan mengedit file repository, menjalankan perintah, mengubah package/lockfile, atau menyentuh file runtime/rahasia. Simpan satu patch Git unified diff menggunakan write_file hanya pada path absolut berikut: " + patchOutput + "\nHeader wajib diff --git a/path b/path. Jangan membuat file lain. Jika tidak ada perubahan aman, jangan buat patch. Jawaban akhir hanya ringkasan, file yang berubah, risiko, dan tes yang disarankan.";
@@ -220,7 +220,7 @@ async function setup(m) {
     "",
     "Hermes Agent open-source; biaya inference bergantung pada provider/model. Model lokal juga dapat dipakai jika resource server cukup.",
     "Jangan jalankan Hermes WhatsApp Gateway pada nomor yang sama. Integrasi ini memakai sesi Baileys Alvareth.",
-    "Jangan aktifkan terminal toolset untuk integrasi ini. Agent hanya mendapat file/web tools; penulisan dibatasi ke workspace patch sementara."
+    "Jangan aktifkan terminal toolset untuk integrasi ini. Agent hanya mendapat file/clarify tools secara default; web/search bersifat opt-in melalui HERMES_ENABLE_WEB_TOOLS=true. Penulisan dibatasi ke workspace patch sementara."
   ].join("\n"));
 }
 

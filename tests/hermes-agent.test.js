@@ -154,7 +154,7 @@ test("Hermes one-shot bridge uses a restricted toolset, query-file, and stream-j
     "const query = args.indexOf('--query-file');",
     "const prompt = query >= 0 ? fs.readFileSync(args[query + 1], 'utf8') : '';",
     "const system = {type:'system',subtype:'init',session_id:'session-test-123'};",
-    "const result = {type:'result',session_id:'session-test-123',exit_code:0,text:'Mock response: '+prompt,args};",
+    "const result = {type:'result',session_id:'session-test-123',exit_code:0,text:'Mock response: '+prompt,args,childWebFlag:process.env.HERMES_ENABLE_WEB_TOOLS||''};",
     "process.stdout.write(JSON.stringify(system)+String.fromCharCode(10)+JSON.stringify(result)+String.fromCharCode(10));"
   ].join("\n");
   await writeFile(fake, fakeScript);
@@ -176,7 +176,22 @@ test("Hermes one-shot bridge uses a restricted toolset, query-file, and stream-j
   assert.equal(result.sessionId, "session-test-123");
   assert.ok(result.usage.args.includes("--in"));
   assert.ok(result.usage.args.includes(repo));
-  assert.ok(result.usage.args.includes("file,web,search,clarify"));
+  assert.ok(result.usage.args.includes("file,clarify"));
+  assert.ok(!result.usage.args.includes("web"));
+  assert.ok(!result.usage.args.includes("search"));
+  assert.equal(result.usage.childWebFlag, "");
+  assert.deepEqual(await readdir(workspace), []);
+
+  const webEnabled = await runHermesQuery({
+    prompt: "Research external Hermes documentation",
+    repoRoot: repo,
+    workspacePath: workspace,
+    binary: fake,
+    env: { HOME: parent, PATH: process.env.PATH, HERMES_ENABLE_WEB_TOOLS: "true" }
+  });
+  assert.ok(webEnabled.usage.args.includes("file,web,search,clarify"));
+  assert.equal(webEnabled.usage.childWebFlag, "");
+  assert.deepEqual(await readdir(workspace), []);
   assert.ok(result.usage.args.includes("--oneshot"));
   assert.ok(result.usage.args.includes("--query-file"));
   assert.ok(result.usage.args.includes("--format"));

@@ -65,7 +65,7 @@ Example:
 - Only one Hermes request is allowed at a time to protect limited VPS resources.
 - Hermes is launched without a shell through `hermes --in <repo> chat --oneshot --query-file <workspace-file> --format stream-json`. The WhatsApp prompt is written to a mode-0600 temporary file rather than exposed as a process argument or interpolated into a shell command.
 - The child process receives an allowlisted environment only. Alvareth bot numbers, GitHub tokens, and unrelated application secrets are not inherited.
-- Hermes receives the file, web, search, and clarify toolsets. The terminal, shell, code-execution, gateway, and WhatsApp toolsets are not enabled by this bridge.
+- Hermes receives only the file and clarify toolsets by default. Web/search are disabled to reduce network-egress and prompt-injection risk; set `HERMES_ENABLE_WEB_TOOLS=true` only when external research is needed. The terminal, shell, code-execution, gateway, and WhatsApp toolsets are never enabled by this bridge.
 - HERMES_WRITE_SAFE_ROOT is set to a temporary workspace outside the repository. Hermes may read project source and write a proposed patch to that workspace, but its file-write/patch tools cannot directly change production files.
 - Prompts explicitly forbid reading .env, credentials, WhatsApp auth/session files, databases, logs, downloads, backups, node_modules, and .git. Hermes file tools also apply their built-in denylist to .env and credential paths; secret redaction remains enabled by Hermes.
 - Patch validation rejects paths outside the project allowlist, path traversal, symlinks, binary diffs, permission changes, renames, deletions, package manifests, and lockfiles.
@@ -73,7 +73,7 @@ Example:
 - Applying a patch does not commit, push, or deploy it. Run .hermes verify after applying and review git diff before committing.
 - .hermes undo <id> uses the reverse patch and refuses if the current file context no longer matches.
 
-Important limitation: Hermes file-write guards are not a general OS sandbox and do not constrain every possible file read. This bridge deliberately does not enable terminal, shell, or code-execution tools, and prompts prohibit sensitive reads. Keep Hermes and its credentials under the same trusted server account.
+Important limitation: Hermes file-write guards are not a general OS sandbox and do not constrain every possible file read. File tools run with the bot process's OS permissions; the built-in denylist blocks `.env` and selected credential paths, but it does not isolate WhatsApp session data or restrict reads to the repository. This bridge does not create a separate OS user/container. For a hard boundary, run Hermes under a separate unprivileged account or container with a read-only source checkout and a narrowly shared patch workspace. Web/search remain off unless the owner explicitly enables them.
 
 ## Data locations
 

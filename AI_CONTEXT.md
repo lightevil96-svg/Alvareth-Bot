@@ -78,11 +78,11 @@ Alvareth Bot adalah bot WhatsApp Multi-Device berbasis Node.js, ES Modules, Bail
 - `.hermes` is an optional bridge to the Nous Research Hermes Agent CLI, not a second WhatsApp gateway. Alvareth keeps its existing Baileys socket.
 - Install and configure Hermes separately under the same trusted Linux user/container as Node.js. The bot resolves `HERMES_BIN` (default `hermes`) and uses `HERMES_HOME`; provider credentials stay in Hermes, not Alvareth `.env`.
 - `plugins/owner/hermes.js` rechecks `isROwner === true`. `lib/hermes-agent.js` uses `spawn` without a shell, an allowlisted child environment, and `HERMES_WRITE_SAFE_ROOT` set to a temporary workspace.
-- The CLI uses `chat --oneshot --query-file --format stream-json` and only the `file,web,search,clarify` toolsets. No terminal, shell, code-execution, gateway, or WhatsApp toolset is enabled. Alvareth credentials are not inherited by the child process.
-- Hermes file tools apply their built-in denylist to `.env` and credential paths. `HERMES_WRITE_SAFE_ROOT` constrains writes, not every possible read; this is defense in depth, not a full OS sandbox.
+- The CLI uses `chat --oneshot --query-file --format stream-json` and only the `file,clarify` toolsets by default. Web/search require `HERMES_ENABLE_WEB_TOOLS=true`; no terminal, shell, code-execution, gateway, or WhatsApp toolset is enabled. Alvareth environment credentials are not inherited by the child process.
+- Hermes file tools apply their built-in denylist to `.env` and selected credential paths. `HERMES_WRITE_SAFE_ROOT` constrains writes, not every possible read; Hermes runs with the bot process's OS permissions, so use a separate unprivileged account/container for hard filesystem isolation.
 - `.hermes audit` and `.hermes ask` are non-mutating. `.hermes patch <path> <instruction>` creates a validated unified diff in a private temporary workspace and queues it for owner review. `.hermes apply <id>` is a separate explicit owner action requiring approved paths, clean target files, backups, `git apply --check`, and JavaScript syntax checks. A syntax failure triggers rollback.
 - `.hermes undo <id>` reverses an applied patch only while its context still matches. `.hermes verify` runs `npm test`. Applying a patch never commits, pushes, or deploys; review `git diff` and test results before committing.
-- Session IDs, pending patches, applied patch copies, and backups live under `ALVARETH_DATA_DIR/hermes/` (default `~/.alvareth-bot-data/hermes/`). Configuration: `HERMES_BIN`, `HERMES_HOME`, `HERMES_TIMEOUT_MS`, and `HERMES_MAX_PROMPT_CHARS`.
+- Session IDs, pending patches, applied patch copies, and backups live under `ALVARETH_DATA_DIR/hermes/` (default `~/.alvareth-bot-data/hermes/`). Configuration: `HERMES_BIN`, `HERMES_HOME`, `HERMES_TIMEOUT_MS`, and `HERMES_MAX_PROMPT_CHARS`, and opt-in `HERMES_ENABLE_WEB_TOOLS`.
 
 ## 3. Aturan wajib: boleh dan tidak boleh
 
