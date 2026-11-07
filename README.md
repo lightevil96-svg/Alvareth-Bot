@@ -201,3 +201,19 @@ Semua akses produksi dan instalasi dibatasi untuk owner melalui pemeriksaan plug
 Untuk setup Linux, lihat [docs/REMOTION_WHATSAPP_LINUX.md](docs/REMOTION_WHATSAPP_LINUX.md). Untuk schema JSON, batas prompt, enum, dan contoh storyboard lengkap, lihat [prompt-remotion.md](prompt-remotion.md). Untuk audit lisensi dan skills, lihat [docs/REMOTION_LOCAL_LICENSES.md](docs/REMOTION_LOCAL_LICENSES.md).
 
 HTTP health-check server Alvareth (jika PORT diaktifkan) hanya untuk pemantauan hosting dan bukan jalur produksi atau pengiriman video.
+
+
+## Hermes Agent — maintenance assistant for the WhatsApp owner
+
+Alvareth can connect to the open-source Nous Research Hermes Agent through its local CLI. The owner can audit the bot, ask repository-aware technical questions, prepare reviewable code patches, and run the project test suite.
+
+- `.hermes` opens the maintenance menu; `.hermes status` checks the CLI and configuration.
+- `.hermes audit [focus]` inspects architecture, plugins, permissions, security, and reliability.
+- `.hermes ask <question>` asks a technical question about the current source.
+- `.hermes patch <path> <instruction>` creates a unified diff for review; it does not edit production files.
+- `.hermes pending`, `.hermes apply <id>`, `.hermes undo <id>`, and `.hermes discard <id>` manage proposed changes.
+- `.hermes verify` runs `npm test`.
+
+Hermes must be installed and configured separately under the same Linux server user/container as Alvareth. The bridge reuses Alvareth's existing Baileys connection; do not pair a second Hermes WhatsApp gateway to the same number. Hermes receives file/web/search/clarify tools only—no terminal, shell, or code-execution toolset. Proposed writes stay in a private temporary workspace until the owner explicitly applies a reviewed patch. Applying a patch does not commit, push, or deploy it. Model inference may use a local model or a configured provider; provider costs depend on that choice.
+
+Setup, environment variables, commands, and security limitations: [docs/HERMES_AGENT.md](docs/HERMES_AGENT.md).

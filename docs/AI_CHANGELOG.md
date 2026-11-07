@@ -1,3 +1,13 @@
+## 2026-11-07 — Add owner-only Hermes Agent maintenance bridge
+
+- **Request:** let the Alvareth owner audit, troubleshoot, and prepare safe code-maintenance changes from WhatsApp.
+- **Architecture:** added `plugins/owner/hermes.js` and `lib/hermes-agent.js`. The bridge invokes the locally installed Nous Research Hermes CLI through the existing Baileys connection; it does not start another WhatsApp gateway and adds no npm dependency.
+- **Commands:** `.hermes`, `status`, `setup`, `help`, `audit`, `ask`, `patch`, `pending`, `apply`, `undo`, `discard`, `verify`, and `reset`.
+- **Safety:** super-owner-only checks, one concurrent Hermes task, no shell spawn, allowlisted child environment, no inherited Alvareth credentials, file/web/search/clarify tools only, and a temporary `HERMES_WRITE_SAFE_ROOT`. Hermes receives prompts through a private query file and returns structured stream-json events.
+- **Patch workflow:** proposals are path-validated and stored pending owner approval. Applying is a separate explicit command that rejects unsafe paths, symlinks, binary/mode/rename/delete changes, package manifests, and dirty target files; it creates backups, checks `git apply --check`, and syntax-checks JavaScript. Failed syntax checks are rolled back. Undo refuses when patch context no longer matches. No automatic commit, push, or deploy.
+- **Regression coverage:** added `tests/hermes-agent.test.js`, `npm run test:hermes`, and a dedicated GitHub Actions workflow; `npm test` includes the Hermes suite.
+- **Not verified:** Hermes CLI installation/configuration on the production VPS, model/provider credentials or inference, live WhatsApp command delivery, and production patch application. These require the owner's server environment.
+
 ## 2026-11-06 — Owner-only WhatsApp Disk Manager
 
 - **Request:** provide a way to inspect and safely reclaim storage when the bot consumes substantial disk space.

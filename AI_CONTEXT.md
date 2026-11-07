@@ -3,11 +3,13 @@
 > **Tujuan:** orientasi singkat untuk AI/developer yang melanjutkan proyek.
 > **Repository:** https://github.com/lightevil96-svg/Alvareth-Bot
 > **Branch produksi:** `main`
-> **Ditinjau:** 2026-11-06
+> **Ditinjau:** 2026-11-07
 >
 > Baca `AGENTS.md` terlebih dahulu, lalu file ini dan `docs/AI_CHANGELOG.md`. Catatan membantu orientasi, tetapi kode saat ini tetap menjadi sumber kebenaran.
 
 ## Pembaruan terbaru
+
+- 2026-11-07: Added the owner-only `.hermes` maintenance bridge. It uses the configured local Hermes CLI, structured one-shot output, a restricted toolset, temporary patch proposals, explicit apply/undo, and separate regression tests. See `docs/HERMES_AGENT.md`.
 
 - 2026-11-06: Added repository-root `prompt-remotion.md`, a strict ChatGPT guide with the current JSON schema, enum allowlists, capability limits, and a complete Indonesian story example. WhatsApp accepts up to 24,000 characters; plain-language briefs are intentionally rejected.
 - 2026-11-06: Planner is now an offline JSON parser/normalizer only. It has no Ollama, Qwen, or ChatGPT API dependency.
@@ -69,6 +71,17 @@ Alvareth Bot adalah bot WhatsApp Multi-Device berbasis Node.js, ES Modules, Bail
 5. Jalankan `npm test` dan pemeriksaan yang relevan. Untuk perubahan plugin, uji jalur terkait; untuk fitur eksternal, bedakan tes sintaks dari tes API dan tes WhatsApp langsung.
 6. Periksa diff akhir agar perubahan tidak menyertakan rahasia, data runtime, atau file yang tidak terkait.
 7. **Catat setiap perubahan bermakna dalam `docs/AI_CHANGELOG.md` pada commit `main` yang sama/berurutan langsung dengan perubahan kode.** Perbarui bagian “Pembaruan terbaru” di file ini dengan ringkasan satu baris. Catat masalah, akar penyebab, perbaikan, file/commit, tes yang dijalankan, hasil, dan hal yang belum diverifikasi. Jangan mengklaim tes atau perilaku live yang tidak benar-benar diuji.
+
+## Hermes Agent — owner-only maintenance bridge
+
+- `.hermes` is an optional bridge to the Nous Research Hermes Agent CLI, not a second WhatsApp gateway. Alvareth keeps its existing Baileys socket.
+- Install and configure Hermes separately under the same trusted Linux user/container as Node.js. The bot resolves `HERMES_BIN` (default `hermes`) and uses `HERMES_HOME`; provider credentials stay in Hermes, not Alvareth `.env`.
+- `plugins/owner/hermes.js` rechecks `isROwner === true`. `lib/hermes-agent.js` uses `spawn` without a shell, an allowlisted child environment, and `HERMES_WRITE_SAFE_ROOT` set to a temporary workspace.
+- The CLI uses `chat --oneshot --query-file --format stream-json` and only the `file,web,search,clarify` toolsets. No terminal, shell, code-execution, gateway, or WhatsApp toolset is enabled. Alvareth credentials are not inherited by the child process.
+- Hermes file tools apply their built-in denylist to `.env` and credential paths. `HERMES_WRITE_SAFE_ROOT` constrains writes, not every possible read; this is defense in depth, not a full OS sandbox.
+- `.hermes audit` and `.hermes ask` are non-mutating. `.hermes patch <path> <instruction>` creates a validated unified diff in a private temporary workspace and queues it for owner review. `.hermes apply <id>` is a separate explicit owner action requiring approved paths, clean target files, backups, `git apply --check`, and JavaScript syntax checks. A syntax failure triggers rollback.
+- `.hermes undo <id>` reverses an applied patch only while its context still matches. `.hermes verify` runs `npm test`. Applying a patch never commits, pushes, or deploys; review `git diff` and test results before committing.
+- Session IDs, pending patches, applied patch copies, and backups live under `ALVARETH_DATA_DIR/hermes/` (default `~/.alvareth-bot-data/hermes/`). Configuration: `HERMES_BIN`, `HERMES_HOME`, `HERMES_TIMEOUT_MS`, and `HERMES_MAX_PROMPT_CHARS`.
 
 ## 3. Aturan wajib: boleh dan tidak boleh
 
