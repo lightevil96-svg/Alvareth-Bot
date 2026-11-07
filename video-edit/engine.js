@@ -230,6 +230,28 @@ function escapeFilterPath(value) {
     .replace(/\]/g, "\\]");
 }
 
+function buildCameraExpressions(cameraMoves, fps) {
+  if (!cameraMoves.length) return null;
+  const zoomTerms = [];
+  let focusX = "0.5";
+  let focusY = "0.5";
+  for (const move of cameraMoves) {
+    const startFrame = Math.max(0, Math.round(move.start * fps));
+    const endFrame = Math.max(startFrame + 1, Math.round(move.end * fps));
+    const rampFrames = Math.max(1, Math.min(Math.round(fps * 0.45), Math.floor((endFrame - startFrame) / 3)));
+    const progress = "min(1,min(max(0,(on-" + startFrame + ")/" + rampFrames + "),max(0,(" + endFrame + "-on)/" + rampFrames + ")))";
+    const eased = "(" + progress + ")*(" + progress + ")*(3-2*(" + progress + "))";
+    zoomTerms.push("(" + numberText(move.zoom - 1) + ")*" + eased);
+    focusX = "if(between(on," + startFrame + "," + endFrame + ")," + numberText(move.focusX) + "," + focusX + ")";
+    focusY = "if(between(on," + startFrame + "," + endFrame + ")," + numberText(move.focusY) + "," + focusY + ")";
+  }
+  return {
+    zoom: "min(2.5,1+" + zoomTerms.join("+") + ")",
+    x: "max(0,min(iw-iw/zoom,(" + focusX + ")*iw-iw/(2*zoom)))",
+    y: "max(0,min(ih-ih/zoom,(" + focusY + ")*ih-ih/(2*zoom)))"
+  };
+}
+
 function buildFilterGraph({ segments, plan, dimensions, duration, hasAudio, music, captionsPath }) {
   const filters = [];
   const videoInputs = [];
@@ -258,16 +280,39 @@ function buildFilterGraph({ segments, plan, dimensions, duration, hasAudio, musi
   );
   const fadeIn = Math.min(plan.edit.fadeInSeconds, duration / 2);
   const fadeOut = Math.min(plan.edit.fadeOutSeconds, duration / 2);
-  const videoEffects = [
-    "scale=" + dimensions.width + ":" + dimensions.height + ":force_original_aspect_ratio=increase",
-    "crop=" + dimensions.width + ":" + dimensions.height + ":(in_w-out_w)/2:(in_h-out_h)/2",
-    "fps=" + plan.output.fps,
-    "setsar=1"
-  ];
+
+  if (plan.output.fitMode === "blur-background") {
+    filters.push("[vcat]split=2[bgsrc][fgsrc]");
+    filters.push(
+      "[bgsrc]scale=" + dimensions.width + ":" + dimensions.height +
+      ":force_original_aspect_ratio=increase,crop=" + dimensions.width + ":" + dimensions.height +
+      ",boxblur=24:2,eq=brightness=-0.10:saturation=0.88[bg]"
+    );
+    filters.push(
+      "[fgsrc]scale=" + dimensions.width + ":" + dimensions.height +
+      ":force_original_aspect_ratio=decrease,setsar=1[fg]"
+    );
+    filters.push("[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1[vbase]");
+  } else {
+    filters.push(
+      "[vcat]scale=" + dimensions.width + ":" + dimensions.height +
+      ":force_original_aspect_ratio=increase,crop=" + dimensions.width + ":" + dimensions.height +
+      ",setsar=1[vbase]"
+    );
+  }
+
+  const videoEffects = ["fps=" + plan.output.fps, "setsar=1"];
+  const camera = buildCameraExpressions(plan.edit.cameraMoves, plan.output.fps);
+  if (camera) {
+    videoEffects.push(
+      "zoompan=z='" + camera.zoom + "':x='" + camera.x + "':y='" + camera.y +
+      "':d=1:s=" + dimensions.width + "x" + dimensions.height + ":fps=" + plan.output.fps
+    );
+  }
   if (fadeIn > 0) videoEffects.push("fade=t=in:st=0:d=" + numberText(fadeIn));
   if (fadeOut > 0) videoEffects.push("fade=t=out:st=" + numberText(Math.max(0, duration - fadeOut)) + ":d=" + numberText(fadeOut));
   if (captionsPath) videoEffects.push("ass=filename='" + escapeFilterPath(captionsPath) + "'");
-  filters.push("[vcat]" + videoEffects.join(",") + "[vout]");
+  filters.push("[vbase]" + videoEffects.join(",") + "[vout]");
 
   const hasOutputAudio = hasAudio || Boolean(music);
   if (hasOutputAudio) {
@@ -374,6 +419,9 @@ export async function renderEditVideo({
     const segments = buildKeepSegments(plan, source.duration, silenceIntervals);
     const duration = segments.reduce((sum, item) => sum + (item.end - item.start) / item.speed, 0);
     if (duration < 1) throw new Error("Hasil edit terlalu pendek. Pilih segmen dengan durasi minimal 1 detik.");
+    if (plan.edit.cameraMoves.some(move => move.end > duration + 0.05)) {
+      throw new Error("Waktu cameraMoves melebihi durasi timeline hasil edit. start/end cameraMoves harus memakai waktu output setelah pemotongan.");
+    }
     if (plan.captions.enabled && plan.captions.items.some(item => item.end > duration + 0.05)) {
       throw new Error("Waktu akhir caption melebihi durasi timeline hasil edit. Sesuaikan captions.items dengan durasi output setelah pemotongan.");
     }
