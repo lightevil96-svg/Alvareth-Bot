@@ -9,6 +9,8 @@
 
 ## Pembaruan terbaru
 
+- 2026-11-07: Instagram downloader now tries the maintained local yt-dlp extractor for public Reels, photo/video posts, and carousels before legacy fallbacks. X/Twitter now resolves public status media through FxTwitter/VXTwitter and sends photos, videos, GIFs, and mixed posts according to detected file type. See `docs/AI_CHANGELOG.md`.
+
 - 2026-11-07: TikTok downloader now previews photo posts with a three-action menu (download all, select one photo for video, or render all photos as one slideshow with preset/per-slide custom timing). Video posts are FFmpeg re-encoded at the highest available source resolution by default and expose lower non-upscaled output qualities. TikTok auto-download routing remains private-chat by default; groups still require `.enable autodl`. See `docs/AI_CHANGELOG.md`.
 
 - 2026-11-07: Removed `.remotion`, `.hermes`, and `.edit` plus their handlers, render/edit runtimes, dedicated dependencies, environment settings, tests, workflows, and feature-specific documentation/skills. Disk Manager now cleans only WhatsApp temporary media. See `docs/AI_CHANGELOG.md`.

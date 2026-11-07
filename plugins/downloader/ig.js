@@ -1,6 +1,7 @@
 import axios from 'axios'
 import * as cheerio from 'cheerio'
 import { fileTypeFromBuffer } from 'file-type'
+import { downloadInstagramMediaYtDlp } from '../../lib/scrape/youtube.js'
 
 
 const MAX_MEDIA_BYTES = 150 * 1024 * 1024
@@ -764,6 +765,32 @@ async function tryProvider(provider, inputUrl, requireVideo) {
 async function resolveInstagramMedia(inputUrl) {
   const requireVideo = isReelUrl(inputUrl)
   const failures = []
+
+  // Prefer the maintained local yt-dlp extractor. It supports public Reels,
+  // photo posts, video posts, and carousel entries without relying on a single
+  // third-party downloader endpoint.
+  try {
+    const result = await downloadInstagramMediaYtDlp(inputUrl, {
+      maxFiles: MAX_MEDIA_ITEMS,
+      maxFileBytes: MAX_MEDIA_BYTES,
+      maxTotalBytes: MAX_TOTAL_MEDIA_BYTES
+    })
+    const files = requireVideo
+      ? result.files.filter(file => file.type === 'video')
+      : result.files
+    if (!files.length) {
+      throw new Error(requireVideo
+        ? 'yt-dlp tidak menemukan file video untuk Reel ini.'
+        : 'yt-dlp tidak menemukan foto/video pada postingan ini.')
+    }
+    const resolved = { ...result, files }
+    console.log('[IG Downloader] Resolver berhasil:', resolved.provider, files.length + ' media')
+    return resolved
+  } catch (error) {
+    const message = String(error?.message || error)
+    failures.push('yt-dlp Instagram: ' + message)
+    console.warn('[IG Downloader] yt-dlp gagal:', message.slice(0, 240))
+  }
 
   // Try the current public Instagram GraphQL operation first. The older package
   // resolver used a retired doc_id and returned 401 in the live logs.

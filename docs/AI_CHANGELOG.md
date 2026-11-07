@@ -1,3 +1,12 @@
+## 2026-11-07 — Instagram and X downloader media-type fixes
+
+- **Request:** repair Instagram downloads that failed across GraphQL/package/third-party providers, and fix X posts containing photos that were incorrectly reported as missing videos.
+- **Root cause:** Instagram's current GraphQL operation and external providers were returning empty responses, HTTP 401/403, or HTTP 500; the existing X plugin was explicitly video-only and parsed only SaveTwitter MP4 links.
+- **Changes:** Instagram now tries the maintained local yt-dlp extractor first for public Reels, photo/video posts, and carousel entries, validates actual image/video file signatures, and keeps the existing GraphQL/API/embed routes as bounded fallbacks. X now uses FxTwitter v2, FxTwitter legacy, and VXTwitter metadata sources; normalizes photo/video/GIF media, restricts fetched media URLs to X's own CDN, validates downloaded bytes, and sends each item using its actual image/video type. Added regression coverage for photo-only, video, mixed media, tracking parameters, and external-URL rejection.
+- **Files:** plugins/downloader/ig.js, plugins/downloader/twitter.js, lib/scrape/youtube.js, lib/scrape/twitter.js, tests/social-downloaders.test.js, package.json, .github/workflows/social-downloader-regression.yml, AI_CONTEXT.md.
+- **Verification:** focused regression tests and GitHub Actions results are pending this commit. Live Instagram/X provider access, the user's TokoPanel environment, and WhatsApp media delivery are not verified here.
+- **Regression lesson:** do not assume every X status is a video. Preserve provider media types and verify the downloaded file signature before choosing the WhatsApp payload. For Instagram, keep a maintained local extractor ahead of brittle GraphQL document IDs and third-party API fallbacks; never treat a successful HTTP status as proof that a media file was returned.
+
 ## 2026-11-07 — TikTok downloader: photo actions, slideshow, and selectable video quality
 
 - **Request:** automatically process TikTok links and provide clear actions for photo posts, one-video slideshow rendering with the original post audio, and selectable output resolutions for video posts.

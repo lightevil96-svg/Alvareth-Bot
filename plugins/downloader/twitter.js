@@ -1,108 +1,199 @@
-/**
- ╔══════════════════════
-      ⧉  [Twitter] — [downloader]
-╚══════════════════════
+import axios from 'axios'
+import { fileTypeFromBuffer } from 'file-type'
+import { extractXMedia, parseXStatusUrl } from '../../lib/scrape/twitter.js'
 
-  ✺ Type     : Plugin ESM
-  ✺ Source   : https://whatsapp.com/channel/0029VbAXhS26WaKugBLx4E05
-  ✺ Creator  : SXZnightmare
-  ✺ Scrape      : 
-  [ https://gist.github.com/ZenzzXD/d6223d6e9ead8f013be12c75754c00e9 ]
-  [ https://whatsapp.com/channel/0029Vap84RE8KMqfYnd0V41A/3420 ]
-  ✺ Scrape Maker : [ Zenz ]
-  ✺ Note    : Only Video download
-*/
+const API_TIMEOUT_MS = 12000
+const MEDIA_TIMEOUT_MS = 60000
+const MAX_MEDIA_BYTES = 150 * 1024 * 1024
+const MAX_TOTAL_MEDIA_BYTES = 250 * 1024 * 1024
+const MAX_MEDIA_ITEMS = 20
+const USER_AGENT = 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Mobile Safari/537.36'
+
+async function downloadXMedia(item, index) {
+  const mediaUrl = new URL(item.url)
+  if (!/(?:^|\\.)twimg\\.com$/i.test(mediaUrl.hostname)) {
+    throw new Error('Host media X tidak diizinkan.')
+  }
+
+  const response = await axios.get(item.url, {
+    responseType: 'arraybuffer',
+    timeout: MEDIA_TIMEOUT_MS,
+    maxContentLength: MAX_MEDIA_BYTES,
+    maxBodyLength: MAX_MEDIA_BYTES,
+    headers: {
+      accept: 'video/mp4,video/*,image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+      'user-agent': USER_AGENT,
+      referer: 'https://x.com/'
+    },
+    validateStatus: status => status >= 200 && status < 300
+  })
+
+  const buffer = Buffer.from(response.data)
+  if (!buffer.length) throw new Error('Media ke-' + index + ' kosong.')
+  if (buffer.length > MAX_MEDIA_BYTES) throw new Error('Media ke-' + index + ' melebihi batas 150 MB.')
+
+  const responseMime = String(response.headers?.['content-type'] || '')
+    .split(';')[0].trim().toLowerCase()
+  const detected = await fileTypeFromBuffer(buffer)
+  const mime = String(detected?.mime || responseMime).toLowerCase()
+  if (!mime.startsWith('image/') && !mime.startsWith('video/')) {
+    throw new Error('Media ke-' + index + ' bukan foto/video yang valid (' + (mime || 'unknown') + ').')
+  }
+
+  return {
+    buffer,
+    mime,
+    ext: detected?.ext || (mime.startsWith('video/') ? 'mp4' : 'jpg'),
+    type: mime.startsWith('video/') ? 'video' : 'image'
+  }
+}
+
+function getPostMetadata(payload) {
+  const post = payload?.status || payload?.tweet || payload?.data?.status || payload?.data?.tweet || payload || {}
+  const author = post.author || {}
+  return {
+    text: String(post.text || payload?.text || '').replace(/\\s+/g, ' ').trim(),
+    author: String(author.name || author.screen_name || post.user_name || post.user_screen_name || '').trim()
+  }
+}
+
+async function resolveXMedia(status) {
+  const providers = [
+    {
+      name: 'FxTwitter API v2',
+      url: 'https://api.fxtwitter.com/2/status/' + encodeURIComponent(status.id)
+    },
+    {
+      name: 'FxTwitter legacy',
+      url: 'https://api.fxtwitter.com/' + encodeURIComponent(status.screenName) + '/status/' + encodeURIComponent(status.id)
+    },
+    {
+      name: 'VXTwitter',
+      url: 'https://api.vxtwitter.com/' + encodeURIComponent(status.screenName) + '/status/' + encodeURIComponent(status.id)
+    }
+  ]
+  const failures = []
+
+  for (const provider of providers) {
+    try {
+      const response = await axios.get(provider.url, {
+        timeout: API_TIMEOUT_MS,
+        maxContentLength: 4 * 1024 * 1024,
+        headers: {
+          accept: 'application/json',
+          'user-agent': USER_AGENT,
+          referer: 'https://x.com/'
+        },
+        validateStatus: code => code >= 200 && code < 300
+      })
+      let payload = response.data
+      if (typeof payload === 'string') {
+        try { payload = JSON.parse(payload) } catch {
+          throw new Error(provider.name + ' mengembalikan respons non-JSON.')
+        }
+      }
+      const apiCode = Number(payload?.code)
+      if (Number.isFinite(apiCode) && apiCode >= 400) {
+        throw new Error(provider.name + ' menolak permintaan dengan kode ' + apiCode + '.')
+      }
+
+      const media = extractXMedia(payload)
+      if (!media.length) {
+        const message = String(payload?.message || payload?.status?.message || '')
+        throw new Error(provider.name + ' tidak mengembalikan media foto/video.' + (message ? ' ' + message : ''))
+      }
+
+      const files = []
+      const itemFailures = []
+      let totalBytes = 0
+      for (let i = 0; i < media.length; i++) {
+        try {
+          const file = await downloadXMedia(media[i], i + 1)
+          totalBytes += file.buffer.length
+          if (totalBytes > MAX_TOTAL_MEDIA_BYTES) {
+            throw new Error('Total media melebihi batas 250 MB.')
+          }
+          files.push(file)
+        } catch (error) {
+          itemFailures.push(String(error?.message || error))
+        }
+      }
+      if (!files.length) {
+        throw new Error(itemFailures.slice(0, 3).join(' | ') || 'Tidak ada media yang berhasil diunduh.')
+      }
+
+      return {
+        files,
+        mediaCount: media.length,
+        skipped: itemFailures.length,
+        metadata: getPostMetadata(payload),
+        provider: provider.name
+      }
+    } catch (error) {
+      const message = String(error?.message || error)
+      failures.push(provider.name + ': ' + message)
+      console.warn('[X Downloader] Provider gagal (' + provider.name + '): ' + message.slice(0, 220))
+    }
+  }
+
+  throw new Error('Semua sumber unduhan X gagal. Pastikan postingan bersifat publik. Detail sumber: ' + failures.join(' | ').slice(0, 700))
+}
 
 let handler = async (m, { conn, text, usedPrefix, command }) => {
-    try {
-        if (!text) {
-            return m.reply(`*Contoh: ${usedPrefix + command} https://x.com/...*`);
-        }
+  const input = String(text || '').trim()
+  if (!input) {
+    return m.reply('*Contoh: ' + usedPrefix + command + ' https://x.com/username/status/123456789*')
+  }
 
-        await conn.sendMessage(m.chat, { react: { text: '⏳', key: m.key } });
+  await m.react('⏳')
+  try {
+    const status = parseXStatusUrl(input)
+    const result = await resolveXMedia(status)
+    let sentCount = 0
 
-        const body = new URLSearchParams({
-            q: text,
-            lang: 'id',
-            cftoken: ''
-        });
+    for (let i = 0; i < result.files.length; i++) {
+      const media = result.files[i]
+      const parts = [
+        '*🐦 X Downloader*',
+        result.metadata.author ? '👤 *Kreator:* ' + result.metadata.author : '',
+        i === 0 && result.metadata.text ? '📝 *Teks:* ' + result.metadata.text.slice(0, 300) : '',
+        '📦 *Media:* ' + (i + 1) + ' dari ' + result.files.length +
+          (result.skipped ? ' (' + result.skipped + ' gagal diambil)' : '')
+      ].filter(Boolean)
+      const caption = parts.join('\\n')
+      const fileName = 'x-' + status.id + '-' + (i + 1) + '.' + media.ext
+      const message = media.type === 'video'
+        ? { video: media.buffer, mimetype: media.mime, fileName, caption }
+        : { image: media.buffer, mimetype: media.mime, fileName, caption }
 
-        const res = await fetch('https://savetwitter.net/api/ajaxSearch', {
-            method: 'POST',
-            headers: {
-                'User-Agent': 'Mozilla/5.0',
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'X-Requested-With': 'XMLHttpRequest',
-                'Origin': 'https://savetwitter.net',
-                'Referer': 'https://savetwitter.net/id3'
-            },
-            body
-        });
-
-        const json = await res.json();
-        const html = json?.data;
-
-        if (!html) {
-            return m.reply('*Gagal mengambil data video 🍂*');
-        }
-
-        const title = html.match(/<h3>(.*?)<\/h3>/)?.[1]?.trim() || 'Twitter Video';
-        const duration = html.match(/<p>(\d+:\d+)<\/p>/)?.[1] || '-';
-        const thumbnail = html.match(/<img src="([^"]+)"/)?.[1];
-
-        const mp4 = [...html.matchAll(/href="(https:\/\/dl\.snapcdn\.app\/get\?token=[^"]+)".*?MP4\s*\(([^)]+)\)/g)]
-            .map(v => ({
-                quality: v[2],
-                url: v[1]
-            }));
-
-        if (!mp4.length) {
-            return m.reply('*Video tidak ditemukan 🍂*');
-        }
-
-        const best = mp4[0];
-
-        let caption = `*🐦 Twitter Downloader*\n\n`;
-        caption += `*📌 Judul:* ${title}\n`;
-        caption += `*⏱️ Durasi:* ${duration}\n`;
-        caption += `*🎞️ Kualitas:* ${best.quality}\n`;
-
-        let jpegThumbnail
-        if (thumbnail) {
-            try {
-                const thumbResponse = await fetch(thumbnail)
-                if (thumbResponse.ok) {
-                    jpegThumbnail = Buffer.from(await thumbResponse.arrayBuffer())
-                }
-            } catch (error) {
-                console.warn('[Twitter Downloader] Thumbnail dilewati:', error?.message || error)
-            }
-        }
-
-        const sent = await conn.sendMessage(
-            m.chat,
-            {
-                video: { url: best.url },
-                mimetype: 'video/mp4',
-                fileName: 'twitter-video.mp4',
-                caption,
-                ...(jpegThumbnail ? { jpegThumbnail } : {})
-            },
-            { quoted: m, noAlvarethPreview: true }
-        )
-        if (!sent?.key?.id) throw new Error('WhatsApp tidak mengembalikan ID pesan video Twitter.')
-
-    } catch (e) {
-        await m.reply(`*Terjadi kesalahan saat memproses video 🍂*\n\n${e.message}`);
-    } finally {
-        await conn.sendMessage(m.chat, { react: { text: '', key: m.key } });
+      const sent = await conn.sendMessage(m.chat, message, {
+        quoted: m,
+        noAlvarethPreview: true
+      })
+      if (!sent?.key?.id) {
+        throw new Error('WhatsApp tidak mengonfirmasi pengiriman media X ke-' + (i + 1) + '.')
+      }
+      sentCount++
     }
-};
 
-handler.help = ['twitter'];
-handler.tags = ['downloader'];
-handler.command = /^(twitter|tw|xdl)$/i;
-handler.limit = true;
-handler.register = false; // true kan jika ada fitur register atau daftar di bot mu.
+    await m.react('✅')
+    console.log('[X Downloader] Berhasil mengirim ' + sentCount + '/' + result.files.length +
+      ' media melalui ' + result.provider)
+  } catch (error) {
+    console.error('[X Downloader]', error?.stack || error)
+    await m.react('❌')
+    await m.reply('❌ Gagal mengunduh X: ' + String(error?.message || error))
+  } finally {
+    try {
+      await conn.sendMessage(m.chat, { react: { text: '', key: m.key } })
+    } catch {}
+  }
+}
 
-export default handler;
+handler.help = ['twitter']
+handler.tags = ['downloader']
+handler.command = /^(twitter|tw|xdl)$/i
+handler.limit = true
+handler.register = false
+
+export default handler
