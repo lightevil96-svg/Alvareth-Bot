@@ -913,6 +913,10 @@ async function processRenderJob({ conn, m, document, key, session }) {
         } else if (value.state === 'exited') {
           session.renderChildExitCode = value.code
           session.renderChildSignal = value.signal || null
+          progress.update(10, 'Shell process telah keluar',
+            'Exit code: ' + String(value.code) +
+            (value.signal ? ' | Signal: ' + value.signal : '') +
+            '. Menunggu seluruh output dan proses turunan selesai.', true)
         } else if (value.state === 'closed') {
           progress.update(90, 'Script render selesai',
             'Exit code: ' + String(value.code) + (value.signal ? ' | Signal: ' + value.signal : '') +
