@@ -6,7 +6,7 @@ import { downloadContentFromMessage } from 'baileys'
 import { getQuotedMediaInfo, downloadQuotedMedia } from '../../lib/simple.js'
 import { createRenderSessionKey as sessionKey, getCurrentRenderDocument as getCurrentDocument, isRenderDocumentEvent } from '../../lib/render-message.js'
 import { sendLocalFile } from '../../lib/whatsapp-file-sender.js'
-import { isWhatsAppConnectionClosedError, sendWithWhatsAppReconnect } from '../../lib/whatsapp-connection.js'
+import { isWhatsAppConnectionClosedError, isWhatsAppSocketOpen, sendWithWhatsAppReconnect } from '../../lib/whatsapp-connection.js'
 import {
   findOrphanedRenderOutputs,
   persistRenderOutputSession,
@@ -459,12 +459,16 @@ async function deliverRenderedOutput({ m, key, session, progressReporter = null 
       throw new Error('File hasil render tidak lagi tersedia di penyimpanan sesi.')
     }
 
-    session.deliveryWaiting = true
-    session.deliveryWaitingSince = Date.now()
+    const socketReady = isWhatsAppSocketOpen(global.conn || m?.conn || null)
+    session.deliveryWaiting = !socketReady
+    session.deliveryWaitingSince = socketReady ? null : Date.now()
+    session.deliveryStartedAt = socketReady ? Date.now() : null
     progress.update(
       95,
-      'Menunggu koneksi WhatsApp',
-      'Render selesai dan hasil video sudah tersimpan. Menunggu socket WhatsApp aktif untuk melanjutkan pengiriman.',
+      socketReady ? 'Menyiapkan pengiriman WhatsApp' : 'Menunggu koneksi WhatsApp',
+      socketReady
+        ? 'Render selesai dan hasil video sudah tersimpan. Menyiapkan upload WhatsApp.'
+        : 'Render selesai dan hasil video sudah tersimpan. Menunggu socket WhatsApp aktif untuk melanjutkan pengiriman.',
       true
     )
     await persistRenderOutputSession({
