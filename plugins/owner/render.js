@@ -663,7 +663,7 @@ const handler = async (m, { conn, text }) => {
 
   const action = String(text || '').trim().toLowerCase()
 
-  const recoverMatch = action.match(/^recover(?:\\s+(\\d+))?$/)
+  const recoverMatch = action.match(/^recover(?:\s+(\d+))?$/)
   if (recoverMatch) {
     if (pendingSessions.has(key)) {
       return safeReply(m, 'Chat ini sudah memiliki sesi render. Gunakan *.render status* atau *.render send*.')
@@ -677,8 +677,8 @@ const handler = async (m, { conn, text }) => {
         (index + 1) + '. ' + item.outputFileName + ' — ' + formatBytes(item.outputSize) +
         ' — ' + new Date(item.createdAt).toLocaleString('id-ID')
       )
-      return safeReply(m, 'Ditemukan beberapa hasil render tanpa metadata sesi:\\n' +
-        list.join('\\n') + '\\nPilih file dengan *.render recover 1*, *.render recover 2*, dan seterusnya.')
+      return safeReply(m, 'Ditemukan beberapa hasil render tanpa metadata sesi:\n' +
+        list.join('\n') + '\nPilih file dengan *.render recover 1*, *.render recover 2*, dan seterusnya.')
     }
     if (!Number.isSafeInteger(requested) || requested < 1 || requested > orphanedRenderOutputs.length) {
       return safeReply(m, 'Nomor hasil render tidak valid. Gunakan *.render recover* untuk melihat daftar.')
@@ -710,7 +710,7 @@ const handler = async (m, { conn, text }) => {
         'Ketik *.render send* untuk menghentikan penantian dan mencoba kirim ulang.',
         'Ketik *.render cancel* hanya jika ingin menghapus hasil render.'
       ]
-      return safeReply(m, lines.join('\\n'))
+      return safeReply(m, lines.join('\n'))
     }
     if (session.processing) {
       const progress = session.progress || {}
