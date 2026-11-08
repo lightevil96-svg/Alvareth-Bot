@@ -11,6 +11,8 @@
 
 - 2026-11-07: Updated owner-only `.render` to accept a Claude `.zip` package after the replied video, safely extract its assets, locate the single `render.sh`, and send the generated video. ZIP extraction has path/symlink/size limits; shell execution remains owner-trusted, not an OS sandbox. 2026-11-08: hardened document-event parsing and session-key normalization after a silent ZIP upload. Live percentage progress is terminal-only; `.render status` never sends percentages to WhatsApp. See `docs/AI_CHANGELOG.md`.
 
+- 2026-11-08: WhatsApp first-time login supports pairing code by default (`WA_LOGIN_METHOD=pairing`) using `BOT_NUMBER`; the code is terminal-only, requested once per socket, and falls back to QR if pairing cannot be issued. Registered sessions remain untouched. See `docs/AI_CHANGELOG.md`.
+
 - 2026-11-07: Instagram downloader now tries the maintained local yt-dlp extractor for public Reels, photo/video posts, and carousels before legacy fallbacks. X/Twitter now resolves public status media through FxTwitter/VXTwitter and sends photos, videos, GIFs, and mixed posts according to detected file type. See `docs/AI_CHANGELOG.md`.
 
 - 2026-11-07: TikTok downloader now previews photo posts with a three-action menu (download all, select one photo for video, or render all photos as one slideshow with preset/per-slide custom timing). Video posts are FFmpeg re-encoded at the highest available source resolution by default and expose lower non-upscaled output qualities. TikTok auto-download routing remains private-chat by default; groups still require `.enable autodl`. See `docs/AI_CHANGELOG.md`.
@@ -84,6 +86,7 @@ Alvareth Bot adalah bot WhatsApp Multi-Device berbasis Node.js, ES Modules, Bail
 - **TikTok search/downloader:** `plugins/search/tiktok.js` memakai helper di `lib/scrape/tikwm.js`. API eksternal bisa membatasi IP/host. Jangan memperlakukan HTTP 403 sebagai kueri kosong; gunakan fallback berbeda dan tetap jelaskan jika semua penyedia gagal. Semua direktori kerja TikTok (video, render foto, dan fallback yt-dlp) harus memakai `ALVARETH_TIKTOK_TMPDIR` bila diatur; jangan membuat jalur sementara tambahan langsung di `os.tmpdir()`.
 - **Updater saat startup:** `npm start` menjalankan `scripts/start-with-update.js`, yang mengambil update Git secara fast-forward dan memulai versi lokal bila pembaruan gagal. Ini bukan update/deploy VPS jarak jauh. Perubahan updater harus mempertahankan data dan perubahan tracked lokal.
 - **Data persisten:** database default berada di `~/.alvareth-bot-data/database.json`; sesi di `~/.alvareth-bot-data/sessions/`. Lokasi dapat berbeda lewat `ALVARETH_DATA_DIR` dan `WA_SESSION_DIR`. Jangan menghapus salinan lama sebelum migrasi berhasil diverifikasi.
+- **WhatsApp pairing:** `WA_LOGIN_METHOD` default `pairing`; `BOT_NUMBER` harus berupa nomor internasional digits-only. `main.js` meminta kode dari socket Baileys hanya saat auth belum terdaftar, menunggu handshake 1,5 detik, membatasi satu permintaan per socket, dan menampilkan kode hanya di terminal. QR tetap tersedia melalui `WA_LOGIN_METHOD=qr` atau sebagai fallback; jangan menghapus sesi yang masih valid.
 - **Deploy:** saat ini jangan menganggap tersedia auto-deploy ke VPS hanya karena ada workflow GitHub. Periksa file workflow yang benar-benar ada.
 
 ## 5. Tes dan cara melaporkan
