@@ -575,6 +575,17 @@ async function deliverRenderedOutput({ m, key, session, progressReporter = null 
   }
 }
 
+async function runTrackedRenderDelivery(options) {
+  const session = options.session
+  const promise = deliverRenderedOutput(options)
+  session.deliveryPromise = promise
+  try {
+    return await promise
+  } finally {
+    if (session.deliveryPromise === promise) session.deliveryPromise = null
+  }
+}
+
 function isZipDocument(filename, mimetype) {
   return /\.zip$/i.test(String(filename || '')) ||
     /application\/(?:zip|x-zip-compressed)|application\/x-zip/i.test(String(mimetype || ''))
@@ -601,6 +612,19 @@ const handler = async (m, { conn, text }) => {
   if (action === 'status') {
     const session = pendingSessions.get(key)
     if (!session) return safeReply(m, 'Tidak ada sesi render aktif.')
+    if (session.processing && session.deliveryWaiting) {
+      const now = Date.now()
+      const waitingSince = Number(session.deliveryWaitingSince) || now
+      const lines = [
+        '📦 Render sudah selesai. Video hasil render sudah tersimpan di server.',
+        'Status: menunggu koneksi WhatsApp untuk pengiriman.',
+        'Waktu menunggu: ' + formatRenderElapsed(now - waitingSince),
+        'Ukuran hasil: ' + formatBytes(session.outputSize || 0),
+        'Ketik *.render send* untuk menghentikan penantian dan mencoba kirim ulang.',
+        'Ketik *.render cancel* hanya jika ingin menghapus hasil render.'
+      ]
+      return safeReply(m, lines.join('\\n'))
+    }
     if (session.processing) {
       const progress = session.progress || {}
       const now = Date.now()
@@ -651,9 +675,33 @@ const handler = async (m, { conn, text }) => {
     if (global.__alvarethUpdateRunning) {
       return safeReply(m, '⏳ Update sedang berlangsung. Pengiriman hasil render akan dilanjutkan setelah bot selesai diperbarui.')
     }
-    const session = pendingSessions.get(key)
-    if (!session) return safeReply(m, 'Tidak ada sesi render aktif.')
-    if (session.processing) return safeReply(m, '⏳ Sesi render masih berjalan atau sedang menunggu koneksi WhatsApp.')
+    let session = pendingSessions.get(key)
+    if (!session) {
+      if (orphanedRenderOutputs.length === 1) {
+        session = await attachOrphanedRenderOutput(key, 0)
+      } else if (orphanedRenderOutputs.length > 1) {
+        return safeReply(m, 'Ada ' + orphanedRenderOutputs.length + ' hasil render tanpa metadata sesi. Gunakan *.render recover* untuk melihat daftar dan memilih file yang benar.')
+      }
+    }
+    if (!session) return safeReply(m, 'Tidak ada sesi render aktif atau hasil render yang dapat dipulihkan.')
+
+    if (session.processing && session.deliveryWaiting && session.deliveryPromise) {
+      if (session.retryRequested) {
+        return safeReply(m, '⏳ Percobaan ulang pengiriman sebelumnya sedang diproses.')
+      }
+      session.retryRequested = true
+      await safeReply(m, '♻️ Menghentikan penantian koneksi lama. File hasil render tetap disimpan; bot akan memulai percobaan pengiriman baru.')
+      session.abortController?.abort()
+      try {
+        await session.deliveryPromise
+      } catch (error) {
+        console.error('[RENDER] Penantian pengiriman lama gagal dihentikan:', error?.stack || error)
+      } finally {
+        session.retryRequested = false
+      }
+    }
+
+    if (session.processing) return safeReply(m, '⏳ Render atau upload WhatsApp masih berjalan. Periksa kembali dengan *.render status*.')
     if (!session.outputPath) return safeReply(m, 'Belum ada hasil render yang siap dikirim. Selesaikan proses render terlebih dahulu.')
 
     try {
@@ -670,7 +718,7 @@ const handler = async (m, { conn, text }) => {
     session.abortController = new AbortController()
     await safeReply(m, '📤 Hasil render ditemukan. Bot akan mengirim file yang tersimpan tanpa menjalankan render ulang.')
     const progress = createRenderChatProgressReporter(m, session)
-    void deliverRenderedOutput({ m, key, session, progressReporter: progress }).catch(async error => {
+    void runTrackedRenderDelivery({ m, key, session, progressReporter: progress }).catch(async error => {
       console.error('[RENDER] Retry pengiriman hasil gagal:', error?.stack || error)
       session.processing = false
       session.abortController = null
@@ -1048,7 +1096,7 @@ async function processRenderJob({ conn, m, document, key, session }) {
     }
 
     throwIfRenderCancelled(session)
-    await deliverRenderedOutput({ m, key, session, progressReporter: progress })
+    await runTrackedRenderDelivery({ m, key, session, progressReporter: progress })
   } catch (error) {
     console.error('[RENDER] Proses render ZIP gagal:', error?.stack || error)
     if (workDirectory) {
