@@ -408,7 +408,7 @@ test('createRenderProgressReporter writes live percentages to its terminal logge
 })
 
 
-test('runRenderScript has no implicit timeout when timeoutMs is omitted', async t => {
+test('runRenderScript has no automatic timeout and waits for the script to exit', async t => {
   const directory = await mkdtemp(path.join(tmpdir(), 'alvareth-render-no-timeout-'))
   t.after(() => rm(directory, { recursive: true, force: true }))
   const scriptPath = path.join(directory, 'render.sh')
