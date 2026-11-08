@@ -178,6 +178,8 @@ function createRenderChatProgressReporter(m, session) {
       } else if (session.renderChildPid && session.renderChildState === 'running') {
         lines.push('⚠️ Shell PID ' + session.renderChildPid + ' masih tercatat berjalan, tetapi tidak mengeluarkan output selama ' +
           formatRenderElapsed(childIdleMs ?? quietMs) + '. Periksa *.render status*; proses tidak dihentikan otomatis.')
+      } else if (session.renderChildPid && session.renderChildState === 'exited') {
+        lines.push('⚠️ Shell PID ' + session.renderChildPid + ' sudah keluar, tetapi worker masih menunggu stream/proses turunannya ditutup.')
       } else {
         lines.push('⚠️ Belum ada perubahan progres selama ' + formatRenderElapsed(quietMs) +
           '. Worker masih menunggu/menjalankan tahap ini; tidak ada batas waktu otomatis.')
@@ -560,6 +562,8 @@ const handler = async (m, { conn, text }) => {
         } else if (session.renderChildPid && session.renderChildState === 'running') {
           lines.push('⚠️ Shell PID ' + session.renderChildPid + ' masih tercatat berjalan, tetapi tidak mengeluarkan output selama ' +
             formatRenderElapsed(childIdleMs ?? quietMs) + '. Proses tidak dihentikan otomatis.')
+        } else if (session.renderChildPid && session.renderChildState === 'exited') {
+          lines.push('⚠️ Shell PID ' + session.renderChildPid + ' sudah keluar, tetapi worker masih menunggu stream/proses turunannya ditutup.')
         } else {
           lines.push('⚠️ Belum ada perubahan progres selama ' + formatRenderElapsed(quietMs) + '. Worker masih menunggu/menjalankan tahap ini.')
         }
@@ -906,6 +910,9 @@ async function processRenderJob({ conn, m, document, key, session }) {
         if (value.state === 'started') {
           progress.update(10, 'Menjalankan render.sh',
             'Shell process aktif dengan PID ' + String(value.pid || 'tidak diketahui') + '.', true)
+        } else if (value.state === 'exited') {
+          session.renderChildExitCode = value.code
+          session.renderChildSignal = value.signal || null
         } else if (value.state === 'closed') {
           progress.update(90, 'Script render selesai',
             'Exit code: ' + String(value.code) + (value.signal ? ' | Signal: ' + value.signal : '') +
