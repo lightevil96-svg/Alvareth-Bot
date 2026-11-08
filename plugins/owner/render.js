@@ -826,7 +826,6 @@ const handler = async (m, { conn, text }) => {
         return safeReply(m, '⏳ Percobaan ulang pengiriman sebelumnya sedang diproses.')
       }
       session.retryRequested = true
-      await safeReply(m, '♻️ Menghentikan penantian koneksi lama. File hasil render tetap disimpan; bot akan memulai percobaan pengiriman baru.')
       session.abortController?.abort()
       try {
         await session.deliveryPromise
