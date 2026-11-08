@@ -7,7 +7,11 @@ import { getQuotedMediaInfo, downloadQuotedMedia } from '../../lib/simple.js'
 import { createRenderSessionKey as sessionKey, getCurrentRenderDocument as getCurrentDocument, isRenderDocumentEvent } from '../../lib/render-message.js'
 import { sendLocalFile } from '../../lib/whatsapp-file-sender.js'
 import { isWhatsAppConnectionClosedError, sendWithWhatsAppReconnect } from '../../lib/whatsapp-connection.js'
-import { persistRenderOutputSession, restorePendingRenderSessions } from '../../lib/render-session-store.js'
+import {
+  findOrphanedRenderOutputs,
+  persistRenderOutputSession,
+  restorePendingRenderSessions
+} from '../../lib/render-session-store.js'
 import {
   extractRenderArchive,
   findRenderScript,
@@ -31,6 +35,7 @@ const MAX_OUTPUT_BYTES = 500 * 1024 * 1024
 // Session dipisahkan berdasarkan chat dan pengirim agar paket ZIP pengguna lain
 // tidak pernah dipasangkan dengan video milik owner.
 const pendingSessions = new Map()
+let orphanedRenderOutputs = []
 
 function getRenderRoot() {
   const configured = String(process.env.ALVARETH_RENDER_TMPDIR || '').trim()
@@ -122,9 +127,9 @@ function formatRenderElapsed(milliseconds) {
   const hours = Math.floor(totalSeconds / 3600)
   const minutes = Math.floor((totalSeconds % 3600) / 60)
   const seconds = totalSeconds % 60
-  if (hours) return hours + 'j ' + minutes + 'm ' + seconds + 'd'
-  if (minutes) return minutes + 'm ' + seconds + 'd'
-  return seconds + 'd'
+  if (hours) return hours + 'j ' + minutes + 'm ' + seconds + ' dtk'
+  if (minutes) return minutes + 'm ' + seconds + ' dtk'
+  return seconds + ' dtk'
 }
 
 function createRenderChatProgressReporter(m, session) {
@@ -154,11 +159,19 @@ function createRenderChatProgressReporter(m, session) {
     const lastProgressAt = Number(progress?.updatedAt) || startedAt
     const quietMs = Math.max(0, now - lastProgressAt)
     const detail = String(progress?.detail || '').trim()
+    const waitingForDelivery = Boolean(session.deliveryWaiting)
+    const elapsedLabel = waitingForDelivery
+      ? 'Menunggu WhatsApp: ' + formatRenderElapsed(now - (Number(session.deliveryWaitingSince) || now))
+      : 'Waktu proses: ' + formatRenderElapsed(now - startedAt)
     const lines = [
-      heartbeat ? '⏳ Render masih berjalan di background.' : '⚙️ Perkembangan render:',
+      heartbeat
+        ? waitingForDelivery
+          ? '📦 Hasil render selesai; menunggu pengiriman WhatsApp.'
+          : '⏳ Render masih berjalan di background.'
+        : '⚙️ Perkembangan render:',
       'Progres tercatat: ' + percent + '%',
       'Tahap: ' + stage,
-      'Waktu proses: ' + formatRenderElapsed(now - startedAt)
+      elapsedLabel
     ]
 
     if (detail) lines.push('Detail: ' + detail)
@@ -171,7 +184,10 @@ function createRenderChatProgressReporter(m, session) {
     if (childIdleMs !== null) {
       lines.push('Output proses terakhir: ' + formatRenderElapsed(childIdleMs) + ' yang lalu.')
     }
-    if (heartbeat && quietMs >= RENDER_STATUS_HEARTBEAT_MS) {
+    if (waitingForDelivery) {
+      lines.push('Hasil render tetap tersimpan. Ketik *.render send* untuk menghentikan penantian dan mencoba kirim ulang.')
+    }
+    if (!waitingForDelivery && heartbeat && quietMs >= RENDER_STATUS_HEARTBEAT_MS) {
       if (session.renderChildPid && session.renderChildState === 'running' &&
           childIdleMs !== null && childIdleMs < RENDER_STATUS_HEARTBEAT_MS) {
         lines.push('ℹ️ Script masih mengeluarkan output, tetapi belum ada perubahan angka progres FFmpeg.')
@@ -380,21 +396,25 @@ async function deliverRenderedOutput({ m, key, session, progressReporter = null 
       getSocket: () => global.conn || m?.conn || null,
       signal: session.abortController?.signal,
       onWait: details => {
-        if (details?.reason === 'waiting-for-connection' ||
+            if (details?.reason === 'waiting-for-connection' ||
             details?.reason === 'retry-after-disconnect') {
+          session.deliveryWaiting = true
+          session.deliveryWaitingSince ||= Date.now()
           progress.update(
             95,
             'Menunggu koneksi WhatsApp',
-            'Hasil render tetap tersimpan. Menunggu socket WhatsApp aktif untuk melanjutkan pengiriman.',
+            'Render selesai dan hasil video sudah tersimpan. Menunggu socket WhatsApp aktif untuk melanjutkan pengiriman.',
             true
           )
           console.warn('[RENDER] Menunggu koneksi WhatsApp pulih sebelum mengirim hasil render.')
-          if (details?.reason === 'waiting-for-connection') {
-            try {
-              global.requestWhatsAppReconnect?.('Render selesai, tetapi socket WhatsApp belum aktif.')
-            } catch (error) {
-              console.error('[RENDER] Tidak dapat meminta reconnect WhatsApp:', error?.message || error)
-            }
+        }
+
+        if (details?.reason === 'waiting-for-connection' ||
+            details?.reason === 'connection-still-unavailable') {
+          try {
+            global.requestWhatsAppReconnect?.('Render selesai, tetapi socket WhatsApp belum aktif.')
+          } catch (error) {
+            console.error('[RENDER] Tidak dapat meminta reconnect WhatsApp:', error?.message || error)
           }
         }
       },
@@ -408,6 +428,14 @@ async function deliverRenderedOutput({ m, key, session, progressReporter = null 
         }
       },
       send: socket => {
+        if (session.retryRequested || session.abortController?.signal.aborted) {
+          const error = new Error('Pengiriman lama dihentikan agar percobaan kirim ulang dapat dimulai.')
+          error.code = 'RENDER_SCRIPT_CANCELLED'
+          throw error
+        }
+        session.deliveryWaiting = false
+        session.deliveryWaitingSince = null
+        acquireRenderUpdateLock(session)
         progress.update(95, 'Mengirim hasil ke WhatsApp', formatBytes(outputInfo.size), true)
         return sendLocalFile(socket, m.chat, outputPath, {
           quoted: socket === m.conn ? m : undefined,
