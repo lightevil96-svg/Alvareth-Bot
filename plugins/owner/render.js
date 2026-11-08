@@ -319,9 +319,7 @@ async function deliverRenderedOutput({ m, key, session }) {
       }
     }
 
-    session.processing = false
-    session.abortController = null
-
+    let outputRecoveryPersisted = false
     if (!cancelled && session.outputPath) {
       try {
         await persistRenderOutputSession({
@@ -333,13 +331,20 @@ async function deliverRenderedOutput({ m, key, session }) {
           createdAt: session.createdAt,
           progress: session.progress
         })
-        // A completed result is durable outside the replaceable project tree.
-        // It no longer needs to block .update or automatic updates.
-        releaseRenderUpdateLock(session)
+        outputRecoveryPersisted = true
         console.log('[RENDER] Hasil render tersimpan untuk pemulihan lintas-restart:', session.outputPath)
       } catch (persistError) {
         console.error('[RENDER] Gagal menyimpan metadata pemulihan; update tetap ditahan:', persistError?.stack || persistError)
       }
+    }
+
+    // Keep processing=true until the manifest is durable so .render send
+    // cannot race the manifest write and release the update lock prematurely.
+    session.processing = false
+    session.abortController = null
+    if (outputRecoveryPersisted) {
+      // A completed result is durable outside the replaceable project tree.
+      releaseRenderUpdateLock(session)
     }
 
     if (cancelled) {
