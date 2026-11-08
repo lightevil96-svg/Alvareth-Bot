@@ -359,8 +359,13 @@ const handler = async (m, { conn, text }) => {
     session.cancelRequested = false
     session.abortController = new AbortController()
     await safeReply(m, '📤 Hasil render ditemukan. Bot akan mengirim file yang tersimpan tanpa menjalankan render ulang.')
-    void deliverRenderedOutput({ m, key, session }).catch(error => {
+    void deliverRenderedOutput({ m, key, session }).catch(async error => {
       console.error('[RENDER] Retry pengiriman hasil gagal:', error?.stack || error)
+      session.processing = false
+      session.abortController = null
+      const progress = createRenderProgressReporter(session)
+      progress.update(95, 'Hasil render tersimpan - pengiriman tertunda', safeError(error), true)
+      await safeReply(m, '⚠️ Hasil render tetap tersimpan. Pengiriman ulang belum berhasil: ' + safeError(error) + '. Coba *.render send* kembali setelah koneksi pulih.')
     })
     return
   }
@@ -562,10 +567,12 @@ handler.all = async function (m) {
     const progress = createRenderProgressReporter(session)
     progress.update(session.progress?.percent || 0, 'Render gagal', safeError(error), true)
     await safeReact(m, '❌')
+    const recoveryMessage = session.outputPath
+      ? '\n\nHasil render tetap tersimpan. Gunakan *.render send* untuk mengirimnya tanpa mengulang proses.'
+      : '\n\nVideo masih tersimpan. Kirim ulang ZIP atau gunakan *.render cancel*.'
     await safeReply(
       m,
-      '❌ Render berhenti karena kesalahan internal: ' + safeError(error) +
-      '\n\nVideo masih tersimpan. Kirim ulang ZIP atau gunakan *.render cancel*.'
+      '❌ Render berhenti karena kesalahan internal: ' + safeError(error) + recoveryMessage
     )
   })
   return
