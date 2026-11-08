@@ -6,7 +6,7 @@
 - **Readiness and media fix:** `isWhatsAppSocketOpen()` now requires an open transport, a usable identity, and no explicit `registered=false` state; it can read the identity from either `socket.user` or `authState.creds.me`. `sendLocalFile()` uses the same helper, so the Baileys fork's `isOpen/isConnecting/isClosing/isClosed` flags are respected before upload.
 - **Render fix:** render percentage/stage updates and 60-second heartbeats are logged only to the terminal/Pterodactyl. WhatsApp is reserved for the initial acknowledgement, final rendered file, failure notice, and an explicit status request. `.render status` no longer returns a percentage or FFmpeg progress details.
 - **Files:** `main.js`, `lib/whatsapp-connection.js`, `lib/whatsapp-file-sender.js`, `plugins/owner/render.js`, `tests/whatsapp-connection.test.js`, `tests/whatsapp-file-sender.test.js`, `AI_CONTEXT.md`, and this changelog.
-- **Verification:** regression tests were added for pending pairing, identity fallback, Baileys 515 restart, and the fork's WebSocketClient upload preflight. GitHub Actions and a live WhatsApp/Pterodactyl pairing, reconnect, render, and delivery run must still be checked; code commits alone do not prove live deployment.
+- **Verification:** GitHub Actions passed for WhatsApp Media Delivery Regression (run `42483098153`), Render script regression (run `42482905623`), and JavaScript syntax checks (run `42483331279`). The media workflow runs `npm run test:media`; the render workflow runs `npm run test:render`. A live WhatsApp/Pterodactyl pairing, reconnect, render, and delivery run remains unverified.
 
 ## 2026-11-08 — Fix WhatsApp reconnect loop with Baileys WebSocketClient state flags
 
