@@ -9,7 +9,7 @@ import './config.js'
 
 import { join, dirname, relative, sep, resolve } from 'path'
 import { fileURLToPath, pathToFileURL } from 'url'
-import { readdirSync, readFileSync, existsSync, statSync, watch, copyFileSync, cpSync, mkdirSync, unlinkSync, writeFileSync } from 'fs'
+import { readdirSync, readFileSync, existsSync, statSync, lstatSync, watch, copyFileSync, cpSync, mkdirSync, renameSync, unlinkSync, writeFileSync } from 'fs'
 import { homedir } from 'os'
 import { format } from 'util'
 import yargs from 'yargs'
@@ -23,7 +23,7 @@ import syntaxerror from 'syntax-error'
 import { useMultiFileAuthState, fetchLatestWaWebVersion, makeCacheableSignalKeyStore, DisconnectReason } from 'baileys'
 import { makeWASocket } from './lib/simple.js'
 import { createPairingCodeRequester, normalizePairingPhoneNumber } from './lib/whatsapp-pairing.js'
-import { getWhatsAppWebSocketState, isWhatsAppSocketOpen } from './lib/whatsapp-connection.js'
+import { getWhatsAppWebSocketState, isWhatsAppRestartRequired, isWhatsAppSocketOpen } from './lib/whatsapp-connection.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -195,7 +195,29 @@ console.log('[DATABASE DIAGNOSTIC] Startup selesai:', JSON.stringify({
 }))
 
 // Session & socket.
-const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR)
+let { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR)
+
+// A registered session without creds.me.id cannot authenticate. Preserve the
+// inconsistent directory as a backup, then create a clean session for pairing.
+if (state.creds?.registered === true && !state.creds?.me?.id) {
+  const sessionInfo = existsSync(SESSION_DIR) ? lstatSync(SESSION_DIR) : null
+  if (!sessionInfo?.isDirectory() || sessionInfo.isSymbolicLink()) {
+    console.error(chalk.red('❌ Sesi WhatsApp terdaftar tidak memiliki identitas akun, tetapi WA_SESSION_DIR bukan folder biasa. File sesi tidak diubah; periksa konfigurasi WA_SESSION_DIR.'))
+    process.exit(1)
+  }
+
+  const backupSessionDir = SESSION_DIR + '.invalid-' + Date.now()
+  try {
+    renameSync(SESSION_DIR, backupSessionDir)
+    mkdirSync(SESSION_DIR, { recursive: true })
+    ;({ state, saveCreds } = await useMultiFileAuthState(SESSION_DIR))
+    console.warn(chalk.yellow('⚠️ Sesi WhatsApp lama tidak konsisten (registered=true, me.id kosong). Folder lama dipertahankan sebagai backup: ' + backupSessionDir))
+    console.log(chalk.cyan('🔐 Sesi baru disiapkan. Bot akan meminta pairing code; tautkan ulang akun melalui WhatsApp > Perangkat tertaut.'))
+  } catch (error) {
+    console.error(chalk.red('❌ Gagal menyiapkan sesi WhatsApp baru. Sesi lama tidak dihapus; periksa izin folder:'), error?.stack || error)
+    process.exit(1)
+  }
+}
 const configuredLoginMethod = String(process.env.WA_LOGIN_METHOD || 'pairing').trim().toLowerCase()
 const loginMethod = ['pairing', 'qr'].includes(configuredLoginMethod) ? configuredLoginMethod : 'pairing'
 if (loginMethod !== configuredLoginMethod) {
@@ -206,6 +228,31 @@ const requestPairingCodeForSocket = createPairingCodeRequester({
   phoneNumber: pairingPhoneNumber,
   delayMs: 1500
 })
+
+async function requestPairingCodeWhileConnecting(activeSocket) {
+  if (loginMethod !== 'pairing' || activeSocket?.authState?.creds?.registered) return null
+
+  const result = await requestPairingCodeForSocket(
+    activeSocket,
+    socket => global.conn === socket
+  )
+
+  if (result?.status === 'generated') {
+    clearReconnectHandshakeTimer()
+    console.log(chalk.greenBright('\\n🔐 PAIRING CODE WHATSAPP'))
+    console.log(chalk.bold.bgGreen.black(` ${result.code} `))
+    console.log(chalk.gray('WhatsApp > Perangkat tertaut > Tautkan perangkat > Tautkan dengan nomor telepon.'))
+    console.log(chalk.yellow('Kode bersifat sementara. Jangan bagikan kepada siapa pun.'))
+  } else if (result?.status === 'invalid-phone') {
+    console.error(chalk.red('❌ BOT_NUMBER tidak valid. Isi nomor WhatsApp dengan kode negara, angka internasional saja (contoh: 62812xxxxxxxx).'))
+  } else if (result?.status === 'unsupported') {
+    console.error(chalk.red('❌ Library Baileys tidak menyediakan requestPairingCode(); login QR akan digunakan sebagai fallback.'))
+  } else if (result?.status === 'failed') {
+    console.error(chalk.red('❌ Gagal meminta pairing code:'), String(result.error?.message || result.error || 'unknown error').slice(0, 200))
+  }
+
+  return result
+}
 
 const { version, isLatest } = await fetchLatestWaWebVersion()
 console.log(chalk.cyan(`WA Web version: v${version.join('.')} (latest: ${isLatest})`))
@@ -368,6 +415,7 @@ let reconnectHandshakeTimer = null
 let reconnectAttempts = 0
 let reconnectInProgress = false
 let reconnectQueued = null
+let authRepairWarningShown = false
 
 function clearReconnectHandshakeTimer() {
   if (!reconnectHandshakeTimer) return
@@ -386,7 +434,9 @@ function scheduleSocketReconnect(statusCode, reason = '') {
 
   // A 405 is usually a rejected WhatsApp companion handshake, not a damaged
   // auth folder. Back off between attempts so we never hammer WhatsApp in a loop.
-  const baseDelay = statusCode === 405 ? 8000 : 3000
+  const baseDelay = isWhatsAppRestartRequired(statusCode)
+    ? 1000
+    : statusCode === 405 ? 8000 : 3000
   const exponent = Math.min(reconnectAttempts, 4)
   const delay = Math.min(60000, baseDelay * (2 ** exponent))
   reconnectAttempts += 1
@@ -420,6 +470,23 @@ function scheduleSocketReconnect(statusCode, reason = '') {
 // connection.update reports the disconnect. Reuse the coordinated reconnect path.
 global.requestWhatsAppReconnect = function requestWhatsAppReconnect(reason = '') {
   const currentSocket = global.conn
+  const currentCreds = currentSocket?.authState?.creds || state.creds || {}
+
+  // Do not invalidate a companion-pairing attempt while the owner is entering
+  // the code. Also stop futile reconnects for a registered session with no ID.
+  if (currentCreds.registered !== true && currentCreds.pairingCode) {
+    clearReconnectHandshakeTimer()
+    return true
+  }
+  if (currentCreds.registered === true && !currentCreds.me?.id) {
+    clearReconnectHandshakeTimer()
+    if (!authRepairWarningShown) {
+      authRepairWarningShown = true
+      console.error(chalk.red('❌ Kredensial WhatsApp terdaftar tidak memiliki creds.me.id. Reconnect tidak akan memperbaiki sesi ini; folder sesi perlu dipulihkan dari backup atau dipasangkan ulang.'))
+    }
+    return true
+  }
+
   if (isWhatsAppSocketOpen(currentSocket)) {
     clearReconnectHandshakeTimer()
     if (reconnectTimer) {
@@ -601,8 +668,15 @@ async function connectionUpdate(update) {
   const { connection, lastDisconnect, isNewLogin, qr } = update
   if (isNewLogin) conn.isInit = true
 
-  // Pairing code is requested only for an unregistered session. If the number
-  // or library method is unavailable, retain QR login as a safe fallback.
+  // Request pairing during the initial connecting event as well as supporting
+  // QR fallback. This avoids depending on a QR event that may arrive late.
+  if (connection === 'connecting' && loginMethod === 'pairing' &&
+      !activeSocket?.authState?.creds?.registered) {
+    await requestPairingCodeWhileConnecting(activeSocket)
+  }
+
+  // Pairing code is requested once per socket. If it cannot be issued, retain
+  // QR login as a safe fallback.
   if (qr) {
     let pairingResult = null
     if (loginMethod === 'pairing' && !activeSocket?.authState?.creds?.registered) {
@@ -616,7 +690,8 @@ async function connectionUpdate(update) {
       ? pairingResult.previous
       : pairingResult?.status
 
-    if (pairingStatus === 'generated' || pairingStatus === 'pending') {
+    const pairingCodeIssued = Boolean(activeSocket?.authState?.creds?.pairingCode)
+    if ((pairingStatus === 'generated' || pairingStatus === 'pending') && pairingCodeIssued) {
       if (pairingResult?.status === 'generated') {
         console.log(chalk.greenBright('\n🔐 PAIRING CODE WHATSAPP'))
         console.log(chalk.bold.bgGreen.black(` ${pairingResult.code} `))
@@ -657,7 +732,11 @@ async function connectionUpdate(update) {
       || lastDisconnect?.error?.message
       || ''
 
-    if (statusCode === DisconnectReason?.badSession) {
+    if (isWhatsAppRestartRequired(statusCode)) {
+      reconnectAttempts = 0
+      console.log(chalk.cyan('🔄 WhatsApp meminta socket baru setelah pairing/login (515). Membuat ulang koneksi dengan jeda singkat.'))
+      scheduleSocketReconnect(statusCode, disconnectReason || 'restartRequired (515)')
+    } else if (statusCode === DisconnectReason?.badSession) {
       console.error(chalk.red('❌ Sesi ditolak sebagai badSession (500). Hentikan bot dan pairing ulang hanya jika log memang menunjukkan sesi rusak.'))
       process.exit(1)
     } else if (statusCode === DisconnectReason?.connectionReplaced) {
@@ -681,14 +760,24 @@ async function connectionUpdate(update) {
       console.warn(chalk.yellow('⚠️ Event open dari socket WhatsApp lama diabaikan.'))
       return
     }
+    const authCreds = activeSocket?.authState?.creds || state.creds || {}
+    const hasIdentity = Boolean(activeSocket?.user?.id || authCreds.me?.id)
+    const pairingPending = authCreds.registered !== true && Boolean(authCreds.pairingCode)
+    if (pairingPending) {
+      clearReconnectHandshakeTimer()
+      console.log(chalk.yellow('⏳ WebSocket terbuka; menunggu persetujuan pairing code. Socket dipertahankan agar kode tidak terputus.'))
+      return
+    }
     if (!isWhatsAppSocketOpen(activeSocket)) {
       const transportState = getWhatsAppWebSocketState(activeSocket)
-      const hasIdentity = Boolean(activeSocket?.user?.id)
       console.warn(chalk.yellow(
-        `⚠️ Event open diterima, tetapi socket belum siap (transport=${transportState}, identitas=${hasIdentity ? 'ada' : 'belum ada'}). Menunggu watchdog handshake.`
+        `⚠️ Event open diterima, tetapi socket belum siap (transport=${transportState}, registered=${authCreds.registered === true}, identitas=${hasIdentity ? 'ada' : 'belum ada'}). Menunggu watchdog handshake.`
       ))
+      if (authCreds.registered === true && !hasIdentity) {
+        console.error(chalk.red('❌ Sesi ditandai terdaftar tetapi creds.me.id kosong. Periksa backup sesi; pairing ulang diperlukan.'))
+      }
       global.requestWhatsAppReconnect(
-        `Event open diterima, tetapi socket belum siap (transport=${transportState}, identitas=${hasIdentity ? 'ada' : 'belum ada'}).`
+        `Event open diterima, tetapi socket belum siap (transport=${transportState}, registered=${authCreds.registered === true}, identitas=${hasIdentity ? 'ada' : 'belum ada'}).`
       )
       return
     }
