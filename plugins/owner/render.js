@@ -329,7 +329,7 @@ async function deliverRenderedOutput({ m, key, session }) {
           directory: session.directory,
           key,
           outputPath: session.outputPath,
-          outputFileName: session.outputFileName || path.basename(session.outputPath),
+          outputFileName: path.basename(session.outputPath),
           createdAt: session.createdAt,
           progress: session.progress
         })
