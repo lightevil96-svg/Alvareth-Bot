@@ -62,8 +62,23 @@ test('does not restore a session whose output file is missing', async t => {
   })
   await fs.rm(outputPath)
 
-  const restored = await restorePendingRenderSessions({ root })
-  assert.equal(restored.length, 0)
+  await assert.rejects(
+    restorePendingRenderSessions({ root }),
+    /ENOENT|no such file/i
+  )
+})
+
+test('blocks recovery when a saved manifest is corrupt', async t => {
+  const { root, directory, outputPath } = await fixture(t)
+  await persistRenderOutputSession({
+    root, directory, key: 'chat|owner', outputPath, outputFileName: 'render-result.mp4'
+  })
+  await fs.writeFile(path.join(directory, 'render-session.json'), '{broken json')
+
+  await assert.rejects(
+    restorePendingRenderSessions({ root }),
+    /Manifest sesi render tidak dapat dibaca/
+  )
 })
 
 test('ignores expired completed render sessions', async t => {
