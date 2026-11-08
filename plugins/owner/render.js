@@ -86,8 +86,7 @@ function getReadyRenderSocket(m) {
     : m?.conn
   if (!socket || typeof socket.sendMessage !== 'function') return null
 
-  const readyState = socket.ws?.readyState
-  if (typeof readyState === 'number' && readyState !== 1) return null
+  if (!isWhatsAppSocketOpen(socket)) return null
   return socket
 }
 

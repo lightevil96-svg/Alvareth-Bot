@@ -1,8 +1,12 @@
 import { smsg } from './lib/simple.js'
 import { extractSelectedCommandId, unwrapInteractiveMessageContent } from './lib/interactive-command.js'
 import { resolveAutoDownload, findAutoDownloadPrefix, claimAutoDownloadMessage, runAutoDownloadJob, isStandaloneOwnLinkMessage, wasBotSentMessage } from './lib/auto-download.js'
+import { getWhatsAppWebSocketState, isWhatsAppSocketOpen } from './lib/whatsapp-connection.js'
 
-console.log('[AUTODL] Router 2026-11-02/self-link-fix aktif; menunggu link WhatsApp.')
+if (!global.__ALVARETH_AUTODL_ROUTER_ANNOUNCED) {
+    global.__ALVARETH_AUTODL_ROUTER_ANNOUNCED = true
+    console.log('[AUTODL] Router 2026-11-02/self-link-fix aktif; menunggu pesan chat.')
+}
 import { format } from 'util'
 import { fileURLToPath } from 'url'
 import path, { join } from 'path'
@@ -59,10 +63,10 @@ async function sendErrorReport(conn, m, error, pluginName = 'handler', command =
         'Catatan: URL dan parameter sensitif disamarkan otomatis.'
     ].filter(Boolean).join('\n')
 
-    // Baileys rejects sendMessage on a closed WebSocket with 428 / Connection Closed.
-    // Do not attempt a second send on the same dead socket: preserve the original error.
-    if (conn?.ws?.readyState !== undefined && conn.ws.readyState !== 1) {
-        console.error('[ERROR REPORT] Laporan WhatsApp dilewati karena socket tertutup (readyState=' + conn.ws.readyState + '). Log lengkap tersedia di terminal.')
+    // Do not send diagnostics unless the current Baileys socket is authenticated and open.
+    if (!isWhatsAppSocketOpen(conn)) {
+        console.error('[ERROR REPORT] Laporan WhatsApp dilewati karena socket belum siap (transport=' +
+            getWhatsAppWebSocketState(conn) + '). Log lengkap tersedia di terminal.')
         return
     }
 
@@ -75,7 +79,7 @@ async function sendErrorReport(conn, m, error, pluginName = 'handler', command =
         const statusCode = sendError?.output?.statusCode || sendError?.statusCode
         const message = String(sendError?.message || '')
         if (statusCode === 428 || /connection closed|socket.*closed/i.test(message) ||
-            (conn?.ws?.readyState !== undefined && conn.ws.readyState !== 1)) {
+            !isWhatsAppSocketOpen(conn)) {
             console.error('[ERROR REPORT] Fallback dibatalkan: koneksi WhatsApp sudah tertutup.')
             return
         }

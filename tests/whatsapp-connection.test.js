@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  getWhatsAppWebSocketState,
   isWhatsAppConnectionClosedError,
   isWhatsAppSocketOpen,
   sendWithWhatsAppReconnect,
@@ -11,12 +12,37 @@ function makeSocket(readyState = 1, sendMessage = async () => ({ key: { id: 'sen
   return { ws: { readyState }, user: { id: 'bot@s.whatsapp.net' }, sendMessage }
 }
 
+function makeForkSocket(state = 'open', userId = 'bot@s.whatsapp.net') {
+  const states = {
+    open: { isOpen: true, isConnecting: false, isClosing: false, isClosed: false },
+    connecting: { isOpen: false, isConnecting: true, isClosing: false, isClosed: false },
+    closing: { isOpen: false, isConnecting: false, isClosing: true, isClosed: false },
+    closed: { isOpen: false, isConnecting: false, isClosing: false, isClosed: true }
+  }
+  return {
+    ws: { ...states[state] },
+    user: userId ? { id: userId } : null,
+    sendMessage: async () => ({ key: { id: 'sent' } })
+  }
+}
+
 test('recognizes only an open Baileys socket as ready', () => {
   assert.equal(isWhatsAppSocketOpen(makeSocket(1)), true)
   assert.equal(isWhatsAppSocketOpen(makeSocket(0)), false)
   assert.equal(isWhatsAppSocketOpen(makeSocket(3)), false)
   assert.equal(isWhatsAppSocketOpen({ sendMessage() {}, ws: { readyState: 1 } }), false)
   assert.equal(isWhatsAppSocketOpen(null), false)
+})
+
+test('@itsliaaa/baileys WebSocketClient state flags work without readyState', () => {
+  const open = makeForkSocket('open')
+  assert.equal('readyState' in open.ws, false)
+  assert.equal(getWhatsAppWebSocketState(open), 'open')
+  assert.equal(isWhatsAppSocketOpen(open), true)
+  assert.equal(getWhatsAppWebSocketState(makeForkSocket('connecting')), 'connecting')
+  assert.equal(getWhatsAppWebSocketState(makeForkSocket('closing')), 'closing')
+  assert.equal(getWhatsAppWebSocketState(makeForkSocket('closed')), 'closed')
+  assert.equal(isWhatsAppSocketOpen(makeForkSocket('open', '')), false)
 })
 
 test('recognizes WhatsApp 428 and closed-socket errors', () => {

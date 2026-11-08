@@ -23,7 +23,7 @@ import syntaxerror from 'syntax-error'
 import { useMultiFileAuthState, fetchLatestWaWebVersion, makeCacheableSignalKeyStore, DisconnectReason } from 'baileys'
 import { makeWASocket } from './lib/simple.js'
 import { createPairingCodeRequester, normalizePairingPhoneNumber } from './lib/whatsapp-pairing.js'
-import { isWhatsAppSocketOpen } from './lib/whatsapp-connection.js'
+import { getWhatsAppWebSocketState, isWhatsAppSocketOpen } from './lib/whatsapp-connection.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -433,19 +433,23 @@ global.requestWhatsAppReconnect = function requestWhatsAppReconnect(reason = '')
 
   if (reconnectTimer || reconnectInProgress || reconnectQueued) return true
 
-  const readyState = currentSocket?.ws?.readyState
-  if (readyState === 0 || readyState === 1) {
-    // A WebSocket can be OPEN before Baileys has authenticated the account.
+  const transportState = getWhatsAppWebSocketState(currentSocket)
+  if (transportState === 'connecting' || transportState === 'open') {
+    // A WebSocket can be open before Baileys has attached the authenticated account.
     // Give the handshake 30 seconds, then replace a socket that never becomes ready.
     if (!reconnectHandshakeTimer) {
       const observedSocket = currentSocket
       console.warn(chalk.yellow(
-        '⏳ WebSocket WhatsApp terbuka/belum selesai handshake. Menunggu autentikasi sebelum meminta reconnect.'
+        `⏳ Socket WhatsApp belum siap (transport=${transportState}, identitas=${currentSocket?.user?.id ? 'ada' : 'belum ada'}). Menunggu handshake 30 detik.`
       ))
       reconnectHandshakeTimer = setTimeout(() => {
         reconnectHandshakeTimer = null
         const activeSocket = global.conn
-        if (isWhatsAppSocketOpen(activeSocket)) return
+        if (isWhatsAppSocketOpen(activeSocket)) {
+          reconnectAttempts = 0
+          reconnectQueued = null
+          return
+        }
         scheduleSocketReconnect(
           428,
           (reason || 'Socket WhatsApp belum siap untuk mengirim media.') +
@@ -481,10 +485,16 @@ global.reloadHandler = async function reloadHandler(restartSocket = false) {
   if (restartSocket) {
     const oldChats = global.conn?.chats || {}
     const oldConn = global.conn
-    // Lepas listener terlebih dahulu supaya event close dari socket lama tidak memicu reconnect ganda.
+    // Lepas listener agar penutupan socket lama tidak memicu reconnect ganda.
     try { oldConn?.ev?.removeAllListeners() } catch { /* socket sudah berhenti */ }
-    try { oldConn?.ws?.close() } catch {
-      try { oldConn?.end?.() } catch { /* socket sudah berhenti */ }
+    // Baileys end() juga membersihkan keepalive, event buffer, dan signal repository.
+    // ws.close() hanya menjadi fallback untuk implementasi socket yang lebih lama.
+    try {
+      if (typeof oldConn?.end === 'function') await oldConn.end()
+      else if (typeof oldConn?.ws?.close === 'function') await oldConn.ws.close()
+    } catch (error) {
+      console.warn(chalk.yellow('⚠️ Pembersihan socket WhatsApp lama gagal:'), error?.message || error)
+      try { await oldConn?.ws?.close?.() } catch { /* socket sudah berhenti */ }
     }
 
     conn = global.conn = makeWASocket(connectionOptions, { chats: oldChats })
@@ -534,6 +544,9 @@ global.reloadHandler = async function reloadHandler(restartSocket = false) {
     const messages = Array.isArray(update?.messages) ? update.messages : []
     for (const message of messages) {
       if (!message) continue
+      // Newsletter/channel events (including empty QuestionReply payloads) are not chat messages.
+      const remoteJid = String(message.key?.remoteJid || message.key?.remoteJidAlt || '')
+      if (remoteJid.endsWith('@newsletter')) continue
       if (!claimMessageOnce(message)) {
         console.warn('[MESSAGE-DEDUP] Pesan duplikat diabaikan:', {
           chat: message.key?.remoteJid || message.key?.remoteJidAlt || null,
@@ -669,8 +682,14 @@ async function connectionUpdate(update) {
       return
     }
     if (!isWhatsAppSocketOpen(activeSocket)) {
-      console.warn(chalk.yellow('⚠️ WebSocket terbuka, tetapi identitas WhatsApp belum terautentikasi. Menunggu watchdog handshake.'))
-      global.requestWhatsAppReconnect('WebSocket melaporkan open tanpa identitas akun WhatsApp yang siap.')
+      const transportState = getWhatsAppWebSocketState(activeSocket)
+      const hasIdentity = Boolean(activeSocket?.user?.id)
+      console.warn(chalk.yellow(
+        `⚠️ Event open diterima, tetapi socket belum siap (transport=${transportState}, identitas=${hasIdentity ? 'ada' : 'belum ada'}). Menunggu watchdog handshake.`
+      ))
+      global.requestWhatsAppReconnect(
+        `Event open diterima, tetapi socket belum siap (transport=${transportState}, identitas=${hasIdentity ? 'ada' : 'belum ada'}).`
+      )
       return
     }
     clearReconnectHandshakeTimer()
@@ -680,8 +699,8 @@ async function connectionUpdate(update) {
     }
     reconnectQueued = null
     reconnectAttempts = 0
-    const { jid, name } = activeSocket.user || {}
-    console.log(chalk.greenBright('✅ Bot terhubung:'), chalk.white(name || '-'), chalk.gray(`(${jid || '-'})`))
+    const { id, name } = activeSocket.user || {}
+    console.log(chalk.greenBright('✅ Bot terhubung:'), chalk.white(name || '-'), chalk.gray(`(${id || '-'} )`.replace(' )', ')')))
   }
 }
 

@@ -1,3 +1,12 @@
+## 2026-11-08 — Fix WhatsApp reconnect loop with Baileys WebSocketClient state flags
+
+- **Observed failure:** logs repeatedly reported an open WebSocket without an authenticated WhatsApp identity, followed by reconnect attempts in the high 40s. Newsletter `QuestionReply` events with 0-byte payloads also flooded the normal chat logger.
+- **Root cause:** `@itsliaaa/baileys@0.3.18-final` wraps the native WebSocket in `WebSocketClient`, which exposes `isOpen`, `isConnecting`, `isClosing`, and `isClosed`; it does not expose `readyState` on `socket.ws`. The shared readiness helper required `readyState === 1`, so it misclassified a real authenticated socket as unavailable and repeatedly replaced it.
+- **Fix:** added `getWhatsAppWebSocketState()` to normalize both the fork's state flags and standard WebSocket `readyState`; all connection, render-reply, and error-report preflights now use the shared helper. Socket replacement awaits Baileys `end()` (with `ws.close()` fallback) so keepalive/event/signal resources are cleaned before the replacement is created. The connected-account log now prints `user.id`, not a nonexistent `user.jid`.
+- **Log hygiene:** ignore `@newsletter` channel events in the chat handler and print the AutoDL router startup notice only once per worker, not on every dynamic handler reload. Group allowlist behavior is unchanged.
+- **Files:** `main.js`, `lib/whatsapp-connection.js`, `handler.js`, `plugins/owner/render.js`, `tests/whatsapp-connection.test.js`, `AI_CONTEXT.md`, and this changelog.
+- **Tests:** added regression coverage for the fork's wrapper flags without `readyState`, while retaining standard-WebSocket state tests. Verification is pending the repository's media regression and JavaScript syntax workflows; a live WhatsApp/TokoPanel session test is still required.
+
 ## 2026-11-08 — Recover completed render delivery when WhatsApp authentication stalls
 
 - **Observed failure:** FFmpeg reached the full 28.5/28.5 seconds, the ZIP script exited with code 0, and a 14.9 MB output was saved. The job then stayed at 95% in "Menunggu koneksi WhatsApp" with the child shell already closed.
