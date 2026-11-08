@@ -160,34 +160,40 @@ function createRenderChatProgressReporter(m, session) {
     const quietMs = Math.max(0, now - lastProgressAt)
     const detail = String(progress?.detail || '').trim()
     const waitingForDelivery = Boolean(session.deliveryWaiting)
+    const deliveryInProgress = Boolean(session.outputPath && session.processing && !waitingForDelivery)
     const elapsedLabel = waitingForDelivery
       ? 'Menunggu WhatsApp: ' + formatRenderElapsed(now - (Number(session.deliveryWaitingSince) || now))
-      : 'Waktu proses: ' + formatRenderElapsed(now - startedAt)
+      : deliveryInProgress
+        ? 'Waktu pengiriman: ' + formatRenderElapsed(now - (Number(session.deliveryStartedAt) || now))
+        : 'Waktu proses: ' + formatRenderElapsed(now - startedAt)
     const lines = [
       heartbeat
         ? waitingForDelivery
           ? '📦 Hasil render selesai; menunggu pengiriman WhatsApp.'
-          : '⏳ Render masih berjalan di background.'
+          : deliveryInProgress
+            ? '📤 Hasil render sedang dikirim ke WhatsApp.'
+            : '⏳ Render masih berjalan di background.'
         : '⚙️ Perkembangan render:',
       'Progres tercatat: ' + percent + '%',
       'Tahap: ' + stage,
       elapsedLabel
     ]
+    if (deliveryInProgress) lines.push('Ukuran hasil: ' + formatBytes(session.outputSize || 0))
 
     if (detail) lines.push('Detail: ' + detail)
     const childIdleMs = session.renderChildLastOutputAt
       ? Math.max(0, now - session.renderChildLastOutputAt)
       : null
-    if (!waitingForDelivery && session.renderChildPid) {
+    if (!session.outputPath && !waitingForDelivery && session.renderChildPid) {
       lines.push('Proses shell: PID ' + session.renderChildPid + ' (' + String(session.renderChildState || 'running') + ').')
     }
-    if (!waitingForDelivery && childIdleMs !== null) {
+    if (!session.outputPath && !waitingForDelivery && childIdleMs !== null) {
       lines.push('Output proses terakhir: ' + formatRenderElapsed(childIdleMs) + ' yang lalu.')
     }
     if (waitingForDelivery) {
       lines.push('Hasil render tetap tersimpan. Ketik *.render send* untuk menghentikan penantian dan mencoba kirim ulang.')
     }
-    if (!waitingForDelivery && heartbeat && quietMs >= RENDER_STATUS_HEARTBEAT_MS) {
+    if (!session.outputPath && !waitingForDelivery && heartbeat && quietMs >= RENDER_STATUS_HEARTBEAT_MS) {
       if (session.renderChildPid && session.renderChildState === 'running' &&
           childIdleMs !== null && childIdleMs < RENDER_STATUS_HEARTBEAT_MS) {
         lines.push('ℹ️ Script masih mengeluarkan output, tetapi belum ada perubahan angka progres FFmpeg.')
@@ -509,6 +515,7 @@ async function deliverRenderedOutput({ m, key, session, progressReporter = null 
         }
         session.deliveryWaiting = false
         session.deliveryWaitingSince = null
+        session.deliveryStartedAt = Date.now()
         acquireRenderUpdateLock(session)
         progress.update(95, 'Mengirim hasil ke WhatsApp', formatBytes(outputInfo.size), true)
         return sendLocalFile(socket, m.chat, outputPath, {
@@ -524,6 +531,7 @@ async function deliverRenderedOutput({ m, key, session, progressReporter = null 
     session.processing = false
     session.deliveryWaiting = false
     session.deliveryWaitingSince = null
+    session.deliveryStartedAt = null
     session.abortController = null
     await removeSession(session)
     console.log('[RENDER] Hasil dikirim:', {
@@ -540,6 +548,7 @@ async function deliverRenderedOutput({ m, key, session, progressReporter = null 
       session.processing = false
       session.deliveryWaiting = false
       session.deliveryWaitingSince = null
+      session.deliveryStartedAt = null
       session.abortController = null
       releaseRenderUpdateLock(session)
       progress.update(
@@ -553,6 +562,7 @@ async function deliverRenderedOutput({ m, key, session, progressReporter = null 
 
     session.deliveryWaiting = false
     session.deliveryWaitingSince = null
+    session.deliveryStartedAt = null
 
     if (!cancelled && isWhatsAppConnectionClosedError(error)) {
       try {
@@ -709,6 +719,18 @@ const handler = async (m, { conn, text }) => {
         'Ukuran hasil: ' + formatBytes(session.outputSize || 0),
         'Ketik *.render send* untuk menghentikan penantian dan mencoba kirim ulang.',
         'Ketik *.render cancel* hanya jika ingin menghapus hasil render.'
+      ]
+      return safeReply(m, lines.join('\n'))
+    }
+    if (session.processing && session.outputPath) {
+      const now = Date.now()
+      const startedAt = Number(session.deliveryStartedAt) || now
+      const lines = [
+        '📤 Render sudah selesai. Video sedang dikirim ke WhatsApp.',
+        'Status: upload media berjalan.',
+        'Waktu pengiriman: ' + formatRenderElapsed(now - startedAt),
+        'Ukuran hasil: ' + formatBytes(session.outputSize || 0),
+        'Ketik *.render status* untuk memeriksa kembali.'
       ]
       return safeReply(m, lines.join('\n'))
     }
