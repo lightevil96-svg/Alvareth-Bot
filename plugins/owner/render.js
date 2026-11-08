@@ -115,7 +115,7 @@ async function safeReact(m, emoji) {
 }
 
 const RENDER_STATUS_HEARTBEAT_MS = 60_000
-const RENDER_STATUS_MIN_INTERVAL_MS = 15_000
+const RENDER_STATUS_MIN_INTERVAL_MS = 30_000
 
 function formatRenderElapsed(milliseconds) {
   const totalSeconds = Math.max(0, Math.floor(Number(milliseconds) / 1000) || 0)
