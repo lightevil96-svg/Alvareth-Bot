@@ -1,3 +1,16 @@
+## 2026-11-08 — Recover completed render delivery when WhatsApp authentication stalls
+
+- **Observed failure:** FFmpeg reached the full 28.5/28.5 seconds, the ZIP script exited with code 0, and a 14.9 MB output was saved. The job then stayed at 95% in "Menunggu koneksi WhatsApp" with the child shell already closed.
+- **Root cause:** the reconnect request treated WebSocket readyState 0 or 1 as healthy even when Baileys had not authenticated the account (no `socket.user.id`). The connection wait callback ran only once, so a replacement socket that stayed open but unauthenticated never triggered another reconnect request. The completed output manifest was also written only after the wait threw; an indefinite wait therefore held the update lock and left the saved output without restart metadata.
+- **Reconnect fix:** the connection wait now notifies the caller on every poll. `main.js` distinguishes a fully authenticated/open socket from a WebSocket that is merely CONNECTING/OPEN, grants the handshake 30 seconds, then schedules a replacement if authentication never completes. Reconnect requests arriving during an active replacement are queued; stale open/close events from an old socket are ignored.
+- **Durable delivery:** the completed video and recovery manifest are persisted before waiting for WhatsApp. The update lock is released during the indefinite connection wait and reacquired only when media upload actually starts. This lets a safe update/restart preserve the result.
+- **Manual retry and recovery:** `.render send` can stop an existing connection wait and start a fresh attempt using the same output without deleting or rerendering it. On startup, the render store also discovers fresh `render-result.*` files left in a job directory without a manifest; `.render recover` attaches the selected orphan to the current owner chat, after which `.render send` delivers it. Ambiguous/multiple orphan outputs require explicit selection.
+- **Status accuracy:** `.render status` now distinguishes a completed video awaiting delivery from active FFmpeg work. WhatsApp heartbeats describe the delivery wait instead of saying render is still running. Finished shell PID/output diagnostics are hidden during delivery wait.
+- **Progress formatting:** render percentage is monotonic across shell stages, so a later `echo` command cannot reset 72% to 10%. Elapsed time now labels seconds as `dtk`, not `d`.
+- **Tests added/updated:** `tests/whatsapp-connection.test.js` covers repeated unavailable-socket notifications; `tests/render-session-store.test.js` covers orphan discovery; `tests/render-script.test.js` covers monotonic progress. The repository test commands are `npm run test:media` and `npm run test:render`.
+- **Files:** `main.js`, `lib/whatsapp-connection.js`, `lib/render-session-store.js`, `lib/render-script.js`, `plugins/owner/render.js`, and the three test files.
+- **Verification:** source changes and regression tests are committed. No GitHub Actions result or live TokoPanel/WhatsApp reconnect-and-delivery run is available yet; those remain required before claiming live delivery is verified.
+
 ## 2026-11-08 — Report background render progress to WhatsApp and monitor shell lifecycle
 
 - **Observed failure:** after the ZIP acceptance message, the owner received no further WhatsApp updates while the background render was running.
