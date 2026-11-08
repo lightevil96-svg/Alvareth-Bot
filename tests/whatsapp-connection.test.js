@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   getWhatsAppWebSocketState,
   isWhatsAppConnectionClosedError,
+  isWhatsAppRestartRequired,
   isWhatsAppSocketOpen,
   sendWithWhatsAppReconnect,
   waitForWhatsAppSocket
@@ -43,6 +44,44 @@ test('@itsliaaa/baileys WebSocketClient state flags work without readyState', ()
   assert.equal(getWhatsAppWebSocketState(makeForkSocket('closing')), 'closing')
   assert.equal(getWhatsAppWebSocketState(makeForkSocket('closed')), 'closed')
   assert.equal(isWhatsAppSocketOpen(makeForkSocket('open', '')), false)
+})
+
+test('does not treat a pending pairing code as an authenticated socket', () => {
+  const socket = makeForkSocket('open')
+  socket.authState = {
+    creds: {
+      registered: false,
+      pairingCode: 'TEMPORARY-CODE',
+      me: { id: '628123456789@s.whatsapp.net' }
+    }
+  }
+
+  assert.equal(isWhatsAppSocketOpen(socket), false)
+
+  socket.authState.creds.registered = true
+  assert.equal(isWhatsAppSocketOpen(socket), true)
+})
+
+test('uses persisted auth identity when socket.user is not exposed', () => {
+  const socket = {
+    ws: { isOpen: true },
+    sendMessage: async () => null,
+    authState: {
+      creds: {
+        registered: true,
+        me: { id: '628123456789@s.whatsapp.net' }
+      }
+    }
+  }
+
+  assert.equal(isWhatsAppSocketOpen(socket), true)
+})
+
+test('recognizes Baileys restartRequired (515)', () => {
+  assert.equal(isWhatsAppRestartRequired(515), true)
+  assert.equal(isWhatsAppRestartRequired({ statusCode: 515 }), true)
+  assert.equal(isWhatsAppRestartRequired({ output: { statusCode: 515 } }), true)
+  assert.equal(isWhatsAppRestartRequired(428), false)
 })
 
 test('waits for the authenticated fork WebSocketClient without a readyState property', async () => {
