@@ -366,10 +366,13 @@ test('runRenderScript reports shell process start, output activity, and exit sta
 
   const started = events.find(event => event.state === 'started')
   const activity = events.find(event => event.state === 'activity')
+  const exited = events.find(event => event.state === 'exited')
   const closed = events.find(event => event.state === 'closed')
   assert.ok(Number.isInteger(started?.pid))
   assert.equal(started?.running, true)
   assert.ok(activity?.stream)
+  assert.equal(exited?.running, false)
+  assert.equal(exited?.code, 0)
   assert.equal(closed?.running, false)
   assert.equal(closed?.code, 0)
   assert.equal(result.code, 0)
