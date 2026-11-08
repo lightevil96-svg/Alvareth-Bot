@@ -6,7 +6,7 @@ import { downloadContentFromMessage } from 'baileys'
 import { getQuotedMediaInfo, downloadQuotedMedia } from '../../lib/simple.js'
 import { createRenderSessionKey as sessionKey, getCurrentRenderDocument as getCurrentDocument, isRenderDocumentEvent } from '../../lib/render-message.js'
 import { sendLocalFile } from '../../lib/whatsapp-file-sender.js'
-import { sendWithWhatsAppReconnect } from '../../lib/whatsapp-connection.js'
+import { isWhatsAppConnectionClosedError, sendWithWhatsAppReconnect } from '../../lib/whatsapp-connection.js'
 import {
   extractRenderArchive,
   findRenderScript,
@@ -219,6 +219,13 @@ async function deliverRenderedOutput({ m, key, session }) {
             true
           )
           console.warn('[RENDER] Menunggu koneksi WhatsApp pulih sebelum mengirim hasil render.')
+          if (details?.reason === 'waiting-for-connection') {
+            try {
+              global.requestWhatsAppReconnect?.('Render selesai, tetapi socket WhatsApp belum aktif.')
+            } catch (error) {
+              console.error('[RENDER] Tidak dapat meminta reconnect WhatsApp:', error?.message || error)
+            }
+          }
         }
       },
       onReconnectRequired: details => {
@@ -254,6 +261,16 @@ async function deliverRenderedOutput({ m, key, session }) {
   } catch (error) {
     const cancelled = error?.code === 'RENDER_SCRIPT_CANCELLED' ||
       session.cancelRequested || session.abortController?.signal.aborted
+
+    if (!cancelled && isWhatsAppConnectionClosedError(error)) {
+      try {
+        global.requestWhatsAppReconnect?.(
+          'Pengiriman hasil render terputus: ' + safeError(error)
+        )
+      } catch (reconnectError) {
+        console.error('[RENDER] Tidak dapat meminta reconnect setelah upload gagal:', reconnectError?.message || reconnectError)
+      }
+    }
 
     session.processing = false
     session.abortController = null
