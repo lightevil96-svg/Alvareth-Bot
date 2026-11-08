@@ -517,10 +517,21 @@ async function deliverRenderedOutput({ m, key, session, progressReporter = null 
           error.code = 'RENDER_SCRIPT_CANCELLED'
           throw error
         }
+        if (global.__alvarethUpdateRunning) {
+          const error = new Error('Pembaruan bot sedang berlangsung; hasil render tetap disimpan untuk dikirim setelah update.')
+          error.code = 'RENDER_DELIVERY_DEFERRED'
+          throw error
+        }
+        acquireRenderUpdateLock(session)
+        if (global.__alvarethUpdateRunning) {
+          releaseRenderUpdateLock(session)
+          const error = new Error('Pembaruan bot dimulai sebelum upload; hasil render tetap disimpan untuk dikirim setelah update.')
+          error.code = 'RENDER_DELIVERY_DEFERRED'
+          throw error
+        }
         session.deliveryWaiting = false
         session.deliveryWaitingSince = null
         session.deliveryStartedAt = Date.now()
-        acquireRenderUpdateLock(session)
         progress.update(95, 'Mengirim hasil ke WhatsApp', formatBytes(outputInfo.size), true)
         return sendLocalFile(socket, m.chat, outputPath, {
           quoted: socket === m.conn ? m : undefined,
@@ -820,15 +831,24 @@ const handler = async (m, { conn, text }) => {
 
     if (session.processing) return safeReply(m, '⏳ Render atau upload WhatsApp masih berjalan. Periksa kembali dengan *.render status*.')
     if (!session.outputPath) return safeReply(m, 'Belum ada hasil render yang siap dikirim. Selesaikan proses render terlebih dahulu.')
+    if (global.__alvarethUpdateRunning) {
+      return safeReply(m, '⏳ Update sedang berlangsung. Hasil render tetap tersimpan; coba *.render send* setelah update selesai.')
+    }
+
+    acquireRenderUpdateLock(session)
+    if (global.__alvarethUpdateRunning) {
+      releaseRenderUpdateLock(session)
+      return safeReply(m, '⏳ Update baru saja dimulai. Hasil render tetap tersimpan; coba *.render send* setelah update selesai.')
+    }
 
     try {
       const outputInfo = await fs.stat(session.outputPath)
       if (!outputInfo.isFile() || outputInfo.size < 1) throw new Error('File hasil render kosong atau tidak tersedia.')
     } catch (error) {
+      releaseRenderUpdateLock(session)
       return safeReply(m, '❌ File hasil render tidak dapat ditemukan: ' + safeError(error) + '. Jalankan render ulang dengan mengirim video dan ZIP.')
     }
 
-    acquireRenderUpdateLock(session)
     session.processing = true
     session.processingStartedAt = Date.now()
     session.cancelRequested = false
