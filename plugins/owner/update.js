@@ -677,8 +677,20 @@ async function handleUpdate(m, context = {}) {
     return m.reply("Perintah update:\n• .update — update aman, file lokal yang berubah dipertahankan\n• .update force — backup lalu timpa hanya file konflik yang berubah di GitHub");
   }
   const forceMode = updateMode.forceMode;
+
+  // Completed render outputs are restored from the persistent render-jobs
+  // directory before checking this lock. They do not block code updates because
+  // the video and its recovery manifest live outside the replaceable project.
+  if (global.__alvarethRenderRecoveryReady) {
+    try {
+      await global.__alvarethRenderRecoveryReady
+    } catch (error) {
+      return m.reply('⏳ Update ditunda karena status pemulihan hasil render belum dapat dipastikan. File hasil akan dilindungi sampai pemeriksaan penyimpanan berhasil. Detail: ' + String(error?.message || error).slice(0, 250))
+    }
+  }
+
   if ((Number(global.__alvarethRenderJobs) || 0) > 0) {
-    return m.reply('⏳ Update ditunda karena masih ada sesi render aktif (menunggu ZIP, proses render, atau pengiriman hasil). Selesaikan atau batalkan sesi render terlebih dahulu.')
+    return m.reply('⏳ Update ditunda karena masih ada pekerjaan render yang benar-benar aktif atau menunggu ZIP/pengiriman. Selesaikan atau batalkan pekerjaan tersebut terlebih dahulu. Hasil render yang sudah selesai dan hanya menunggu dikirim tidak lagi mengunci update.')
   }
   if (global.__alvarethUpdateRunning) {
     return m.reply('⏳ Update sedang berjalan, tunggu sampai selesai.')
