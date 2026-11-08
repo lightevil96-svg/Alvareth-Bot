@@ -395,6 +395,19 @@ function scheduleSocketReconnect(statusCode, reason = '') {
   }, delay)
 }
 
+// A media send can discover a closed socket before connection.update is handled.
+// Reuse the same backoff/reconnect path instead of creating a second socket loop.
+global.requestWhatsAppReconnect = function requestWhatsAppReconnect(reason = '') {
+  const currentSocket = global.conn
+  const readyState = currentSocket?.ws?.readyState
+
+  // CONNECTING means the replacement socket is already performing its handshake.
+  if (readyState === 0 || readyState === 1) return false
+
+  scheduleSocketReconnect(428, reason || 'Socket WhatsApp terdeteksi tertutup saat pengiriman media.')
+  return Boolean(reconnectTimer || reconnectInProgress)
+}
+
 global.reloadHandler = async function reloadHandler(restartSocket = false) {
   try {
     const loaded = await import(`./handler.js?update=${Date.now()}`).catch(error => {
