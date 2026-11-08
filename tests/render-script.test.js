@@ -391,3 +391,88 @@ test('createRenderProgressReporter writes live percentages to its terminal logge
   assert.equal(session.progress.percent, 100)
   assert.equal(session.progress.stage, 'Selesai')
 })
+
+
+test('runRenderScript has no implicit timeout when timeoutMs is omitted', async t => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'alvareth-render-no-timeout-'))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const scriptPath = path.join(directory, 'render.sh')
+  const inputPath = path.join(directory, 'input.mp4')
+  await writeFile(inputPath, 'input')
+  await writeFile(scriptPath, 'sleep 0.15\n')
+
+  const result = await runRenderScript({
+    scriptPath,
+    workingDirectory: directory,
+    inputPath
+  })
+
+  assert.equal(result.code, 0)
+  assert.ok(result.durationMs >= 100)
+})
+
+test('runRenderScript aborts an active render process tree on request', async t => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'alvareth-render-cancel-'))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const scriptPath = path.join(directory, 'render.sh')
+  const inputPath = path.join(directory, 'input.mp4')
+  await writeFile(inputPath, 'input')
+  await writeFile(scriptPath, 'sleep 10 &\nwait\n')
+
+  const controller = new AbortController()
+  const abortTimer = setTimeout(() => controller.abort(), 100)
+  t.after(() => clearTimeout(abortTimer))
+
+  await assert.rejects(
+    runRenderScript({
+      scriptPath,
+      workingDirectory: directory,
+      inputPath,
+      signal: controller.signal
+    }),
+    error => error.code === 'RENDER_SCRIPT_CANCELLED'
+  )
+})
+
+test('runRenderScript reports shell stages and parses FFmpeg progress from stdout and stderr', async t => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'alvareth-render-live-progress-'))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const scriptPath = path.join(directory, 'render.sh')
+  const inputPath = path.join(directory, 'input.mp4')
+  await writeFile(inputPath, 'input')
+  await writeFile(scriptPath, [
+    'cp input.mp4 staged.mp4',
+    "printf 'Duration: 00:00:06.50, start: 0.000000\\n' >&2",
+    "printf 'frame=1 time=00:00:03.25 speed=1x\\n' >&2",
+    "printf 'out_time=00:00:04.50\\n'"
+  ].join('\n') + '\n')
+
+  const updates = []
+  const stages = []
+  await runRenderScript({
+    scriptPath,
+    workingDirectory: directory,
+    inputPath,
+    progressDurationSeconds: null,
+    onProgress: value => updates.push(value),
+    onStage: value => stages.push(value)
+  })
+
+  assert.ok(stages.some(value => value.stage === 'Menyiapkan aset' && value.command === 'cp'))
+  assert.ok(updates.some(value => value.percent === 50))
+  assert.ok(updates.some(value => value.percent === 69))
+})
+
+test('runRenderScript reports a nonzero exit code when the render script stops unexpectedly', async t => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'alvareth-render-exit-'))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const scriptPath = path.join(directory, 'render.sh')
+  const inputPath = path.join(directory, 'input.mp4')
+  await writeFile(inputPath, 'input')
+  await writeFile(scriptPath, 'exit 23\n')
+
+  await assert.rejects(
+    runRenderScript({ scriptPath, workingDirectory: directory, inputPath }),
+    error => error.code === 'RENDER_SCRIPT_FAILED' && error.exitCode === 23
+  )
+})

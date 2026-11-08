@@ -18,7 +18,6 @@ import {
 const VIDEO_EXTENSIONS = new Set([
   '3gp', 'avi', 'flv', 'm4v', 'mkv', 'mov', 'mp4', 'mpeg', 'mpg', 'mts', 'ts', 'webm', 'wmv'
 ])
-const SESSION_TTL_MS = 15 * 60 * 1000
 const STALE_JOB_TTL_MS = 24 * 60 * 60 * 1000
 const MAX_PENDING_SESSIONS = 3
 const MAX_VIDEO_BYTES = 300 * 1024 * 1024
@@ -26,7 +25,6 @@ const MAX_ARCHIVE_ENTRIES = 200
 const MAX_ARCHIVE_FILE_BYTES = 100 * 1024 * 1024
 const MAX_ARCHIVE_UNPACKED_BYTES = 250 * 1024 * 1024
 const MAX_OUTPUT_BYTES = 500 * 1024 * 1024
-const SCRIPT_TIMEOUT_MS = 30 * 60 * 1000
 
 // Session dipisahkan berdasarkan chat dan pengirim agar paket ZIP pengguna lain
 // tidak pernah dipasangkan dengan video milik owner.
@@ -73,6 +71,25 @@ async function safeReply(m, message) {
   return null
 }
 
+async function safeReact(m, emoji) {
+  try {
+    if (typeof m?.react === 'function') return await m.react(emoji)
+    if (m?.chat && m?.key && typeof m?.conn?.sendMessage === 'function') {
+      return await m.conn.sendMessage(m.chat, { react: { text: emoji, key: m.key } })
+    }
+  } catch (error) {
+    console.warn('[RENDER] Gagal memperbarui reaksi WhatsApp:', error?.message || error)
+  }
+  return null
+}
+
+function throwIfRenderCancelled(session) {
+  if (!session?.cancelRequested && !session?.abortController?.signal?.aborted) return
+  const error = new Error('Render dibatalkan atas permintaan pengguna.')
+  error.code = 'RENDER_SCRIPT_CANCELLED'
+  throw error
+}
+
 async function removeSession(session) {
   if (!session) return
   if (session.updateLockHeld) {
@@ -111,18 +128,6 @@ async function ensureRenderRoot() {
     } catch {}
   }
   return root
-}
-
-async function pruneExpiredSessions() {
-  const now = Date.now()
-  const expired = []
-  for (const [key, session] of pendingSessions) {
-    if (session.processing || now - session.createdAt <= SESSION_TTL_MS) continue
-    pendingSessions.delete(key)
-    expired.push(key)
-    await removeSession(session)
-  }
-  return expired
 }
 
 async function downloadDocument(conn, media, options = {}) {
@@ -189,13 +194,12 @@ const handler = async (m, { conn, text }) => {
   if (!key) return safeReply(m, 'Identitas chat tidak terbaca. Coba kirim ulang perintah.')
 
   const action = String(text || '').trim().toLowerCase()
-  await pruneExpiredSessions()
 
   if (action === 'status') {
     const session = pendingSessions.get(key)
     if (!session) return safeReply(m, 'Tidak ada sesi render aktif.')
     if (session.processing) {
-      return safeReply(m, '⏳ Render sedang berjalan. Persentase real-time hanya tampil di terminal server.')
+      return safeReply(m, '⏳ Render berjalan di background. Tahap saat ini: ' + String(session.progress?.stage || 'Menyiapkan render') + '. Detail progres hanya tampil di terminal server.')
     }
     if (/gagal/i.test(String(session.progress?.stage || ''))) {
       return safeReply(m, '❌ Render terakhir gagal: ' + safeError(session.progress?.detail || 'Kesalahan tidak diketahui.'))
@@ -205,11 +209,21 @@ const handler = async (m, { conn, text }) => {
 
   if (action === 'cancel') {
     const session = pendingSessions.get(key)
-    if (!session) return safeReply(m, 'Tidak ada sesi render yang menunggu file ZIP.')
-    if (session.processing) return safeReply(m, 'Render sedang berjalan. Tunggu sampai proses selesai.')
+    if (!session) return safeReply(m, 'Tidak ada sesi render aktif.')
+    if (session.processing) {
+      if (session.progress?.stage === 'Mengirim hasil ke WhatsApp') {
+        return safeReply(m, '📤 Hasil sudah masuk tahap pengiriman dan tidak dapat dibatalkan lagi.')
+      }
+      if (session.cancelRequested) {
+        return safeReply(m, '🛑 Permintaan pembatalan render sudah dikirim.')
+      }
+      session.cancelRequested = true
+      session.abortController?.abort()
+      return safeReply(m, '🛑 Permintaan pembatalan diterima. Bot sedang menghentikan render dan proses turunannya; konfirmasi akan dikirim setelah proses berhenti.')
+    }
     pendingSessions.delete(key)
     await removeSession(session)
-    return safeReply(m, 'Sesi render dibatalkan dan file sementara dibersihkan.')
+    return safeReply(m, '🛑 Sesi render dibatalkan dan file sementara dibersihkan.')
   }
 
   if (action) {
@@ -289,13 +303,15 @@ const handler = async (m, { conn, text }) => {
         detail: 'Kirim paket ZIP sebagai dokumen di chat yang sama.',
         updatedAt: Date.now()
       },
-      updateLockHeld: true
+      updateLockHeld: true,
+      abortController: null,
+      cancelRequested: false
     })
     global.__alvarethRenderJobs = Math.max(0, Number(global.__alvarethRenderJobs) || 0) + 1
 
     return safeReply(
       m,
-      '🎬 Video diterima (' + formatBytes(videoBuffer.length) + ').\n\nSekarang kirim paket render *.zip* sebagai dokumen di chat yang sama. Bot akan mengekstrak aset dan menjalankan render.sh dari dalam paket tersebut.\n\nSesi berlaku 15 menit. Gunakan *.render cancel* jika ingin membatalkan.'
+      '🎬 Video diterima (' + formatBytes(videoBuffer.length) + ').\n\nSekarang kirim paket render *.zip* sebagai dokumen di chat yang sama. Bot akan mengekstrak aset dan menjalankan render.sh dari dalam paket tersebut.\n\nSesi tetap aktif sampai ZIP diterima atau kamu membatalkannya. Tidak ada batas waktu otomatis; gunakan *.render cancel* untuk membatalkan.'
     )
   } catch (error) {
     if (sessionDirectory) await fs.rm(sessionDirectory, { recursive: true, force: true }).catch(() => {})
@@ -329,14 +345,6 @@ handler.all = async function (m) {
     return
   }
 
-  const expired = await pruneExpiredSessions()
-  if (expired.includes(key)) {
-    if (isZip) {
-      await safeReply(m, '⏳ Sesi render sudah kedaluwarsa. Kirim ulang video, reply dengan *.render*, lalu kirim paket ZIP dalam 15 menit.')
-    }
-    return
-  }
-
   const session = pendingSessions.get(key)
   if (!session) {
     if (isZip) {
@@ -346,7 +354,7 @@ handler.all = async function (m) {
         mimetype,
         activeSessions: pendingSessions.size
       })
-      await safeReply(m, '📦 ZIP terdeteksi, tetapi sesi render tidak ditemukan atau sudah kedaluwarsa. Kirim ulang video, reply dengan *.render*, kemudian kirim ZIP di chat yang sama.')
+      await safeReply(m, '📦 ZIP terdeteksi, tetapi sesi render tidak ditemukan. Kirim ulang video, reply dengan *.render*, kemudian kirim ZIP di chat yang sama.')
     }
     return
   }
@@ -368,19 +376,52 @@ handler.all = async function (m) {
   }
 
   session.processing = true
+  session.cancelRequested = false
+  session.abortController = new AbortController()
+  const conn = m.conn || this
+  void safeReact(m, '⚙️')
+  void safeReply(
+    m,
+    '📦 Paket ZIP diterima. ⚙️ Render mulai diproses di background. Fitur bot lain tetap dapat digunakan; tidak ada batas waktu otomatis. Gunakan *.render cancel* untuk menghentikan.'
+  )
+  void processRenderJob({ conn, m, document, key, session }).catch(async error => {
+    console.error('[RENDER] Background worker gagal:', error?.stack || error)
+    session.processing = false
+    session.abortController = null
+    if (session.cancelRequested) {
+      if (pendingSessions.get(key) === session) pendingSessions.delete(key)
+      await safeReact(m, '🛑')
+      await safeReply(m, '🛑 Render dibatalkan. Proses render dihentikan.')
+      await removeSession(session)
+      return
+    }
+    const progress = createRenderProgressReporter(session)
+    progress.update(session.progress?.percent || 0, 'Render gagal', safeError(error), true)
+    await safeReact(m, '❌')
+    await safeReply(
+      m,
+      '❌ Render berhenti karena kesalahan internal: ' + safeError(error) +
+      '\n\nVideo masih tersimpan. Kirim ulang ZIP atau gunakan *.render cancel*.'
+    )
+  })
+  return
+}
+
+async function processRenderJob({ conn, m, document, key, session }) {
   const progress = createRenderProgressReporter(session)
-  progress.update(1, 'Mengunduh paket ZIP', '', true)
   let workDirectory
   try {
-    const archiveBuffer = await downloadDocument(this, document, {
+    progress.update(1, 'Mengunduh paket ZIP', '', true)
+    throwIfRenderCancelled(session)
+    const archiveBuffer = await downloadDocument(conn, document, {
       label: 'ZIP'
     })
+    throwIfRenderCancelled(session)
     if (!hasZipSignature(archiveBuffer)) {
       throw new Error('File yang dikirim tidak memiliki signature ZIP yang valid. Kirim ulang arsip .zip dari Claude.')
     }
 
     progress.update(4, 'Memeriksa paket ZIP', formatBytes(archiveBuffer.length), true)
-    await safeReply(m, '📦 Paket ZIP diterima. Bot mulai memeriksa aset dan menjalankan render. Persentase progres hanya tampil di terminal server; WhatsApp akan menerima hasil video setelah selesai.')
 
     workDirectory = await fs.mkdtemp(path.join(session.directory, 'run-'))
     await fs.chmod(workDirectory, 0o700).catch(() => {})
@@ -393,6 +434,7 @@ handler.all = async function (m) {
       maxFileBytes: MAX_ARCHIVE_FILE_BYTES,
       maxTotalBytes: MAX_ARCHIVE_UNPACKED_BYTES
     })
+    throwIfRenderCancelled(session)
     const scriptPath = await findRenderScript(packageDirectory)
     const scriptDirectory = path.dirname(scriptPath)
 
@@ -417,10 +459,10 @@ handler.all = async function (m) {
     const progressDurationSeconds = parseRenderDurationSeconds(scriptSource)
     progress.update(
       10,
-      'Render FFmpeg',
+      'Menjalankan render.sh',
       progressDurationSeconds
-        ? 'Durasi target: ' + progressDurationSeconds.toFixed(1) + ' detik.'
-        : 'Sedang memproses; durasi target tidak terdeteksi dari script.',
+        ? 'Target durasi: ' + progressDurationSeconds.toFixed(1) + ' detik; tahap perintah dan progres FFmpeg dipantau langsung.'
+        : 'Durasi target tidak terdeteksi; tahap perintah dan aktivitas FFmpeg tetap dipantau.',
       true
     )
 
@@ -429,18 +471,27 @@ handler.all = async function (m) {
       scriptPath,
       workingDirectory: scriptDirectory,
       inputPath,
-      timeoutMs: SCRIPT_TIMEOUT_MS,
+      signal: session.abortController?.signal,
       progressDurationSeconds,
+      onStage: value => {
+        progress.update(10, String(value.stage || 'Menjalankan render.sh'),
+          value.command ? 'Perintah: ' + value.command : '')
+      },
       onProgress: value => {
-        const percent = 10 + Math.round((Number(value.percent) || 0) * 0.8)
-        const detail = Number.isFinite(value.currentTimeSeconds) &&
-          Number.isFinite(value.durationSeconds)
-          ? 'Waktu FFmpeg: ' + value.currentTimeSeconds.toFixed(1) +
-            ' / ' + value.durationSeconds.toFixed(1) + ' detik.'
-          : ''
+        const rawPercent = Number.isFinite(value.percent) ? value.percent : null
+        const percent = rawPercent === null ? 10 : 10 + Math.round(rawPercent * 0.8)
+        const detail = [
+          Number.isFinite(value.currentTimeSeconds) && Number.isFinite(value.durationSeconds)
+            ? 'Waktu FFmpeg: ' + value.currentTimeSeconds.toFixed(1) + ' / ' + value.durationSeconds.toFixed(1) + ' detik.'
+            : '',
+          Number.isFinite(value.frame) ? 'Frame: ' + value.frame : '',
+          Number.isFinite(value.fps) ? 'FPS: ' + value.fps : '',
+          value.speed ? 'Kecepatan: ' + value.speed : ''
+        ].filter(Boolean).join(' | ')
         progress.update(percent, 'Render FFmpeg', detail)
       }
     })
+    throwIfRenderCancelled(session)
     console.log('[RENDER] Paket ZIP selesai dijalankan:', {
       archiveFiles: extracted.files.length,
       extractedBytes: formatBytes(extracted.totalBytes),
@@ -453,6 +504,7 @@ handler.all = async function (m) {
       excludePaths: [scriptPath, inputPath],
       startedAt
     })
+    throwIfRenderCancelled(session)
     if (!output) {
       throw new Error('Script selesai, tetapi file video hasil render tidak ditemukan. Simpan hasil sebagai file MP4 di folder yang sama dengan render.sh.')
     }
@@ -461,13 +513,17 @@ handler.all = async function (m) {
     }
 
     progress.update(95, 'Mengirim hasil ke WhatsApp', formatBytes(output.size), true)
-    await sendLocalFile(this, m.chat, output.path, {
+    throwIfRenderCancelled(session)
+    await sendLocalFile(conn, m.chat, output.path, {
       quoted: m,
       caption: '✅ Render berhasil. Berikut hasil videonya.'
     })
 
+    await safeReact(m, '✅')
     progress.update(100, 'Selesai', 'Video berhasil dikirim ke WhatsApp.', true)
-    pendingSessions.delete(key)
+    if (pendingSessions.get(key) === session) pendingSessions.delete(key)
+    session.processing = false
+    session.abortController = null
     await removeSession(session)
     console.log('[RENDER] Hasil dikirim:', {
       fileName: path.basename(output.path),
@@ -478,6 +534,25 @@ handler.all = async function (m) {
     if (workDirectory) {
       await fs.rm(workDirectory, { recursive: true, force: true }).catch(() => {})
     }
+
+    const cancelled = error?.code === 'RENDER_SCRIPT_CANCELLED' ||
+      session.cancelRequested || session.abortController?.signal.aborted
+    if (cancelled) {
+      progress.update(
+        session.progress?.percent || 0,
+        'Dibatalkan',
+        'Render dihentikan atas permintaan pengguna.',
+        true
+      )
+      session.processing = false
+      session.abortController = null
+      if (pendingSessions.get(key) === session) pendingSessions.delete(key)
+      await safeReact(m, '🛑')
+      await safeReply(m, '🛑 Render dibatalkan. Proses render dan proses turunannya telah dihentikan.')
+      await removeSession(session)
+      return
+    }
+
     progress.update(
       session.progress?.percent || 0,
       'Render gagal',
@@ -485,15 +560,19 @@ handler.all = async function (m) {
       true
     )
     session.processing = false
+    session.abortController = null
+    await safeReact(m, '❌')
+    const exitDetails = error?.exitCode !== undefined && error?.exitCode !== null
+      ? '\nKode keluar: ' + error.exitCode
+      : error?.signal ? '\nSinyal: ' + error.signal : ''
     await safeReply(
       m,
-      '❌ Render gagal: ' + safeError(error) +
-      '\n\nVideo masih tersimpan selama sesi aktif. Kamu bisa kirim ulang paket ZIP yang sudah diperbaiki, atau gunakan *.render cancel*.'
+      '❌ Render gagal: ' + safeError(error) + exitDetails +
+      '\n\nVideo masih tersimpan. Kirim ulang ZIP yang sudah diperbaiki atau gunakan *.render cancel*.'
     )
-  } finally {
-    // The update lock remains held for the entire render session, including retries.
   }
 }
+
 
 handler.help = ['render', 'render status', 'render cancel']
 handler.tags = ['owner']
