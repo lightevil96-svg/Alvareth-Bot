@@ -1,3 +1,12 @@
+## 2026-11-08 — Add WhatsApp pairing-code login with QR fallback
+
+- **Request:** add a reliable phone-number pairing-code login path to Alvareth without removing the existing QR login or disturbing a valid WhatsApp session.
+- **Root cause:** `main.js` was QR-only even though the installed `@itsliaaa/baileys` fork exposes `requestPairingCode()`; `BOT_NUMBER` was already available through configuration but was not used for authentication.
+- **Implementation:** `WA_LOGIN_METHOD` now defaults to `pairing` and accepts `qr`. On a QR handshake event, an unregistered socket waits 1.5 seconds and requests one pairing code for the validated international `BOT_NUMBER`. The code is printed only in the server terminal. Registered sessions skip pairing; QR is displayed automatically if the number is invalid or the pairing API is unavailable/fails. Requests are deduplicated per socket and cancelled if that socket is no longer current.
+- **Session safety:** no session folder is deleted, reset, or migrated by this feature. Existing credentials and reconnect behavior remain in place. No dependency was added.
+- **Files:** `main.js`, `lib/whatsapp-pairing.js`, `tests/whatsapp-pairing.test.js`, `package.json`, `.env.example`, `index.js`, `README.md`, `AI_CONTEXT.md`, and this changelog.
+- **Verification:** pairing helper regression tests passed locally, 8/8; `npm test` now includes this suite. GitHub Actions after the final source changes and a real first-time pairing on TokoPanel/WhatsApp are still pending, so live account pairing is not yet verified.
+
 ## 2026-11-08 — Make `.render` percentage progress terminal-only
 
 - **Root cause:** `createRenderProgressReporter()` called the WhatsApp reply helper for every progress update, and `.render status` also formatted the percentage for chat output.
