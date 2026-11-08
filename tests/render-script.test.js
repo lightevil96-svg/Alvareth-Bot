@@ -417,7 +417,7 @@ test('createRenderProgressReporter never moves percentage backwards on a later s
   progress.update(10, 'Menjalankan echo', 'Perintah: echo')
   progress.update(90, 'Script render selesai', 'Exit code: 0', true)
 
-  assert.deepEqual(output.map(message => Number(message.match(/^\\[RENDER\\] (\\d+)%/)[1])), [72, 72, 90])
+  assert.deepEqual(output.map(message => Number(message.match(/^\[RENDER\] (\d+)%/)[1])), [72, 72, 90])
   assert.equal(session.progress.percent, 90)
   assert.equal(session.progress.stage, 'Script render selesai')
 })
