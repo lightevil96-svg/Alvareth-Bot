@@ -391,7 +391,27 @@ async function deliverRenderedOutput({ m, key, session, progressReporter = null 
       throw new Error('File hasil render tidak lagi tersedia di penyimpanan sesi.')
     }
 
-    progress.update(95, 'Mengirim hasil ke WhatsApp', formatBytes(outputInfo.size), true)
+    session.deliveryWaiting = true
+    session.deliveryWaitingSince = Date.now()
+    progress.update(
+      95,
+      'Menunggu koneksi WhatsApp',
+      'Render selesai dan hasil video sudah tersimpan. Menunggu socket WhatsApp aktif untuk melanjutkan pengiriman.',
+      true
+    )
+    await persistRenderOutputSession({
+      root: getRenderRoot(),
+      directory: session.directory,
+      key,
+      outputPath,
+      outputFileName: path.basename(outputPath),
+      createdAt: session.createdAt,
+      progress: session.progress
+    })
+    // The output and recovery manifest are durable before an indefinite socket wait.
+    // An updater/restart can now safely restore the completed video.
+    releaseRenderUpdateLock(session)
+
     const result = await sendWithWhatsAppReconnect({
       getSocket: () => global.conn || m?.conn || null,
       signal: session.abortController?.signal,
@@ -448,6 +468,8 @@ async function deliverRenderedOutput({ m, key, session, progressReporter = null 
     progress.update(100, 'Selesai', 'Video berhasil dikirim ke WhatsApp.', true)
     if (pendingSessions.get(key) === session) pendingSessions.delete(key)
     session.processing = false
+    session.deliveryWaiting = false
+    session.deliveryWaitingSince = null
     session.abortController = null
     await removeSession(session)
     console.log('[RENDER] Hasil dikirim:', {
@@ -459,6 +481,24 @@ async function deliverRenderedOutput({ m, key, session, progressReporter = null 
   } catch (error) {
     const cancelled = error?.code === 'RENDER_SCRIPT_CANCELLED' ||
       session.cancelRequested || session.abortController?.signal.aborted
+
+    if (cancelled && session.retryRequested && !session.cancelRequested) {
+      session.processing = false
+      session.deliveryWaiting = false
+      session.deliveryWaitingSince = null
+      session.abortController = null
+      releaseRenderUpdateLock(session)
+      progress.update(
+        95,
+        'Hasil render siap dikirim ulang',
+        'Penantian koneksi sebelumnya dihentikan. File yang sama tetap tersimpan.',
+        true
+      )
+      return false
+    }
+
+    session.deliveryWaiting = false
+    session.deliveryWaitingSince = null
 
     if (!cancelled && isWhatsAppConnectionClosedError(error)) {
       try {
