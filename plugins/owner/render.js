@@ -765,7 +765,11 @@ const handler = async (m, { conn, text }) => {
     let session = pendingSessions.get(key)
     if (!session) {
       if (orphanedRenderOutputs.length === 1) {
-        session = await attachOrphanedRenderOutput(key, 0)
+        try {
+          session = await attachOrphanedRenderOutput(key, 0)
+        } catch (error) {
+          return safeReply(m, '❌ Hasil render lama ditemukan, tetapi belum dapat dipulihkan: ' + safeError(error))
+        }
       } else if (orphanedRenderOutputs.length > 1) {
         return safeReply(m, 'Ada ' + orphanedRenderOutputs.length + ' hasil render tanpa metadata sesi. Gunakan *.render recover* untuk melihat daftar dan memilih file yang benar.')
       }
@@ -835,7 +839,7 @@ const handler = async (m, { conn, text }) => {
   }
 
   if (action) {
-    return safeReply(m, 'Format: reply video dengan *.render*. Untuk mengirim ulang hasil gunakan *.render send*, melihat status *.render status*, atau membatalkan *.render cancel*.')
+    return safeReply(m, 'Format: reply video dengan *.render*. Perintah lain: *.render status*, *.render send*, *.render recover*, dan *.render cancel*.')
   }
 
   if (global.__alvarethUpdateRunning) {
