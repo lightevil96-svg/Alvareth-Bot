@@ -271,8 +271,9 @@ async function removeSession(session) {
 }
 
 async function restoreCompletedRenderSessions() {
+  const root = getRenderRoot()
   const restored = await restorePendingRenderSessions({
-    root: getRenderRoot(),
+    root,
     staleTtlMs: STALE_JOB_TTL_MS,
     maxOutputBytes: MAX_OUTPUT_BYTES
   })
@@ -282,10 +283,63 @@ async function restoreCompletedRenderSessions() {
     pendingSessions.set(key, session)
   }
 
+  orphanedRenderOutputs = await findOrphanedRenderOutputs({
+    root,
+    staleTtlMs: STALE_JOB_TTL_MS,
+    maxOutputBytes: MAX_OUTPUT_BYTES
+  })
+
   if (restored.length) {
     console.log('[RENDER] Sesi hasil render yang belum terkirim dipulihkan:', restored.length)
   }
+  if (orphanedRenderOutputs.length) {
+    console.warn('[RENDER] Menemukan hasil render tanpa manifest sesi; file dipertahankan untuk pemulihan manual:', orphanedRenderOutputs.length)
+  }
   return restored.length
+}
+
+async function attachOrphanedRenderOutput(key, index = 0) {
+  const orphan = orphanedRenderOutputs[index]
+  if (!orphan) throw new Error('Hasil render orphan yang dipilih tidak ditemukan.')
+  if (pendingSessions.has(key)) throw new Error('Chat ini sudah memiliki sesi render aktif.')
+
+  const session = {
+    directory: orphan.directory,
+    createdAt: orphan.createdAt,
+    processing: false,
+    progress: {
+      percent: 95,
+      stage: 'Hasil render tersimpan - pengiriman tertunda',
+      detail: 'Hasil render dipulihkan dari file yang tersisa setelah proses bot terhenti. Tidak perlu merender ulang.',
+      updatedAt: Date.now()
+    },
+    updateLockHeld: false,
+    abortController: null,
+    cancelRequested: false,
+    deliveryWaiting: false,
+    outputPath: orphan.outputPath,
+    outputFileName: orphan.outputFileName,
+    outputSize: orphan.outputSize,
+    restored: true
+  }
+
+  await persistRenderOutputSession({
+    root: getRenderRoot(),
+    directory: session.directory,
+    key,
+    outputPath: session.outputPath,
+    outputFileName: session.outputFileName,
+    createdAt: session.createdAt,
+    progress: session.progress
+  })
+
+  pendingSessions.set(key, session)
+  orphanedRenderOutputs.splice(index, 1)
+  console.log('[RENDER] Hasil render orphan berhasil dipulihkan:', {
+    fileName: session.outputFileName,
+    size: formatBytes(session.outputSize)
+  })
+  return session
 }
 
 let renderRecoveryPromise = null
@@ -609,8 +663,41 @@ const handler = async (m, { conn, text }) => {
 
   const action = String(text || '').trim().toLowerCase()
 
+  const recoverMatch = action.match(/^recover(?:\\s+(\\d+))?$/)
+  if (recoverMatch) {
+    if (pendingSessions.has(key)) {
+      return safeReply(m, 'Chat ini sudah memiliki sesi render. Gunakan *.render status* atau *.render send*.')
+    }
+    if (!orphanedRenderOutputs.length) {
+      return safeReply(m, 'Tidak ada file hasil render orphan yang perlu dipulihkan.')
+    }
+    const requested = recoverMatch[1] ? Number(recoverMatch[1]) : 1
+    if (!recoverMatch[1] && orphanedRenderOutputs.length > 1) {
+      const list = orphanedRenderOutputs.map((item, index) =>
+        (index + 1) + '. ' + item.outputFileName + ' — ' + formatBytes(item.outputSize) +
+        ' — ' + new Date(item.createdAt).toLocaleString('id-ID')
+      )
+      return safeReply(m, 'Ditemukan beberapa hasil render tanpa metadata sesi:\\n' +
+        list.join('\\n') + '\\nPilih file dengan *.render recover 1*, *.render recover 2*, dan seterusnya.')
+    }
+    if (!Number.isSafeInteger(requested) || requested < 1 || requested > orphanedRenderOutputs.length) {
+      return safeReply(m, 'Nomor hasil render tidak valid. Gunakan *.render recover* untuk melihat daftar.')
+    }
+    try {
+      const recovered = await attachOrphanedRenderOutput(key, requested - 1)
+      return safeReply(m, '♻️ Hasil render berhasil dipulihkan: ' + recovered.outputFileName +
+        ' (' + formatBytes(recovered.outputSize) + '). Gunakan *.render send* untuk mengirim video tanpa merender ulang.')
+    } catch (error) {
+      return safeReply(m, '❌ Hasil render belum dapat dipulihkan: ' + safeError(error))
+    }
+  }
+
   if (action === 'status') {
     const session = pendingSessions.get(key)
+    if (!session && orphanedRenderOutputs.length) {
+      return safeReply(m, '⚠️ Ada ' + orphanedRenderOutputs.length +
+        ' file hasil render yang masih tersimpan tetapi metadata sesinya hilang. Gunakan *.render recover* agar dapat dikirim tanpa render ulang.')
+    }
     if (!session) return safeReply(m, 'Tidak ada sesi render aktif.')
     if (session.processing && session.deliveryWaiting) {
       const now = Date.now()
@@ -753,6 +840,10 @@ const handler = async (m, { conn, text }) => {
 
   if (global.__alvarethUpdateRunning) {
     return safeReply(m, '⏳ Render ditunda karena pembaruan bot sedang berlangsung. Coba lagi setelah bot selesai diperbarui.')
+  }
+
+  if (orphanedRenderOutputs.length) {
+    return safeReply(m, '⚠️ Ada hasil render lama yang belum dipulihkan. Gunakan *.render recover* lalu *.render send* sebelum memulai render baru.')
   }
 
   const previous = pendingSessions.get(key)
@@ -1144,7 +1235,7 @@ async function processRenderJob({ conn, m, document, key, session }) {
 }
 
 
-handler.help = ['render', 'render status', 'render send', 'render cancel']
+handler.help = ['render', 'render status', 'render send', 'render recover', 'render cancel']
 handler.tags = ['owner']
 handler.command = /^render$/i
 handler.rowner = true
