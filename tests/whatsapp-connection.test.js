@@ -47,7 +47,7 @@ test('aborts an indefinite connection wait when the render is cancelled', async 
   await assert.rejects(waiting, error => error.code === 'RENDER_SCRIPT_CANCELLED')
 })
 
-test('retries once on the replacement socket after a 428 disconnect', async () => {
+test('retries once on the replacement socket after a preflight closed-socket error', async () => {
   const oldSocket = makeSocket(1)
   const newSocket = makeSocket(1)
   let current = oldSocket
@@ -67,7 +67,7 @@ test('retries once on the replacement socket after a 428 disconnect', async () =
       if (socket === oldSocket) {
         oldSocket.ws.readyState = 3
         current = newSocket
-        throw Object.assign(new Error('Connection Closed'), { statusCode: 428 })
+        throw Object.assign(new Error('WebSocket is not open'), { code: 'WA_SOCKET_NOT_OPEN', stage: 'preflight' })
       }
       return { key: { id: 'delivered-on-new-socket' } }
     }
@@ -76,6 +76,31 @@ test('retries once on the replacement socket after a 428 disconnect', async () =
   assert.equal(result.key.id, 'delivered-on-new-socket')
   assert.deepEqual(calls, [oldSocket, newSocket])
   assert.equal(reconnectRequests, 1)
+})
+
+test('does not retry an ambiguous 428 after the socket is replaced', async () => {
+  const oldSocket = makeSocket(1)
+  const newSocket = makeSocket(1)
+  let current = oldSocket
+  let calls = 0
+
+  await assert.rejects(
+    sendWithWhatsAppReconnect({
+      getSocket: () => current,
+      send: async socket => {
+        calls++
+        oldSocket.ws.readyState = 3
+        current = newSocket
+        throw Object.assign(new Error('Connection Closed'), {
+          statusCode: 428,
+          stage: 'whatsapp-upload'
+        })
+      }
+    }),
+    /Connection Closed/
+  )
+
+  assert.equal(calls, 1)
 })
 
 test('does not retry an ambiguous 428 while the same socket still appears open', async () => {
