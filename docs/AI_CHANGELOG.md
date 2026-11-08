@@ -1,3 +1,11 @@
+## 2026-11-08 — Make `.render` percentage progress terminal-only
+
+- **Root cause:** `createRenderProgressReporter()` called the WhatsApp reply helper for every progress update, and `.render status` also formatted the percentage for chat output.
+- **Fix:** moved progress reporting into `lib/render-script.js`; every changed percentage/stage is logged to the server terminal and the latest progress remains available internally for session state. The reporter has no WhatsApp connection or message-sending dependency.
+- **WhatsApp behavior:** removed automatic percentage/progress messages. `.render status` now returns a plain message without a percentage; the ZIP acknowledgement explains that live progress is visible only in the server terminal. The final rendered video is still delivered normally.
+- **Regression coverage:** added a unit test for terminal logger output and session-state updates; retained the FFmpeg timestamp-to-percentage test.
+- **Verification:** pending GitHub Actions and live TokoPanel/WhatsApp validation.
+
 ## 2026-11-08 — Remove repository preview, add render progress, and harden updater restart safety
 
 - **WhatsApp replies:** added a central outgoing-message sanitizer that removes the bot repository URL and matching external-ad preview from text, captions, and send options. Removed the unused bot preview-thumbnail helper; unrelated link previews remain available.

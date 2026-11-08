@@ -11,7 +11,8 @@ import {
   findRenderScript,
   runRenderScript,
   findRenderOutput,
-  parseRenderDurationSeconds
+  parseRenderDurationSeconds,
+  createRenderProgressReporter
 } from '../lib/render-script.js'
 
 test('normalizeShellScript removes BOM and normalizes Windows line endings', () => {
@@ -367,4 +368,26 @@ test('runRenderScript reports FFmpeg time-based percentage progress', async t =>
 
   assert.ok(updates.some(value => value.percent === 50))
   assert.equal(updates.at(-1).percent, 100)
+})
+
+
+test('createRenderProgressReporter writes live percentages to its terminal logger without WhatsApp coupling', () => {
+  const session = {}
+  const output = []
+  const progress = createRenderProgressReporter(session, message => output.push(message))
+
+  progress.update(1, 'Mengunduh paket ZIP', '', true)
+  progress.update(10, 'Render FFmpeg')
+  progress.update(11, 'Render FFmpeg', 'Waktu FFmpeg: 0.7 / 6.5 detik.')
+  progress.update(11, 'Render FFmpeg', 'Waktu FFmpeg: 0.8 / 6.5 detik.')
+  progress.update(100, 'Selesai', 'Video berhasil dikirim.', true)
+
+  assert.deepEqual(output, [
+    '[RENDER] 1% | Mengunduh paket ZIP',
+    '[RENDER] 10% | Render FFmpeg',
+    '[RENDER] 11% | Render FFmpeg | Waktu FFmpeg: 0.7 / 6.5 detik.',
+    '[RENDER] 100% | Selesai | Video berhasil dikirim.'
+  ])
+  assert.equal(session.progress.percent, 100)
+  assert.equal(session.progress.stage, 'Selesai')
 })

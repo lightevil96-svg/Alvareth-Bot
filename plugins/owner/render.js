@@ -11,7 +11,8 @@ import {
   findRenderScript,
   runRenderScript,
   findRenderOutput,
-  parseRenderDurationSeconds
+  parseRenderDurationSeconds,
+  createRenderProgressReporter
 } from '../../lib/render-script.js'
 
 const VIDEO_EXTENSIONS = new Set([
@@ -183,58 +184,6 @@ function hasZipSignature(buffer) {
   return signature === '504b0304' || signature === '504b0506' || signature === '504b0708'
 }
 
-function formatRenderProgress(progress = {}) {
-  const percent = Math.max(0, Math.min(100, Math.round(Number(progress.percent) || 0)))
-  const filled = Math.max(0, Math.min(10, Math.round(percent / 10)))
-  const bar = '█'.repeat(filled) + '░'.repeat(10 - filled)
-  const stage = String(progress.stage || 'Menyiapkan render')
-  const detail = String(progress.detail || '').trim()
-  const title = /gagal/i.test(stage)
-    ? '❌ RENDER GAGAL'
-    : percent >= 100
-      ? '✅ RENDER SELESAI'
-      : '🎬 RENDER SEDANG BERJALAN'
-  return title + '\n' +
-    '[' + bar + '] ' + percent + '%\n' +
-    'Tahap: ' + stage +
-    (detail ? '\n' + detail : '') +
-    (percent < 100 && !/gagal/i.test(stage) ? '\nKetik *.render status* untuk melihat progres terbaru.' : '')
-}
-
-function createRenderProgressReporter(m, session) {
-  let lastBucket = -1
-  let lastStage = ''
-  let lastSentAt = 0
-  let sendQueue = Promise.resolve()
-
-  function update(percent, stage, detail = '', force = false) {
-    const current = {
-      percent: Math.max(0, Math.min(100, Math.round(Number(percent) || 0))),
-      stage: String(stage || 'Memproses'),
-      detail: String(detail || ''),
-      updatedAt: Date.now()
-    }
-    session.progress = current
-
-    const bucket = current.percent >= 100 ? 100 : Math.floor(current.percent / 10) * 10
-    const now = Date.now()
-    const shouldSend = force ||
-      current.stage !== lastStage ||
-      bucket >= lastBucket + 10 ||
-      (now - lastSentAt >= 15_000 && bucket > lastBucket)
-    if (!shouldSend) return
-
-    lastBucket = bucket
-    lastStage = current.stage
-    lastSentAt = now
-    sendQueue = sendQueue
-      .then(() => safeReply(m, formatRenderProgress(current)))
-      .catch(error => console.warn('[RENDER] Gagal mengirim progres:', error?.message || error))
-  }
-
-  return { update, flush: () => sendQueue }
-}
-
 const handler = async (m, { conn, text }) => {
   const key = sessionKey(m)
   if (!key) return safeReply(m, 'Identitas chat tidak terbaca. Coba kirim ulang perintah.')
@@ -246,13 +195,10 @@ const handler = async (m, { conn, text }) => {
     const session = pendingSessions.get(key)
     if (!session) return safeReply(m, 'Tidak ada sesi render aktif.')
     if (session.processing) {
-      return safeReply(m, formatRenderProgress(session.progress || {
-        percent: 0,
-        stage: 'Menyiapkan render'
-      }))
+      return safeReply(m, '⏳ Render sedang berjalan. Persentase real-time hanya tampil di terminal server.')
     }
     if (/gagal/i.test(String(session.progress?.stage || ''))) {
-      return safeReply(m, formatRenderProgress(session.progress))
+      return safeReply(m, '❌ Render terakhir gagal: ' + safeError(session.progress?.detail || 'Kesalahan tidak diketahui.'))
     }
     return safeReply(m, '⏳ Sesi render aktif dan sedang menunggu paket ZIP. Kirim ZIP sebagai dokumen di chat yang sama.')
   }
@@ -422,7 +368,7 @@ handler.all = async function (m) {
   }
 
   session.processing = true
-  const progress = createRenderProgressReporter(m, session)
+  const progress = createRenderProgressReporter(session)
   progress.update(1, 'Mengunduh paket ZIP', '', true)
   let workDirectory
   try {
@@ -434,7 +380,7 @@ handler.all = async function (m) {
     }
 
     progress.update(4, 'Memeriksa paket ZIP', formatBytes(archiveBuffer.length), true)
-    await safeReply(m, '📦 Paket ZIP diterima. Bot mulai memeriksa aset dan menjalankan render. Progres akan dikirim bertahap; gunakan *.render status* untuk mengecek kapan saja.')
+    await safeReply(m, '📦 Paket ZIP diterima. Bot mulai memeriksa aset dan menjalankan render. Persentase progres hanya tampil di terminal server; WhatsApp akan menerima hasil video setelah selesai.')
 
     workDirectory = await fs.mkdtemp(path.join(session.directory, 'run-'))
     await fs.chmod(workDirectory, 0o700).catch(() => {})
@@ -495,7 +441,6 @@ handler.all = async function (m) {
         progress.update(percent, 'Render FFmpeg', detail)
       }
     })
-    await progress.flush()
     console.log('[RENDER] Paket ZIP selesai dijalankan:', {
       archiveFiles: extracted.files.length,
       extractedBytes: formatBytes(extracted.totalBytes),
@@ -516,14 +461,12 @@ handler.all = async function (m) {
     }
 
     progress.update(95, 'Mengirim hasil ke WhatsApp', formatBytes(output.size), true)
-    await progress.flush()
     await sendLocalFile(this, m.chat, output.path, {
       quoted: m,
       caption: '✅ Render berhasil. Berikut hasil videonya.'
     })
 
     progress.update(100, 'Selesai', 'Video berhasil dikirim ke WhatsApp.', true)
-    await progress.flush()
     pendingSessions.delete(key)
     await removeSession(session)
     console.log('[RENDER] Hasil dikirim:', {
@@ -541,7 +484,6 @@ handler.all = async function (m) {
       safeError(error),
       true
     )
-    await progress.flush()
     session.processing = false
     await safeReply(
       m,
