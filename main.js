@@ -239,7 +239,7 @@ async function requestPairingCodeWhileConnecting(activeSocket) {
 
   if (result?.status === 'generated') {
     clearReconnectHandshakeTimer()
-    console.log(chalk.greenBright('\\n🔐 PAIRING CODE WHATSAPP'))
+    console.log(chalk.greenBright('\n🔐 PAIRING CODE WHATSAPP'))
     console.log(chalk.bold.bgGreen.black(` ${result.code} `))
     console.log(chalk.gray('WhatsApp > Perangkat tertaut > Tautkan perangkat > Tautkan dengan nomor telepon.'))
     console.log(chalk.yellow('Kode bersifat sementara. Jangan bagikan kepada siapa pun.'))
