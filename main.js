@@ -538,7 +538,7 @@ async function connectionUpdate(update) {
 
     if (pairingStatus === 'generated' || pairingStatus === 'pending') {
       if (pairingResult?.status === 'generated') {
-        console.log(chalk.greenBright('\\n🔐 PAIRING CODE WHATSAPP'))
+        console.log(chalk.greenBright('\n🔐 PAIRING CODE WHATSAPP'))
         console.log(chalk.bold.bgGreen.black(` ${pairingResult.code} `))
         console.log(chalk.gray('WhatsApp > Perangkat tertaut > Tautkan perangkat > Tautkan dengan nomor telepon.'))
         console.log(chalk.yellow('Kode bersifat sementara. Jangan bagikan kepada siapa pun.'))
@@ -555,7 +555,7 @@ async function connectionUpdate(update) {
       }
 
       try {
-        console.log(chalk.cyan('\\n📱 Pindai QR ini melalui WhatsApp > Perangkat tertaut > Tautkan perangkat:'))
+        console.log(chalk.cyan('\n📱 Pindai QR ini melalui WhatsApp > Perangkat tertaut > Tautkan perangkat:'))
         console.log(await QRCode.toString(qr, { type: 'terminal', small: true }))
       } catch (error) {
         console.error(chalk.red('Gagal menampilkan QR WhatsApp:'), error?.message || error)
