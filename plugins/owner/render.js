@@ -6,6 +6,7 @@ import { downloadContentFromMessage } from 'baileys'
 import { getQuotedMediaInfo, downloadQuotedMedia } from '../../lib/simple.js'
 import { createRenderSessionKey as sessionKey, getCurrentRenderDocument as getCurrentDocument, isRenderDocumentEvent } from '../../lib/render-message.js'
 import { sendLocalFile } from '../../lib/whatsapp-file-sender.js'
+import { sendWithWhatsAppReconnect } from '../../lib/whatsapp-connection.js'
 import {
   extractRenderArchive,
   findRenderScript,
@@ -59,12 +60,26 @@ function safeError(error) {
     .slice(0, 700)
 }
 
+function getReadyRenderSocket(m) {
+  const socket = typeof global.conn?.sendMessage === 'function'
+    ? global.conn
+    : m?.conn
+  if (!socket || typeof socket.sendMessage !== 'function') return null
+
+  const readyState = socket.ws?.readyState
+  if (typeof readyState === 'number' && readyState !== 1) return null
+  return socket
+}
+
 async function safeReply(m, message) {
   try {
-    if (typeof m?.reply === 'function') return await m.reply(message)
-    if (m?.chat && typeof m?.conn?.sendMessage === 'function') {
-      return await m.conn.sendMessage(m.chat, { text: message })
+    const socket = getReadyRenderSocket(m)
+    if (!socket || !m?.chat) {
+      console.warn('[RENDER] Balasan ditunda: belum ada socket WhatsApp aktif.')
+      return null
     }
+    const options = socket === m.conn && m?.key ? { quoted: m } : {}
+    return await socket.sendMessage(m.chat, { text: message }, options)
   } catch (error) {
     console.warn('[RENDER] Gagal mengirim balasan WhatsApp:', error?.message || error)
   }
@@ -73,10 +88,11 @@ async function safeReply(m, message) {
 
 async function safeReact(m, emoji) {
   try {
-    if (typeof m?.react === 'function') return await m.react(emoji)
-    if (m?.chat && m?.key && typeof m?.conn?.sendMessage === 'function') {
-      return await m.conn.sendMessage(m.chat, { react: { text: emoji, key: m.key } })
-    }
+    const socket = getReadyRenderSocket(m)
+    if (!socket || !m?.chat || !m?.key) return null
+    return await socket.sendMessage(m.chat, {
+      react: { text: emoji, key: m.key }
+    })
   } catch (error) {
     console.warn('[RENDER] Gagal memperbarui reaksi WhatsApp:', error?.message || error)
   }
@@ -178,6 +194,93 @@ async function downloadDocument(conn, media, options = {}) {
     (lastError?.message ? ': ' + String(lastError.message).slice(0, 250) : '.'))
 }
 
+async function deliverRenderedOutput({ m, key, session }) {
+  const progress = createRenderProgressReporter(session)
+  const outputPath = session.outputPath
+
+  try {
+    throwIfRenderCancelled(session)
+    const outputInfo = await fs.stat(outputPath)
+    if (!outputInfo.isFile() || outputInfo.size < 1) {
+      throw new Error('File hasil render tidak lagi tersedia di penyimpanan sesi.')
+    }
+
+    progress.update(95, 'Mengirim hasil ke WhatsApp', formatBytes(outputInfo.size), true)
+    const result = await sendWithWhatsAppReconnect({
+      getSocket: () => global.conn || m?.conn || null,
+      signal: session.abortController?.signal,
+      onWait: details => {
+        if (details?.reason === 'waiting-for-connection' ||
+            details?.reason === 'retry-after-disconnect') {
+          progress.update(
+            95,
+            'Menunggu koneksi WhatsApp',
+            'Hasil render tetap tersimpan. Menunggu socket WhatsApp aktif untuk melanjutkan pengiriman.',
+            true
+          )
+          console.warn('[RENDER] Menunggu koneksi WhatsApp pulih sebelum mengirim hasil render.')
+        }
+      },
+      send: socket => sendLocalFile(socket, m.chat, outputPath, {
+        quoted: socket === m.conn ? m : undefined,
+        caption: '✅ Render berhasil. Berikut hasil videonya.'
+      })
+    })
+
+    await safeReact(m, '✅')
+    progress.update(100, 'Selesai', 'Video berhasil dikirim ke WhatsApp.', true)
+    if (pendingSessions.get(key) === session) pendingSessions.delete(key)
+    session.processing = false
+    session.abortController = null
+    await removeSession(session)
+    console.log('[RENDER] Hasil dikirim:', {
+      fileName: session.outputFileName || path.basename(outputPath),
+      size: formatBytes(result.size || outputInfo.size),
+      messageId: result.messageId
+    })
+    return true
+  } catch (error) {
+    const cancelled = error?.code === 'RENDER_SCRIPT_CANCELLED' ||
+      session.cancelRequested || session.abortController?.signal.aborted
+
+    session.processing = false
+    session.abortController = null
+
+    if (cancelled) {
+      progress.update(
+        session.progress?.percent || 95,
+        'Dibatalkan',
+        'Pengiriman hasil render dibatalkan atas permintaan pengguna.',
+        true
+      )
+      if (pendingSessions.get(key) === session) pendingSessions.delete(key)
+      await safeReact(m, '🛑')
+      await safeReply(m, '🛑 Pengiriman hasil render dibatalkan. File sementara dibersihkan.')
+      await removeSession(session)
+      return false
+    }
+
+    progress.update(
+      95,
+      'Hasil render tersimpan - pengiriman tertunda',
+      safeError(error),
+      true
+    )
+    console.error('[RENDER] Hasil render dipertahankan karena pengiriman tertunda:', {
+      outputPath,
+      error: error?.stack || error
+    })
+    await safeReact(m, '⚠️')
+    await safeReply(
+      m,
+      '⚠️ Render sudah selesai dan file hasilnya tetap tersimpan di server, tetapi pengiriman WhatsApp belum berhasil: ' +
+      safeError(error) +
+      '\n\nKetik *.render send* untuk mencoba mengirim ulang hasil yang sama tanpa merender dari awal. Gunakan *.render cancel* jika ingin menghapus sesi dan file hasil.'
+    )
+    return false
+  }
+}
+
 function isZipDocument(filename, mimetype) {
   return /\.zip$/i.test(String(filename || '')) ||
     /application\/(?:zip|x-zip-compressed)|application\/x-zip/i.test(String(mimetype || ''))
@@ -201,10 +304,36 @@ const handler = async (m, { conn, text }) => {
     if (session.processing) {
       return safeReply(m, '⏳ Render berjalan di background. Tahap saat ini: ' + String(session.progress?.stage || 'Menyiapkan render') + '. Detail progres hanya tampil di terminal server.')
     }
+    if (session.outputPath) {
+      return safeReply(m, '✅ Hasil render sudah selesai dan tersimpan di server. Pengiriman belum terkonfirmasi. Gunakan *.render send* untuk mengirim file yang sama tanpa mengulang render.')
+    }
     if (/gagal/i.test(String(session.progress?.stage || ''))) {
       return safeReply(m, '❌ Render terakhir gagal: ' + safeError(session.progress?.detail || 'Kesalahan tidak diketahui.'))
     }
     return safeReply(m, '⏳ Sesi render aktif dan sedang menunggu paket ZIP. Kirim ZIP sebagai dokumen di chat yang sama.')
+  }
+
+  if (action === 'send') {
+    const session = pendingSessions.get(key)
+    if (!session) return safeReply(m, 'Tidak ada sesi render aktif.')
+    if (session.processing) return safeReply(m, '⏳ Sesi render masih berjalan atau sedang menunggu koneksi WhatsApp.')
+    if (!session.outputPath) return safeReply(m, 'Belum ada hasil render yang siap dikirim. Selesaikan proses render terlebih dahulu.')
+
+    try {
+      const outputInfo = await fs.stat(session.outputPath)
+      if (!outputInfo.isFile() || outputInfo.size < 1) throw new Error('File hasil render kosong atau tidak tersedia.')
+    } catch (error) {
+      return safeReply(m, '❌ File hasil render tidak dapat ditemukan: ' + safeError(error) + '. Jalankan render ulang dengan mengirim video dan ZIP.')
+    }
+
+    session.processing = true
+    session.cancelRequested = false
+    session.abortController = new AbortController()
+    await safeReply(m, '📤 Hasil render ditemukan. Bot akan mengirim file yang tersimpan tanpa menjalankan render ulang.')
+    void deliverRenderedOutput({ m, key, session }).catch(error => {
+      console.error('[RENDER] Retry pengiriman hasil gagal:', error?.stack || error)
+    })
+    return
   }
 
   if (action === 'cancel') {
@@ -227,7 +356,7 @@ const handler = async (m, { conn, text }) => {
   }
 
   if (action) {
-    return safeReply(m, 'Format: reply video dengan *.render*. Untuk membatalkan sesi, gunakan *.render cancel*.')
+    return safeReply(m, 'Format: reply video dengan *.render*. Untuk mengirim ulang hasil gunakan *.render send*, melihat status *.render status*, atau membatalkan *.render cancel*.')
   }
 
   if (global.__alvarethUpdateRunning) {
@@ -237,6 +366,9 @@ const handler = async (m, { conn, text }) => {
   const previous = pendingSessions.get(key)
   if (previous?.processing) {
     return safeReply(m, 'Render sebelumnya masih berjalan. Tunggu sampai selesai.')
+  }
+  if (previous?.outputPath) {
+    return safeReply(m, 'Hasil render sebelumnya masih tersimpan dan belum terkirim. Gunakan *.render send* untuk mengirimnya atau *.render cancel* untuk menghapusnya sebelum memulai render baru.')
   }
   if (previous) {
     pendingSessions.delete(key)
@@ -305,7 +437,10 @@ const handler = async (m, { conn, text }) => {
       },
       updateLockHeld: true,
       abortController: null,
-      cancelRequested: false
+      cancelRequested: false,
+      outputPath: null,
+      outputFileName: null,
+      outputSize: 0
     })
     global.__alvarethRenderJobs = Math.max(0, Number(global.__alvarethRenderJobs) || 0) + 1
 
@@ -512,23 +647,26 @@ async function processRenderJob({ conn, m, document, key, session }) {
       throw new Error('Ukuran hasil render ' + formatBytes(output.size) + ' melebihi batas pengiriman ' + formatBytes(MAX_OUTPUT_BYTES) + '.')
     }
 
-    progress.update(95, 'Mengirim hasil ke WhatsApp', formatBytes(output.size), true)
-    throwIfRenderCancelled(session)
-    await sendLocalFile(conn, m.chat, output.path, {
-      quoted: m,
-      caption: '✅ Render berhasil. Berikut hasil videonya.'
-    })
+    const outputExtension = path.extname(output.path).toLowerCase()
+    const safeOutputExtension = VIDEO_EXTENSIONS.has(outputExtension.replace(/^\./, ''))
+      ? outputExtension
+      : '.mp4'
+    const storedOutputPath = path.join(session.directory, 'render-result' + safeOutputExtension)
+    await fs.rename(output.path, storedOutputPath)
+    await fs.chmod(storedOutputPath, 0o600).catch(() => {})
+    session.outputPath = storedOutputPath
+    session.outputFileName = path.basename(output.path)
+    session.outputSize = output.size
 
-    await safeReact(m, '✅')
-    progress.update(100, 'Selesai', 'Video berhasil dikirim ke WhatsApp.', true)
-    if (pendingSessions.get(key) === session) pendingSessions.delete(key)
-    session.processing = false
-    session.abortController = null
-    await removeSession(session)
-    console.log('[RENDER] Hasil dikirim:', {
-      fileName: path.basename(output.path),
-      size: formatBytes(output.size)
-    })
+    // The final video now lives outside the extracted ZIP work directory.
+    // Removing scripts/assets cannot delete the recoverable rendered output.
+    if (workDirectory) {
+      await fs.rm(workDirectory, { recursive: true, force: true }).catch(() => {})
+      workDirectory = undefined
+    }
+
+    throwIfRenderCancelled(session)
+    await deliverRenderedOutput({ m, key, session })
   } catch (error) {
     console.error('[RENDER] Proses render ZIP gagal:', error?.stack || error)
     if (workDirectory) {
@@ -574,7 +712,7 @@ async function processRenderJob({ conn, m, document, key, session }) {
 }
 
 
-handler.help = ['render', 'render status', 'render cancel']
+handler.help = ['render', 'render status', 'render send', 'render cancel']
 handler.tags = ['owner']
 handler.command = /^render$/i
 handler.rowner = true
