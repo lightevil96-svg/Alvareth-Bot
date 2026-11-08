@@ -43,6 +43,7 @@ Nomor WhatsApp di `.env` menggunakan angka internasional saja tanpa tanda `+` at
 - Setelah berhasil ditautkan, kredensial disimpan di folder sesi yang sama. Restart bot berikutnya akan memakai sesi tersimpan dan tidak meminta pairing ulang.
 - Untuk memakai QR seperti sebelumnya, atur `WA_LOGIN_METHOD=qr`. Jika nomor tidak valid atau library gagal menyediakan pairing code, bot otomatis menampilkan QR sebagai fallback.
 - Jika Console tidak menampilkan pairing code, periksa apakah folder sesi sudah berisi sesi terdaftar. Sesi yang masih valid memang tidak perlu pairing ulang; jangan menghapus folder sesi aktif hanya untuk memunculkan kode baru.
+- Jika kredensial tersimpan menyatakan `registered=true` tetapi identitas akun (`creds.me.id`) kosong, startup akan mempertahankan folder yang tidak konsisten sebagai `session.invalid-<timestamp>`, membuat folder sesi baru, dan meminta pairing ulang. Folder lama hanya dipindahkan, tidak dihapus.
 - Pairing code bersifat sementara dan rahasia. Jangan membagikannya kepada orang lain.
 
 
