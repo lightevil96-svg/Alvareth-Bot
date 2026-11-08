@@ -5,7 +5,7 @@
 - **Fix:** added `getWhatsAppWebSocketState()` to normalize both the fork's state flags and standard WebSocket `readyState`; all connection, render-reply, and error-report preflights now use the shared helper. Socket replacement awaits Baileys `end()` (with `ws.close()` fallback) so keepalive/event/signal resources are cleaned before the replacement is created. The connected-account log now prints `user.id`, not a nonexistent `user.jid`.
 - **Log hygiene:** ignore `@newsletter` channel events in the chat handler and print the AutoDL router startup notice only once per worker, not on every dynamic handler reload. Group allowlist behavior is unchanged.
 - **Files:** `main.js`, `lib/whatsapp-connection.js`, `handler.js`, `plugins/owner/render.js`, `tests/whatsapp-connection.test.js`, `AI_CONTEXT.md`, and this changelog.
-- **Tests:** added regression coverage for the fork's wrapper flags without `readyState`, while retaining standard-WebSocket state tests. Verification is pending the repository's media regression and JavaScript syntax workflows; a live WhatsApp/TokoPanel session test is still required.
+- **Tests:** added regression coverage for the fork's wrapper flags without `readyState`, while retaining standard-WebSocket state tests. GitHub Actions passed for WhatsApp Media Delivery Regression, JavaScript syntax checks, and Updater Regression on commit `fe8c14d198e56d7e3ca970718fe5426308d93805`. A live WhatsApp/TokoPanel reconnect test is still required.
 
 ## 2026-11-08 — Recover completed render delivery when WhatsApp authentication stalls
 
