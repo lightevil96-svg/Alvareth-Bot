@@ -140,7 +140,7 @@ Fitur owner-only **.render** menerima satu paket ZIP dari Claude. Bot mengekstra
 1. Kirim video gameplay ke chat bot.
 2. Reply video tersebut dengan **.render**.
 3. Bot meminta paket render **.zip**; kirim ZIP sebagai **dokumen** di chat yang sama.
-4. Bot memeriksa arsip, mempertahankan struktur folder/aset, menyiapkan video input, menjalankan **render.sh**, lalu mengirim hasil render.
+4. Bot memeriksa arsip, mempertahankan struktur folder/aset, menyiapkan video input, menjalankan **render.sh**, lalu mengirim hasil render. Selama FFmpeg berjalan, bot mengirim progres bertahap berdasarkan timestamp render; ketik **.render status** kapan saja untuk melihat persentase dan tahap terbaru.
 
 Paket harus berisi tepat satu file bernama **render.sh**. Script dijalankan dari folder tempat render.sh berada sehingga path relatif seperti **assets/vt_mask.png**, **assets/title.png**, dan file aset lain tetap berfungsi. Untuk paket Claude yang saat ini diberikan, bot menaruh video yang dikirim sebagai **378541.mp4** di samping render.sh dan juga memberikan path video sebagai argumen pertama (**$1**). Hasil **jumpscare_short.mp4** akan diprioritaskan saat ditemukan.
 

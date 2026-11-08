@@ -1,3 +1,11 @@
+## 2026-11-08 — Remove repository preview, add render progress, and harden updater restart safety
+
+- **WhatsApp replies:** added a central outgoing-message sanitizer that removes the bot repository URL and matching external-ad preview from text, captions, and send options. Removed the unused bot preview-thumbnail helper; unrelated link previews remain available.
+- **Render status:** FFmpeg stderr timestamps are parsed against the output duration declared in the render script (including the Claude package's DUR=6.5 and -t $DUR). The bot now reports progress in 10% steps, records the latest stage, and supports .render status.
+- **Restart safety:** active render jobs are counted globally within the worker. Manual and automatic updates are deferred while a render is running, preventing an updater restart from killing FFmpeg mid-job.
+- **Updater transport:** GitHub codeload archives are read as a guarded stream and the entire download is retried when the response body ends with a socket error such as UND_ERR_SOCKET; oversized update archives remain rejected.
+- **Verification:** pending GitHub Actions and live WhatsApp/TokoPanel testing. Progress is based on FFmpeg output timestamps; WhatsApp upload is reported as a separate final stage.
+
 ## 2026-11-08 — Remove fixed compressed ZIP size ceiling
 
 - Removed the hard-coded 50 MB limit from .render ZIP metadata checks, WhatsApp media download, and archive validation.

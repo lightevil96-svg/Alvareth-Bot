@@ -48,8 +48,8 @@ function describeFetchCause(error) {
   return [...new Set(parts)].join(' <- ')
 }
 
-async function fetchWithRetry(url, options = {}, label = 'GitHub') {
-  const maxAttempts = 3
+async function fetchWithRetry(url, options = {}, label = 'GitHub', maxAttempts = 3) {
+  maxAttempts = Math.max(1, Math.min(3, Number(maxAttempts) || 3))
   let lastError
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -67,6 +67,72 @@ async function fetchWithRetry(url, options = {}, label = 'GitHub') {
 
     if (attempt < maxAttempts) {
       await new Promise(resolve => setTimeout(resolve, attempt * 1200))
+    }
+  }
+
+  throw new Error(
+    label + ' gagal setelah ' + maxAttempts + ' percobaan: ' +
+    describeFetchCause(lastError || new Error('penyebab tidak diketahui')),
+    { cause: lastError }
+  )
+}
+
+async function fetchBufferWithRetry(
+  url,
+  options = {},
+  label = 'GitHub',
+  maxBytes = MAX_ARCHIVE_BYTES,
+  pause = ms => new Promise(resolve => setTimeout(resolve, ms))
+) {
+  const maxAttempts = 3
+  let lastError
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    let response
+    try {
+      response = await fetchWithRetry(url, options, label, 1)
+      if (!response.ok) {
+        const error = new Error(label + ' gagal: HTTP ' + response.status)
+        error.status = response.status
+        throw error
+      }
+
+      const declaredSize = Number(response.headers.get('content-length') || 0)
+      if (declaredSize > maxBytes) {
+        const error = new Error(label + ' melebihi batas ' + maxBytes + ' byte.')
+        error.code = 'UPDATE_ARCHIVE_TOO_LARGE'
+        throw error
+      }
+
+      if (!response.body) throw new Error(label + ' tidak memiliki response body.')
+      const chunks = []
+      let total = 0
+      for await (const chunk of response.body) {
+        const part = Buffer.from(chunk)
+        total += part.length
+        if (total > maxBytes) {
+          const error = new Error(label + ' melebihi batas ' + maxBytes + ' byte.')
+          error.code = 'UPDATE_ARCHIVE_TOO_LARGE'
+          throw error
+        }
+        chunks.push(part)
+      }
+      return Buffer.concat(chunks, total)
+    } catch (error) {
+      lastError = error
+      if (error?.code === 'UPDATE_ARCHIVE_TOO_LARGE') throw error
+
+      const causeText = describeFetchCause(error)
+      const retryable = !Number.isFinite(Number(error?.status)) ||
+        [429, 500, 502, 503, 504].includes(Number(error.status)) ||
+        /UND_ERR_SOCKET|ECONNRESET|ETIMEDOUT|fetch failed|socket|terminated/i.test(causeText)
+      if (!retryable || attempt === maxAttempts) break
+
+      log(label + ': respons terputus pada percobaan ' + attempt + '/' + maxAttempts +
+        ' (' + causeText + '); mengulang unduhan dari awal.')
+      await pause(attempt * 1200)
+    } finally {
+      try { await response?.body?.cancel() } catch {}
     }
   }
 
@@ -399,18 +465,12 @@ async function compareCommits(baseSha, headSha) {
 
 async function downloadArchiveAtCommit(commitSha) {
   const url = 'https://codeload.github.com/' + REPOSITORY + '/zip/' + commitSha
-  const response = await fetchWithRetry(url, { headers: { 'User-Agent': 'Alvareth-Bot-Updater' } }, 'Mengunduh arsip GitHub')
-  if (!response.ok) throw new Error('Arsip GitHub gagal diunduh: HTTP ' + response.status)
-
-  const declaredSize = Number(response.headers.get('content-length') || 0)
-  if (declaredSize > MAX_ARCHIVE_BYTES) {
-    throw new Error('Arsip update melebihi batas 100 MB; update dibatalkan demi keamanan.')
-  }
-
-  const archiveBuffer = Buffer.from(await response.arrayBuffer())
-  if (archiveBuffer.length > MAX_ARCHIVE_BYTES) {
-    throw new Error('Arsip update melebihi batas 100 MB; update dibatalkan demi keamanan.')
-  }
+  const archiveBuffer = await fetchBufferWithRetry(
+    url,
+    { headers: { 'User-Agent': 'Alvareth-Bot' } },
+    'Mengunduh arsip GitHub',
+    MAX_ARCHIVE_BYTES
+  )
 
   const zip = await JSZip.loadAsync(archiveBuffer, { checkCRC32: true })
   const entries = Object.values(zip.files).filter(entry => !entry.dir)
@@ -617,6 +677,9 @@ async function handleUpdate(m, context = {}) {
     return m.reply("Perintah update:\n• .update — update aman, file lokal yang berubah dipertahankan\n• .update force — backup lalu timpa hanya file konflik yang berubah di GitHub");
   }
   const forceMode = updateMode.forceMode;
+  if ((Number(global.__alvarethRenderJobs) || 0) > 0) {
+    return m.reply('⏳ Update ditunda karena render sedang berjalan. Coba lagi setelah render selesai agar proses render tidak terputus.')
+  }
   if (global.__alvarethUpdateRunning) {
     return m.reply('⏳ Update sedang berjalan, tunggu sampai selesai.')
   }

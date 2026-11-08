@@ -172,3 +172,5 @@ Pada laporan akhir, sebutkan file/fungsi yang berubah, akar masalah, hasil tes n
 - Jika ada kandidat image tetapi tidak ada `[IMAGE] ▶ Mulai`, telusuri tahap plugin loop, status disabled, dan tipe export plugin. Jika `[IMAGE] ▶ Mulai` muncul, lanjutkan ke tahap download/upload/API.
 
 - 2026-11-08: `.render` tidak lagi menetapkan batas ukuran ZIP terkompresi 50 MB; batas keamanan jumlah item dan total hasil ekstraksi tetap aktif. Ukuran unggahan efektif bergantung pada RAM/storage server dan batas WhatsApp. Lihat `docs/AI_CHANGELOG.md`.
+
+- 2026-11-08: `.render` now reports FFmpeg timestamp-based progress and supports `.render status`; updater defers while a render job is active. Central outgoing WhatsApp sanitization strips the repository's own GitHub link/preview. GitHub codeload updater downloads retry the response-body stream when the remote socket closes. See `docs/AI_CHANGELOG.md`.

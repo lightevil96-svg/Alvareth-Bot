@@ -10,7 +10,8 @@ import {
   extractRenderArchive,
   findRenderScript,
   runRenderScript,
-  findRenderOutput
+  findRenderOutput,
+  parseRenderDurationSeconds
 } from '../lib/render-script.js'
 
 test('normalizeShellScript removes BOM and normalizes Windows line endings', () => {
@@ -333,4 +334,37 @@ test('extractRenderArchive has no fixed 50 MB compressed-archive ceiling', async
 
   assert.equal(result.files.length, 1)
   assert.equal(result.totalBytes, 4)
+})
+
+
+test('parseRenderDurationSeconds resolves the Claude render.sh DUR variable used by FFmpeg -t', () => {
+  const script = [
+    'START=23.0',
+    'DUR=6.5',
+    'ffmpeg -y -ss $START -t $DUR -i "$IN" output.mp4'
+  ].join('\n')
+  assert.equal(parseRenderDurationSeconds(script), 6.5)
+  assert.equal(parseRenderDurationSeconds('ffmpeg -i input.mp4 output.mp4'), null)
+})
+
+test('runRenderScript reports FFmpeg time-based percentage progress', async t => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'alvareth-render-progress-'))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const scriptPath = path.join(directory, 'render.sh')
+  const inputPath = path.join(directory, 'input.mp4')
+  await writeFile(inputPath, 'input')
+  await writeFile(scriptPath, "printf 'frame=1 time=00:00:03.25 speed=1x\\\\n' >&2\n")
+
+  const updates = []
+  await runRenderScript({
+    scriptPath,
+    workingDirectory: directory,
+    inputPath,
+    timeoutMs: 5000,
+    progressDurationSeconds: 6.5,
+    onProgress: value => updates.push(value)
+  })
+
+  assert.ok(updates.some(value => value.percent === 50))
+  assert.equal(updates.at(-1).percent, 100)
 })

@@ -266,3 +266,45 @@ test('manual updater accepts safe mode and explicit force mode only', () => {
   assert.equal(resolveUpdateMode({ args: ['FORCE'] }).forceMode, true)
   assert.equal(resolveUpdateMode({ args: ['hard-reset'] }).valid, false)
 })
+
+
+test('GitHub archive response body retries from the beginning after UND_ERR_SOCKET', async () => {
+  const code = extract('async function fetchBufferWithRetry(', '\nfunction isDependencyFile(')
+  let calls = 0
+  const fetchBuffer = new Function('deps', [
+    'const { fetchWithRetry, describeFetchCause, log, MAX_ARCHIVE_BYTES } = deps',
+    code,
+    'return fetchBufferWithRetry'
+  ].join('\n'))({
+    fetchWithRetry: async () => {
+      calls++
+      if (calls === 1) {
+        const broken = new ReadableStream({
+          start(controller) {
+            const error = new Error('other side closed')
+            error.code = 'UND_ERR_SOCKET'
+            controller.error(error)
+          }
+        })
+        return new Response(broken, { status: 200 })
+      }
+      return new Response(Buffer.from('archive-ok'), { status: 200 })
+    },
+    describeFetchCause: error => {
+      const cause = error?.cause
+      return [error?.code, error?.message, cause?.code, cause?.message].filter(Boolean).join(' ')
+    },
+    log: () => {},
+    MAX_ARCHIVE_BYTES: 1024
+  })
+
+  const result = await fetchBuffer(
+    'https://example.invalid/archive.zip',
+    {},
+    'Test archive',
+    1024,
+    async () => {}
+  )
+  assert.equal(result.toString(), 'archive-ok')
+  assert.equal(calls, 2)
+})
