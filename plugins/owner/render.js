@@ -162,15 +162,26 @@ function createRenderChatProgressReporter(m, session) {
     ]
 
     if (detail) lines.push('Detail: ' + detail)
+    const childIdleMs = session.renderChildLastOutputAt
+      ? Math.max(0, now - session.renderChildLastOutputAt)
+      : null
     if (session.renderChildPid) {
-      lines.push('Proses shell: PID ' + session.renderChildPid + ' (' + String(session.renderChildState || 'aktif') + ').')
+      lines.push('Proses shell: PID ' + session.renderChildPid + ' (' + String(session.renderChildState || 'running') + ').')
     }
-    if (session.renderChildLastOutputAt) {
-      lines.push('Output proses terakhir: ' + formatRenderElapsed(now - session.renderChildLastOutputAt) + ' yang lalu.')
+    if (childIdleMs !== null) {
+      lines.push('Output proses terakhir: ' + formatRenderElapsed(childIdleMs) + ' yang lalu.')
     }
     if (heartbeat && quietMs >= RENDER_STATUS_HEARTBEAT_MS) {
-      lines.push('⚠️ Belum ada perubahan progres dari tahap ini selama ' +
-        formatRenderElapsed(quietMs) + '. Worker masih menunggu/menjalankan tahap tersebut; tidak ada batas waktu otomatis.')
+      if (session.renderChildPid && session.renderChildState === 'running' &&
+          childIdleMs !== null && childIdleMs < RENDER_STATUS_HEARTBEAT_MS) {
+        lines.push('ℹ️ Script masih mengeluarkan output, tetapi belum ada perubahan angka progres FFmpeg.')
+      } else if (session.renderChildPid && session.renderChildState === 'running') {
+        lines.push('⚠️ Shell PID ' + session.renderChildPid + ' masih tercatat berjalan, tetapi tidak mengeluarkan output selama ' +
+          formatRenderElapsed(childIdleMs ?? quietMs) + '. Periksa *.render status*; proses tidak dihentikan otomatis.')
+      } else {
+        lines.push('⚠️ Belum ada perubahan progres selama ' + formatRenderElapsed(quietMs) +
+          '. Worker masih menunggu/menjalankan tahap ini; tidak ada batas waktu otomatis.')
+      }
     }
     lines.push('Ketik *.render status* untuk memeriksa kembali atau *.render cancel* untuk menghentikan.')
 
@@ -526,6 +537,9 @@ const handler = async (m, { conn, text }) => {
       const startedAt = Number(session.processingStartedAt || session.createdAt) || now
       const lastProgressAt = Number(progress.updatedAt) || startedAt
       const quietMs = Math.max(0, now - lastProgressAt)
+      const childIdleMs = session.renderChildLastOutputAt
+        ? Math.max(0, now - session.renderChildLastOutputAt)
+        : null
       const lines = [
         '⏳ Render berjalan di background.',
         'Progres tercatat: ' + Math.max(0, Math.min(100, Math.round(Number(progress.percent) || 0))) + '%',
@@ -533,8 +547,22 @@ const handler = async (m, { conn, text }) => {
         'Waktu proses: ' + formatRenderElapsed(now - startedAt)
       ]
       if (progress.detail) lines.push('Detail: ' + String(progress.detail).slice(0, 500))
+      if (session.renderChildPid) {
+        lines.push('Proses shell: PID ' + session.renderChildPid + ' (' + String(session.renderChildState || 'running') + ').')
+      }
+      if (childIdleMs !== null) {
+        lines.push('Output proses terakhir: ' + formatRenderElapsed(childIdleMs) + ' yang lalu.')
+      }
       if (quietMs >= RENDER_STATUS_HEARTBEAT_MS) {
-        lines.push('⚠️ Belum ada perubahan progres selama ' + formatRenderElapsed(quietMs) + '. Worker masih menunggu/menjalankan tahap ini; tidak ada batas waktu otomatis.')
+        if (session.renderChildPid && session.renderChildState === 'running' &&
+            childIdleMs !== null && childIdleMs < RENDER_STATUS_HEARTBEAT_MS) {
+          lines.push('ℹ️ Script masih mengeluarkan output, tetapi belum ada perubahan angka progres FFmpeg.')
+        } else if (session.renderChildPid && session.renderChildState === 'running') {
+          lines.push('⚠️ Shell PID ' + session.renderChildPid + ' masih tercatat berjalan, tetapi tidak mengeluarkan output selama ' +
+            formatRenderElapsed(childIdleMs ?? quietMs) + '. Proses tidak dihentikan otomatis.')
+        } else {
+          lines.push('⚠️ Belum ada perubahan progres selama ' + formatRenderElapsed(quietMs) + '. Worker masih menunggu/menjalankan tahap ini.')
+        }
       }
       return safeReply(m, lines.join('\n'))
     }
@@ -565,6 +593,7 @@ const handler = async (m, { conn, text }) => {
 
     acquireRenderUpdateLock(session)
     session.processing = true
+    session.processingStartedAt = Date.now()
     session.cancelRequested = false
     session.abortController = new AbortController()
     await safeReply(m, '📤 Hasil render ditemukan. Bot akan mengirim file yang tersimpan tanpa menjalankan render ulang.')
@@ -868,7 +897,7 @@ async function processRenderJob({ conn, m, document, key, session }) {
           value.command ? 'Perintah: ' + value.command : '')
       },
       onProcess: value => {
-        session.renderChildState = String(value.state || 'unknown')
+        session.renderChildState = value.running ? 'running' : String(value.state || 'unknown')
         session.renderChildPid = value.pid || null
         session.renderChildLastOutputAt = Number(value.lastOutputAt) || session.renderChildLastOutputAt || null
         session.renderChildStdoutBytes = Number(value.stdoutBytes) || 0
