@@ -114,6 +114,104 @@ async function safeReact(m, emoji) {
   return null
 }
 
+const RENDER_STATUS_HEARTBEAT_MS = 60_000
+const RENDER_STATUS_MIN_INTERVAL_MS = 15_000
+
+function formatRenderElapsed(milliseconds) {
+  const totalSeconds = Math.max(0, Math.floor(Number(milliseconds) / 1000) || 0)
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  if (hours) return hours + 'j ' + minutes + 'm ' + seconds + 'd'
+  if (minutes) return minutes + 'm ' + seconds + 'd'
+  return seconds + 'd'
+}
+
+function createRenderChatProgressReporter(m, session) {
+  let lastSentAt = 0
+  let lastSentStage = ''
+  let lastSentPercent = -1
+  let closed = false
+  let sendQueue = Promise.resolve()
+
+  const sendStatus = (progress, { force = false, heartbeat = false } = {}) => {
+    if (closed || !m?.chat) return
+    const now = Date.now()
+    const stage = String(progress?.stage || 'Menyiapkan render')
+    const percent = Math.max(0, Math.min(100, Math.round(Number(progress?.percent) || 0)))
+    const stageChanged = stage !== lastSentStage
+    const percentChanged = percent >= lastSentPercent + 5
+    const heartbeatDue = now - lastSentAt >= RENDER_STATUS_HEARTBEAT_MS
+
+    if (!force && !stageChanged && !percentChanged && !heartbeatDue) return
+    if (!force && now - lastSentAt < RENDER_STATUS_MIN_INTERVAL_MS && !heartbeatDue) return
+
+    lastSentAt = now
+    lastSentStage = stage
+    lastSentPercent = percent
+
+    const startedAt = Number(session.processingStartedAt || session.createdAt) || now
+    const lastProgressAt = Number(progress?.updatedAt) || startedAt
+    const quietMs = Math.max(0, now - lastProgressAt)
+    const detail = String(progress?.detail || '').trim()
+    const lines = [
+      heartbeat ? '⏳ Render masih berjalan di background.' : '⚙️ Perkembangan render:',
+      'Progres tercatat: ' + percent + '%',
+      'Tahap: ' + stage,
+      'Waktu proses: ' + formatRenderElapsed(now - startedAt)
+    ]
+
+    if (detail) lines.push('Detail: ' + detail)
+    if (heartbeat && quietMs >= RENDER_STATUS_HEARTBEAT_MS) {
+      lines.push('⚠️ Belum ada perubahan progres dari tahap ini selama ' +
+        formatRenderElapsed(quietMs) + '. Worker masih menunggu/menjalankan tahap tersebut; tidak ada batas waktu otomatis.')
+    }
+    lines.push('Ketik *.render status* untuk memeriksa kembali atau *.render cancel* untuk menghentikan.')
+
+    const message = lines.join('\n')
+    sendQueue = sendQueue.then(async () => {
+      const sent = await safeReply(m, message)
+      if (!sent) {
+        console.warn('[RENDER] Notifikasi progres belum terkirim; akan dicoba lagi pada pembaruan berikutnya.')
+      }
+    }).catch(error => {
+      console.error('[RENDER] Antrean notifikasi WhatsApp gagal:', error?.stack || error)
+    })
+  }
+
+  const progress = createRenderProgressReporter(session, (message, current) => {
+    console.log(message)
+    sendStatus(current)
+  })
+
+  const heartbeatTimer = setInterval(() => {
+    if (closed || !session.processing) return
+    const current = session.progress || {
+      percent: 0,
+      stage: 'Menyiapkan render',
+      detail: '',
+      updatedAt: session.processingStartedAt || Date.now()
+    }
+    const quietMs = Math.max(0, Date.now() - (Number(current.updatedAt) || Date.now()))
+    console.log('[RENDER] HEARTBEAT | pid=' + process.pid +
+      ' | elapsed=' + formatRenderElapsed(Date.now() - (Number(session.processingStartedAt || session.createdAt) || Date.now())) +
+      ' | stage=' + String(current.stage || 'Menyiapkan render') +
+      ' | noProgressFor=' + formatRenderElapsed(quietMs))
+    sendStatus(current, { force: true, heartbeat: true })
+  }, RENDER_STATUS_HEARTBEAT_MS)
+  heartbeatTimer.unref?.()
+
+  return {
+    update: progress.update,
+    async close() {
+      if (closed) return
+      closed = true
+      clearInterval(heartbeatTimer)
+      await sendQueue.catch(() => {})
+    }
+  }
+}
+
 function throwIfRenderCancelled(session) {
   if (!session?.cancelRequested && !session?.abortController?.signal?.aborted) return
   const error = new Error('Render dibatalkan atas permintaan pengguna.')
@@ -241,8 +339,9 @@ async function downloadDocument(conn, media, options = {}) {
     (lastError?.message ? ': ' + String(lastError.message).slice(0, 250) : '.'))
 }
 
-async function deliverRenderedOutput({ m, key, session }) {
-  const progress = createRenderProgressReporter(session)
+async function deliverRenderedOutput({ m, key, session, progressReporter = null }) {
+  const ownsProgressReporter = !progressReporter
+  const progress = progressReporter || createRenderChatProgressReporter(m, session)
   const outputPath = session.outputPath
 
   try {
@@ -379,6 +478,8 @@ async function deliverRenderedOutput({ m, key, session }) {
       '\n\nKetik *.render send* untuk mencoba mengirim ulang hasil yang sama tanpa merender dari awal. Gunakan *.render cancel* jika ingin menghapus sesi dan file hasil.'
     )
     return false
+  } finally {
+    if (ownsProgressReporter) await progress.close()
   }
 }
 
@@ -409,7 +510,22 @@ const handler = async (m, { conn, text }) => {
     const session = pendingSessions.get(key)
     if (!session) return safeReply(m, 'Tidak ada sesi render aktif.')
     if (session.processing) {
-      return safeReply(m, '⏳ Render berjalan di background. Tahap saat ini: ' + String(session.progress?.stage || 'Menyiapkan render') + '. Detail progres hanya tampil di terminal server.')
+      const progress = session.progress || {}
+      const now = Date.now()
+      const startedAt = Number(session.processingStartedAt || session.createdAt) || now
+      const lastProgressAt = Number(progress.updatedAt) || startedAt
+      const quietMs = Math.max(0, now - lastProgressAt)
+      const lines = [
+        '⏳ Render berjalan di background.',
+        'Progres tercatat: ' + Math.max(0, Math.min(100, Math.round(Number(progress.percent) || 0))) + '%',
+        'Tahap: ' + String(progress.stage || 'Menyiapkan render'),
+        'Waktu proses: ' + formatRenderElapsed(now - startedAt)
+      ]
+      if (progress.detail) lines.push('Detail: ' + String(progress.detail).slice(0, 500))
+      if (quietMs >= RENDER_STATUS_HEARTBEAT_MS) {
+        lines.push('⚠️ Belum ada perubahan progres selama ' + formatRenderElapsed(quietMs) + '. Worker masih menunggu/menjalankan tahap ini; tidak ada batas waktu otomatis.')
+      }
+      return safeReply(m, lines.join('\n'))
     }
     if (session.outputPath) {
       return safeReply(m, '✅ Hasil render sudah selesai dan tersimpan di server. Pengiriman belum terkonfirmasi. Gunakan *.render send* untuk mengirim file yang sama tanpa mengulang render.')
@@ -441,14 +557,14 @@ const handler = async (m, { conn, text }) => {
     session.cancelRequested = false
     session.abortController = new AbortController()
     await safeReply(m, '📤 Hasil render ditemukan. Bot akan mengirim file yang tersimpan tanpa menjalankan render ulang.')
-    void deliverRenderedOutput({ m, key, session }).catch(async error => {
+    const progress = createRenderChatProgressReporter(m, session)
+    void deliverRenderedOutput({ m, key, session, progressReporter: progress }).catch(async error => {
       console.error('[RENDER] Retry pengiriman hasil gagal:', error?.stack || error)
       session.processing = false
       session.abortController = null
-      const progress = createRenderProgressReporter(session)
       progress.update(95, 'Hasil render tersimpan - pengiriman tertunda', safeError(error), true)
       await safeReply(m, '⚠️ Hasil render tetap tersimpan. Pengiriman ulang belum berhasil: ' + safeError(error) + '. Coba *.render send* kembali setelah koneksi pulih.')
-    })
+    }).finally(() => progress.close())
     return
   }
 
@@ -635,6 +751,7 @@ handler.all = async function (m) {
   }
 
   session.processing = true
+  session.processingStartedAt = Date.now()
   session.cancelRequested = false
   session.abortController = new AbortController()
   const conn = m.conn || this
@@ -654,7 +771,7 @@ handler.all = async function (m) {
       await removeSession(session)
       return
     }
-    const progress = createRenderProgressReporter(session)
+    const progress = createRenderChatProgressReporter(m, session)
     progress.update(session.progress?.percent || 0, 'Render gagal', safeError(error), true)
     await safeReact(m, '❌')
     const recoveryMessage = session.outputPath
@@ -664,12 +781,13 @@ handler.all = async function (m) {
       m,
       '❌ Render berhenti karena kesalahan internal: ' + safeError(error) + recoveryMessage
     )
+    await progress.close()
   })
   return
 }
 
 async function processRenderJob({ conn, m, document, key, session }) {
-  const progress = createRenderProgressReporter(session)
+  const progress = createRenderChatProgressReporter(m, session)
   let workDirectory
   try {
     progress.update(1, 'Mengunduh paket ZIP', '', true)
@@ -792,7 +910,7 @@ async function processRenderJob({ conn, m, document, key, session }) {
     }
 
     throwIfRenderCancelled(session)
-    await deliverRenderedOutput({ m, key, session })
+    await deliverRenderedOutput({ m, key, session, progressReporter: progress })
   } catch (error) {
     console.error('[RENDER] Proses render ZIP gagal:', error?.stack || error)
     if (workDirectory) {
@@ -834,6 +952,8 @@ async function processRenderJob({ conn, m, document, key, session }) {
       '❌ Render gagal: ' + safeError(error) + exitDetails +
       '\n\nVideo masih tersimpan. Kirim ulang ZIP yang sudah diperbaiki atau gunakan *.render cancel*.'
     )
+  } finally {
+    await progress.close()
   }
 }
 
