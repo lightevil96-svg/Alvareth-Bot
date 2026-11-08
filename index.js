@@ -88,5 +88,5 @@ function start(file) {
   }
 }
 
-// Login WhatsApp menggunakan QR scan; tidak meminta nomor pairing.
+// Login WhatsApp memakai pairing code secara default; QR tetap tersedia melalui WA_LOGIN_METHOD=qr.
 start('main.js');
