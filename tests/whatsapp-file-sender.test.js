@@ -88,6 +88,25 @@ test('non-MP4 video containers are sent as video messages', async t => {
   assert.equal('document' in captured[1], false)
 })
 
+test('accepts an open Baileys WebSocketClient without readyState', async t => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'alvareth-wa-fork-open-'))
+  t.after(() => fs.rm(directory, { recursive: true, force: true }))
+  const filePath = await makeMp4(directory, 'fork.mp4')
+  let calls = 0
+  const conn = {
+    ws: { isOpen: true, isConnecting: false, isClosing: false, isClosed: false },
+    user: { id: 'bot@s.whatsapp.net' },
+    async sendMessage() {
+      calls++
+      return { key: { id: 'fork-open' } }
+    }
+  }
+
+  const result = await sendLocalFile(conn, '628123@s.whatsapp.net', filePath, { checkTempSpace: false })
+  assert.equal(result.messageId, 'fork-open')
+  assert.equal(calls, 1)
+})
+
 test('upload queue serializes concurrent media sends per WhatsApp socket', async t => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'alvareth-wa-queue-'))
   t.after(() => fs.rm(directory, { recursive: true, force: true }))
@@ -150,7 +169,7 @@ test('missing, oversized and disconnected sends fail before upload', async t => 
   )
   await assert.rejects(
     sendLocalFile(socket(async () => { calls++ }, 3), '628123@s.whatsapp.net', filePath, { checkTempSpace: false }),
-    /WebSocket readyState=3/
+    /transport=closed/
   )
   assert.equal(calls, 0)
 })
