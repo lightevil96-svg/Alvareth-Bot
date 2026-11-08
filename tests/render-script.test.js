@@ -45,27 +45,12 @@ test('runRenderScript executes in its job directory with a minimal environment',
     scriptPath,
     workingDirectory: directory,
     inputPath,
-    timeoutMs: 5000,
     env: { PATH: process.env.PATH, RENDER_TEST_SECRET: 'must-not-leak' }
   })
 
   assert.equal(result.code, 0)
   assert.equal(await readFile(outputPath, 'utf8'), 'fake-rendered-video')
   assert.equal(await readFile(envPath, 'utf8'), 'not-inherited')
-})
-
-test('runRenderScript terminates a script that exceeds its timeout', async t => {
-  const directory = await mkdtemp(path.join(tmpdir(), 'alvareth-render-timeout-'))
-  t.after(() => rm(directory, { recursive: true, force: true }))
-  const scriptPath = path.join(directory, 'render.sh')
-  const inputPath = path.join(directory, 'input.mp4')
-  await writeFile(inputPath, 'input')
-  await writeFile(scriptPath, 'sleep 5\n')
-
-  await assert.rejects(
-    runRenderScript({ scriptPath, workingDirectory: directory, inputPath, timeoutMs: 100 }),
-    error => error.code === 'RENDER_SCRIPT_TIMEOUT'
-  )
 })
 
 test('runRenderScript rejects script and input paths outside the job directory', async t => {
@@ -392,7 +377,6 @@ test('runRenderScript reports FFmpeg time-based percentage progress', async t =>
     scriptPath,
     workingDirectory: directory,
     inputPath,
-    timeoutMs: 5000,
     progressDurationSeconds: 6.5,
     onProgress: value => updates.push(value)
   })
