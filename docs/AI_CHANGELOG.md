@@ -1,3 +1,14 @@
+## 2026-11-08 — Report background render progress to WhatsApp and monitor shell lifecycle
+
+- **Observed failure:** after the ZIP acceptance message, the owner received no further WhatsApp updates while the background render was running.
+- **Root cause:** `createRenderProgressReporter()` only wrote progress to the server console. The `.render status` response also explicitly told the owner that progress details were only available in the terminal. No periodic heartbeat was sent during long shell commands or quiet FFmpeg stages.
+- **WhatsApp progress:** added a throttled progress reporter that sends stage changes and meaningful percentage changes to the same chat. It sends a heartbeat every 60 seconds, includes elapsed render time and current details, and keeps the existing no-automatic-timeout behavior. Notifications are throttled to avoid flooding the chat.
+- **Live status:** `.render status` now reports recorded percentage, stage, elapsed time, child shell PID/state, and how long ago the shell last produced output. Heartbeats distinguish a shell that is still producing output from one that remains running without output; the bot does not kill a job merely because it is quiet.
+- **Shell diagnostics:** `runRenderScript()` now reports child process start, stdout/stderr/shell-trace activity, exit code, signal, and duration. The render worker surfaces failures through WhatsApp and the server log rather than silently leaving the owner with only the initial background message.
+- **Tests:** added a regression test for shell process lifecycle and output activity in `tests/render-script.test.js`; the existing `npm run test:render` suite includes it.
+- **Files:** `plugins/owner/render.js`, `lib/render-script.js`, `tests/render-script.test.js`, `AI_CONTEXT.md`, and this changelog.
+- **Verification:** changes and regression coverage are committed. A live render run on TokoPanel is still required to confirm actual FFmpeg output and WhatsApp delivery on the user's server.
+
 ## 2026-11-08 — Allow safe updates while a completed render awaits delivery
 
 - **Observed failure:** `.update` returned “Update ditunda karena masih ada sesi render aktif” even though the render had already completed and only WhatsApp delivery had failed.
