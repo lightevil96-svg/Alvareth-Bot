@@ -532,7 +532,8 @@ const handler = async (m, { conn, text }) => {
 
     while (pendingSessions.size >= MAX_PENDING_SESSIONS) {
       const oldest = [...pendingSessions.entries()]
-        .filter(([, item]) => !item.processing)
+        // Never evict a completed output that is waiting for the owner to send it.
+        .filter(([, item]) => !item.processing && !item.outputPath)
         .sort((a, b) => a[1].createdAt - b[1].createdAt)[0]
       if (!oldest) throw new Error('Antrean render penuh. Selesaikan atau batalkan sesi sebelumnya terlebih dahulu.')
       pendingSessions.delete(oldest[0])
