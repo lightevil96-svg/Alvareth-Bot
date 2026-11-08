@@ -6,7 +6,7 @@
 - **Render recovery:** the completed video is moved out of the extracted ZIP work directory into the persistent render session before upload. If delivery still fails, the video remains available and `.render send` retries the stored result without rerunning FFmpeg; `.render status` explains the pending delivery. A new render cannot silently delete an unsent result. Waiting for reconnect is cancellable with `.render cancel`.
 - **Stale socket fix:** render status replies and reactions resolve the current `global.conn` instead of using `m.reply`/`m.react` closures bound to the socket that received the original ZIP.
 - **Files:** `main.js`, `plugins/owner/render.js`, `lib/whatsapp-connection.js`, `tests/whatsapp-connection.test.js`, `package.json`, `AI_CONTEXT.md`, and this changelog.
-- **Verification:** reconnect helper syntax and regression tests passed locally, 7/7. Full repository `npm test`, GitHub Actions, and live render delivery/reconnect on TokoPanel/WhatsApp have not yet been verified.
+- **Verification:** reconnect helper syntax and regression tests passed locally, 8/8. Full repository `npm test`, GitHub Actions, and live render delivery/reconnect on TokoPanel/WhatsApp have not yet been verified.
 
 ## 2026-11-08 — Add WhatsApp pairing-code login with QR fallback
 
