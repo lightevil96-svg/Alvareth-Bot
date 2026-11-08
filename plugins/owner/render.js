@@ -221,6 +221,15 @@ async function deliverRenderedOutput({ m, key, session }) {
           console.warn('[RENDER] Menunggu koneksi WhatsApp pulih sebelum mengirim hasil render.')
         }
       },
+      onReconnectRequired: details => {
+        const reason = 'Pengiriman hasil render terputus: ' +
+          safeError(details?.error || 'Connection Closed')
+        try {
+          global.requestWhatsAppReconnect?.(reason)
+        } catch (error) {
+          console.error('[RENDER] Tidak dapat meminta reconnect WhatsApp:', error?.message || error)
+        }
+      },
       send: socket => sendLocalFile(socket, m.chat, outputPath, {
         quoted: socket === m.conn ? m : undefined,
         caption: '✅ Render berhasil. Berikut hasil videonya.'
