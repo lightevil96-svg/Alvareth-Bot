@@ -422,6 +422,12 @@ global.requestWhatsAppReconnect = function requestWhatsAppReconnect(reason = '')
   const currentSocket = global.conn
   if (isWhatsAppSocketOpen(currentSocket)) {
     clearReconnectHandshakeTimer()
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer)
+      reconnectTimer = null
+    }
+    reconnectQueued = null
+    reconnectAttempts = 0
     return false
   }
 
