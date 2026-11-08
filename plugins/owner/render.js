@@ -416,6 +416,9 @@ const handler = async (m, { conn, text }) => {
   }
 
   if (action === 'send') {
+    if (global.__alvarethUpdateRunning) {
+      return safeReply(m, '⏳ Update sedang berlangsung. Pengiriman hasil render akan dilanjutkan setelah bot selesai diperbarui.')
+    }
     const session = pendingSessions.get(key)
     if (!session) return safeReply(m, 'Tidak ada sesi render aktif.')
     if (session.processing) return safeReply(m, '⏳ Sesi render masih berjalan atau sedang menunggu koneksi WhatsApp.')
