@@ -36,6 +36,23 @@ test('waits for the current socket to reconnect without a fixed deadline', async
   assert.equal(await resultPromise, replacement)
 })
 
+test('keeps notifying the reconnect watchdog while an open socket is not authenticated', async () => {
+  const current = makeSocket(1)
+  current.user = null
+  const controller = new AbortController()
+  const reasons = []
+  const waiting = waitForWhatsAppSocket(() => current, {
+    signal: controller.signal,
+    pollIntervalMs: 5,
+    onWait: details => reasons.push(details.reason)
+  })
+  setTimeout(() => controller.abort(), 25)
+
+  await assert.rejects(waiting, error => error.code === 'RENDER_SCRIPT_CANCELLED')
+  assert.equal(reasons[0], 'waiting-for-connection')
+  assert.ok(reasons.includes('connection-still-unavailable'))
+})
+
 test('aborts an indefinite connection wait when the render is cancelled', async () => {
   const controller = new AbortController()
   const waiting = waitForWhatsAppSocket(() => makeSocket(3), {
