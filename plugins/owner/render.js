@@ -178,10 +178,10 @@ function createRenderChatProgressReporter(m, session) {
     const childIdleMs = session.renderChildLastOutputAt
       ? Math.max(0, now - session.renderChildLastOutputAt)
       : null
-    if (session.renderChildPid) {
+    if (!waitingForDelivery && session.renderChildPid) {
       lines.push('Proses shell: PID ' + session.renderChildPid + ' (' + String(session.renderChildState || 'running') + ').')
     }
-    if (childIdleMs !== null) {
+    if (!waitingForDelivery && childIdleMs !== null) {
       lines.push('Output proses terakhir: ' + formatRenderElapsed(childIdleMs) + ' yang lalu.')
     }
     if (waitingForDelivery) {
