@@ -4,6 +4,7 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import {
+  findOrphanedRenderOutputs,
   persistRenderOutputSession,
   restorePendingRenderSessions
 } from '../lib/render-session-store.js'
@@ -36,6 +37,25 @@ test('persists and restores a completed output without holding the update lock',
   assert.equal(restored[0].session.processing, false)
   assert.equal(restored[0].session.updateLockHeld, false)
   assert.equal(restored[0].session.restored, true)
+})
+
+test('finds a completed output left behind without a manifest after a process interruption', async t => {
+  const { root, directory, outputPath } = await fixture(t)
+  const orphaned = await findOrphanedRenderOutputs({ root })
+
+  assert.equal(orphaned.length, 1)
+  assert.equal(orphaned[0].directory, directory)
+  assert.equal(orphaned[0].outputPath, outputPath)
+  assert.equal(orphaned[0].outputSize, Buffer.byteLength('rendered-video'))
+
+  await persistRenderOutputSession({
+    root,
+    directory,
+    key: 'chat|owner',
+    outputPath,
+    outputFileName: 'render-result.mp4'
+  })
+  assert.equal((await findOrphanedRenderOutputs({ root })).length, 0)
 })
 
 test('rejects output files outside the render session directory', async t => {
