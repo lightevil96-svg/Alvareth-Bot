@@ -1,3 +1,13 @@
+## 2026-11-08 — Allow safe updates while a completed render awaits delivery
+
+- **Observed failure:** `.update` returned “Update ditunda karena masih ada sesi render aktif” even though the render had already completed and only WhatsApp delivery had failed.
+- **Root cause:** `global.__alvarethRenderJobs` was incremented when a video session was created and released only when the entire session was deleted. A completed output awaiting `.render send` therefore looked identical to a ZIP-waiting or active FFmpeg job, so the updater blocked unnecessarily.
+- **Fix:** added `lib/render-session-store.js` to atomically persist a private `render-session.json` manifest beside the completed output and safely restore pending results after restart. The update lock is released only after the output and manifest have both been verified and saved. Active ZIP waits, FFmpeg work, and live WhatsApp uploads continue to hold the lock; `.render send` reacquires it while retrying.
+- **Updater integration:** manual and automatic update paths now await render recovery before checking the lock. A completed output that is only waiting for delivery no longer blocks code updates, and its `.render status` / `.render send` session survives the updater restart. If recovery metadata cannot be saved or read, update remains blocked rather than risking the output.
+- **Tests:** added `tests/render-session-store.test.js` for durable recovery, path containment, missing outputs, stale sessions, symlink rejection, and unsafe filenames. Included it and the helper syntax check in `npm run test:media`.
+- **Files:** `plugins/owner/render.js`, `plugins/owner/update.js`, `lib/auto-update.js`, `lib/render-session-store.js`, `tests/render-session-store.test.js`, `package.json`, `AI_CONTEXT.md`, and this changelog.
+- **Verification:** source changes and test wiring are committed. GitHub Actions and a live TokoPanel update/restart followed by `.render send` recovery still need to be confirmed on the running bot.
+
 ## 2026-11-08 — Keep completed render output deliverable after WhatsApp disconnect
 
 - **Observed failure:** the terminal showed render progress reaching 95%, followed by HTTP 428 / `Connection Closed` from `lib/whatsapp-file-sender.js`. This is a WhatsApp socket/session delivery failure after the render stage, not evidence that FFmpeg itself failed.
