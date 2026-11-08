@@ -7,6 +7,7 @@ import { getQuotedMediaInfo, downloadQuotedMedia } from '../../lib/simple.js'
 import { createRenderSessionKey as sessionKey, getCurrentRenderDocument as getCurrentDocument, isRenderDocumentEvent } from '../../lib/render-message.js'
 import { sendLocalFile } from '../../lib/whatsapp-file-sender.js'
 import { isWhatsAppConnectionClosedError, sendWithWhatsAppReconnect } from '../../lib/whatsapp-connection.js'
+import { persistRenderOutputSession, restorePendingRenderSessions } from '../../lib/render-session-store.js'
 import {
   extractRenderArchive,
   findRenderScript,
@@ -35,6 +36,20 @@ function getRenderRoot() {
   const configured = String(process.env.ALVARETH_RENDER_TMPDIR || '').trim()
   const dataRoot = String(process.env.ALVARETH_DATA_DIR || path.join(homedir(), '.alvareth-bot-data'))
   return path.resolve(configured || path.join(dataRoot, 'render-jobs'))
+}
+
+function releaseRenderUpdateLock(session) {
+  if (!session?.updateLockHeld) return false
+  session.updateLockHeld = false
+  global.__alvarethRenderJobs = Math.max(0, (Number(global.__alvarethRenderJobs) || 1) - 1)
+  return true
+}
+
+function acquireRenderUpdateLock(session) {
+  if (!session || session.updateLockHeld) return false
+  session.updateLockHeld = true
+  global.__alvarethRenderJobs = Math.max(0, Number(global.__alvarethRenderJobs) || 0) + 1
+  return true
 }
 
 function toSafeNumber(value) {
@@ -108,10 +123,7 @@ function throwIfRenderCancelled(session) {
 
 async function removeSession(session) {
   if (!session) return
-  if (session.updateLockHeld) {
-    session.updateLockHeld = false
-    global.__alvarethRenderJobs = Math.max(0, (Number(global.__alvarethRenderJobs) || 1) - 1)
-  }
+  releaseRenderUpdateLock(session)
   if (!session.directory) return
   try {
     await fs.rm(session.directory, { recursive: true, force: true, maxRetries: 2, retryDelay: 250 })
@@ -120,7 +132,42 @@ async function removeSession(session) {
   }
 }
 
+async function restoreCompletedRenderSessions() {
+  const restored = await restorePendingRenderSessions({
+    root: getRenderRoot(),
+    staleTtlMs: STALE_JOB_TTL_MS,
+    maxOutputBytes: MAX_OUTPUT_BYTES
+  })
+
+  for (const { key, session } of restored) {
+    if (pendingSessions.has(key)) continue
+    pendingSessions.set(key, session)
+  }
+
+  if (restored.length) {
+    console.log('[RENDER] Sesi hasil render yang belum terkirim dipulihkan:', restored.length)
+  }
+  return restored.length
+}
+
+let renderRecoveryPromise = null
+function ensureRenderRecovery() {
+  if (!renderRecoveryPromise) {
+    renderRecoveryPromise = restoreCompletedRenderSessions().catch(error => {
+      global.__alvarethRenderRecoveryError = error
+      console.error('[RENDER] Pemulihan hasil render tertunda gagal:', error?.stack || error)
+      throw error
+    })
+    global.__alvarethRenderRecoveryReady = renderRecoveryPromise
+  }
+  return renderRecoveryPromise
+}
+
+// Restore saved outputs before owner commands or updater can run.
+void ensureRenderRecovery().catch(() => {})
+
 async function ensureRenderRoot() {
+  await ensureRenderRecovery()
   const root = getRenderRoot()
   await fs.mkdir(root, { recursive: true, mode: 0o700 })
   const info = await fs.lstat(root)
@@ -275,6 +322,26 @@ async function deliverRenderedOutput({ m, key, session }) {
     session.processing = false
     session.abortController = null
 
+    if (!cancelled && session.outputPath) {
+      try {
+        await persistRenderOutputSession({
+          root: getRenderRoot(),
+          directory: session.directory,
+          key,
+          outputPath: session.outputPath,
+          outputFileName: session.outputFileName || path.basename(session.outputPath),
+          createdAt: session.createdAt,
+          progress: session.progress
+        })
+        // A completed result is durable outside the replaceable project tree.
+        // It no longer needs to block .update or automatic updates.
+        releaseRenderUpdateLock(session)
+        console.log('[RENDER] Hasil render tersimpan untuk pemulihan lintas-restart:', session.outputPath)
+      } catch (persistError) {
+        console.error('[RENDER] Gagal menyimpan metadata pemulihan; update tetap ditahan:', persistError?.stack || persistError)
+      }
+    }
+
     if (cancelled) {
       progress.update(
         session.progress?.percent || 95,
@@ -322,6 +389,12 @@ function hasZipSignature(buffer) {
 }
 
 const handler = async (m, { conn, text }) => {
+  try {
+    await ensureRenderRecovery()
+  } catch (error) {
+    return safeReply(m, '⏳ Status pemulihan hasil render belum dapat dipastikan. Update dan render baru ditahan demi menjaga file hasil. Detail: ' + safeError(error))
+  }
+
   const key = sessionKey(m)
   if (!key) return safeReply(m, 'Identitas chat tidak terbaca. Coba kirim ulang perintah.')
 
@@ -355,6 +428,7 @@ const handler = async (m, { conn, text }) => {
       return safeReply(m, '❌ File hasil render tidak dapat ditemukan: ' + safeError(error) + '. Jalankan render ulang dengan mengirim video dan ZIP.')
     }
 
+    acquireRenderUpdateLock(session)
     session.processing = true
     session.cancelRequested = false
     session.abortController = new AbortController()
@@ -491,6 +565,13 @@ const handler = async (m, { conn, text }) => {
 
 handler.all = async function (m) {
   if (!isRenderDocumentEvent(m)) return
+
+  try {
+    await ensureRenderRecovery()
+  } catch (error) {
+    console.error('[RENDER] ZIP ditahan karena pemulihan sesi gagal:', safeError(error))
+    return safeReply(m, '⏳ Bot belum dapat memastikan status hasil render sebelumnya. ZIP ditahan agar tidak mengganggu pemulihan file.')
+  }
 
   const document = getCurrentDocument(m)
   const filename = path.basename(String(
