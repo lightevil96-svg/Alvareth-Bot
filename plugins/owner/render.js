@@ -470,7 +470,7 @@ async function deliverRenderedOutput({ m, key, session, progressReporter = null 
       getSocket: () => global.conn || m?.conn || null,
       signal: session.abortController?.signal,
       onWait: details => {
-            if (details?.reason === 'waiting-for-connection' ||
+        if (details?.reason === 'waiting-for-connection' ||
             details?.reason === 'retry-after-disconnect') {
           session.deliveryWaiting = true
           session.deliveryWaitingSince ||= Date.now()
@@ -926,6 +926,8 @@ const handler = async (m, { conn, text }) => {
       updateLockHeld: true,
       abortController: null,
       cancelRequested: false,
+      deliveryWaiting: false,
+      deliveryWaitingSince: null,
       outputPath: null,
       outputFileName: null,
       outputSize: 0
