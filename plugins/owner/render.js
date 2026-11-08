@@ -20,7 +20,6 @@ const SESSION_TTL_MS = 15 * 60 * 1000
 const STALE_JOB_TTL_MS = 24 * 60 * 60 * 1000
 const MAX_PENDING_SESSIONS = 3
 const MAX_VIDEO_BYTES = 300 * 1024 * 1024
-const MAX_ARCHIVE_BYTES = 50 * 1024 * 1024
 const MAX_ARCHIVE_ENTRIES = 200
 const MAX_ARCHIVE_FILE_BYTES = 100 * 1024 * 1024
 const MAX_ARCHIVE_UNPACKED_BYTES = 250 * 1024 * 1024
@@ -120,7 +119,7 @@ async function pruneExpiredSessions() {
 }
 
 async function downloadDocument(conn, media, options = {}) {
-  const maxBytes = Number(options.maxBytes) > 0 ? Number(options.maxBytes) : MAX_ARCHIVE_BYTES
+  const maxBytes = Number(options.maxBytes) > 0 ? Number(options.maxBytes) : 0
   const label = String(options.label || 'ZIP')
   let lastError
 
@@ -129,7 +128,7 @@ async function downloadDocument(conn, media, options = {}) {
       const result = await conn.downloadM(media, 'document')
       if (Buffer.isBuffer(result) || result instanceof Uint8Array) {
         const buffer = Buffer.from(result)
-        if (buffer.length > maxBytes) {
+        if (maxBytes > 0 && buffer.length > maxBytes) {
           const error = new Error('File ' + label + ' melebihi batas ' + formatBytes(maxBytes) + '.')
           error.code = 'RENDER_ARCHIVE_TOO_LARGE'
           throw error
@@ -149,7 +148,7 @@ async function downloadDocument(conn, media, options = {}) {
     for await (const chunk of stream) {
       const part = Buffer.from(chunk)
       total += part.length
-      if (total > maxBytes) {
+      if (maxBytes > 0 && total > maxBytes) {
         const error = new Error('File ' + label + ' melebihi batas ' + formatBytes(maxBytes) + '.')
         error.code = 'RENDER_ARCHIVE_TOO_LARGE'
         throw error
@@ -333,16 +332,10 @@ handler.all = async function (m) {
     return safeReply(m, 'File yang diminta harus berupa paket *.zip* dan dikirim sebagai dokumen. Video masih tersimpan; kirim file ZIP dari Claude.')
   }
 
-  const declaredSize = toSafeNumber(document.fileLength)
-  if (declaredSize > MAX_ARCHIVE_BYTES) {
-    return safeReply(m, 'Ukuran ZIP ' + formatBytes(declaredSize) + ' melebihi batas ' + formatBytes(MAX_ARCHIVE_BYTES) + '.')
-  }
-
   session.processing = true
   let workDirectory
   try {
     const archiveBuffer = await downloadDocument(this, document, {
-      maxBytes: MAX_ARCHIVE_BYTES,
       label: 'ZIP'
     })
     if (!hasZipSignature(archiveBuffer)) {
@@ -357,7 +350,6 @@ handler.all = async function (m) {
     await fs.mkdir(packageDirectory, { recursive: true, mode: 0o700 })
 
     const extracted = await extractRenderArchive(archiveBuffer, packageDirectory, {
-      maxArchiveBytes: MAX_ARCHIVE_BYTES,
       maxEntries: MAX_ARCHIVE_ENTRIES,
       maxFileBytes: MAX_ARCHIVE_FILE_BYTES,
       maxTotalBytes: MAX_ARCHIVE_UNPACKED_BYTES

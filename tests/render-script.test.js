@@ -311,3 +311,26 @@ test('render session keys normalize phone aliases and WhatsApp device suffixes',
   })
   assert.equal(first, second)
 })
+
+
+test('extractRenderArchive has no fixed 50 MB compressed-archive ceiling', async t => {
+  const root = await mkdtemp(path.join(tmpdir(), 'render-unlimited-zip-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+
+  const archive = Buffer.alloc(50 * 1024 * 1024 + 1)
+  const entry = {
+    name: 'assets/test.txt',
+    unsafeOriginalName: 'assets/test.txt',
+    dir: false,
+    unixPermissions: 0,
+    _data: { uncompressedSize: 4 },
+    async: async () => Buffer.from('test')
+  }
+
+  const result = await extractRenderArchive(archive, root, {
+    loadZip: async () => ({ files: { 'assets/test.txt': entry } })
+  })
+
+  assert.equal(result.files.length, 1)
+  assert.equal(result.totalBytes, 4)
+})

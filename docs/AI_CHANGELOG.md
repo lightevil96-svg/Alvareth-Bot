@@ -1,3 +1,10 @@
+## 2026-11-08 — Remove fixed compressed ZIP size ceiling
+
+- Removed the hard-coded 50 MB limit from .render ZIP metadata checks, WhatsApp media download, and archive validation.
+- ZIP packages can now exceed 50 MB; the effective upload ceiling is the WhatsApp transport and available server memory/storage.
+- Retained ZIP-bomb protections: maximum 200 entries, 100 MB per extracted file, and 250 MB total extracted content. Existing path traversal and symbolic-link rejection remain enabled.
+- Added a regression test proving that an archive slightly larger than 50 MB is accepted by the extraction path.
+- Verification: pending GitHub Actions and a live WhatsApp/TokoPanel test.
 ## 2026-11-08 — Fix ZIP document event detection and session matching
 
 - **Observed issue:** WhatsApp accepted pack.zip as a document, but the bot gave no reply after the upload. The earlier handler returned silently when the serialized message type or session key did not match its narrow assumptions.
