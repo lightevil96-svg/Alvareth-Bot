@@ -162,6 +162,12 @@ function createRenderChatProgressReporter(m, session) {
     ]
 
     if (detail) lines.push('Detail: ' + detail)
+    if (session.renderChildPid) {
+      lines.push('Proses shell: PID ' + session.renderChildPid + ' (' + String(session.renderChildState || 'aktif') + ').')
+    }
+    if (session.renderChildLastOutputAt) {
+      lines.push('Output proses terakhir: ' + formatRenderElapsed(now - session.renderChildLastOutputAt) + ' yang lalu.')
+    }
     if (heartbeat && quietMs >= RENDER_STATUS_HEARTBEAT_MS) {
       lines.push('⚠️ Belum ada perubahan progres dari tahap ini selama ' +
         formatRenderElapsed(quietMs) + '. Worker masih menunggu/menjalankan tahap tersebut; tidak ada batas waktu otomatis.')
@@ -196,6 +202,11 @@ function createRenderChatProgressReporter(m, session) {
     console.log('[RENDER] HEARTBEAT | pid=' + process.pid +
       ' | elapsed=' + formatRenderElapsed(Date.now() - (Number(session.processingStartedAt || session.createdAt) || Date.now())) +
       ' | stage=' + String(current.stage || 'Menyiapkan render') +
+      ' | childPid=' + String(session.renderChildPid || 'not-started') +
+      ' | childState=' + String(session.renderChildState || 'not-started') +
+      ' | childOutputIdle=' + (session.renderChildLastOutputAt
+        ? formatRenderElapsed(Date.now() - session.renderChildLastOutputAt)
+        : 'no-output-yet') +
       ' | noProgressFor=' + formatRenderElapsed(quietMs))
     sendStatus(current, { force: true, heartbeat: true })
   }, RENDER_STATUS_HEARTBEAT_MS)
@@ -855,6 +866,25 @@ async function processRenderJob({ conn, m, document, key, session }) {
       onStage: value => {
         progress.update(10, String(value.stage || 'Menjalankan render.sh'),
           value.command ? 'Perintah: ' + value.command : '')
+      },
+      onProcess: value => {
+        session.renderChildState = String(value.state || 'unknown')
+        session.renderChildPid = value.pid || null
+        session.renderChildLastOutputAt = Number(value.lastOutputAt) || session.renderChildLastOutputAt || null
+        session.renderChildStdoutBytes = Number(value.stdoutBytes) || 0
+        session.renderChildStderrBytes = Number(value.stderrBytes) || 0
+
+        if (value.state === 'started') {
+          progress.update(10, 'Menjalankan render.sh',
+            'Shell process aktif dengan PID ' + String(value.pid || 'tidak diketahui') + '.', true)
+        } else if (value.state === 'closed') {
+          progress.update(90, 'Script render selesai',
+            'Exit code: ' + String(value.code) + (value.signal ? ' | Signal: ' + value.signal : '') +
+            ' | Durasi: ' + formatRenderElapsed(value.durationMs), true)
+        } else if (value.state === 'error') {
+          progress.update(session.progress?.percent || 10, 'Gagal menjalankan shell',
+            String(value.error || 'Proses shell gagal dibuat.'), true)
+        }
       },
       onProgress: value => {
         const rawPercent = Number.isFinite(value.percent) ? value.percent : null
