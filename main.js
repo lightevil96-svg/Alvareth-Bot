@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
 // ALVARETH BOT — main.js
-// QR login, auto-reconnect, recursive plugin loader, lowdb
+// Pairing code/QR login, auto-reconnect, recursive plugin loader, lowdb
 // ═══════════════════════════════════════════════════════════════
 
 import 'dotenv/config'
@@ -22,6 +22,7 @@ import { JSONFile } from 'lowdb/node'
 import syntaxerror from 'syntax-error'
 import { useMultiFileAuthState, fetchLatestWaWebVersion, makeCacheableSignalKeyStore, DisconnectReason } from 'baileys'
 import { makeWASocket } from './lib/simple.js'
+import { createPairingCodeRequester, normalizePairingPhoneNumber } from './lib/whatsapp-pairing.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -194,10 +195,25 @@ console.log('[DATABASE DIAGNOSTIC] Startup selesai:', JSON.stringify({
 
 // Session & socket.
 const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR)
+const configuredLoginMethod = String(process.env.WA_LOGIN_METHOD || 'pairing').trim().toLowerCase()
+const loginMethod = ['pairing', 'qr'].includes(configuredLoginMethod) ? configuredLoginMethod : 'pairing'
+if (loginMethod !== configuredLoginMethod) {
+  console.warn(chalk.yellow(`WA_LOGIN_METHOD tidak dikenal ("${configuredLoginMethod}"); memakai pairing.`))
+}
+const pairingPhoneNumber = normalizePairingPhoneNumber(global.pairing)
+const requestPairingCodeForSocket = createPairingCodeRequester({
+  phoneNumber: pairingPhoneNumber,
+  delayMs: 1500
+})
+
 const { version, isLatest } = await fetchLatestWaWebVersion()
 console.log(chalk.cyan(`WA Web version: v${version.join('.')} (latest: ${isLatest})`))
 
-console.log(chalk.cyan('📷 Mode login QR aktif. Pindai QR dari WhatsApp > Perangkat Tertaut.'))
+if (loginMethod === 'pairing') {
+  console.log(chalk.cyan('🔐 Mode login pairing code aktif. Kode tampil di Console saat sesi belum terdaftar.'))
+} else {
+  console.log(chalk.cyan('📷 Mode login QR aktif. Pindai QR dari WhatsApp > Perangkat Tertaut.'))
+}
 
 // conn sengaja memakai let karena socket diganti ketika reconnect.
 let conn
@@ -261,7 +277,7 @@ async function getCachedGroupMetadata(jid) {
 const connectionOptions = {
   version,
   logger: silentLogger,
-  printQRInTerminal: true,
+  printQRInTerminal: false,
   auth: { ...state, keys: makeCacheableSignalKeyStore(state.keys, silentLogger) },
   browser: ['Mac OS', 'Chrome', '14.4.1'],
   markOnlineOnConnect: true,
@@ -304,8 +320,6 @@ conn.findUserId = async (lid) => {
   }
   return null
 }
-
-// Login hanya menggunakan QR; pairing code dinonaktifkan.
 
 // Handler utama dan event koneksi.
 let { handler, participantsUpdate, groupsUpdate, deleteUpdate } = await import('./handler.js')
@@ -503,16 +517,49 @@ global.reloadHandler = async function reloadHandler(restartSocket = false) {
 }
 
 async function connectionUpdate(update) {
+  const activeSocket = this && typeof this.requestPairingCode === 'function' ? this : conn
   const { connection, lastDisconnect, isNewLogin, qr } = update
   if (isNewLogin) conn.isInit = true
 
-  // Render QR explicitly; some Baileys forks no longer honor printQRInTerminal.
+  // Pairing code is requested only for an unregistered session. If the number
+  // or library method is unavailable, retain QR login as a safe fallback.
   if (qr) {
-    try {
-      console.log(chalk.cyan('\n📱 Pindai QR ini melalui WhatsApp > Perangkat tertaut > Tautkan perangkat:'))
-      console.log(await QRCode.toString(qr, { type: 'terminal', small: true }))
-    } catch (error) {
-      console.error(chalk.red('Gagal menampilkan QR WhatsApp:'), error?.message || error)
+    let pairingResult = null
+    if (loginMethod === 'pairing' && !activeSocket?.authState?.creds?.registered) {
+      pairingResult = await requestPairingCodeForSocket(
+        activeSocket,
+        socket => global.conn === socket
+      )
+    }
+
+    const pairingStatus = pairingResult?.status === 'already-attempted'
+      ? pairingResult.previous
+      : pairingResult?.status
+
+    if (pairingStatus === 'generated' || pairingStatus === 'pending') {
+      if (pairingResult?.status === 'generated') {
+        console.log(chalk.greenBright('\\n🔐 PAIRING CODE WHATSAPP'))
+        console.log(chalk.bold.bgGreen.black(` ${pairingResult.code} `))
+        console.log(chalk.gray('WhatsApp > Perangkat tertaut > Tautkan perangkat > Tautkan dengan nomor telepon.'))
+        console.log(chalk.yellow('Kode bersifat sementara. Jangan bagikan kepada siapa pun.'))
+      }
+    } else {
+      if (loginMethod === 'pairing' && pairingResult && pairingResult.status !== 'already-attempted') {
+        if (pairingResult.status === 'invalid-phone') {
+          console.error(chalk.red('❌ BOT_NUMBER tidak valid. Isi nomor WhatsApp dengan kode negara, angka internasional saja (contoh: 62812xxxxxxxx).'))
+        } else if (pairingResult.status === 'unsupported') {
+          console.error(chalk.red('❌ Library Baileys tidak menyediakan requestPairingCode(); beralih ke login QR.'))
+        } else if (pairingResult.status === 'failed') {
+          console.error(chalk.red('❌ Gagal meminta pairing code:'), String(pairingResult.error?.message || pairingResult.error || 'unknown error').slice(0, 200))
+        }
+      }
+
+      try {
+        console.log(chalk.cyan('\\n📱 Pindai QR ini melalui WhatsApp > Perangkat tertaut > Tautkan perangkat:'))
+        console.log(await QRCode.toString(qr, { type: 'terminal', small: true }))
+      } catch (error) {
+        console.error(chalk.red('Gagal menampilkan QR WhatsApp:'), error?.message || error)
+      }
     }
   }
 
