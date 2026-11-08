@@ -348,6 +348,34 @@ test('parseRenderDurationSeconds resolves the Claude render.sh DUR variable used
   assert.equal(parseRenderDurationSeconds('ffmpeg -i input.mp4 output.mp4'), null)
 })
 
+test('runRenderScript reports shell process start, output activity, and exit status', async t => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'alvareth-render-process-events-'))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const scriptPath = path.join(directory, 'render.sh')
+  const inputPath = path.join(directory, 'input.mp4')
+  await writeFile(inputPath, 'input')
+  await writeFile(scriptPath, "printf 'render-worker-alive\\n'\n")
+
+  const events = []
+  const result = await runRenderScript({
+    scriptPath,
+    workingDirectory: directory,
+    inputPath,
+    onProcess: event => events.push(event)
+  })
+
+  const started = events.find(event => event.state === 'started')
+  const activity = events.find(event => event.state === 'activity')
+  const closed = events.find(event => event.state === 'closed')
+  assert.ok(Number.isInteger(started?.pid))
+  assert.equal(started?.running, true)
+  assert.ok(activity?.stream)
+  assert.equal(closed?.running, false)
+  assert.equal(closed?.code, 0)
+  assert.equal(result.code, 0)
+  assert.ok(closed.stdoutBytes + closed.stderrBytes > 0)
+})
+
 test('runRenderScript reports FFmpeg time-based percentage progress', async t => {
   const directory = await mkdtemp(path.join(tmpdir(), 'alvareth-render-progress-'))
   t.after(() => rm(directory, { recursive: true, force: true }))
