@@ -662,6 +662,11 @@ async function connectionUpdate(update) {
       console.warn(chalk.yellow('⚠️ Event open dari socket WhatsApp lama diabaikan.'))
       return
     }
+    if (!isWhatsAppSocketOpen(activeSocket)) {
+      console.warn(chalk.yellow('⚠️ WebSocket terbuka, tetapi identitas WhatsApp belum terautentikasi. Menunggu watchdog handshake.'))
+      global.requestWhatsAppReconnect('WebSocket melaporkan open tanpa identitas akun WhatsApp yang siap.')
+      return
+    }
     clearReconnectHandshakeTimer()
     if (reconnectTimer) {
       clearTimeout(reconnectTimer)
