@@ -196,6 +196,10 @@ function createRenderChatProgressReporter(m, session) {
     }
     if (waitingForDelivery) {
       lines.push('Hasil render tetap tersimpan. Ketik *.render send* untuk menghentikan penantian dan mencoba kirim ulang.')
+    } else if (deliveryInProgress) {
+      lines.push('Ketik *.render status* untuk memeriksa kembali. Upload yang sedang berjalan tidak dibatalkan agar tidak menimbulkan pengiriman ganda.')
+    } else {
+      lines.push('Ketik *.render status* untuk memeriksa kembali atau *.render cancel* untuk menghentikan render.')
     }
     if (!session.outputPath && !waitingForDelivery && heartbeat && quietMs >= RENDER_STATUS_HEARTBEAT_MS) {
       if (session.renderChildPid && session.renderChildState === 'running' &&
@@ -211,7 +215,6 @@ function createRenderChatProgressReporter(m, session) {
           '. Worker masih menunggu/menjalankan tahap ini; tidak ada batas waktu otomatis.')
       }
     }
-    lines.push('Ketik *.render status* untuk memeriksa kembali atau *.render cancel* untuk menghentikan.')
 
     const message = lines.join('\n')
     sendQueue = sendQueue.then(async () => {
@@ -327,6 +330,7 @@ async function attachOrphanedRenderOutput(key, index = 0) {
     abortController: null,
     cancelRequested: false,
     deliveryWaiting: false,
+    deliveryStartedAt: null,
     outputPath: orphan.outputPath,
     outputFileName: orphan.outputFileName,
     outputSize: orphan.outputSize,
@@ -974,6 +978,7 @@ const handler = async (m, { conn, text }) => {
       cancelRequested: false,
       deliveryWaiting: false,
       deliveryWaitingSince: null,
+      deliveryStartedAt: null,
       outputPath: null,
       outputFileName: null,
       outputSize: 0
