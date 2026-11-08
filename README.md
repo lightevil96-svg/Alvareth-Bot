@@ -36,6 +36,16 @@ npm start
 
 Nomor WhatsApp di `.env` menggunakan angka internasional saja tanpa tanda `+` atau spasi. Jangan commit `.env`, sesi WhatsApp, atau database runtime.
 
+## Login WhatsApp dengan pairing code atau QR
+
+- Metode awal default adalah **pairing code** (`WA_LOGIN_METHOD=pairing`). Isi `BOT_NUMBER` dengan nomor akun WhatsApp yang akan ditautkan, termasuk kode negara dan hanya angka, misalnya `62812xxxxxxxx`.
+- Saat belum ada sesi WhatsApp yang terdaftar, pairing code akan muncul **hanya di Console/terminal server**. Di ponsel akun tersebut, buka **WhatsApp → Perangkat tertaut → Tautkan perangkat → Tautkan dengan nomor telepon**, lalu masukkan kode dari Console.
+- Setelah berhasil ditautkan, kredensial disimpan di folder sesi yang sama. Restart bot berikutnya akan memakai sesi tersimpan dan tidak meminta pairing ulang.
+- Untuk memakai QR seperti sebelumnya, atur `WA_LOGIN_METHOD=qr`. Jika nomor tidak valid atau library gagal menyediakan pairing code, bot otomatis menampilkan QR sebagai fallback.
+- Jika Console tidak menampilkan pairing code, periksa apakah folder sesi sudah berisi sesi terdaftar. Sesi yang masih valid memang tidak perlu pairing ulang; jangan menghapus folder sesi aktif hanya untuk memunculkan kode baru.
+- Pairing code bersifat sementara dan rahasia. Jangan membagikannya kepada orang lain.
+
+
 - `npm start` menjalankan `scripts/start-with-update.js`, yang mencoba mengambil pembaruan dari `origin/main` secara fast-forward sebelum memulai bot.
 - `AUTO_UPDATE_ENABLED=false` menonaktifkan pembaruan startup.
 - `AUTO_UPDATE_BRANCH` mengubah branch yang diperiksa; default-nya `main`.
