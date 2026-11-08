@@ -173,7 +173,11 @@ function createRenderChatProgressReporter(m, session) {
           : deliveryInProgress
             ? '📤 Hasil render sedang dikirim ke WhatsApp.'
             : '⏳ Render masih berjalan di background.'
-        : '⚙️ Perkembangan render:',
+        : waitingForDelivery
+          ? '📦 Status pengiriman hasil render:'
+          : deliveryInProgress
+            ? '📤 Status pengiriman hasil render:'
+            : '⚙️ Perkembangan render:',
       'Progres tercatat: ' + percent + '%',
       'Tahap: ' + stage,
       elapsedLabel
