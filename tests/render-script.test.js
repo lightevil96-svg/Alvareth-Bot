@@ -408,6 +408,20 @@ test('createRenderProgressReporter writes live percentages to its terminal logge
 })
 
 
+test('createRenderProgressReporter never moves percentage backwards on a later shell stage', () => {
+  const session = {}
+  const output = []
+  const progress = createRenderProgressReporter(session, message => output.push(message))
+
+  progress.update(72, 'Render FFmpeg', 'FFmpeg hampir selesai.')
+  progress.update(10, 'Menjalankan echo', 'Perintah: echo')
+  progress.update(90, 'Script render selesai', 'Exit code: 0', true)
+
+  assert.deepEqual(output.map(message => Number(message.match(/^\\[RENDER\\] (\\d+)%/)[1])), [72, 72, 90])
+  assert.equal(session.progress.percent, 90)
+  assert.equal(session.progress.stage, 'Script render selesai')
+})
+
 test('runRenderScript has no automatic timeout and waits for the script to exit', async t => {
   const directory = await mkdtemp(path.join(tmpdir(), 'alvareth-render-no-timeout-'))
   t.after(() => rm(directory, { recursive: true, force: true }))
