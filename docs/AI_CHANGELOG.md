@@ -4,7 +4,7 @@
 - **Fix:** moved progress reporting into `lib/render-script.js`; every changed percentage/stage is logged to the server terminal and the latest progress remains available internally for session state. The reporter has no WhatsApp connection or message-sending dependency.
 - **WhatsApp behavior:** removed automatic percentage/progress messages. `.render status` now returns a plain message without a percentage; the ZIP acknowledgement explains that live progress is visible only in the server terminal. The final rendered video is still delivered normally.
 - **Regression coverage:** added a unit test for terminal logger output and session-state updates; retained the FFmpeg timestamp-to-percentage test.
-- **Verification:** pending GitHub Actions and live TokoPanel/WhatsApp validation.
+- **Verification:** Render script regression passed 19/19 (GitHub Actions run `42440890264`); repository-wide JavaScript syntax checks passed (run `42440890280`). Live TokoPanel/WhatsApp rendering, delivery, and deployment/restart were not performed and remain unverified.
 
 ## 2026-11-08 — Remove repository preview, add render progress, and harden updater restart safety
 
