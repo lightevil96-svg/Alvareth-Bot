@@ -678,7 +678,7 @@ async function handleUpdate(m, context = {}) {
   }
   const forceMode = updateMode.forceMode;
   if ((Number(global.__alvarethRenderJobs) || 0) > 0) {
-    return m.reply('⏳ Update ditunda karena render sedang berjalan. Coba lagi setelah render selesai agar proses render tidak terputus.')
+    return m.reply('⏳ Update ditunda karena masih ada sesi render aktif (menunggu ZIP, proses render, atau pengiriman hasil). Selesaikan atau batalkan sesi render terlebih dahulu.')
   }
   if (global.__alvarethUpdateRunning) {
     return m.reply('⏳ Update sedang berjalan, tunggu sampai selesai.')

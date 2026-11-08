@@ -73,7 +73,12 @@ async function safeReply(m, message) {
 }
 
 async function removeSession(session) {
-  if (!session?.directory) return
+  if (!session) return
+  if (session.updateLockHeld) {
+    session.updateLockHeld = false
+    global.__alvarethRenderJobs = Math.max(0, (Number(global.__alvarethRenderJobs) || 1) - 1)
+  }
+  if (!session.directory) return
   try {
     await fs.rm(session.directory, { recursive: true, force: true, maxRetries: 2, retryDelay: 250 })
   } catch (error) {
@@ -265,6 +270,10 @@ const handler = async (m, { conn, text }) => {
     return safeReply(m, 'Format: reply video dengan *.render*. Untuk membatalkan sesi, gunakan *.render cancel*.')
   }
 
+  if (global.__alvarethUpdateRunning) {
+    return safeReply(m, '⏳ Render ditunda karena pembaruan bot sedang berlangsung. Coba lagi setelah bot selesai diperbarui.')
+  }
+
   const previous = pendingSessions.get(key)
   if (previous?.processing) {
     return safeReply(m, 'Render sebelumnya masih berjalan. Tunggu sampai selesai.')
@@ -333,8 +342,10 @@ const handler = async (m, { conn, text }) => {
         stage: 'Menunggu paket ZIP',
         detail: 'Kirim paket ZIP sebagai dokumen di chat yang sama.',
         updatedAt: Date.now()
-      }
+      },
+      updateLockHeld: true
     })
+    global.__alvarethRenderJobs = Math.max(0, Number(global.__alvarethRenderJobs) || 0) + 1
 
     return safeReply(
       m,
@@ -402,12 +413,15 @@ handler.all = async function (m) {
     return safeReply(m, 'Paket render untuk sesi ini sedang diproses. Tunggu sampai selesai.')
   }
 
+  if (global.__alvarethUpdateRunning) {
+    return safeReply(m, '⏳ Paket ZIP diterima, tetapi pembaruan bot sedang berlangsung. Coba kirim ulang ZIP setelah update selesai.')
+  }
+
   if (!isZip) {
     return safeReply(m, 'File yang diminta harus berupa paket *.zip* dan dikirim sebagai dokumen. Video masih tersimpan; kirim file ZIP dari Claude.')
   }
 
   session.processing = true
-  global.__alvarethRenderJobs = Math.max(0, Number(global.__alvarethRenderJobs) || 0) + 1
   const progress = createRenderProgressReporter(m, session)
   progress.update(1, 'Mengunduh paket ZIP', '', true)
   let workDirectory
@@ -535,7 +549,7 @@ handler.all = async function (m) {
       '\n\nVideo masih tersimpan selama sesi aktif. Kamu bisa kirim ulang paket ZIP yang sudah diperbaiki, atau gunakan *.render cancel*.'
     )
   } finally {
-    global.__alvarethRenderJobs = Math.max(0, (Number(global.__alvarethRenderJobs) || 1) - 1)
+    // The update lock remains held for the entire render session, including retries.
   }
 }
 
