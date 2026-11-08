@@ -230,10 +230,13 @@ async function deliverRenderedOutput({ m, key, session }) {
           console.error('[RENDER] Tidak dapat meminta reconnect WhatsApp:', error?.message || error)
         }
       },
-      send: socket => sendLocalFile(socket, m.chat, outputPath, {
-        quoted: socket === m.conn ? m : undefined,
-        caption: '✅ Render berhasil. Berikut hasil videonya.'
-      })
+      send: socket => {
+        progress.update(95, 'Mengirim hasil ke WhatsApp', formatBytes(outputInfo.size), true)
+        return sendLocalFile(socket, m.chat, outputPath, {
+          quoted: socket === m.conn ? m : undefined,
+          caption: '✅ Render berhasil. Berikut hasil videonya.'
+        })
+      }
     })
 
     await safeReact(m, '✅')
