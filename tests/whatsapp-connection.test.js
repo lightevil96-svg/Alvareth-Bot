@@ -15,7 +15,7 @@ test('recognizes only an open Baileys socket as ready', () => {
   assert.equal(isWhatsAppSocketOpen(makeSocket(1)), true)
   assert.equal(isWhatsAppSocketOpen(makeSocket(0)), false)
   assert.equal(isWhatsAppSocketOpen(makeSocket(3)), false)
-  assert.equal(isWhatsAppSocketOpen({ sendMessage() {} }), false)
+  assert.equal(isWhatsAppSocketOpen({ sendMessage() {}, ws: { readyState: 1 } }), false)
   assert.equal(isWhatsAppSocketOpen(null), false)
 })
 
@@ -52,10 +52,16 @@ test('retries once on the replacement socket after a 428 disconnect', async () =
   const newSocket = makeSocket(1)
   let current = oldSocket
   const calls = []
+  let reconnectRequests = 0
 
   const result = await sendWithWhatsAppReconnect({
     getSocket: () => current,
     pollIntervalMs: 5,
+    onReconnectRequired: details => {
+      reconnectRequests++
+      assert.equal(details.previousSocket, oldSocket)
+      assert.equal(details.socket, newSocket)
+    },
     send: async socket => {
       calls.push(socket)
       if (socket === oldSocket) {
@@ -69,6 +75,7 @@ test('retries once on the replacement socket after a 428 disconnect', async () =
 
   assert.equal(result.key.id, 'delivered-on-new-socket')
   assert.deepEqual(calls, [oldSocket, newSocket])
+  assert.equal(reconnectRequests, 1)
 })
 
 test('does not retry an ambiguous 428 while the same socket still appears open', async () => {
