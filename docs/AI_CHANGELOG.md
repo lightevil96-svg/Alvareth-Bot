@@ -1,3 +1,13 @@
+## 2026-11-08 — Keep completed render output deliverable after WhatsApp disconnect
+
+- **Observed failure:** the terminal showed render progress reaching 95%, followed by HTTP 428 / `Connection Closed` from `lib/whatsapp-file-sender.js`. This is a WhatsApp socket/session delivery failure after the render stage, not evidence that FFmpeg itself failed.
+- **Root cause:** `processRenderJob()` captured the socket from the incoming ZIP message and reused it after a potentially long render. The bot may have replaced that socket during automatic reconnect, leaving the background job trying to send through a stale connection. The error path also removed the ZIP work directory before retaining the final output, so a completed render could be lost.
+- **Fix:** added `lib/whatsapp-connection.js` to wait without a fixed deadline for the current authenticated/open socket, detect a closed socket, request the existing coordinated reconnect path, and retry once only when the old socket is confirmed closed/replaced. Ambiguous failures on a socket that still appears open are not blindly retried, avoiding duplicate video sends. `main.js` exposes `global.requestWhatsAppReconnect()` and avoids creating a duplicate socket while a replacement is already connecting.
+- **Render recovery:** the completed video is moved out of the extracted ZIP work directory into the persistent render session before upload. If delivery still fails, the video remains available and `.render send` retries the stored result without rerunning FFmpeg; `.render status` explains the pending delivery. A new render cannot silently delete an unsent result. Waiting for reconnect is cancellable with `.render cancel`.
+- **Stale socket fix:** render status replies and reactions resolve the current `global.conn` instead of using `m.reply`/`m.react` closures bound to the socket that received the original ZIP.
+- **Files:** `main.js`, `plugins/owner/render.js`, `lib/whatsapp-connection.js`, `tests/whatsapp-connection.test.js`, `package.json`, `AI_CONTEXT.md`, and this changelog.
+- **Verification:** reconnect helper syntax and regression tests passed locally, 7/7. Full repository `npm test`, GitHub Actions, and live render delivery/reconnect on TokoPanel/WhatsApp have not yet been verified.
+
 ## 2026-11-08 — Add WhatsApp pairing-code login with QR fallback
 
 - **Request:** add a reliable phone-number pairing-code login path to Alvareth without removing the existing QR login or disturbing a valid WhatsApp session.
