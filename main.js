@@ -23,6 +23,7 @@ import syntaxerror from 'syntax-error'
 import { useMultiFileAuthState, fetchLatestWaWebVersion, makeCacheableSignalKeyStore, DisconnectReason } from 'baileys'
 import { makeWASocket } from './lib/simple.js'
 import { createPairingCodeRequester, normalizePairingPhoneNumber } from './lib/whatsapp-pairing.js'
+import { isWhatsAppSocketOpen } from './lib/whatsapp-connection.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -363,11 +364,25 @@ function claimMessageOnce(message) {
 
 let isInit = false
 let reconnectTimer = null
+let reconnectHandshakeTimer = null
 let reconnectAttempts = 0
 let reconnectInProgress = false
+let reconnectQueued = null
+
+function clearReconnectHandshakeTimer() {
+  if (!reconnectHandshakeTimer) return
+  clearTimeout(reconnectHandshakeTimer)
+  reconnectHandshakeTimer = null
+}
 
 function scheduleSocketReconnect(statusCode, reason = '') {
-  if (reconnectTimer || reconnectInProgress) return
+  if (reconnectTimer) return
+  if (reconnectInProgress) {
+    reconnectQueued = { statusCode, reason }
+    return
+  }
+
+  clearReconnectHandshakeTimer()
 
   // A 405 is usually a rejected WhatsApp companion handshake, not a damaged
   // auth folder. Back off between attempts so we never hammer WhatsApp in a loop.
@@ -391,21 +406,54 @@ function scheduleSocketReconnect(statusCode, reason = '') {
       console.error(chalk.red('Gagal membuat ulang socket WhatsApp:'), error?.stack || error)
     } finally {
       reconnectInProgress = false
+      if (reconnectQueued) {
+        const queued = reconnectQueued
+        reconnectQueued = null
+        queueMicrotask(() => scheduleSocketReconnect(queued.statusCode, queued.reason))
+      }
     }
   }, delay)
+  reconnectTimer.unref?.()
 }
 
-// A media send can discover a closed socket before connection.update is handled.
-// Reuse the same backoff/reconnect path instead of creating a second socket loop.
+// A media send can discover a closed or unauthenticated socket before
+// connection.update reports the disconnect. Reuse the coordinated reconnect path.
 global.requestWhatsAppReconnect = function requestWhatsAppReconnect(reason = '') {
   const currentSocket = global.conn
-  const readyState = currentSocket?.ws?.readyState
+  if (isWhatsAppSocketOpen(currentSocket)) {
+    clearReconnectHandshakeTimer()
+    return false
+  }
 
-  // CONNECTING means the replacement socket is already performing its handshake.
-  if (readyState === 0 || readyState === 1) return false
+  if (reconnectTimer || reconnectInProgress || reconnectQueued) return true
+
+  const readyState = currentSocket?.ws?.readyState
+  if (readyState === 0 || readyState === 1) {
+    // A WebSocket can be OPEN before Baileys has authenticated the account.
+    // Give the handshake 30 seconds, then replace a socket that never becomes ready.
+    if (!reconnectHandshakeTimer) {
+      const observedSocket = currentSocket
+      console.warn(chalk.yellow(
+        '⏳ WebSocket WhatsApp terbuka/belum selesai handshake. Menunggu autentikasi sebelum meminta reconnect.'
+      ))
+      reconnectHandshakeTimer = setTimeout(() => {
+        reconnectHandshakeTimer = null
+        const activeSocket = global.conn
+        if (isWhatsAppSocketOpen(activeSocket)) return
+        scheduleSocketReconnect(
+          428,
+          (reason || 'Socket WhatsApp belum siap untuk mengirim media.') +
+          ' Socket tidak terautentikasi dalam 30 detik' +
+          (activeSocket !== observedSocket ? ' setelah pergantian socket.' : '.')
+        )
+      }, 30_000)
+      reconnectHandshakeTimer.unref?.()
+    }
+    return true
+  }
 
   scheduleSocketReconnect(428, reason || 'Socket WhatsApp terdeteksi tertutup saat pengiriman media.')
-  return Boolean(reconnectTimer || reconnectInProgress)
+  return Boolean(reconnectTimer || reconnectInProgress || reconnectQueued)
 }
 
 global.reloadHandler = async function reloadHandler(restartSocket = false) {
@@ -530,7 +578,7 @@ global.reloadHandler = async function reloadHandler(restartSocket = false) {
 }
 
 async function connectionUpdate(update) {
-  const activeSocket = this && typeof this.requestPairingCode === 'function' ? this : conn
+  const activeSocket = this && this.ws ? this : conn
   const { connection, lastDisconnect, isNewLogin, qr } = update
   if (isNewLogin) conn.isInit = true
 
@@ -577,6 +625,11 @@ async function connectionUpdate(update) {
   }
 
   if (connection === 'close') {
+    if (activeSocket !== global.conn) {
+      console.warn(chalk.yellow('⚠️ Event disconnect dari socket WhatsApp lama diabaikan.'))
+      return
+    }
+    clearReconnectHandshakeTimer()
     const statusCode = lastDisconnect?.error?.output?.statusCode
       || lastDisconnect?.error?.statusCode
       || 0
@@ -605,12 +658,18 @@ async function connectionUpdate(update) {
       scheduleSocketReconnect(statusCode, disconnectReason)
     }
   } else if (connection === 'open') {
+    if (activeSocket !== global.conn) {
+      console.warn(chalk.yellow('⚠️ Event open dari socket WhatsApp lama diabaikan.'))
+      return
+    }
+    clearReconnectHandshakeTimer()
     if (reconnectTimer) {
       clearTimeout(reconnectTimer)
       reconnectTimer = null
     }
+    reconnectQueued = null
     reconnectAttempts = 0
-    const { jid, name } = conn.user || {}
+    const { jid, name } = activeSocket.user || {}
     console.log(chalk.greenBright('✅ Bot terhubung:'), chalk.white(name || '-'), chalk.gray(`(${jid || '-'})`))
   }
 }
