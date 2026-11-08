@@ -119,7 +119,6 @@ async function safeReact(m, emoji) {
 }
 
 const RENDER_STATUS_HEARTBEAT_MS = 60_000
-const RENDER_STATUS_MIN_INTERVAL_MS = 30_000
 
 function formatRenderElapsed(milliseconds) {
   const totalSeconds = Math.max(0, Math.floor(Number(milliseconds) / 1000) || 0)
@@ -131,105 +130,11 @@ function formatRenderElapsed(milliseconds) {
   return seconds + ' dtk'
 }
 
-function createRenderChatProgressReporter(m, session) {
-  let lastSentAt = 0
-  let lastSentStage = ''
-  let lastSentPercent = -1
+// Render progress belongs in the Pterodactyl/terminal log, not WhatsApp.
+// WhatsApp is reserved for the initial acknowledgement, final result and errors.
+function createRenderTerminalProgressReporter(session) {
   let closed = false
-  let sendQueue = Promise.resolve()
-
-  const sendStatus = (progress, { force = false, heartbeat = false } = {}) => {
-    if (closed || !m?.chat) return
-    const now = Date.now()
-    const stage = String(progress?.stage || 'Menyiapkan render')
-    const percent = Math.max(0, Math.min(100, Math.round(Number(progress?.percent) || 0)))
-    const stageChanged = stage !== lastSentStage
-    const percentChanged = percent >= lastSentPercent + 5
-    const heartbeatDue = now - lastSentAt >= RENDER_STATUS_HEARTBEAT_MS
-
-    if (!force && !stageChanged && !percentChanged && !heartbeatDue) return
-    if (!force && now - lastSentAt < RENDER_STATUS_MIN_INTERVAL_MS && !heartbeatDue) return
-
-    lastSentAt = now
-    lastSentStage = stage
-    lastSentPercent = percent
-
-    const startedAt = Number(session.processingStartedAt || session.createdAt) || now
-    const lastProgressAt = Number(progress?.updatedAt) || startedAt
-    const quietMs = Math.max(0, now - lastProgressAt)
-    const detail = String(progress?.detail || '').trim()
-    const waitingForDelivery = Boolean(session.deliveryWaiting)
-    const deliveryInProgress = Boolean(session.outputPath && session.processing && !waitingForDelivery)
-    const elapsedLabel = waitingForDelivery
-      ? 'Menunggu WhatsApp: ' + formatRenderElapsed(now - (Number(session.deliveryWaitingSince) || now))
-      : deliveryInProgress
-        ? 'Waktu pengiriman: ' + formatRenderElapsed(now - (Number(session.deliveryStartedAt) || now))
-        : 'Waktu proses: ' + formatRenderElapsed(now - startedAt)
-    const lines = [
-      heartbeat
-        ? waitingForDelivery
-          ? '📦 Hasil render selesai; menunggu pengiriman WhatsApp.'
-          : deliveryInProgress
-            ? '📤 Hasil render sedang dikirim ke WhatsApp.'
-            : '⏳ Render masih berjalan di background.'
-        : waitingForDelivery
-          ? '📦 Status pengiriman hasil render:'
-          : deliveryInProgress
-            ? '📤 Status pengiriman hasil render:'
-            : '⚙️ Perkembangan render:',
-      'Progres tercatat: ' + percent + '%',
-      'Tahap: ' + stage,
-      elapsedLabel
-    ]
-    if (deliveryInProgress) lines.push('Ukuran hasil: ' + formatBytes(session.outputSize || 0))
-
-    if (detail) lines.push('Detail: ' + detail)
-    const childIdleMs = session.renderChildLastOutputAt
-      ? Math.max(0, now - session.renderChildLastOutputAt)
-      : null
-    if (!session.outputPath && !waitingForDelivery && session.renderChildPid) {
-      lines.push('Proses shell: PID ' + session.renderChildPid + ' (' + String(session.renderChildState || 'running') + ').')
-    }
-    if (!session.outputPath && !waitingForDelivery && childIdleMs !== null) {
-      lines.push('Output proses terakhir: ' + formatRenderElapsed(childIdleMs) + ' yang lalu.')
-    }
-    if (waitingForDelivery) {
-      lines.push('Hasil render tetap tersimpan. Ketik *.render send* untuk menghentikan penantian dan mencoba kirim ulang.')
-    } else if (deliveryInProgress) {
-      lines.push('Ketik *.render status* untuk memeriksa kembali. Upload yang sedang berjalan tidak dibatalkan agar tidak menimbulkan pengiriman ganda.')
-    } else {
-      lines.push('Ketik *.render status* untuk memeriksa kembali atau *.render cancel* untuk menghentikan render.')
-    }
-    if (!session.outputPath && !waitingForDelivery && heartbeat && quietMs >= RENDER_STATUS_HEARTBEAT_MS) {
-      if (session.renderChildPid && session.renderChildState === 'running' &&
-          childIdleMs !== null && childIdleMs < RENDER_STATUS_HEARTBEAT_MS) {
-        lines.push('ℹ️ Script masih mengeluarkan output, tetapi belum ada perubahan angka progres FFmpeg.')
-      } else if (session.renderChildPid && session.renderChildState === 'running') {
-        lines.push('⚠️ Shell PID ' + session.renderChildPid + ' masih tercatat berjalan, tetapi tidak mengeluarkan output selama ' +
-          formatRenderElapsed(childIdleMs ?? quietMs) + '. Periksa *.render status*; proses tidak dihentikan otomatis.')
-      } else if (session.renderChildPid && session.renderChildState === 'exited') {
-        lines.push('⚠️ Shell PID ' + session.renderChildPid + ' sudah keluar, tetapi worker masih menunggu stream/proses turunannya ditutup.')
-      } else {
-        lines.push('⚠️ Belum ada perubahan progres selama ' + formatRenderElapsed(quietMs) +
-          '. Worker masih menunggu/menjalankan tahap ini; tidak ada batas waktu otomatis.')
-      }
-    }
-
-    const message = lines.join('\n')
-    sendQueue = sendQueue.then(async () => {
-      const sent = await safeReply(m, message)
-      if (!sent) {
-        console.warn('[RENDER] Notifikasi progres belum terkirim; akan dicoba lagi pada pembaruan berikutnya.')
-      }
-    }).catch(error => {
-      console.error('[RENDER] Antrean notifikasi WhatsApp gagal:', error?.stack || error)
-    })
-  }
-
-  const progress = createRenderProgressReporter(session, (message, current) => {
-    console.log(message)
-    sendStatus(current)
-  })
+  const progress = createRenderProgressReporter(session, message => console.log(message))
 
   const heartbeatTimer = setInterval(() => {
     if (closed || !session.processing) return
@@ -249,7 +154,6 @@ function createRenderChatProgressReporter(m, session) {
         ? formatRenderElapsed(Date.now() - session.renderChildLastOutputAt)
         : 'no-output-yet') +
       ' | noProgressFor=' + formatRenderElapsed(quietMs))
-    sendStatus(current, { force: true, heartbeat: true })
   }, RENDER_STATUS_HEARTBEAT_MS)
   heartbeatTimer.unref?.()
 
@@ -259,7 +163,6 @@ function createRenderChatProgressReporter(m, session) {
       if (closed) return
       closed = true
       clearInterval(heartbeatTimer)
-      await sendQueue.catch(() => {})
     }
   }
 }
@@ -448,7 +351,7 @@ async function downloadDocument(conn, media, options = {}) {
 
 async function deliverRenderedOutput({ m, key, session, progressReporter = null }) {
   const ownsProgressReporter = !progressReporter
-  const progress = progressReporter || createRenderChatProgressReporter(m, session)
+  const progress = progressReporter || createRenderTerminalProgressReporter(session)
   const outputPath = session.outputPath
 
   try {
@@ -767,11 +670,9 @@ const handler = async (m, { conn, text }) => {
         : null
       const lines = [
         '⏳ Render berjalan di background.',
-        'Progres tercatat: ' + Math.max(0, Math.min(100, Math.round(Number(progress.percent) || 0))) + '%',
-        'Tahap: ' + String(progress.stage || 'Menyiapkan render'),
-        'Waktu proses: ' + formatRenderElapsed(now - startedAt)
+        'Waktu proses: ' + formatRenderElapsed(now - startedAt),
+        'Persentase dan detail FFmpeg ditampilkan langsung di terminal/Pterodactyl.'
       ]
-      if (progress.detail) lines.push('Detail: ' + String(progress.detail).slice(0, 500))
       if (session.renderChildPid) {
         lines.push('Proses shell: PID ' + session.renderChildPid + ' (' + String(session.renderChildState || 'running') + ').')
       }
@@ -860,7 +761,7 @@ const handler = async (m, { conn, text }) => {
     session.cancelRequested = false
     session.abortController = new AbortController()
     await safeReply(m, '📤 Hasil render ditemukan. Bot akan mengirim file yang tersimpan tanpa menjalankan render ulang.')
-    const progress = createRenderChatProgressReporter(m, session)
+    const progress = createRenderTerminalProgressReporter(session)
     void runTrackedRenderDelivery({ m, key, session, progressReporter: progress }).catch(async error => {
       console.error('[RENDER] Retry pengiriman hasil gagal:', error?.stack || error)
       session.processing = false
@@ -1081,7 +982,7 @@ handler.all = async function (m) {
       await removeSession(session)
       return
     }
-    const progress = createRenderChatProgressReporter(m, session)
+    const progress = createRenderTerminalProgressReporter(session)
     progress.update(session.progress?.percent || 0, 'Render gagal', safeError(error), true)
     await safeReact(m, '❌')
     const recoveryMessage = session.outputPath
@@ -1097,7 +998,7 @@ handler.all = async function (m) {
 }
 
 async function processRenderJob({ conn, m, document, key, session }) {
-  const progress = createRenderChatProgressReporter(m, session)
+  const progress = createRenderTerminalProgressReporter(session)
   let workDirectory
   try {
     progress.update(1, 'Mengunduh paket ZIP', '', true)
