@@ -700,7 +700,7 @@ async function connectionUpdate(update) {
     reconnectQueued = null
     reconnectAttempts = 0
     const { id, name } = activeSocket.user || {}
-    console.log(chalk.greenBright('✅ Bot terhubung:'), chalk.white(name || '-'), chalk.gray(`(${id || '-'} )`.replace(' )', ')')))
+    console.log(chalk.greenBright('✅ Bot terhubung:'), chalk.white(name || '-'), chalk.gray(`(${id || '-'})`))
   }
 }
 

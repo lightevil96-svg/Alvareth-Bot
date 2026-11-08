@@ -45,6 +45,11 @@ test('@itsliaaa/baileys WebSocketClient state flags work without readyState', ()
   assert.equal(isWhatsAppSocketOpen(makeForkSocket('open', '')), false)
 })
 
+test('waits for the authenticated fork WebSocketClient without a readyState property', async () => {
+  const socket = makeForkSocket('open')
+  assert.equal(await waitForWhatsAppSocket(() => socket), socket)
+})
+
 test('recognizes WhatsApp 428 and closed-socket errors', () => {
   assert.equal(isWhatsAppConnectionClosedError({ statusCode: 428 }), true)
   assert.equal(isWhatsAppConnectionClosedError(new Error('Connection Closed')), true)
