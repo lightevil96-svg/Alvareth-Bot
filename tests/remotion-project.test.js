@@ -143,7 +143,7 @@ test('buildRemotionRenderScript rejects path traversal and invalid composition I
   assert.throws(() => buildRemotionRenderScript({
     entryPoint: '../src/index.ts',
     compositionId: 'Main'
-  }), /path relatif yang aman/)
+  }), /tidak boleh keluar dari folder proyek/)
 
   assert.throws(() => buildRemotionRenderScript({
     entryPoint: 'src/index.ts',

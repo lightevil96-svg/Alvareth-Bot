@@ -525,7 +525,26 @@ async function handleSend(m, key, session) {
   session.cancelRequested = false
   const progress = createTerminalProgress(session)
   await safeReply(m, '📤 Mengirim ulang MP4 yang sudah tersimpan. Bot tidak akan merender ulang.')
-  void deliverRemotionOutput({ m, key, session, progress }).finally(() => progress.close())
+  void deliverRemotionOutput({ m, key, session, progress })
+    .catch(async error => {
+      session.processing = false
+      session.abortController = null
+      releaseUpdateLock(session)
+      if (session.outputPath) {
+        progress.update(95, 'Hasil render tersimpan - pengiriman tertunda', safeError(error), true)
+        try { await persistOutput(key, session) } catch (persistError) {
+          console.error('[REMOTION] Manifest hasil render gagal disimpan:', persistError?.stack || persistError)
+        }
+        await safeReply(m,
+          '⚠️ MP4 tetap tersimpan, tetapi belum terkirim: ' + safeError(error) +
+          '\\n\\nKetik *.remotion send* untuk mencoba kembali tanpa render ulang.')
+      } else {
+        if (pendingJobs.get(key) === session) pendingJobs.delete(key)
+        await removeJob(session)
+        await safeReply(m, '❌ Hasil Remotion tidak dapat disiapkan untuk dikirim: ' + safeError(error))
+      }
+    })
+    .finally(() => progress.close())
 }
 
 async function handler(m, { conn, text = '' } = {}) {
