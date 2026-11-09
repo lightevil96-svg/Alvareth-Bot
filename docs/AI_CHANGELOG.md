@@ -1,3 +1,13 @@
+## 2026-11-09 — Add owner-only Remotion project ZIP rendering to WhatsApp
+
+- **Request:** allow the super-owner to send a complete Remotion project ZIP and reply to that ZIP with `.remotion` to render and receive the MP4.
+- **Implementation:** added `plugins/owner/remotion.js` with quoted-document download, background job handling, terminal-only progress/heartbeat, cancellation, status, retryable MP4 delivery, and persistent output recovery. Added `lib/remotion-project.js` to locate and validate a single Remotion project, resolve the entry point and composition ID, and generate a fixed render command. The bot does not run project-provided npm scripts or shell scripts.
+- **Dependency and archive safeguards:** ZIP is capped at 100 MB compressed, 200 entries, 100 MB per file, and 250 MB extracted. Rejects traversal/symlinks through the shared ZIP extractor, and rejects included `node_modules`, `.git`, `.env`, `.npmrc`, npm shrinkwrap, and direct git/URL/local dependencies. NPM installs with `--ignore-scripts` from the public registry. Project source and Remotion config still execute during bundling/render; this is not an OS sandbox and trusted ZIPs only are allowed.
+- **Delivery:** output is persisted before waiting for WhatsApp; `.remotion send` retries the saved MP4 without rerendering. Uses the existing WhatsApp reconnect and disk-streaming file sender.
+- **Tests:** added `tests/remotion-project.test.js` for project discovery, composition selection, dependency rejection, path safety, and render-script generation. Wired the suite into `npm run test:render`.
+- **Files:** `plugins/owner/remotion.js`, `lib/remotion-project.js`, `tests/remotion-project.test.js`, `package.json`, `README.md`, `.env.example`, `AI_CONTEXT.md`, and this changelog.
+- **Verification:** GitHub Actions regression and live WhatsApp/TokoPanel Remotion rendering are pending after commit. The bot's production browser availability, npm network access, and actual render/upload must be verified on the target server.
+
 ## 2026-11-08 — Stop unauthenticated WhatsApp reconnect loops and restore terminal-only render progress
 
 - **Observed failure:** the bot repeatedly reported an open WebSocket without an authenticated account and reached dozens of reconnect attempts. The `.render` workflow also continued to send percentage/stage updates to WhatsApp even though live progress belongs in the Pterodactyl terminal.

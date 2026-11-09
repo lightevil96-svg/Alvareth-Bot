@@ -144,6 +144,37 @@ Untuk menggunakan sesi YouTube milik sendiri, ikuti [panduan ekspor cookies yt-d
 
 AutoDL tidak menjamin unduhan dari konten privat, yang membutuhkan login, yang diblokir penyedia, atau layanan API yang sedang bermasalah. Fitur ini menggunakan downloader yang sudah ada; untuk verifikasi akhir, lakukan tes WhatsApp dari server yang sebenarnya.
 
+## Render proyek Remotion langsung dari WhatsApp
+
+Fitur owner-only **.remotion** menerima ZIP proyek Remotion lengkap, menjalankan Remotion CLI di server, lalu mengirim MP4 hasil render ke chat WhatsApp.
+
+1. Kompres satu folder proyek Remotion menjadi file **.zip**. Sertakan `package.json`, entry point, source, dan aset di folder `public/`.
+2. Kirim ZIP sebagai **dokumen** ke bot.
+3. Reply ZIP tersebut dengan **.remotion**.
+4. Bot memeriksa proyek, memasang dependency, menjalankan komposisi Remotion, lalu mengirim MP4.
+5. Gunakan **.remotion status**, **.remotion cancel**, atau **.remotion send** bila diperlukan.
+
+Proyek harus memiliki dependency `remotion`, `@remotion/cli`, `react`, dan `react-dom`. Secara default bot mencari entry point seperti **src/index.ts** dan satu ID statis pada elemen **<Composition id="...">**. Jika proyek memakai struktur berbeda atau memiliki beberapa komposisi, tambahkan konfigurasi berikut ke `package.json`:
+
+```json
+{
+  "alvarethRemotion": {
+    "entryPoint": "src/index.ts",
+    "compositionId": "NamaKomposisi"
+  }
+}
+```
+
+Dependency dipasang dari npm registry dengan **--ignore-scripts**; script lifecycle npm tidak dijalankan. Bot menjalankan Remotion CLI secara langsung dan tidak menjalankan `npm run render`, `render.sh`, atau script lain dari ZIP. Keluaran disimpan sebagai MP4 sebelum dikirim, sehingga **.remotion send** dapat mengirim ulang file yang sama tanpa render ulang.
+
+**Batas proses:** ZIP terkompresi maksimal 100 MB, maksimal 200 item, 100 MB per file, 250 MB total hasil ekstraksi, dan 500 MB untuk MP4 keluaran. Maksimal dua job Remotion aktif secara bersamaan. Progress teknis dicatat di terminal server; WhatsApp menerima acknowledgement, status atas permintaan, hasil akhir, atau pesan error.
+
+**Peringatan keamanan:** hanya super-owner yang dapat menjalankan fitur ini. ZIP yang berisi `node_modules`, `.git`, `.env`, `.npmrc`, symbolic link, atau dependency dari URL/Git/local source ditolak. Walaupun lifecycle scripts npm dinonaktifkan, source proyek tetap dieksekusi oleh Remotion saat proses bundling/render. Proses berjalan dengan user OS bot dan **bukan sandbox OS**; unggah hanya proyek yang kamu percaya.
+
+Folder kerja default berada di **~/.alvareth-bot-data/remotion-jobs/** dan dapat diganti melalui **ALVARETH_REMOTION_TMPDIR**. Remotion menggunakan browser bawaan yang dikelola Remotion; jika server memerlukan Chromium khusus, atur **ALVARETH_REMOTION_BROWSER_EXECUTABLE** ke path absolut executable tersebut.
+
+Catatan audio: bot merender aset sesuai isi proyek ZIP. Bot tidak membuat dubbing/TTS otomatis; file suara harus sudah tersedia di proyek dan komposisi harus mengaktifkan audio tersebut.
+
 ## Render video dari WhatsApp dengan paket ZIP
 
 Fitur owner-only **.render** menerima satu paket ZIP dari Claude. Bot mengekstrak seluruh aset, menjalankan **render.sh** yang ada di dalam paket, lalu mengirim video hasilnya ke WhatsApp.

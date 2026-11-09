@@ -19,7 +19,8 @@
     "test:pairing": "node --check lib/whatsapp-pairing.js && node --test tests/whatsapp-pairing.test.js",
     "test:tiktok": "node --check lib/tiktok-workflow.js && node --check plugins/downloader/tiktok.js && node --test tests/tiktok-workflow.test.js",
     "test:social": "node --check lib/scrape/twitter.js && node --check lib/scrape/youtube.js && node --check plugins/downloader/ig.js && node --check plugins/downloader/twitter.js && node --test tests/social-downloaders.test.js",
-    "test:render": "node --check lib/render-script.js && node --check plugins/owner/render.js && node --test tests/render-script.test.js"
+    "test:remotion": "node --check lib/remotion-project.js && node --check plugins/owner/remotion.js && node --test tests/remotion-project.test.js",
+    "test:render": "npm run test:remotion && node --check lib/render-script.js && node --check plugins/owner/render.js && node --test tests/render-script.test.js"
   },
   "keywords": [
     "alvareth-bot",
