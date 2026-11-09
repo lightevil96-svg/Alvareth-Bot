@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - "lib/render-script.js"
+      - "lib/remotion-project.js"
+      - "plugins/owner/remotion.js"
+      - "tests/remotion-project.test.js"
       - "plugins/owner/render.js"
       - "tests/render-script.test.js"
       - "package.json"

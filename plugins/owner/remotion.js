@@ -537,7 +537,7 @@ async function handleSend(m, key, session) {
         }
         await safeReply(m,
           '⚠️ MP4 tetap tersimpan, tetapi belum terkirim: ' + safeError(error) +
-          '\\n\\nKetik *.remotion send* untuk mencoba kembali tanpa render ulang.')
+          '\n\nKetik *.remotion send* untuk mencoba kembali tanpa render ulang.')
       } else {
         if (pendingJobs.get(key) === session) pendingJobs.delete(key)
         await removeJob(session)
