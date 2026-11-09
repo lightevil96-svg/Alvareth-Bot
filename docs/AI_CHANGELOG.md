@@ -6,7 +6,7 @@
 - **Delivery:** output is persisted before waiting for WhatsApp; `.remotion send` retries the saved MP4 without rerendering. Uses the existing WhatsApp reconnect and disk-streaming file sender.
 - **Tests:** added `tests/remotion-project.test.js` for project discovery, composition selection, dependency rejection, path safety, and render-script generation. Wired the suite into `npm run test:render`.
 - **Files:** `plugins/owner/remotion.js`, `lib/remotion-project.js`, `tests/remotion-project.test.js`, `package.json`, `README.md`, `.env.example`, `AI_CONTEXT.md`, and this changelog.
-- **Verification:** GitHub Actions regression and live WhatsApp/TokoPanel Remotion rendering are pending after commit. The bot's production browser availability, npm network access, and actual render/upload must be verified on the target server.
+- **Verification:** GitHub Actions Render script regression passed on the latest Remotion code (9/9 Remotion project tests plus 24/24 existing render-script tests; run `42602002710`). Repository-wide JavaScript syntax checks passed (run `42602002628`). Live WhatsApp/TokoPanel Remotion rendering and MP4 delivery remain unverified; production browser availability and npm registry access must be checked on the target server. A separate YouTube Clip progress workflow also reported 31/32 tests on the initial push, failing at `tests/clip-policy.test.js:372`; no clip files were changed in this feature.
 
 ## 2026-11-08 — Stop unauthenticated WhatsApp reconnect loops and restore terminal-only render progress
 
