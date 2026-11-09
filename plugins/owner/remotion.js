@@ -208,7 +208,7 @@ function hasZipSignature(buffer) {
     (buffer[2] === 0x07 && buffer[3] === 0x08)
 }
 
-async function downloadQuotedZip(mediaInfo) {
+async function downloadQuotedZip(mediaInfo, session) {
   const declaredSize = toSafeNumber(mediaInfo?.media?.fileLength)
   if (declaredSize > MAX_ARCHIVE_BYTES) {
     throw new Error('Ukuran ZIP ' + formatBytes(declaredSize) + ' melebihi batas ' + formatBytes(MAX_ARCHIVE_BYTES) + '.')
@@ -218,6 +218,7 @@ async function downloadQuotedZip(mediaInfo) {
   const chunks = []
   let total = 0
   for await (const chunk of stream) {
+    throwIfCancelled(session)
     const part = Buffer.from(chunk)
     total += part.length
     if (total > MAX_ARCHIVE_BYTES) {
@@ -226,6 +227,7 @@ async function downloadQuotedZip(mediaInfo) {
     chunks.push(part)
   }
 
+  throwIfCancelled(session)
   const buffer = Buffer.concat(chunks)
   if (!buffer.length || !hasZipSignature(buffer)) {
     throw new Error('File yang direply bukan arsip ZIP yang valid.')
@@ -363,7 +365,7 @@ async function processRemotionJob({ m, conn, mediaInfo, key, session }) {
 
     acquireUpdateLock(session)
     progress.update(1, 'Mengunduh ZIP proyek', '', true)
-    const archiveBuffer = await downloadQuotedZip(mediaInfo)
+    const archiveBuffer = await downloadQuotedZip(mediaInfo, session)
     throwIfCancelled(session)
 
     const root = await ensureRemotionRoot()
