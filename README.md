@@ -154,7 +154,7 @@ Fitur owner-only **.remotion** menerima ZIP proyek Remotion lengkap, menjalankan
 4. Bot memeriksa proyek, memasang dependency, menjalankan komposisi Remotion, lalu mengirim MP4.
 5. Gunakan **.remotion status**, **.remotion cancel**, atau **.remotion send** bila diperlukan.
 
-Proyek harus memiliki dependency `remotion`, `@remotion/cli`, `react`, dan `react-dom`. Secara default bot mencari entry point seperti **src/index.ts** dan satu ID statis pada elemen **<Composition id="...">**. Jika proyek memakai struktur berbeda atau memiliki beberapa komposisi, tambahkan konfigurasi berikut ke `package.json`:
+Proyek harus memiliki dependency `remotion`, `@remotion/cli`, `react`, dan `react-dom`. Secara default bot mencari entry point seperti **src/index.ts** dan satu ID statis pada elemen `<Composition id="...">`. Jika proyek memakai struktur berbeda atau memiliki beberapa komposisi, tambahkan konfigurasi berikut ke `package.json`:
 
 ```json
 {
