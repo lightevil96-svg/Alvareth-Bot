@@ -123,9 +123,14 @@ test('WhatsApp plugin exposes owner-only private interactive analysis actions', 
   assert.match(source, /handler\.command = \/\^analisis\$\/i/)
   assert.match(source, /handler\.rowner = true/)
   assert.match(source, /handler\.private = true/)
+  assert.match(source, /rowId: prefix \+ 'analisis ' \+ action/)
   for (const action of ['full', 'transcript', 'speakers', 'characters', 'summary', 'highlights', 'scenes', 'export', 'status', 'cancel']) {
-    assert.match(source, new RegExp("rowId: prefix \\\\+ 'analisis " + action + "'"))
+    assert.ok(source.includes("['" + action + "'"), 'menu action missing: ' + action)
   }
   assert.match(source, /buttonText: 'Buka fitur analisis'/)
   assert.match(source, /source_included: false/)
+})
+
+test('returns an empty SRT rather than inventing captions without timestamps', () => {
+  assert.equal(buildSrt({ words: [], unresolved_words: [], segments: [] }), '')
 })
