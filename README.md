@@ -227,3 +227,10 @@ Repository ini mewarisi struktur dan sebagian kode dari source sebelumnya. Perta
 ## Panduan AI dan kontribusi
 
 Sebelum mengubah kode, AI/developer wajib membaca [`AGENTS.md`](AGENTS.md), [`AI_CONTEXT.md`](AI_CONTEXT.md), dan [`docs/AI_CHANGELOG.md`](docs/AI_CHANGELOG.md). Setiap perubahan bermakna harus memperbarui changelog dan ringkasan terbaru di `AI_CONTEXT.md` dalam PR yang sama. Ikuti aturan keamanan, jalankan tes yang relevan, dan laporkan dengan jujur apa yang sudah serta belum diverifikasi.
+
+
+## Video Intelligence Analyzer
+
+Alvareth includes an owner-only `.analisis` command for video understanding. Reply to a video with `.analisis` to open an interactive menu for full analysis, speaker detection, character identification, transcript/subtitles, conversation summary, highlights, and AI-editor handoff. The bot creates a ZIP package and does not render the final video.
+
+The feature requires `GEMINI_API_KEY`, FFmpeg, and FFprobe. An optional WhisperX + pyannote sidecar adds word timestamps and audio speaker diarization. Configure it through `ALVARETH_WHISPERX_API_URL` and `ALVARETH_WHISPERX_API_TOKEN`; deployment instructions are in `services/whisperx-api/README.md`. Transcript output remains `ASR_RAW` until a person verifies it against the source audio. Speaker-to-character matches remain `CANDIDATE` or `UNKNOWN`. See `docs/VIDEO_ANALYSIS.md`.
