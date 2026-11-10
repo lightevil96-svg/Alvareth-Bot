@@ -9,6 +9,8 @@
 
 ## Pembaruan terbaru
 
+- 2026-11-10: Added owner-only `.analisis` interactive video-analysis menu and persistent per-chat source jobs. It supports full analysis, speaker detection, character identification, transcript/subtitles, conversation summary, highlights, and Skills-Clip editor handoff. Gemini full-video processing defaults to `static`; optional WhisperX + pyannote sidecar provides word alignment and diarization. Transcript remains ASR_RAW and speaker-character links remain CANDIDATE/UNKNOWN. See `docs/VIDEO_ANALYSIS.md` and `services/whisperx-api/README.md`.
+
 - 2026-11-10: Fixed the `registered=false` reconnect storm using per-socket Baileys login events; signed QR sessions skip pairing, invalid `BOT_NUMBER` falls back to QR once, QR/code entry survives the watchdog, and failed reconnects stop after eight attempts. See `docs/AI_CHANGELOG.md`.
 
 - 2026-11-09: Added a lightweight owner-only `.remotion` ZIP workflow on current `main`: reply to a Remotion project ZIP with `.remotion`; the bot validates one project, installs npm dependencies with lifecycle scripts disabled, renders a selected composition, and sends/preserves the MP4. `.remotion status/cancel/send` manage active jobs and failed delivery. It is separate from `.render`; trusted source code is still executed by Remotion and this is not an OS sandbox. See `docs/AI_CHANGELOG.md`.
