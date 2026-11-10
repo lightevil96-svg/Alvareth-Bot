@@ -9,6 +9,8 @@
 
 ## Pembaruan terbaru
 
+- 2026-11-10: `.analisis` now supports an optional Cutroom sidecar for faster-whisper transcription, pyannote diarization, face tracks, and LR-ASD active-speaker matches on real-face footage. The optional WhisperX sidecar remains the fallback. Animated/VTuber avatars still rely on Gemini visual evidence and conservative UNKNOWN/CANDIDATE mapping. Cutroom upstream Linux support is untested; keep its unauthenticated API bound to localhost. See `docs/VIDEO_ANALYSIS.md`.
+
 - 2026-11-10: Added owner-only `.analisis` interactive video-analysis menu and persistent per-chat source jobs. It supports full analysis, speaker detection, character identification, transcript/subtitles, conversation summary, highlights, and Skills-Clip editor handoff. Gemini full-video processing defaults to `static`; optional WhisperX + pyannote sidecar provides word alignment and diarization. Transcript remains ASR_RAW and speaker-character links remain CANDIDATE/UNKNOWN. See `docs/VIDEO_ANALYSIS.md` and `services/whisperx-api/README.md`.
 
 - 2026-11-10: Fixed the `registered=false` reconnect storm using per-socket Baileys login events; signed QR sessions skip pairing, invalid `BOT_NUMBER` falls back to QR once, QR/code entry survives the watchdog, and failed reconnects stop after eight attempts. See `docs/AI_CHANGELOG.md`.
