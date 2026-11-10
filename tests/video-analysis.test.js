@@ -113,7 +113,7 @@ test('analysis report and editorial handoff declare machine output limitations',
   const report = buildAnalysisReport(result)
   const brief = buildEditorialBrief(result)
   assert.match(report, /ASR_RAW/)
-  assert.match(report, /wajib diperiksa/)
+  assert.match(report, /draft, bukan subtitle final terverifikasi/)
   assert.match(brief, /Speaker IDs are provisional/)
   assert.match(report, /Reaksi singkat/)
 })
