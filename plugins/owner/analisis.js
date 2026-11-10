@@ -65,6 +65,14 @@ function formatBytes(bytes) {
   return (value / (1024 ** 3)).toFixed(2) + ' GB'
 }
 
+function safeVideoFileName(value, fallback) {
+  const normalized = String(value || fallback || 'video.mp4').replace(/\\/g, '/')
+  const base = path.basename(normalized)
+    .replace(/[\\r\\n\\u0000-\\u001f<>:"|?*]/g, '_')
+    .slice(0, 120)
+  return base || fallback || 'video.mp4'
+}
+
 async function safeReply(m, text) {
   try {
     if (typeof m?.reply === 'function') return await m.reply(text)
@@ -196,7 +204,7 @@ async function prepareVideoSession(m, conn) {
     sender: m.sender,
     directory,
     filePath,
-    fileName: String(mediaInfo.media?.fileName || ('video.' + extension)).slice(0, 120),
+    fileName: safeVideoFileName(mediaInfo.media?.fileName, 'video.' + extension),
     mimeType: detected?.mime || mime || 'video/mp4',
     size: buffer.length,
     duration,
