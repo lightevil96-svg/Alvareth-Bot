@@ -6,6 +6,8 @@ import fs from 'node:fs'
 import { spawn, spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { EventEmitter } from 'node:events'
+import { getWhatsAppWebSocketState, isWhatsAppSocketOpen, trackWhatsAppSocket } from '../lib/whatsapp-connection.js'
 const clipPlugin = await readFile(new URL('../plugins/downloader/clip.js', import.meta.url), 'utf8')
 const youtubeSource = await readFile(new URL('../lib/scrape/youtube.js', import.meta.url), 'utf8')
 const clipPipeline = youtubeSource.slice(youtubeSource.indexOf('export async function downloadYoutubeClip'))
@@ -367,11 +369,28 @@ test('invalid .clip range explains how the bot parsed each timestamp', () => {
 
 test('.clip and global error reporter do not retry sends on a closed WhatsApp socket', async () => {
   const handlerSource = await readFile(new URL('../handler.js', import.meta.url), 'utf8')
-  assert.ok(clipPlugin.includes('conn?.ws?.readyState !== undefined && conn.ws.readyState !== 1'))
-  assert.ok(clipPlugin.includes('Gagal mengirim pesan WhatsApp; detail utama tetap dicatat di terminal'))
-  assert.match(handlerSource, /Laporan WhatsApp dilewati karena socket tertutup/)
-  assert.match(handlerSource, /statusCode === 428/)
-  assert.match(handlerSource, /Fallback dibatalkan: koneksi WhatsApp sudah tertutup/)
+  const reportSource = handlerSource.slice(handlerSource.indexOf('async function sendErrorReport('), handlerSource.indexOf('export async function handler('))
+  const logger = { error() {}, warn() {} }
+  const report = new Function('isWhatsAppSocketOpen', 'getWhatsAppWebSocketState', 'console', 'redactErrorLog', 'format',
+    reportSource + '; return sendErrorReport')(isWhatsAppSocketOpen, getWhatsAppWebSocketState, logger, String, String)
+  const saySource = clipPlugin.slice(clipPlugin.indexOf('  const say = async message =>'), clipPlugin.indexOf('  const request = extractRequest(text)'))
+  const message = { chat: 'test@s.whatsapp.net', key: { id: 'test' } }
+  let sends = 0
+  const conn = trackWhatsAppSocket({
+    ev: new EventEmitter(), ws: { readyState: 3 },
+    authState: { creds: { registered: false, me: { id: 'bot@s.whatsapp.net' } } },
+    async sendMessage() { sends++; throw Object.assign(new Error('Connection Closed'), { statusCode: 428 }) }
+  })
+  const say = new Function('conn', 'm', 'console', saySource + '; return say')(conn, message, logger)
+  await say('failure')
+  await report(conn, message, new Error('clip failed'))
+  assert.equal(sends, 0, 'a closed socket must not send either notification')
+  conn.ws.readyState = 1
+  conn.ev.emit('connection.update', { connection: 'open' })
+  await say('failure')
+  assert.equal(sends, 1)
+  await report(conn, message, new Error('clip failed'))
+  assert.equal(sends, 2, 'authenticated QR sessions may send, but ambiguous 428 is never retried')
 })
 
 

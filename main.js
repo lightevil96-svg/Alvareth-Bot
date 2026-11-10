@@ -23,7 +23,8 @@ import syntaxerror from 'syntax-error'
 import { useMultiFileAuthState, fetchLatestWaWebVersion, makeCacheableSignalKeyStore, DisconnectReason } from 'baileys'
 import { makeWASocket } from './lib/simple.js'
 import { createPairingCodeRequester, normalizePairingPhoneNumber } from './lib/whatsapp-pairing.js'
-import { getWhatsAppWebSocketState, isWhatsAppRestartRequired, isWhatsAppSocketOpen } from './lib/whatsapp-connection.js'
+import { getWhatsAppWebSocketState, hasLinkedWhatsAppSession, isWhatsAppRestartRequired, isWhatsAppSocketOpen, trackWhatsAppSocket } from './lib/whatsapp-connection.js'
+import { createWhatsAppReconnectController } from './lib/whatsapp-reconnect.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -219,18 +220,24 @@ if (state.creds?.registered === true && !state.creds?.me?.id) {
   }
 }
 const configuredLoginMethod = String(process.env.WA_LOGIN_METHOD || 'pairing').trim().toLowerCase()
-const loginMethod = ['pairing', 'qr'].includes(configuredLoginMethod) ? configuredLoginMethod : 'pairing'
+let loginMethod = ['pairing', 'qr'].includes(configuredLoginMethod) ? configuredLoginMethod : 'pairing'
 if (loginMethod !== configuredLoginMethod) {
   console.warn(chalk.yellow(`WA_LOGIN_METHOD tidak dikenal ("${configuredLoginMethod}"); memakai pairing.`))
 }
-const pairingPhoneNumber = normalizePairingPhoneNumber(global.pairing)
+const pairingPhoneNumber = normalizePairingPhoneNumber(process.env.BOT_NUMBER ?? global.pairing)
+if (loginMethod === 'pairing' && !pairingPhoneNumber) {
+  loginMethod = 'qr'
+  if (!hasLinkedWhatsAppSession(state.creds)) {
+    console.warn(chalk.yellow('⚠️ BOT_NUMBER kosong atau tidak valid. Login QR digunakan; isi nomor internasional seperti 62812xxxxxxxx jika ingin memakai pairing code.'))
+  }
+}
 const requestPairingCodeForSocket = createPairingCodeRequester({
   phoneNumber: pairingPhoneNumber,
   delayMs: 1500
 })
 
 async function requestPairingCodeWhileConnecting(activeSocket) {
-  if (loginMethod !== 'pairing' || activeSocket?.authState?.creds?.registered) return null
+  if (loginMethod !== 'pairing' || hasLinkedWhatsAppSession(activeSocket?.authState?.creds) || isWhatsAppSocketOpen(activeSocket)) return null
 
   const result = await requestPairingCodeForSocket(
     activeSocket,
@@ -238,7 +245,7 @@ async function requestPairingCodeWhileConnecting(activeSocket) {
   )
 
   if (result?.status === 'generated') {
-    clearReconnectHandshakeTimer()
+    socketReconnect.clearHandshake()
     console.log(chalk.greenBright('\n🔐 PAIRING CODE WHATSAPP'))
     console.log(chalk.bold.bgGreen.black(` ${result.code} `))
     console.log(chalk.gray('WhatsApp > Perangkat tertaut > Tautkan perangkat > Tautkan dengan nomor telepon.'))
@@ -344,7 +351,7 @@ const connectionOptions = {
   cachedGroupMetadata: getCachedGroupMetadata
 }
 
-conn = global.conn = makeWASocket(connectionOptions)
+conn = global.conn = trackWhatsAppSocket(makeWASocket(connectionOptions))
 
 // Bind store agar cache kontak/grup tetap tersedia pada socket aktif.
 const storeModule = await import('./lib/store.js')
@@ -410,128 +417,11 @@ function claimMessageOnce(message) {
 }
 
 let isInit = false
-let reconnectTimer = null
-let reconnectHandshakeTimer = null
-let reconnectAttempts = 0
-let reconnectInProgress = false
-let reconnectQueued = null
-let authRepairWarningShown = false
-
-function clearReconnectHandshakeTimer() {
-  if (!reconnectHandshakeTimer) return
-  clearTimeout(reconnectHandshakeTimer)
-  reconnectHandshakeTimer = null
-}
-
-function scheduleSocketReconnect(statusCode, reason = '') {
-  if (reconnectTimer) return
-  if (reconnectInProgress) {
-    reconnectQueued = { statusCode, reason }
-    return
-  }
-
-  clearReconnectHandshakeTimer()
-
-  // A 405 is usually a rejected WhatsApp companion handshake, not a damaged
-  // auth folder. Back off between attempts so we never hammer WhatsApp in a loop.
-  const baseDelay = isWhatsAppRestartRequired(statusCode)
-    ? 1000
-    : statusCode === 405 ? 8000 : 3000
-  const exponent = Math.min(reconnectAttempts, 4)
-  const delay = Math.min(60000, baseDelay * (2 ** exponent))
-  reconnectAttempts += 1
-
-  const delaySeconds = Math.ceil(delay / 1000)
-  console.log(chalk.yellow(
-    `⏳ Reconnect dijadwalkan ${delaySeconds} detik lagi (percobaan ${reconnectAttempts}).` +
-    (reason ? ' Detail: ' + String(reason).slice(0, 160) : '')
-  ))
-
-  reconnectTimer = setTimeout(async () => {
-    reconnectTimer = null
-    reconnectInProgress = true
-    try {
-      await global.reloadHandler(true)
-    } catch (error) {
-      console.error(chalk.red('Gagal membuat ulang socket WhatsApp:'), error?.stack || error)
-    } finally {
-      reconnectInProgress = false
-      if (reconnectQueued) {
-        const queued = reconnectQueued
-        reconnectQueued = null
-        queueMicrotask(() => scheduleSocketReconnect(queued.statusCode, queued.reason))
-      }
-    }
-  }, delay)
-  reconnectTimer.unref?.()
-}
-
-// A media send can discover a closed or unauthenticated socket before
-// connection.update reports the disconnect. Reuse the coordinated reconnect path.
-global.requestWhatsAppReconnect = function requestWhatsAppReconnect(reason = '') {
-  const currentSocket = global.conn
-  const currentCreds = currentSocket?.authState?.creds || state.creds || {}
-
-  // Do not invalidate a companion-pairing attempt while the owner is entering
-  // the code. Also stop futile reconnects for a registered session with no ID.
-  if (currentCreds.registered !== true && currentCreds.pairingCode) {
-    clearReconnectHandshakeTimer()
-    return true
-  }
-  if (currentCreds.registered === true && !currentCreds.me?.id) {
-    clearReconnectHandshakeTimer()
-    if (!authRepairWarningShown) {
-      authRepairWarningShown = true
-      console.error(chalk.red('❌ Kredensial WhatsApp terdaftar tidak memiliki creds.me.id. Reconnect tidak akan memperbaiki sesi ini; folder sesi perlu dipulihkan dari backup atau dipasangkan ulang.'))
-    }
-    return true
-  }
-
-  if (isWhatsAppSocketOpen(currentSocket)) {
-    clearReconnectHandshakeTimer()
-    if (reconnectTimer) {
-      clearTimeout(reconnectTimer)
-      reconnectTimer = null
-    }
-    reconnectQueued = null
-    reconnectAttempts = 0
-    return false
-  }
-
-  if (reconnectTimer || reconnectInProgress || reconnectQueued) return true
-
-  const transportState = getWhatsAppWebSocketState(currentSocket)
-  if (transportState === 'connecting' || transportState === 'open') {
-    // A WebSocket can be open before Baileys has attached the authenticated account.
-    // Give the handshake 30 seconds, then replace a socket that never becomes ready.
-    if (!reconnectHandshakeTimer) {
-      const observedSocket = currentSocket
-      console.warn(chalk.yellow(
-        `⏳ Socket WhatsApp belum siap (transport=${transportState}, identitas=${currentSocket?.user?.id ? 'ada' : 'belum ada'}). Menunggu handshake 30 detik.`
-      ))
-      reconnectHandshakeTimer = setTimeout(() => {
-        reconnectHandshakeTimer = null
-        const activeSocket = global.conn
-        if (isWhatsAppSocketOpen(activeSocket)) {
-          reconnectAttempts = 0
-          reconnectQueued = null
-          return
-        }
-        scheduleSocketReconnect(
-          428,
-          (reason || 'Socket WhatsApp belum siap untuk mengirim media.') +
-          ' Socket tidak terautentikasi dalam 30 detik' +
-          (activeSocket !== observedSocket ? ' setelah pergantian socket.' : '.')
-        )
-      }, 30_000)
-      reconnectHandshakeTimer.unref?.()
-    }
-    return true
-  }
-
-  scheduleSocketReconnect(428, reason || 'Socket WhatsApp terdeteksi tertutup saat pengiriman media.')
-  return Boolean(reconnectTimer || reconnectInProgress || reconnectQueued)
-}
+const socketReconnect = createWhatsAppReconnectController({
+  getSocket: () => global.conn,
+  reconnect: () => global.reloadHandler(true)
+})
+global.requestWhatsAppReconnect = socketReconnect.request
 
 global.reloadHandler = async function reloadHandler(restartSocket = false) {
   try {
@@ -564,7 +454,7 @@ global.reloadHandler = async function reloadHandler(restartSocket = false) {
       try { await oldConn?.ws?.close?.() } catch { /* socket sudah berhenti */ }
     }
 
-    conn = global.conn = makeWASocket(connectionOptions, { chats: oldChats })
+    conn = global.conn = trackWhatsAppSocket(makeWASocket(connectionOptions, { chats: oldChats }))
     if (typeof storeBind === 'function') storeBind(conn)
     conn.findUserId = async (lid) => {
       try {
@@ -665,13 +555,14 @@ global.reloadHandler = async function reloadHandler(restartSocket = false) {
 
 async function connectionUpdate(update) {
   const activeSocket = this && this.ws ? this : conn
+  if (activeSocket !== global.conn) return
   const { connection, lastDisconnect, isNewLogin, qr } = update
-  if (isNewLogin) conn.isInit = true
+  if (isNewLogin) activeSocket.isInit = true
 
   // Request pairing during the initial connecting event as well as supporting
   // QR fallback. This avoids depending on a QR event that may arrive late.
   if (connection === 'connecting' && loginMethod === 'pairing' &&
-      !activeSocket?.authState?.creds?.registered) {
+      !hasLinkedWhatsAppSession(activeSocket?.authState?.creds) && !isWhatsAppSocketOpen(activeSocket)) {
     await requestPairingCodeWhileConnecting(activeSocket)
   }
 
@@ -679,12 +570,15 @@ async function connectionUpdate(update) {
   // QR login as a safe fallback.
   if (qr) {
     let pairingResult = null
-    if (loginMethod === 'pairing' && !activeSocket?.authState?.creds?.registered) {
+    if (loginMethod === 'pairing' && !hasLinkedWhatsAppSession(activeSocket?.authState?.creds) && !isWhatsAppSocketOpen(activeSocket)) {
       pairingResult = await requestPairingCodeForSocket(
         activeSocket,
         socket => global.conn === socket
       )
     }
+
+    if (activeSocket !== global.conn || isWhatsAppSocketOpen(activeSocket)) return
+    socketReconnect.clearHandshake()
 
     const pairingStatus = pairingResult?.status === 'already-attempted'
       ? pairingResult.previous
@@ -723,7 +617,7 @@ async function connectionUpdate(update) {
       console.warn(chalk.yellow('⚠️ Event disconnect dari socket WhatsApp lama diabaikan.'))
       return
     }
-    clearReconnectHandshakeTimer()
+    socketReconnect.clearHandshake()
     const statusCode = lastDisconnect?.error?.output?.statusCode
       || lastDisconnect?.error?.statusCode
       || 0
@@ -733,9 +627,8 @@ async function connectionUpdate(update) {
       || ''
 
     if (isWhatsAppRestartRequired(statusCode)) {
-      reconnectAttempts = 0
       console.log(chalk.cyan('🔄 WhatsApp meminta socket baru setelah pairing/login (515). Membuat ulang koneksi dengan jeda singkat.'))
-      scheduleSocketReconnect(statusCode, disconnectReason || 'restartRequired (515)')
+      socketReconnect.schedule(statusCode, disconnectReason || 'restartRequired (515)')
     } else if (statusCode === DisconnectReason?.badSession) {
       console.error(chalk.red('❌ Sesi ditolak sebagai badSession (500). Hentikan bot dan pairing ulang hanya jika log memang menunjukkan sesi rusak.'))
       process.exit(1)
@@ -753,7 +646,7 @@ async function connectionUpdate(update) {
       } else {
         console.log(chalk.yellow(`⚠️ Koneksi terputus (${statusCode}).`))
       }
-      scheduleSocketReconnect(statusCode, disconnectReason)
+      socketReconnect.schedule(statusCode, disconnectReason)
     }
   } else if (connection === 'open') {
     if (activeSocket !== global.conn) {
@@ -762,12 +655,6 @@ async function connectionUpdate(update) {
     }
     const authCreds = activeSocket?.authState?.creds || state.creds || {}
     const hasIdentity = Boolean(activeSocket?.user?.id || authCreds.me?.id)
-    const pairingPending = authCreds.registered !== true && Boolean(authCreds.pairingCode)
-    if (pairingPending) {
-      clearReconnectHandshakeTimer()
-      console.log(chalk.yellow('⏳ WebSocket terbuka; menunggu persetujuan pairing code. Socket dipertahankan agar kode tidak terputus.'))
-      return
-    }
     if (!isWhatsAppSocketOpen(activeSocket)) {
       const transportState = getWhatsAppWebSocketState(activeSocket)
       console.warn(chalk.yellow(
@@ -781,13 +668,7 @@ async function connectionUpdate(update) {
       )
       return
     }
-    clearReconnectHandshakeTimer()
-    if (reconnectTimer) {
-      clearTimeout(reconnectTimer)
-      reconnectTimer = null
-    }
-    reconnectQueued = null
-    reconnectAttempts = 0
+    socketReconnect.reset()
     const { id, name } = activeSocket.user || {}
     console.log(chalk.greenBright('✅ Bot terhubung:'), chalk.white(name || '-'), chalk.gray(`(${id || '-'})`))
   }

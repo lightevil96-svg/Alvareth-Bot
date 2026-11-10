@@ -5,6 +5,12 @@ on:
     branches: [main]
     paths:
       - 'main.js'
+      - 'lib/whatsapp-connection.js'
+      - 'lib/whatsapp-reconnect.js'
+      - 'lib/whatsapp-pairing.js'
+      - 'tests/whatsapp-connection.test.js'
+      - 'tests/whatsapp-reconnect.test.js'
+      - 'tests/whatsapp-pairing.test.js'
       - 'lib/whatsapp-temp-dir.js'
       - 'lib/whatsapp-temp-bootstrap.js'
       - 'tests/whatsapp-temp-dir.test.js'
@@ -20,6 +26,12 @@ on:
   pull_request:
     paths:
       - 'main.js'
+      - 'lib/whatsapp-connection.js'
+      - 'lib/whatsapp-reconnect.js'
+      - 'lib/whatsapp-pairing.js'
+      - 'tests/whatsapp-connection.test.js'
+      - 'tests/whatsapp-reconnect.test.js'
+      - 'tests/whatsapp-pairing.test.js'
       - 'lib/whatsapp-temp-dir.js'
       - 'lib/whatsapp-temp-bootstrap.js'
       - 'tests/whatsapp-temp-dir.test.js'
@@ -42,4 +54,4 @@ jobs:
         with:
           node-version: 22
       - name: Check syntax and media-delivery regressions
-        run: npm run test:media
+        run: npm run test:pairing && npm run test:media

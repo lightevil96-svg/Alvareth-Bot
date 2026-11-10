@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { EventEmitter } from 'node:events'
+import { trackWhatsAppSocket } from '../lib/whatsapp-connection.js'
 import { sendLocalFile, describeWhatsAppUploadError } from '../lib/whatsapp-file-sender.js'
 
 async function makeMp4(directory, name, size = 128) {
@@ -16,6 +18,25 @@ async function makeMp4(directory, name, size = 128) {
 function socket(sendMessage, readyState = 1) {
   return { ws: { readyState }, user: { id: 'bot@s.whatsapp.net' }, sendMessage }
 }
+
+test('the uploader waits for login success, then accepts a registered=false QR session', async t => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'alvareth-wa-qr-'))
+  t.after(() => fs.rm(directory, { recursive: true, force: true }))
+  const filePath = await makeMp4(directory, 'result.mp4')
+  let sends = 0
+  const conn = trackWhatsAppSocket({
+    ...socket(async () => { sends++; return { key: { id: 'qr-result' } } }),
+    ev: new EventEmitter(), authState: { creds: { registered: false } }
+  })
+  await assert.rejects(sendLocalFile(conn, 'test@s.whatsapp.net', filePath, { checkTempSpace: false }),
+    error => error.code === 'WA_SOCKET_NOT_OPEN' && error.stage === 'preflight')
+  assert.equal(sends, 0)
+  conn.ev.emit('connection.update', { connection: 'open' })
+  const result = await sendLocalFile(conn, 'test@s.whatsapp.net', filePath, { checkTempSpace: false })
+  assert.equal(result.messageId, 'qr-result')
+  assert.equal(sends, 1)
+  assert.ok((await fs.stat(filePath)).isFile())
+})
 
 test('small MP4 is streamed as inline video with Baileys upload timeout', async t => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'alvareth-wa-small-'))

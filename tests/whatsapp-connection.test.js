@@ -1,13 +1,70 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { EventEmitter } from 'node:events'
 import {
   getWhatsAppWebSocketState,
+  hasLinkedWhatsAppSession,
   isWhatsAppConnectionClosedError,
+  isWhatsAppLoginPending,
   isWhatsAppRestartRequired,
   isWhatsAppSocketOpen,
   sendWithWhatsAppReconnect,
+  trackWhatsAppSocket,
   waitForWhatsAppSocket
 } from '../lib/whatsapp-connection.js'
+
+test('server login success accepts QR credentials with registered=false and a stale pairing code', () => {
+  const socket = trackWhatsAppSocket({
+    ...makeForkSocket('open'),
+    ev: new EventEmitter(),
+    authState: { creds: { registered: false, pairingCode: 'OLD-CODE' } }
+  })
+  assert.equal(isWhatsAppSocketOpen(socket), false)
+  assert.equal(isWhatsAppLoginPending(socket), true)
+  socket.ev.emit('connection.update', { connection: 'open' })
+  assert.equal(isWhatsAppSocketOpen(socket), true)
+  assert.equal(isWhatsAppLoginPending(socket), false)
+  assert.equal(socket.authState.creds.registered, false, 'do not manufacture registration credentials')
+})
+
+test('persisted credentials and an open transport cannot substitute for a login event', () => {
+  const socket = trackWhatsAppSocket({
+    ...makeForkSocket('open'), ev: new EventEmitter(),
+    authState: { creds: { registered: true, me: { id: 'bot@s.whatsapp.net' } } }
+  })
+  assert.equal(isWhatsAppSocketOpen(socket), false)
+  socket.ev.emit('connection.update', { connection: 'open' })
+  assert.equal(isWhatsAppSocketOpen(socket), true)
+  // Baileys can report closure before the transport wrapper changes flags.
+  socket.ev.emit('connection.update', { connection: 'close' })
+  assert.equal(isWhatsAppSocketOpen(socket), false)
+  assert.equal(isWhatsAppSocketOpen(trackWhatsAppSocket({ ...socket, ev: new EventEmitter() })), false)
+})
+
+test('QR entry is pending until server authentication and tracking is idempotent', () => {
+  const socket = trackWhatsAppSocket({ ...makeForkSocket('open', ''), ev: new EventEmitter() })
+  trackWhatsAppSocket(socket)
+  assert.equal(socket.ev.listenerCount('connection.update'), 1)
+  socket.ev.emit('connection.update', { qr: 'test-qr' })
+  assert.equal(isWhatsAppLoginPending(socket), true)
+  assert.equal(isWhatsAppSocketOpen(socket), false)
+  socket.ev.emit('connection.update', { connection: 'open' })
+  assert.equal(isWhatsAppSocketOpen(socket), false, 'an identity is still required')
+  socket.user = { id: 'bot@s.whatsapp.net' }
+  assert.equal(isWhatsAppSocketOpen(socket), true)
+  socket.ws.isOpen = false
+  socket.ws.isClosed = true
+  assert.equal(isWhatsAppSocketOpen(socket), false)
+})
+
+test('saved signed QR account is linked even when registered=false; temporary me is not', () => {
+  const creds = { registered: false, me: { id: 'bot:1@s.whatsapp.net' }, pairingCode: 'TEMP' }
+  assert.equal(hasLinkedWhatsAppSession(creds), false)
+  creds.account = { details: Buffer.from('details'), accountSignature: Buffer.from('signature'), deviceSignature: Buffer.from('device') }
+  assert.equal(hasLinkedWhatsAppSession(creds), true)
+  assert.equal(hasLinkedWhatsAppSession({ ...creds, me: undefined }), false)
+  assert.equal(hasLinkedWhatsAppSession({ ...creds, account: {} }), false)
+})
 
 function makeSocket(readyState = 1, sendMessage = async () => ({ key: { id: 'sent' } })) {
   return { ws: { readyState }, user: { id: 'bot@s.whatsapp.net' }, sendMessage }

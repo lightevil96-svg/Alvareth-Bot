@@ -1,5 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { EventEmitter } from 'node:events'
+import { trackWhatsAppSocket } from '../lib/whatsapp-connection.js'
 import {
   createPairingCodeRequester,
   normalizePairingPhoneNumber
@@ -48,6 +50,45 @@ test('does not request a code when the auth state is already registered', async 
   assert.equal(requested, false)
 })
 
+test('saved QR sessions do not request pairing or reject an empty BOT_NUMBER', async () => {
+  const socket = {
+    authState: { creds: {
+      registered: false,
+      me: { id: 'bot:1@s.whatsapp.net' },
+      account: { details: Buffer.from('details'), accountSignature: Buffer.from('signature'), deviceSignature: Buffer.from('device') }
+    } },
+    async requestPairingCode() { assert.fail('must not overwrite a linked QR account') }
+  }
+  const requester = createPairingCodeRequester({ phoneNumber: '', wait: async () => assert.fail('no pairing delay needed') })
+  assert.deepEqual(await requester(socket), { status: 'already-registered' })
+})
+
+test('login completing during the pairing delay cancels the pairing request', async () => {
+  const socket = trackWhatsAppSocket({
+    ev: new EventEmitter(), ws: { isOpen: true },
+    authState: { creds: { registered: false } },
+    sendMessage() {},
+    async requestPairingCode() { assert.fail('already logged in') }
+  })
+  const requester = createPairingCodeRequester({
+    phoneNumber: '6281234567890',
+    wait: async () => {
+      socket.user = { id: 'bot:1@s.whatsapp.net' }
+      socket.ev.emit('connection.update', { connection: 'open' })
+    }
+  })
+  assert.deepEqual(await requester(socket), { status: 'already-registered' })
+})
+
+test('a temporary pairing identity alone does not suppress code login', async () => {
+  const socket = {
+    authState: { creds: { registered: false, me: { id: 'bot@s.whatsapp.net' } } },
+    async requestPairingCode() { return 'TEST-CODE' }
+  }
+  const requester = createPairingCodeRequester({ phoneNumber: '6281234567890', wait: async () => {} })
+  assert.deepEqual(await requester(socket), { status: 'generated', code: 'TEST-CODE' })
+})
+
 test('reports invalid phone and unsupported library method without throwing', async () => {
   const invalidRequester = createPairingCodeRequester({ phoneNumber: '081234567890', wait: async () => {} })
   const unsupportedRequester = createPairingCodeRequester({ phoneNumber: '6281234567890', wait: async () => {} })
@@ -79,6 +120,16 @@ test('does not issue duplicate requests for the same socket', async () => {
   assert.deepEqual(await requester(socket), { status: 'generated', code: 'ABCD-EFGH' })
   assert.deepEqual(await requester(socket), { status: 'already-attempted', previous: 'generated' })
   assert.equal(requests, 1)
+})
+
+test('discards a pairing code returned after the socket was replaced', async () => {
+  let current = true
+  const socket = {
+    authState: { creds: { registered: false } },
+    async requestPairingCode() { current = false; return 'STALE-CODE' }
+  }
+  const requester = createPairingCodeRequester({ phoneNumber: '6281234567890', wait: async () => {} })
+  assert.deepEqual(await requester(socket, () => current), { status: 'cancelled' })
 })
 
 test('captures a WhatsApp pairing API failure and does not retry the same socket', async () => {
