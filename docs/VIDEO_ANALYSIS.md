@@ -63,7 +63,7 @@ If the optional sidecar fails, the bot falls back to Gemini unless ALVARETH_CUTR
 Copy the relevant variables from .env.example:
 
     GEMINI_API_KEY=
-    ALVARETH_VIDEO_ANALYSIS_MODEL=gemini-2.5-flash
+    ALVARETH_VIDEO_ANALYSIS_MODEL=gemini-3.8-flash
     ALVARETH_VIDEO_ANALYSIS_MAX_BYTES=262144000
     ALVARETH_VIDEO_ANALYSIS_MAX_DURATION_SECONDS=1800
     ALVARETH_VIDEO_ANALYSIS_TIMEOUT_MS=1200000
