@@ -68,7 +68,7 @@ function formatBytes(bytes) {
 function safeVideoFileName(value, fallback) {
   const normalized = String(value || fallback || 'video.mp4').replace(/\\/g, '/')
   const base = path.basename(normalized)
-    .replace(/[\\r\\n\\u0000-\\u001f<>:"|?*]/g, '_')
+    .replace(/[\r\n\u0000-\u001f<>:"|?*]/g, '_')
     .slice(0, 120)
   return base || fallback || 'video.mp4'
 }
