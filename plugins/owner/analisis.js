@@ -345,7 +345,8 @@ function actionMessage(action, result) {
   if (action === 'highlights') return '✨ *KANDIDAT HIGHLIGHT*\n\n' + formatHighlights(analysis)
   if (action === 'speakers') {
     return '🎙️ *HASIL DETEKSI SPEAKER*\n\n' + formatSpeakers(result.speakerMap) +
-      '\n\nSpeaker-to-face mapping tetap kandidat, bukan identitas terverifikasi.'
+      '\n\nSpeaker-to-face mapping tetap kandidat, bukan identitas terverifikasi.' +
+      (result.engine.cutroom_used ? '' : '\n\nCatatan: Cutroom tidak aktif. Label speaker dari Gemini bersifat sementara dan bukan diarization khusus.')
   }
   if (action === 'characters') {
     const characters = analysis.characters || []
