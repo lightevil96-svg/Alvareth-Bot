@@ -1,3 +1,15 @@
+## 2026-11-10 — Add `.analisis` interactive video intelligence workflow
+
+- **Request:** create one WhatsApp command that opens a feature menu for audiovisual analysis and prepares reliable editing handoff files.
+- **Implementation:** add `plugins/owner/analisis.js` with an interactive list menu, owner-only access, private-chat restriction, persistent per-user job manifests, status/cancel/send actions, temporary source retention, and retryable ZIP delivery. The command opens with `.analisis` after replying to a video.
+- **Analysis engine:** add `lib/video-analysis.js` with FFprobe validation, FFmpeg audio extraction/contact sheet, Gemini Files API upload, full-video static Interactions API analysis, structured JSON normalization, source timestamp checks, and cleanup of the uploaded Gemini file. Static processing is the default; agentic mode is opt-in.
+- **Audio pipeline:** add an optional WhisperX + pyannote sidecar adapter. When configured, it supplies diarization and word timestamps. Without it, Gemini remains the fallback and the output does not fabricate word-level alignment.
+- **Evidence policy:** speaker-to-character mapping is accepted only as CANDIDATE when two separate evidence intervals match two real transcript turns for the same speaker. Transcript entries remain ASR_RAW. No model output can self-promote a mapping or transcript to VERIFIED/USER_CONFIRMED.
+- **Skills-Clip handoff:** emit a v2 transcript JSON, SRT draft, speaker map, contact sheet, analysis report, and editor brief. The source video and extracted audio are excluded from the delivery ZIP.
+- **Upstream research:** use WhisperX (BSD-2-Clause) and pyannote.audio (MIT) through their public packages. Do not copy WhisperVideo or TalkNet forks because the inspected repositories do not provide clear production redistribution terms for all code and pretrained weights.
+- **Files:** `plugins/owner/analisis.js`, `lib/video-analysis.js`, `tests/video-analysis.test.js`, `services/whisperx-api/*`, `docs/VIDEO_ANALYSIS.md`, `.env.example`, `README.md`, `AI_CONTEXT.md`, `package.json`, and this changelog.
+- **Verification:** local syntax checks and nine focused unit tests pass. Python sidecar syntax compiles. Gemini live analysis, WhisperX model download/inference, real video diarization, and WhatsApp/TokoPanel delivery still require testing with the owner's credentials and representative footage.
+
 ## 2026-11-10 - Fix authenticated QR sessions rejected as unregistered and bound reconnect attempts
 
 - **Observed failure:** completed render delivery stayed in "Menunggu koneksi WhatsApp" while reconnect attempts reached 647-649. Each new socket logged an invalid BOT_NUMBER, then `connection.update/open` with `registered=false` and an existing identity, followed by the 30-second watchdog.
