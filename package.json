@@ -21,7 +21,7 @@
     "test:social": "node --check lib/scrape/twitter.js && node --check lib/scrape/youtube.js && node --check plugins/downloader/ig.js && node --check plugins/downloader/twitter.js && node --test tests/social-downloaders.test.js",
     "test:remotion": "node --check lib/remotion-project.js && node --check plugins/owner/remotion.js && node --test tests/remotion-project.test.js",
     "test:render": "npm run test:remotion && node --check lib/render-script.js && node --check plugins/owner/render.js && node --test tests/render-script.test.js",
-    "test:video-analysis": "node --check lib/video-analysis.js && node --check plugins/owner/analisis.js && node --test tests/video-analysis.test.js"
+    "test:video-analysis": "node --check lib/video-analysis-secrets.js && node --check lib/video-analysis.js && node --check plugins/owner/analisis.js && node --check handler.js && node --test tests/video-analysis.test.js tests/video-analysis-secrets.test.js"
   },
   "keywords": [
     "alvareth-bot",
