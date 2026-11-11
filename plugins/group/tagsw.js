@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 
 const PENDING_TTL_MS = 5 * 60 * 1000
-const GROUPS_PER_PAGE = 2
+const GROUPS_PER_PAGE = 9
 const pendingSwgc = global.__ALVARETH_SWGC_PENDING || (global.__ALVARETH_SWGC_PENDING = new Map())
 
 const statusContextInfo = {
@@ -104,41 +104,45 @@ async function sendPickerPage(m, conn, pending, token, page, prefix) {
 
   const start = page * GROUPS_PER_PAGE
   const currentGroups = pending.groups.slice(start, start + GROUPS_PER_PAGE)
-  const buttons = currentGroups.map((group, index) => ({
-    name: 'quick_reply',
-    buttonParamsJson: JSON.stringify({
-      display_text: (start + index + 1) + '. ' + String(group.subject || 'Grup tanpa nama')
-        .replace(/[\r\n]+/g, ' ')
-        .trim()
-        .slice(0, 25),
-      id: prefix + 'swgcselect ' + token + ' ' + group.id
-    })
+  const rows = currentGroups.map((group, index) => ({
+    header: '',
+    title: String(start + index + 1) + '. ' + String(group.subject || 'Grup tanpa nama')
+      .replace(/[\\r\\n]+/g, ' ')
+      .trim()
+      .slice(0, 60),
+    description: 'Kirim Status Grup ke grup ini',
+    id: prefix + 'swgcselect ' + token + ' ' + group.id
   }))
 
   if (page < totalPages - 1) {
-    buttons.push({
-      name: 'quick_reply',
-      buttonParamsJson: JSON.stringify({
-        display_text: '➡️ Grup berikutnya',
-        id: prefix + 'swgcpager ' + token + ' ' + (page + 1)
-      })
+    rows.push({
+      header: '',
+      title: '➡️ Grup berikutnya (' + (page + 2) + '/' + totalPages + ')',
+      description: 'Tampilkan pilihan grup selanjutnya',
+      id: prefix + 'swgcpager ' + token + ' ' + (page + 1)
     })
   }
 
-  const pageText = [
-    'Pilih grup tujuan untuk Status Grup.',
-    'Halaman ' + (page + 1) + '/' + totalPages + ' • Total ' + pending.groups.length + ' grup',
-    '',
-    ...currentGroups.map((group, index) =>
-      (start + index + 1) + '. ' + String(group.subject || 'Grup tanpa nama').replace(/[\r\n]+/g, ' ').trim()
-    )
-  ].join('\n')
-
   return conn.sendMessage(m.chat, {
-    text: pageText,
-    footer: 'SWGC • Berlaku 5 menit',
-    interactiveButtons: buttons
-  }, { quoted: m })
+    text: 'Pilih grup tujuan untuk Status Grup.\\nHalaman ' + (page + 1) + '/' + totalPages +
+      ' • Total ' + pending.groups.length + ' grup',
+    footer: global.namebot || 'Alvareth Bot',
+    optionText: 'Pilih Grup',
+    optionTitle: '📣 Kirim Status ke Grup',
+    offerText: global.namebot || 'Alvareth Bot',
+    offerCode: global.namebot || 'Alvareth Bot',
+    offerUrl: global.botLink || 'https://spoo.me/Alvareth-Bot',
+    offerExpiration: Date.now() + 86400000,
+    nativeFlow: [{
+      text: 'Pilih grup tujuan',
+      sections: [{
+        title: 'Daftar grup • Halaman ' + (page + 1),
+        rows
+      }],
+      icon: 'groups'
+    }],
+    interactiveAsTemplate: false
+  }, { quoted: m, noAlvarethPreview: true })
 }
 
 async function showGroupButtons(m, conn, message, prefix) {
