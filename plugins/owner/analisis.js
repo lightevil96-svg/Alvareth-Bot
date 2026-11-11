@@ -46,7 +46,6 @@ const MENU_ROWS = [
   ['scenes', '🎞️ Deteksi adegan', 'Scene breakdown berdasarkan waktu'],
   ['export', '📦 Export Skills-Clip', 'JSON, SRT, speaker map, dan brief'],
   ['status', 'ℹ️ Status analisis', 'Periksa progres job saat ini'],
-  ['cancel', '🛑 Batalkan job', 'Hentikan analisis dan hapus source sementara']
 ]
 
 function getRoot() {
