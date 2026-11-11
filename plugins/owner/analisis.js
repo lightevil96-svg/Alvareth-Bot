@@ -484,8 +484,8 @@ const handler = async (m, { conn, text, usedPrefix }) => {
       return safeReply(m, status.configured
         ? '🔑 API key Gemini sudah tersedia. Sumber: ' +
           (status.source === 'local' ? 'penyimpanan privat server' : 'environment server') +
-          (status.updatedAt ? '\\nTerakhir diperbarui: ' + new Date(status.updatedAt).toLocaleString('id-ID') : '') +
-          '\\nNilai API key tidak ditampilkan.'
+          (status.updatedAt ? '\nTerakhir diperbarui: ' + new Date(status.updatedAt).toLocaleString('id-ID') : '') +
+          '\nNilai API key tidak ditampilkan.'
         : '🔑 API key Gemini belum tersedia. Tekan tombol API Key Gemini untuk memasukkannya.')
     }
     if (subAction === 'clear' || subAction === 'delete' || subAction === 'hapus') {
@@ -518,7 +518,7 @@ const handler = async (m, { conn, text, usedPrefix }) => {
       '',
       'Sesi input berlaku 5 menit. Ketik .analisis apikey cancel untuk membatalkan.',
       'Setelah berhasil, hapus pesan yang berisi API key dari riwayat chat.'
-    ].join('\\n'))
+    ].join('\n'))
   }
 
   if (action === 'menu' || action === 'help') {
@@ -639,16 +639,17 @@ handler.all = async function (m, { isROwner } = {}) {
   }) || /^[.!/]/.test(submitted)
   if (isCommand) return
 
-  // Redact before any await so the normal message logger never prints the secret.
-  m.text = '[API KEY REDACTED]'
-
   if (Date.now() > pending.expiresAt) {
     apiKeyPrompts.delete(key)
     if (isValidGeminiApiKey(submitted)) {
+      m.text = '[API KEY REDACTED]'
       await safeReply(m, 'Sesi input API key sudah kedaluwarsa. Pesan ini tidak disimpan. Tekan tombol API Key Gemini untuk mencoba lagi, lalu hapus pesan key ini dari riwayat chat.')
     }
     return
   }
+
+  // Redact before any await so the normal message logger never prints the secret.
+  m.text = '[API KEY REDACTED]'
 
   if (!isValidGeminiApiKey(submitted)) {
     pending.expiresAt = Date.now() + API_KEY_PROMPT_TTL_MS
