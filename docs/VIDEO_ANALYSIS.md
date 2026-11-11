@@ -35,7 +35,7 @@ The command requires a quoted/replied video to create a session. The menu can st
 
 ### Gemini video understanding
 
-Set GEMINI_API_KEY in the server environment, or use the API Key Gemini button in the private .analisis menu. The bot stores a key entered through WhatsApp in ~/.alvareth-bot-data/video-analysis/gemini-api-key.json (or ALVARETH_DATA_DIR/video-analysis/gemini-api-key.json), with directory permissions 700 and file permissions 600. A locally stored key takes precedence over GEMINI_API_KEY. The bot uploads the video through Gemini Files API and calls generateContent with the video file URI. The default model is gemini-3.8-flash; override it with ALVARETH_VIDEO_ANALYSIS_MODEL if a compatible video model is available to your API key.
+Set GEMINI_API_KEY in the server environment, or use the API Key Gemini button in the private .analisis menu. The bot stores a key entered through WhatsApp in ~/.alvareth-bot-data/video-analysis/gemini-api-key.json (or ALVARETH_DATA_DIR/video-analysis/gemini-api-key.json), with directory permissions 700 and file permissions 600. The file is not encrypted at rest, so restrict server and backup access. A locally stored key takes precedence over GEMINI_API_KEY. The bot uploads the video through Gemini Files API and calls generateContent with the video file URI. The default model is gemini-3.8-flash; override it with ALVARETH_VIDEO_ANALYSIS_MODEL if a compatible video model is available to your API key.
 
 Gemini produces a structured analysis with:
 - scene ranges and visual focus;
