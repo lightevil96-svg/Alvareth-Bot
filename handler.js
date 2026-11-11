@@ -1007,7 +1007,7 @@ for (let name in global.plugins) {
             const __filename = join(___dirname, name)
             if (typeof plugin.all === 'function') {
                 try {
-                    await plugin.all.call(this, m, { chatUpdate, __dirname: ___dirname, __filename })
+                    await plugin.all.call(this, m, { chatUpdate, isROwner, isOwner, __dirname: ___dirname, __filename })
                 } catch (e) {
                     console.error('[PLUGIN ALL ERROR]', name, e)
                     await sendErrorReport(this, m, e, name, 'plugin.all')
