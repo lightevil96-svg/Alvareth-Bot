@@ -627,7 +627,7 @@ handler.all = async function (m, { isROwner } = {}) {
   const submitted = String(m.text || '').trim()
   if (!submitted) return
 
-  const configuredPrefix = global.prefix
+  const configuredPrefix = this?.prefix ?? global.prefix
   const prefixes = Array.isArray(configuredPrefix) ? configuredPrefix : [configuredPrefix || '.']
   const isCommand = prefixes.some(prefix => {
     if (prefix instanceof RegExp) {
