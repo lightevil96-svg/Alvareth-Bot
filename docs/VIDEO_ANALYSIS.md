@@ -8,13 +8,16 @@
 2. Reply to that video with .analisis.
 3. The bot downloads the video and opens an interactive list.
 4. Choose an analysis action. The first action runs the analysis pipeline and caches the result for the current sender/chat.
-5. Use the menu again to download the relevant artifact or the complete ZIP.\n\nTo configure Gemini, choose API Key Gemini, send the key as the next private text message, and wait for confirmation. The input session expires after five minutes. Delete the message containing the key from the WhatsApp chat after the bot confirms it.
+5. Use the menu again to download the relevant artifact or the complete ZIP.
+
+To configure Gemini, choose API Key Gemini, send the key as the next private text message, and wait for confirmation. The input session expires after five minutes. Delete the message containing the key from the WhatsApp chat after the bot confirms it.
 
 Available actions:
 
 | Button | Output |
 |---|---|
-| API Key Gemini | Save or replace the Gemini key in private chat |\n| Analisis lengkap | Summary plus ZIP handoff |
+| API Key Gemini | Save or replace the Gemini key in private chat |
+| Analisis lengkap | Summary plus ZIP handoff |
 | Transkrip + subtitle | Draft SRT and transcript JSON |
 | Deteksi speaker | Speaker turns, overlap and face-match candidates |
 | Identifikasi karakter | Observable visual descriptions and visible labels |
@@ -23,9 +26,8 @@ Available actions:
 | Deteksi adegan | Timestamped scene breakdown |
 | Export Skills-Clip | Complete artifact ZIP |
 | Status analisis | Current job state |
-| Batalkan job | Abort processing or delete the stored source/session |
 
-Text commands are also available: .analisis apikey status, .analisis apikey clear, .analisis apikey cancel, .analisis full, .analisis transcript, .analisis speakers, .analisis characters, .analisis summary, .analisis highlights, .analisis scenes, .analisis export, .analisis status, .analisis send, and .analisis cancel.
+Text commands are also available: .analisis apikey (open input), .analisis apikey status, .analisis apikey clear, .analisis apikey cancel, .analisis full, .analisis transcript, .analisis speakers, .analisis characters, .analisis summary, .analisis highlights, .analisis scenes, .analisis export, .analisis status, .analisis send, and .analisis cancel.
 
 The command requires a quoted/replied video to create a session. The menu can still be opened without a video, but analysis actions will ask for a source video.
 
@@ -79,7 +81,9 @@ Copy the relevant variables from .env.example:
     ALVARETH_CUTROOM_REQUIRED=false
     ALVARETH_CUTROOM_TIMEOUT_MS=2700000
 
-The API key is never shown in bot replies or included in analysis ZIP files. The next plain-text message is treated as the key only for the owner who opened the prompt, in that private chat, for five minutes. Bot logs redact the submitted message. WhatsApp itself retains the sent message until you delete it, so remove the key message from the chat after confirmation. Use .analisis apikey status to check configuration, .analisis apikey clear to remove the locally stored key, or .analisis apikey cancel to cancel an open prompt. Clearing the local key does not remove GEMINI_API_KEY from the server environment.\n\nThe defaults cap source videos at 250 MiB and 30 minutes. Output ZIPs are capped at 500 MiB. ffprobe is optional; if unavailable, duration metadata is omitted and duration-based preflight cannot run. The source video is stored under ALVARETH_VIDEO_ANALYSIS_TMPDIR or ~/.alvareth-bot-data/video-analysis. The bot removes stale analysis directories older than the retention window when a new analysis session starts. .analisis cancel removes the current session when no job is running.
+The API key is never shown in bot replies or included in analysis ZIP files. The next plain-text message is treated as the key only for the owner who opened the prompt, in that private chat, for five minutes. Bot logs redact the submitted message. WhatsApp itself retains the sent message until you delete it, so remove the key message from the chat after confirmation. Use .analisis apikey status to check configuration, .analisis apikey clear to remove the locally stored key, or .analisis apikey cancel to cancel an open prompt. Clearing the local key does not remove GEMINI_API_KEY from the server environment.
+
+The defaults cap source videos at 250 MiB and 30 minutes. Output ZIPs are capped at 500 MiB. ffprobe is optional; if unavailable, duration metadata is omitted and duration-based preflight cannot run. The source video is stored under ALVARETH_VIDEO_ANALYSIS_TMPDIR or ~/.alvareth-bot-data/video-analysis. The bot removes stale analysis directories older than the retention window when a new analysis session starts. .analisis cancel removes the current session when no job is running.
 
 Do not commit .env, API keys, video sources, or generated analysis artifacts.
 
