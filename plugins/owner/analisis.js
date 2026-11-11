@@ -12,6 +12,7 @@ import {
   isValidGeminiApiKey,
   saveGeminiApiKey
 } from '../../lib/video-analysis-secrets.js'
+import { isPlainPrivateTextMessage, isPromptTriggerMessage } from '../../lib/video-analysis-input.js'
 import {
   analyzeVideoFile,
   buildAnalysisReport,
@@ -506,6 +507,7 @@ const handler = async (m, { conn, text, usedPrefix }) => {
     apiKeyPrompts.set(key, {
       chat: m.chat,
       sender: m.sender,
+      triggerMessageId: String(m.id || m.key?.id || ''),
       expiresAt: Date.now() + API_KEY_PROMPT_TTL_MS
     })
     return safeReply(m, [
@@ -623,6 +625,9 @@ handler.all = async function (m, { isROwner } = {}) {
   const pending = key ? apiKeyPrompts.get(key) : null
   if (!pending) return
   if (!isROwner || m.isGroup || String(m.chat || '').endsWith('@g.us')) return
+  if (String(pending.chat) !== String(m.chat) || String(pending.sender) !== String(m.sender)) return
+  if (isPromptTriggerMessage(m, pending)) return
+  if (!isPlainPrivateTextMessage(m)) return
 
   const submitted = String(m.text || '').trim()
   if (!submitted) return
