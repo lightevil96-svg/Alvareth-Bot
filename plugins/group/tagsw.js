@@ -108,7 +108,7 @@ async function sendPickerPage(m, conn, pending, token, page, prefix) {
     name: 'quick_reply',
     buttonParamsJson: JSON.stringify({
       display_text: (start + index + 1) + '. ' + String(group.subject || 'Grup tanpa nama')
-        .replace(/[\\r\\n]+/g, ' ')
+        .replace(/[\r\n]+/g, ' ')
         .trim()
         .slice(0, 25),
       id: prefix + 'swgcselect ' + token + ' ' + group.id
@@ -130,9 +130,9 @@ async function sendPickerPage(m, conn, pending, token, page, prefix) {
     'Halaman ' + (page + 1) + '/' + totalPages + ' • Total ' + pending.groups.length + ' grup',
     '',
     ...currentGroups.map((group, index) =>
-      (start + index + 1) + '. ' + String(group.subject || 'Grup tanpa nama').replace(/[\\r\\n]+/g, ' ').trim()
+      (start + index + 1) + '. ' + String(group.subject || 'Grup tanpa nama').replace(/[\r\n]+/g, ' ').trim()
     )
-  ].join('\\n')
+  ].join('\n')
 
   return conn.sendMessage(m.chat, {
     text: pageText,
@@ -171,7 +171,7 @@ const handler = async (m, { conn, text, usedPrefix, command, isAdmin, isOwner })
   const action = String(command || '').toLowerCase()
 
   if (action === 'swgcpager') {
-    const [token, pageValue] = String(text || '').trim().split(/\\s+/)
+    const [token, pageValue] = String(text || '').trim().split(/\s+/)
     const page = Number(pageValue)
     cleanPending()
 
@@ -195,7 +195,7 @@ const handler = async (m, { conn, text, usedPrefix, command, isAdmin, isOwner })
   }
 
   if (action === 'swgcselect') {
-    const [token, groupId] = String(text || '').trim().split(/\\s+/)
+    const [token, groupId] = String(text || '').trim().split(/\s+/)
     if (!token || !groupId || !groupId.endsWith('@g.us')) {
       return m.reply('❌ Data pilihan grup tidak valid. Jalankan ulang perintah .swgc pada pesan sumber.')
     }
@@ -231,7 +231,7 @@ const handler = async (m, { conn, text, usedPrefix, command, isAdmin, isOwner })
     } catch (error) {
       pending.used = false
       console.error('[SWGC] Gagal mengirim status grup:', error?.stack || error)
-      return m.reply('❌ Gagal mengirim status grup.\\n\\n' + String(error?.message || error).slice(0, 500))
+      return m.reply('❌ Gagal mengirim status grup.\n\n' + String(error?.message || error).slice(0, 500))
     }
     return
   }
@@ -244,10 +244,10 @@ const handler = async (m, { conn, text, usedPrefix, command, isAdmin, isOwner })
   const message = createStatusMessage(m, text)
   if (!message) {
     return m.reply(
-      'Cara pakai .swgc:\\n' +
-      '1. Kirim foto/video beserta caption di chat pribadi atau chat biasa.\\n' +
-      '2. Reply pesan tersebut dengan .swgc.\\n' +
-      '3. Pilih grup tujuan dari tombol yang muncul.\\n\\n' +
+      'Cara pakai .swgc:\n' +
+      '1. Kirim foto/video beserta caption di chat pribadi atau chat biasa.\n' +
+      '2. Reply pesan tersebut dengan .swgc.\n' +
+      '3. Pilih grup tujuan dari tombol yang muncul.\n\n' +
       'Kamu juga bisa reply teks untuk membuat Status Grup berbentuk teks.'
     )
   }
@@ -256,7 +256,7 @@ const handler = async (m, { conn, text, usedPrefix, command, isAdmin, isOwner })
     await showGroupButtons(m, conn, message, getPrefix(usedPrefix))
   } catch (error) {
     console.error('[SWGC] Gagal menampilkan pilihan grup:', error?.stack || error)
-    return m.reply('❌ Tidak dapat menampilkan daftar grup.\\n\\n' + String(error?.message || error).slice(0, 500))
+    return m.reply('❌ Tidak dapat menampilkan daftar grup.\n\n' + String(error?.message || error).slice(0, 500))
   }
 }
 
