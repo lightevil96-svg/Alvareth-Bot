@@ -7,6 +7,12 @@ import { fileTypeFromBuffer } from 'file-type'
 import { getQuotedMediaInfo, downloadQuotedMedia } from '../../lib/simple.js'
 import { sendLocalFile } from '../../lib/whatsapp-file-sender.js'
 import {
+  clearGeminiApiKey,
+  getGeminiApiKeyStatus,
+  isValidGeminiApiKey,
+  saveGeminiApiKey
+} from '../../lib/video-analysis-secrets.js'
+import {
   analyzeVideoFile,
   buildAnalysisReport,
   buildEditorialBrief,
@@ -25,8 +31,12 @@ const STALE_SESSION_MS = Math.max(60 * 60 * 1000,
   Number(process.env.ALVARETH_VIDEO_ANALYSIS_RETENTION_HOURS) * 60 * 60 * 1000 || 24 * 60 * 60 * 1000)
 const sessions = global.__alvarethVideoAnalysisSessions ||
   (global.__alvarethVideoAnalysisSessions = new Map())
+const API_KEY_PROMPT_TTL_MS = 5 * 60 * 1000
+const apiKeyPrompts = global.__alvarethGeminiApiKeyPrompts ||
+  (global.__alvarethGeminiApiKeyPrompts = new Map())
 
 const MENU_ROWS = [
+  ['apikey', '🔑 API Key Gemini', 'Masukkan atau ganti API key secara privat'],
   ['full', '🎬 Analisis lengkap', 'Semua hasil analisis + paket ZIP'],
   ['transcript', '📝 Transkrip + subtitle', 'ASR, speaker, dan SRT draft'],
   ['speakers', '🎙️ Deteksi speaker', 'Pemisahan giliran bicara dan overlap'],
@@ -114,6 +124,7 @@ async function showMenu(m, conn, usedPrefix, hasSession) {
     description,
     rowId: prefix + 'analisis ' + action
   }))
+  const apiKeyStatus = await getGeminiApiKeyStatus().catch(() => ({ configured: false }))
   const intro = [
     '🎬 *ALVARETH VIDEO INTELLIGENCE*',
     '',
@@ -124,6 +135,7 @@ async function showMenu(m, conn, usedPrefix, hasSession) {
     'Fitur: transkrip, subtitle draft, speaker diarization, face tracking, karakter, scene, highlight, ringkasan, dan handoff Skills-Clip.',
     '',
     'Batas default: ' + formatBytes(MAX_VIDEO_BYTES) + ' dan ' + Math.round(MAX_DURATION_SECONDS / 60) + ' menit.',
+    'API Key Gemini: ' + (apiKeyStatus.configured ? 'sudah tersedia' : 'belum diatur'),
     'Hasil ASR dan pencocokan karakter tetap perlu verifikasi manusia.'
   ].join('\n')
 
@@ -461,6 +473,54 @@ const handler = async (m, { conn, text, usedPrefix }) => {
   const action = parts[0] || 'menu'
   let session = sessions.get(key)
 
+  if (action === 'apikey') {
+    const subAction = parts[1] || 'set'
+    if (subAction === 'cancel' || subAction === 'batal') {
+      apiKeyPrompts.delete(key)
+      return safeReply(m, 'Input API key dibatalkan.')
+    }
+    if (subAction === 'status') {
+      const status = await getGeminiApiKeyStatus()
+      return safeReply(m, status.configured
+        ? '🔑 API key Gemini sudah tersedia. Sumber: ' +
+          (status.source === 'local' ? 'penyimpanan privat server' : 'environment server') +
+          (status.updatedAt ? '\\nTerakhir diperbarui: ' + new Date(status.updatedAt).toLocaleString('id-ID') : '') +
+          '\\nNilai API key tidak ditampilkan.'
+        : '🔑 API key Gemini belum tersedia. Tekan tombol API Key Gemini untuk memasukkannya.')
+    }
+    if (subAction === 'clear' || subAction === 'delete' || subAction === 'hapus') {
+      apiKeyPrompts.delete(key)
+      try {
+        const removed = await clearGeminiApiKey()
+        const status = await getGeminiApiKeyStatus()
+        return safeReply(m, removed
+          ? (status.configured
+            ? '🗑️ API key lokal dihapus. Bot sekarang menggunakan GEMINI_API_KEY dari environment server.'
+            : '🗑️ API key lokal berhasil dihapus. Gemini belum memiliki API key aktif.')
+          : (status.configured
+            ? 'Tidak ada API key lokal untuk dihapus. API key environment tetap aktif.'
+            : 'Tidak ada API key lokal yang tersimpan.'))
+      } catch (error) {
+        return safeReply(m, 'Gagal menghapus API key lokal: ' + safeError(error))
+      }
+    }
+    apiKeyPrompts.set(key, {
+      chat: m.chat,
+      sender: m.sender,
+      expiresAt: Date.now() + API_KEY_PROMPT_TTL_MS
+    })
+    return safeReply(m, [
+      '🔑 *PENGATURAN API KEY GEMINI*',
+      '',
+      'Kirim API key Gemini sebagai satu pesan teks berikutnya di chat pribadi ini.',
+      'Bot akan menyimpannya di file privat server dengan izin folder 700 dan file 600.',
+      'API key tidak akan ditampilkan kembali atau dimasukkan ke log/ZIP analisis.',
+      '',
+      'Sesi input berlaku 5 menit. Ketik .analisis apikey cancel untuk membatalkan.',
+      'Setelah berhasil, hapus pesan yang berisi API key dari riwayat chat.'
+    ].join('\\n'))
+  }
+
   if (action === 'menu' || action === 'help') {
     if (!session && getQuotedMediaInfo(m)) {
       try {
@@ -538,6 +598,10 @@ const handler = async (m, { conn, text, usedPrefix }) => {
 
 handler.help = [
   'analisis',
+  'analisis apikey',
+  'analisis apikey status',
+  'analisis apikey clear',
+  'analisis apikey cancel',
   'analisis full',
   'analisis transcript',
   'analisis speakers',
@@ -554,5 +618,53 @@ handler.tags = ['owner']
 handler.command = /^analisis$/i
 handler.rowner = true
 handler.private = true
+
+handler.all = async function (m, { isROwner } = {}) {
+  const key = sessionKey(m)
+  const pending = key ? apiKeyPrompts.get(key) : null
+  if (!pending) return
+  if (!isROwner || m.isGroup || String(m.chat || '').endsWith('@g.us')) return
+
+  const submitted = String(m.text || '').trim()
+  if (!submitted) return
+
+  const configuredPrefix = global.prefix
+  const prefixes = Array.isArray(configuredPrefix) ? configuredPrefix : [configuredPrefix || '.']
+  const isCommand = prefixes.some(prefix => {
+    if (prefix instanceof RegExp) {
+      const regex = new RegExp(prefix.source, prefix.flags.replace(/[gy]/g, ''))
+      return regex.test(submitted)
+    }
+    return typeof prefix === 'string' && prefix.length > 0 && submitted.startsWith(prefix)
+  }) || /^[.!/]/.test(submitted)
+  if (isCommand) return
+
+  // Redact before any await so the normal message logger never prints the secret.
+  m.text = '[API KEY REDACTED]'
+
+  if (Date.now() > pending.expiresAt) {
+    apiKeyPrompts.delete(key)
+    if (isValidGeminiApiKey(submitted)) {
+      await safeReply(m, 'Sesi input API key sudah kedaluwarsa. Pesan ini tidak disimpan. Tekan tombol API Key Gemini untuk mencoba lagi, lalu hapus pesan key ini dari riwayat chat.')
+    }
+    return
+  }
+
+  if (!isValidGeminiApiKey(submitted)) {
+    pending.expiresAt = Date.now() + API_KEY_PROMPT_TTL_MS
+    await safeReply(m, 'Format API key tidak valid. Kirim ulang API key Gemini yang utuh tanpa spasi, atau ketik .analisis apikey cancel.')
+    return
+  }
+
+  try {
+    await saveGeminiApiKey(submitted)
+    apiKeyPrompts.delete(key)
+    console.log('[ANALISIS] API key Gemini disimpan ke penyimpanan privat server.')
+    await safeReply(m, '✅ API key Gemini berhasil disimpan. Bot siap menggunakannya untuk analisis video. Nilai key tidak ditampilkan. Demi keamanan, hapus pesan berisi key dari riwayat chat.')
+  } catch (error) {
+    console.error('[ANALISIS] Gagal menyimpan API key Gemini:', error?.code || error?.message || 'storage-error')
+    await safeReply(m, '❌ API key gagal disimpan ke server. Input tetap disamarkan dari log. Periksa izin folder data server, lalu coba lagi.')
+  }
+}
 
 export default handler
