@@ -139,7 +139,7 @@ async function sendPickerPage(m, conn, pending, token, page, prefix) {
         title: 'Daftar grup • Halaman ' + (page + 1),
         rows
       }],
-      icon: 'groups'
+      icon: 'image'
     }],
     interactiveAsTemplate: false
   }, { quoted: m, noAlvarethPreview: true })
