@@ -124,11 +124,16 @@ test('WhatsApp plugin exposes owner-only private interactive analysis actions', 
   assert.match(source, /handler\.rowner = true/)
   assert.match(source, /handler\.private = true/)
   assert.match(source, /rowId: prefix \+ 'analisis ' \+ action/)
-  for (const action of ['full', 'transcript', 'speakers', 'characters', 'summary', 'highlights', 'scenes', 'export', 'status', 'cancel']) {
+  for (const action of ['apikey', 'full', 'transcript', 'speakers', 'characters', 'summary', 'highlights', 'scenes', 'export', 'status']) {
     assert.ok(source.includes("['" + action + "'"), 'menu action missing: ' + action)
   }
   assert.match(source, /buttonText: 'Buka fitur analisis'/)
+  assert.match(source, /handler\.all = async function/)
+  assert.match(source, /\[API KEY REDACTED\]/)
+  assert.match(source, /API_KEY_PROMPT_TTL_MS = 5 \* 60 \* 1000/)
   assert.match(source, /source_included: false/)
+  const handler = await fs.readFile(new URL('../handler.js', import.meta.url), 'utf8')
+  assert.match(handler, /plugin\.all\.call\(this, m, \{ chatUpdate, isROwner, isOwner,/)
 })
 
 test('returns an empty SRT rather than inventing captions without timestamps', () => {
