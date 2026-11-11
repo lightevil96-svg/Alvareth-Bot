@@ -31,11 +31,10 @@ test('stores Gemini API keys privately and falls back to the environment key', a
     const saved = await saveGeminiApiKey(localKey)
     assert.equal(saved.saved, true)
     assert.equal(await getGeminiApiKey(), localKey)
-    assert.deepEqual(await getGeminiApiKeyStatus(), {
-      configured: true,
-      source: 'local',
-      updatedAt: (await getGeminiApiKeyStatus()).updatedAt
-    })
+    const localStatus = await getGeminiApiKeyStatus()
+    assert.equal(localStatus.configured, true)
+    assert.equal(localStatus.source, 'local')
+    assert.ok(localStatus.updatedAt > 0)
 
     const filePath = getGeminiApiKeyFilePath()
     const fileStat = await fs.stat(filePath)
