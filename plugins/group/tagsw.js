@@ -1,26 +1,42 @@
-let handler = async (m, { conn, text, usedPrefix, command }) => {
-  if (!m.isGroup) return m.reply('Khusus grup.')
+import { randomBytes } from 'node:crypto'
 
-  const statusContextInfo = {
-    forwardingScore: 0,
-    featureEligibilities: {
-      canBeReshared: true,
-      canReceiveMultiReact: true
-    },
-    statusSourceType: 4,
-    statusAttributions: [{ type: 10 }],
-    statusAudienceMetadata: { audienceType: 1 }
+const PENDING_TTL_MS = 5 * 60 * 1000
+const BUTTONS_PER_MESSAGE = 3
+const pendingSwgc = global.__ALVARETH_SWGC_PENDING || (global.__ALVARETH_SWGC_PENDING = new Map())
+
+const statusContextInfo = {
+  forwardingScore: 0,
+  featureEligibilities: {
+    canBeReshared: true,
+    canReceiveMultiReact: true
+  },
+  statusSourceType: 4,
+  statusAttributions: [{ type: 10 }],
+  statusAudienceMetadata: { audienceType: 1 }
+}
+
+function cleanPending() {
+  const now = Date.now()
+  for (const [token, item] of pendingSwgc) {
+    if (!item || now - item.createdAt > PENDING_TTL_MS || item.used) {
+      pendingSwgc.delete(token)
+    }
   }
+}
 
+function getPrefix(usedPrefix) {
+  return typeof usedPrefix === 'string' && usedPrefix
+    ? usedPrefix
+    : (typeof global.prefix === 'string' ? global.prefix : '.')
+}
+
+function createStatusMessage(m, text) {
   const captionOverride = typeof text === 'string' ? text.trim() : ''
   const quotedMessage =
     m.message?.extendedTextMessage?.contextInfo?.quotedMessage ||
     m.quoted?.message ||
     null
 
-  let message
-
-  // Reply media: forward the actual media payload into the group status.
   const mediaContainer = m.quoted?.mediaMessage || quotedMessage
   if (mediaContainer) {
     const mediaType = [
@@ -39,8 +55,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
         m.quoted?.text ||
         ''
 
-      // Explicit text after .swgc takes priority; otherwise preserve media caption.
-      if (mediaType === 'imageMessage' || mediaType === 'videoMessage' || mediaType === 'documentMessage') {
+      if (['imageMessage', 'videoMessage', 'documentMessage'].includes(mediaType)) {
         media.caption = captionOverride || originalCaption
       }
 
@@ -49,55 +64,165 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
         ...statusContextInfo
       }
 
-      message = { [mediaType]: media }
+      return { [mediaType]: media }
     }
   }
 
-  // If no media was quoted, publish the provided text or quoted text as a text status.
-  if (!message) {
-    const statusText = captionOverride || m.quoted?.text || m.quoted?.caption || ''
-    if (!statusText) {
-      return m.reply(
-        `Cara pakai:\n${usedPrefix + command} teks status\n\nAtau reply foto/video dengan .swgc [caption opsional]`
-      )
+  const statusText = captionOverride || m.quoted?.text || m.quoted?.caption || ''
+  if (!statusText) return null
+
+  return {
+    extendedTextMessage: {
+      text: statusText,
+      textArgb: 4294967295,
+      backgroundArgb: 4280669030,
+      font: 5,
+      previewType: 0,
+      contextInfo: statusContextInfo
+    }
+  }
+}
+
+async function sendGroupStatus(conn, groupId, message) {
+  return conn.relayMessage(
+    groupId,
+    {
+      messageContextInfo: {
+        messageSecret: 'BrRzGQ6/B0ddqBuasejEf+rJKLQ2pauxHtAw1nIMPvw='
+      },
+      groupStatusMessageV2: { message }
+    },
+    {}
+  )
+}
+
+async function showGroupButtons(m, conn, message, prefix) {
+  cleanPending()
+
+  const groups = Object.values(await conn.groupFetchAllParticipating())
+    .filter(group => group?.id && group.id.endsWith('@g.us'))
+    .sort((a, b) => String(a.subject || '').localeCompare(String(b.subject || ''), 'id'))
+
+  if (!groups.length) {
+    return m.reply('❌ Bot belum tergabung di grup WhatsApp mana pun.')
+  }
+
+  const token = randomBytes(8).toString('hex')
+  pendingSwgc.set(token, {
+    sender: m.sender,
+    message,
+    createdAt: Date.now(),
+    used: false
+  })
+
+  const pages = []
+  for (let i = 0; i < groups.length; i += BUTTONS_PER_MESSAGE) {
+    pages.push(groups.slice(i, i + BUTTONS_PER_MESSAGE))
+  }
+
+  await m.reply(
+    '🖼️ Media/caption berhasil disiapkan.\n' +
+    'Pilih grup tujuan melalui tombol di bawah.\n' +
+    'Permintaan berlaku selama 5 menit.\n\n' +
+    '📋 Total grup tersedia: ' + groups.length
+  )
+
+  for (let page = 0; page < pages.length; page++) {
+    const buttons = pages[page].map((group, index) => {
+      const groupName = String(group.subject || 'Grup tanpa nama')
+        .replace(/[\\r\\n]+/g, ' ')
+        .trim()
+      const displayText = (page * BUTTONS_PER_MESSAGE + index + 1) + '. ' + groupName
+      return {
+        name: 'quick_reply',
+        buttonParamsJson: JSON.stringify({
+          display_text: displayText.slice(0, 25),
+          id: prefix + 'swgcselect ' + token + ' ' + group.id
+        })
+      }
+    })
+
+    await conn.sendMessage(m.chat, {
+      text: 'Pilih grup tujuan (' + (page + 1) + '/' + pages.length + '):',
+      footer: 'SWGC • ' + groups.length + ' grup terdeteksi',
+      interactiveButtons: buttons
+    }, { quoted: m })
+
+    if (page < pages.length - 1) {
+      await new Promise(resolve => setTimeout(resolve, 350))
+    }
+  }
+}
+
+const handler = async (m, { conn, text, usedPrefix, command, isAdmin, isOwner }) => {
+  const action = String(command || '').toLowerCase()
+
+  if (action === 'swgcselect') {
+    const [token, groupId] = String(text || '').trim().split(/\\s+/)
+    if (!token || !groupId || !groupId.endsWith('@g.us')) {
+      return m.reply('❌ Data pilihan grup tidak valid. Jalankan ulang perintah .swgc pada pesan sumber.')
     }
 
-    message = {
-      extendedTextMessage: {
-        text: statusText,
-        textArgb: 4294967295,
-        backgroundArgb: 4280669030,
-        font: 5,
-        previewType: 0,
-        contextInfo: statusContextInfo
-      }
+    cleanPending()
+    const pending = pendingSwgc.get(token)
+    if (!pending) {
+      return m.reply('⌛ Permintaan SWGC sudah kedaluwarsa atau tidak ditemukan. Reply ulang pesan sumber dengan .swgc.')
     }
+    if (pending.sender !== m.sender) {
+      return m.reply('❌ Tombol ini bukan milik kamu. Jalankan .swgc dari pesan sumber milikmu sendiri.')
+    }
+    if (pending.used) {
+      return m.reply('⏳ Pengiriman SWGC ini sedang diproses atau sudah digunakan.')
+    }
+
+    pending.used = true
+    try {
+      const groups = await conn.groupFetchAllParticipating()
+      const target = groups[groupId]
+      if (!target) {
+        pendingSwgc.delete(token)
+        return m.reply('❌ Bot sudah tidak tergabung di grup tujuan tersebut. Jalankan .swgc kembali untuk memilih grup lain.')
+      }
+
+      await sendGroupStatus(conn, groupId, pending.message)
+      pendingSwgc.delete(token)
+      await m.reply('✅ Status grup berhasil dikirim ke *' + String(target.subject || 'grup tujuan') + '*.')
+      await m.react?.('✅').catch(() => {})
+    } catch (error) {
+      pending.used = false
+      console.error('[SWGC] Gagal mengirim status grup:', error?.stack || error)
+      return m.reply('❌ Gagal mengirim status grup.\n\n' + String(error?.message || error).slice(0, 500))
+    }
+    return
+  }
+
+  // Keep the previous in-group workflow and its admin restriction intact.
+  if (m.isGroup && !(isAdmin || isOwner)) {
+    return m.reply('❌ Perintah .swgc di dalam grup hanya dapat digunakan oleh admin grup.')
+  }
+
+  const message = createStatusMessage(m, text)
+  if (!message) {
+    return m.reply(
+      'Cara pakai .swgc:\n' +
+      '1. Kirim foto/video beserta caption di chat pribadi atau chat biasa.\n' +
+      '2. Reply pesan tersebut dengan .swgc.\n' +
+      '3. Pilih grup tujuan dari tombol yang muncul.\n\n' +
+      'Kamu juga bisa reply teks untuk membuat Status Grup berbentuk teks.'
+    )
   }
 
   try {
-    await conn.relayMessage(
-      m.chat,
-      {
-        messageContextInfo: {
-          messageSecret: 'BrRzGQ6/B0ddqBuasejEf+rJKLQ2pauxHtAw1nIMPvw='
-        },
-        groupStatusMessageV2: { message }
-      },
-      {}
-    )
-
-    await m.reply('✅ Status grup berhasil dikirim.')
-  } catch (e) {
-    console.error('[swgc]', e)
-    await m.reply(`❌ Gagal mengirim status grup.\n\n${e.message || e}`)
+    await showGroupButtons(m, conn, message, getPrefix(usedPrefix))
+  } catch (error) {
+    console.error('[SWGC] Gagal menampilkan pilihan grup:', error?.stack || error)
+    return m.reply('❌ Tidak dapat menampilkan daftar grup.\n\n' + String(error?.message || error).slice(0, 500))
   }
 }
 
 handler.help = ['swgc']
 handler.tags = ['group']
-handler.command = /^(swgc|upswgc)$/i
-handler.group = true
-handler.admin = true
+handler.command = /^(swgc|upswgc|swgcselect)$/i
 handler.register = true
 
 export default handler
