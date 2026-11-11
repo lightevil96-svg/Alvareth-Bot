@@ -107,7 +107,7 @@ async function sendPickerPage(m, conn, pending, token, page, prefix) {
   const rows = currentGroups.map((group, index) => ({
     header: '',
     title: String(start + index + 1) + '. ' + String(group.subject || 'Grup tanpa nama')
-      .replace(/[\\r\\n]+/g, ' ')
+      .replace(/[\r\n]+/g, ' ')
       .trim()
       .slice(0, 60),
     description: 'Kirim Status Grup ke grup ini',
@@ -124,7 +124,7 @@ async function sendPickerPage(m, conn, pending, token, page, prefix) {
   }
 
   return conn.sendMessage(m.chat, {
-    text: 'Pilih grup tujuan untuk Status Grup.\\nHalaman ' + (page + 1) + '/' + totalPages +
+    text: 'Pilih grup tujuan untuk Status Grup.\nHalaman ' + (page + 1) + '/' + totalPages +
       ' • Total ' + pending.groups.length + ' grup',
     footer: global.namebot || 'Alvareth Bot',
     optionText: 'Pilih Grup',
