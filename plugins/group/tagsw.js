@@ -130,7 +130,7 @@ async function showGroupButtons(m, conn, message, prefix) {
   for (let page = 0; page < pages.length; page++) {
     const buttons = pages[page].map((group, index) => {
       const groupName = String(group.subject || 'Grup tanpa nama')
-        .replace(/[\\r\\n]+/g, ' ')
+        .replace(/[\r\n]+/g, ' ')
         .trim()
       const displayText = (page * BUTTONS_PER_MESSAGE + index + 1) + '. ' + groupName
       return {
@@ -158,7 +158,7 @@ const handler = async (m, { conn, text, usedPrefix, command, isAdmin, isOwner })
   const action = String(command || '').toLowerCase()
 
   if (action === 'swgcselect') {
-    const [token, groupId] = String(text || '').trim().split(/\\s+/)
+    const [token, groupId] = String(text || '').trim().split(/\s+/)
     if (!token || !groupId || !groupId.endsWith('@g.us')) {
       return m.reply('❌ Data pilihan grup tidak valid. Jalankan ulang perintah .swgc pada pesan sumber.')
     }
