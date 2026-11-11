@@ -22,6 +22,9 @@ baileys_auth_info/
 assets/pingcanvas/
 
 # Private persistent data and authenticated YouTube cookies (never commit).
+# Gemini API key files entered through the private WhatsApp .analisis menu.
+**/video-analysis/gemini-api-key.json
+**/video-analysis/.gemini-api-key-*.tmp
 .alvareth-bot-data/
 youtube-cookies.txt
 *.cookies.txt
