@@ -1,3 +1,14 @@
+## 2026-11-11 — Add private Gemini API key setup to .analisis
+
+- **Request:** add an API key button to the existing video-analysis menu so the owner can configure Gemini without editing the server .env file.
+- **Menu and input:** add an API Key Gemini list item. Selecting it opens a five-minute, one-message prompt. The plugin consumes the next plain-text message only from the verified root owner in that same private chat. It redacts m.text before the normal message logger and rejects invalid key formats without echoing the value. The interactive list remains within ten rows; job cancellation remains available as a text command.
+- **Storage:** add lib/video-analysis-secrets.js. The key is stored outside the repository under ALVARETH_DATA_DIR/video-analysis/gemini-api-key.json, defaulting to ~/.alvareth-bot-data/video-analysis/gemini-api-key.json. The directory uses mode 0700 and the file uses mode 0600; writes use a temporary file and atomic rename. A locally entered key takes precedence over GEMINI_API_KEY. No key is returned by status commands or included in analysis artifacts. The key is not encrypted at rest, so filesystem permissions and server access remain security boundaries.
+- **Commands:** .analisis apikey opens the prompt; .analisis apikey status reports only the configured source; .analisis apikey clear removes the local key; .analisis apikey cancel closes the prompt. Clearing the local key does not alter the environment key.
+- **WhatsApp privacy:** the bot cannot guarantee deletion of a message sent by the owner from WhatsApp chat history. The success message instructs the owner to delete the key message after confirmation. The input message is redacted from the bot's normal text logger.
+- **Runtime integration:** lib/video-analysis.js now resolves the key from the private local store before falling back to GEMINI_API_KEY. handler.js passes verified isROwner/isOwner flags to plugin all-hooks so the input handler does not rely on a user-supplied sender field.
+- **Tests:** add tests/video-analysis-secrets.test.js for key validation, local persistence, permissions, environment fallback and deletion. Extend the video-analysis plugin test and include both test files in npm run test:video-analysis and GitHub Actions.
+- **Files:** plugins/owner/analisis.js, lib/video-analysis.js, lib/video-analysis-secrets.js, handler.js, tests/video-analysis.test.js, tests/video-analysis-secrets.test.js, package.json, .github/workflows/javascript-syntax.yml, .gitignore, .env.example, README.md, docs/VIDEO_ANALYSIS.md, AI_CONTEXT.md, and this changelog.
+
 ## 2026-11-10 — Add interactive WhatsApp video analysis
 
 - **Request:** add one owner command, `.analisis`, that opens a WhatsApp list menu for audiovisual analysis and exports a Skills-Clip handoff package.
