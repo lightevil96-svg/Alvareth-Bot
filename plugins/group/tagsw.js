@@ -82,17 +82,63 @@ function createStatusMessage(m, text) {
   }
 }
 
-async function sendGroupStatus(conn, groupId, message) {
-  return conn.relayMessage(
-    groupId,
-    {
-      messageContextInfo: {
-        messageSecret: 'BrRzGQ6/B0ddqBuasejEf+rJKLQ2pauxHtAw1nIMPvw='
-      },
-      groupStatusMessageV2: { message }
-    },
-    {}
+const SWGC_MIN_INTERVAL_MS = 15 * 1000
+const SWGC_RATE_LIMIT_COOLDOWN_MS = 60 * 1000
+
+function isRateLimitError(error) {
+  return /rate-overlimit|rate[ -]over[ -]limit|too many requests|\\b429\\b/i.test(
+    String(error?.message || error || '')
   )
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+async function sendGroupStatus(conn, groupId, message) {
+  // Serialize status posts and enforce a minimum interval. Group-status relay
+  // is rate-limited by WhatsApp independently from ordinary sendMessage calls.
+  const previous = global.__ALVARETH_SWGC_SEND_LOCK || Promise.resolve()
+  let release
+  const current = new Promise(resolve => { release = resolve })
+  global.__ALVARETH_SWGC_SEND_LOCK = previous.then(() => current)
+
+  await previous
+  try {
+    const cooldownUntil = Number(global.__ALVARETH_SWGC_COOLDOWN_UNTIL || 0)
+    if (cooldownUntil > Date.now()) {
+      const waitSeconds = Math.ceil((cooldownUntil - Date.now()) / 1000)
+      throw new Error('WhatsApp sedang membatasi pengiriman Status Grup. Tunggu sekitar ' + waitSeconds + ' detik sebelum mencoba lagi.')
+    }
+
+    const lastSentAt = Number(global.__ALVARETH_SWGC_LAST_SEND_AT || 0)
+    const waitMs = SWGC_MIN_INTERVAL_MS - (Date.now() - lastSentAt)
+    if (waitMs > 0) await sleep(waitMs)
+
+    try {
+      const result = await conn.relayMessage(
+        groupId,
+        {
+          messageContextInfo: {
+            messageSecret: 'BrRzGQ6/B0ddqBuasejEf+rJKLQ2pauxHtAw1nIMPvw='
+          },
+          groupStatusMessageV2: { message }
+        },
+        {}
+      )
+      global.__ALVARETH_SWGC_LAST_SEND_AT = Date.now()
+      global.__ALVARETH_SWGC_COOLDOWN_UNTIL = 0
+      return result
+    } catch (error) {
+      if (isRateLimitError(error)) {
+        global.__ALVARETH_SWGC_COOLDOWN_UNTIL = Date.now() + SWGC_RATE_LIMIT_COOLDOWN_MS
+        throw new Error('WhatsApp menolak Status Grup karena rate limit. Bot otomatis menghentikan percobaan ulang selama 60 detik agar tidak memperparah pembatasan. Setelah itu jalankan .swgc sekali lagi.')
+      }
+      throw error
+    }
+  } finally {
+    release()
+  }
 }
 
 async function sendGroupPicker(m, conn, pending, token, prefix) {
@@ -179,11 +225,10 @@ const handler = async (m, { conn, text, usedPrefix, command, isAdmin, isOwner })
 
     pending.used = true
     try {
-      const groups = await conn.groupFetchAllParticipating()
-      const target = groups[groupId]
+      const target = pending.groups.find(group => group.id === groupId)
       if (!target) {
         pendingSwgc.delete(token)
-        return m.reply('❌ Bot sudah tidak tergabung di grup tujuan tersebut. Jalankan .swgc kembali untuk memilih grup lain.')
+        return m.reply('❌ Grup tujuan tidak lagi tersedia dalam sesi pilihan ini. Jalankan .swgc kembali.')
       }
 
       await sendGroupStatus(conn, groupId, pending.message)
