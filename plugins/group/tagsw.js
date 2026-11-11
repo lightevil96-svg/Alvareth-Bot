@@ -99,7 +99,7 @@ async function sendGroupPicker(m, conn, pending, token, prefix) {
   const rows = pending.groups.map((group, index) => ({
     header: '',
     title: String(index + 1) + '. ' + String(group.subject || 'Grup tanpa nama')
-      .replace(/[\\r\\n]+/g, ' ')
+      .replace(/[\r\n]+/g, ' ')
       .trim()
       .slice(0, 60),
     description: 'Kirim Status Grup ke grup ini',
@@ -157,7 +157,7 @@ const handler = async (m, { conn, text, usedPrefix, command, isAdmin, isOwner })
   const action = String(command || '').toLowerCase()
 
   if (action === 'swgcselect') {
-    const [token, groupId] = String(text || '').trim().split(/\\s+/)
+    const [token, groupId] = String(text || '').trim().split(/\s+/)
     if (!token || !groupId || !groupId.endsWith('@g.us')) {
       return m.reply('❌ Data pilihan grup tidak valid. Jalankan ulang perintah .swgc pada pesan sumber.')
     }
@@ -193,7 +193,7 @@ const handler = async (m, { conn, text, usedPrefix, command, isAdmin, isOwner })
     } catch (error) {
       pending.used = false
       console.error('[SWGC] Gagal mengirim status grup:', error?.stack || error)
-      return m.reply('❌ Gagal mengirim status grup.\\n\\n' + String(error?.message || error).slice(0, 500))
+      return m.reply('❌ Gagal mengirim status grup.\n\n' + String(error?.message || error).slice(0, 500))
     }
     return
   }
@@ -206,10 +206,10 @@ const handler = async (m, { conn, text, usedPrefix, command, isAdmin, isOwner })
   const message = createStatusMessage(m, text)
   if (!message) {
     return m.reply(
-      'Cara pakai .swgc:\\n' +
-      '1. Kirim foto/video beserta caption di chat pribadi atau chat biasa.\\n' +
-      '2. Reply pesan tersebut dengan .swgc.\\n' +
-      '3. Pilih grup tujuan dari tombol yang muncul.\\n\\n' +
+      'Cara pakai .swgc:\n' +
+      '1. Kirim foto/video beserta caption di chat pribadi atau chat biasa.\n' +
+      '2. Reply pesan tersebut dengan .swgc.\n' +
+      '3. Pilih grup tujuan dari tombol yang muncul.\n\n' +
       'Kamu juga bisa reply teks untuk membuat Status Grup berbentuk teks.'
     )
   }
@@ -218,7 +218,7 @@ const handler = async (m, { conn, text, usedPrefix, command, isAdmin, isOwner })
     await showGroupButtons(m, conn, message, getPrefix(usedPrefix))
   } catch (error) {
     console.error('[SWGC] Gagal menampilkan pilihan grup:', error?.stack || error)
-    return m.reply('❌ Tidak dapat menampilkan daftar grup.\\n\\n' + String(error?.message || error).slice(0, 500))
+    return m.reply('❌ Tidak dapat menampilkan daftar grup.\n\n' + String(error?.message || error).slice(0, 500))
   }
 }
 
