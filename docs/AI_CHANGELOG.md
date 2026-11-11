@@ -8,6 +8,7 @@
 - **Runtime integration:** lib/video-analysis.js now resolves the key from the private local store before falling back to GEMINI_API_KEY. handler.js passes verified isROwner/isOwner flags to plugin all-hooks so the input handler does not rely on a user-supplied sender field.
 - **Tests:** add tests/video-analysis-secrets.test.js for key validation, local persistence, permissions, environment fallback and deletion. Extend the video-analysis plugin test and include both test files in npm run test:video-analysis and GitHub Actions.
 - **Files:** plugins/owner/analisis.js, lib/video-analysis.js, lib/video-analysis-secrets.js, handler.js, tests/video-analysis.test.js, tests/video-analysis-secrets.test.js, package.json, .github/workflows/javascript-syntax.yml, .gitignore, .env.example, README.md, docs/VIDEO_ANALYSIS.md, AI_CONTEXT.md, and this changelog.
+- **Verification:** GitHub Actions run [42940512328](https://github.com/lightevil96-svg/Alvareth-Bot/actions/runs/42940512328) passed repository-wide JavaScript syntax checks and all 10 focused video-analysis/key-storage tests (10/10, zero failures). Live WhatsApp key input and Gemini inference still require a deployment smoke test.
 
 ## 2026-11-10 — Add interactive WhatsApp video analysis
 
