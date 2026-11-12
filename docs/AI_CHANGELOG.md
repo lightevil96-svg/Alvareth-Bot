@@ -1,3 +1,11 @@
+## 2026-11-13 — Fix .swgc so one button can reach the full group list
+
+- **Request:** perbaiki fitur `.swgc` agar satu tombol bisa memunculkan semua daftar grup.
+- **Root cause:** `plugins/group/tagsw.js` memasukkan semua grup bot ke dalam satu section native-flow/single-select. WhatsApp membatasi satu pesan daftar maksimal 10 baris di semua section, sehingga bot yang tergabung di lebih dari 10 grup tidak bisa menampilkan seluruh daftar — pesan ditolak/dipotong dan grup di luar 10 pertama tidak bisa dipilih.
+- **Fix:** satu tombol `.swgc` tetap dipakai, tetapi daftarnya dipaginasi di dalam daftar yang sama. `getSwgcPages()`/`getSwgcPage()`/`buildSwgcPickerRows()` membagi grup menjadi halaman 9 grup + "Halaman berikutnya" di halaman pertama, 8 grup + "sebelumnya"/"berikutnya" di halaman tengah, dan sisanya + "sebelumnya" di halaman terakhir, sehingga tiap pesan tetap maksimal 10 baris. Perintah internal baru `.swgcpage <token> <halaman>` (ditambahkan ke `handler.command`) membuka halaman berikutnya/sebelumnya dari sesi pending yang sama, dengan pemeriksaan pemilik sesi, kedaluwarsa, dan status sudah dipakai yang sama seperti `.swgcselect`. Nomor grup di judul baris mengikuti urutan global, teks picker menampilkan "Halaman X dari Y (grup A–B)", dan petunjuk `.swgc` diperbarui. Pemilihan grup, rate limit pengiriman Status Grup, dan batasan admin di dalam grup tidak berubah.
+- **Tests:** tambah `tests/swgc-picker.test.js` (4 tes): ≤10 grup tampil semua tanpa navigasi; 11/20/25/47/100 grup semuanya muncul tepat sekali dengan tiap halaman ≤10 baris; penomoran global; dan alur handler `.swgc` → `.swgcpage` memakai sesi yang sama, termasuk penolakan pengirim lain. Tambah skrip `npm run test:swgc` dan sambungkan ke `npm test`.
+- **Files:** `plugins/group/tagsw.js`, `tests/swgc-picker.test.js`, `package.json`, `AI_CONTEXT.md`, dan changelog ini.
+- **Verification:** `npm run test:swgc` lolos 4/4 di Node 24.22.1. Uji langsung di WhatsApp dengan bot yang tergabung di lebih dari 10 grup (tombol, pindah halaman, lalu pilih grup) masih belum diverifikasi dan perlu dicoba setelah bot di-restart.
 ## 2026-11-11 — Add private Gemini API key setup to .analisis
 
 - **Request:** add an API key button to the existing video-analysis menu so the owner can configure Gemini without editing the server .env file.
