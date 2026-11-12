@@ -85,7 +85,9 @@ async function live3d(buffer, prompt) {
   const taskId = job.data.task_id
   if (!taskId) throw new Error('TaskId cannot be found')
 
-  while (true) {
+  const MAX_ATTEMPTS = 20
+  const POLL_DELAY_MS = 3000
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     const { data: status } = await api.post('/aitools/of/check-status', {
       task_id: taskId,
       fn_name: 'demo-image-editor',
@@ -95,8 +97,9 @@ async function live3d(buffer, prompt) {
     })
     if (status.data.status === 2) return 'https://temp.live3d.io/' + status.data.result_image
     if (status.data.status === 3) throw new Error('Task failed')
-    await new Promise(r => setTimeout(r, 3000))
+    await new Promise(r => setTimeout(r, POLL_DELAY_MS))
   }
+  throw new Error('Pembuatan gambar habis waktu setelah ' + MAX_ATTEMPTS + ' percobaan. Coba lagi beberapa saat lagi.')
 }
 
 let handler = async (m, { conn, text }) => {

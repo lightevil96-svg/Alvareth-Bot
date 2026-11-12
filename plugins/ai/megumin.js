@@ -2,9 +2,9 @@
 Original creator: Hilman.
 Adapted and maintained for Alvareth Bot.
 */
-import fetch from 'node-fetch'
+import { askFreeAi, aiErrorMessage } from '../../lib/ai-chat.js'
 
-let handler = async (m, { text, usedPrefix, command, conn }) => {
+let handler = async (m, { text, usedPrefix, command }) => {
   if (!text) {
     return m.reply(
       `💥 *Megumin (Explosion) AI*\n\nContoh:\n${usedPrefix + command} tunjukkan kekuatanmu!`
@@ -27,61 +27,13 @@ Tetap jawab sebagai Megumin. Jangan keluar karakter.
 Gunakan kata-kata dramatis seperti "Waga na wa Megumin!", "Explosion!", atau "Kekuatan kegelapan".
 `
 
-  let prompt = `${system}\nUser: ${text}\nMegumin:`
-
   try {
-    const response = await fetch('https://www.puruboy.kozow.com/api/ai/gemini-v2', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ prompt: prompt })
-    })
+    const result = await askFreeAi(text.trim(), { system })
 
-    const json = await response.json()
-    const result = json?.result?.answer || null
-
-    if (!result) throw Error("Gagal mendapatkan respon dari Megumin.")
-
-    const { prepareWAMessageMedia } = await import('baileys')
-
-    const urlB = global.repository || 'https://github.com/'
-    const img = 'https://files.catbox.moe/6v7y8y.jpg'
-
-    const { imageMessage: image } = await prepareWAMessageMedia({
-      image: { url: img }
-    }, {
-      upload: conn.waUploadToServer,
-      mediaTypeOverride: 'thumbnail-link'
-    })
-
-    image.width = 1280
-    image.height = 720
-
-    const thumb = Buffer.from(await (await fetch(img)).arrayBuffer())
-
-    const invisible = '\u200B'.repeat(400)
-
-    await conn.sendMessage(m.chat, {
-      text: `${urlB}${invisible}\n\n${result}`,
-      linkPreview: {
-        'matched-text': urlB,
-        title: 'Megumin AI',
-        description: 'Crimson Demon Clan',
-        previewType: 0,
-        jpegThumbnail: thumb,
-        highQualityThumbnail: image,
-        linkPreviewMetadata: {
-          linkMediaDuration: 0,
-          socialMediaPostType: 4
-        }
-      },
-      favicon: { url: img }
-    }, { quoted: m })
-
+    return await m.reply(result)
   } catch (e) {
     console.error('[MEGUMIN ERROR]', e)
-    m.reply('W-Waga na wa... aduh, aku kehabisan mana! (API Error)')
+    return m.reply(aiErrorMessage(e))
   }
 }
 

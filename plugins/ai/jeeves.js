@@ -1,4 +1,4 @@
-import fetch from 'node-fetch'
+import { askFreeAi, aiErrorMessage } from '../../lib/ai-chat.js'
 
 let handler = async (m, { conn, text }) => {
   await m.react('✨')
@@ -7,13 +7,12 @@ let handler = async (m, { conn, text }) => {
     return conn.reply(m.chat, '*Example :* .jeeves Halo', m)
   }
 
-  let url = `${global.APIs.faa}/faa/jeeves-ai?prompt=${encodeURIComponent(text)}`
-  let res = await fetch(url)
-  let json = await res.json()
-
-  if (!json.status) return
-
-  conn.reply(m.chat, json.result.trim(), m)
+  try {
+    let answer = await askFreeAi(text)
+    conn.reply(m.chat, answer, m)
+  } catch (e) {
+    conn.reply(m.chat, aiErrorMessage(e), m)
+  }
 }
 
 handler.help = ['jeeves']

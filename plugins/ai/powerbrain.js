@@ -1,4 +1,4 @@
-import fetch from 'node-fetch'
+import { askFreeAi, aiErrorMessage } from '../../lib/ai-chat.js'
 
 let handler = async (m, { conn, text, usedPrefix, command }) => {
   await m.react('✨')
@@ -11,13 +11,12 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
     )
   }
 
-  let url = `${global.APIs.faa}/faa/powerbrain-ai?text=${encodeURIComponent(text)}`
-  let res = await fetch(url)
-  let json = await res.json()
-
-  if (!json.status) return
-
-  conn.reply(m.chat, json.result.trim(), m)
+  try {
+    let answer = await askFreeAi(text)
+    conn.reply(m.chat, answer, m)
+  } catch (e) {
+    conn.reply(m.chat, aiErrorMessage(e), m)
+  }
 }
 
 handler.help = ['powerbrain']

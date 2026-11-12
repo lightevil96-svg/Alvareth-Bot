@@ -1,4 +1,4 @@
-import fetch from 'node-fetch'
+import { askFreeAi, aiErrorMessage } from '../../lib/ai-chat.js'
 
 let handler = async (m, { conn, text }) => {
   await m.react('✨')
@@ -20,13 +20,12 @@ let handler = async (m, { conn, text }) => {
     )
   }
 
-  let url = `${global.APIs.faa}/faa/gpt-promt?prompt=${encodeURIComponent(prompt)}&text=${encodeURIComponent(isi)}`
-  let res = await fetch(url)
-  let json = await res.json()
-
-  if (!json.status) return
-
-  conn.reply(m.chat, json.result.trim(), m)
+  try {
+    let answer = await askFreeAi(isi, { system: prompt })
+    conn.reply(m.chat, answer, m)
+  } catch (e) {
+    conn.reply(m.chat, aiErrorMessage(e), m)
+  }
 }
 
 handler.help = ['gptprompt']

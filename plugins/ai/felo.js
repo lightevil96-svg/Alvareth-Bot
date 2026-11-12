@@ -1,4 +1,4 @@
-import fetch from 'node-fetch'
+import { askFreeAi, aiErrorMessage } from '../../lib/ai-chat.js'
 
 let handler = async (m, { conn, text }) => {
   await m.react('✨')
@@ -7,20 +7,14 @@ let handler = async (m, { conn, text }) => {
     return conn.reply(m.chat, '*Example :* .felo Apa itu bot wa', m)
   }
 
-  let url = `${global.APIs.faa}/faa/feloai?text=${encodeURIComponent(text)}`
-  let res = await fetch(url)
-  let json = await res.json()
-
-  if (!json.status) return
-
-  let sumber = (json.sources || [])
-    .slice(0, 5)
-    .map((v, i) => `${i + 1}. ${v.title}\n${v.url}`)
-    .join('\n\n')
-
-  let hasil = `${json.result.trim()}\n\nSumber:\n${sumber}`
-
-  conn.reply(m.chat, hasil, m)
+  try {
+    // Backend gratis tidak menyediakan daftar sumber/referensi,
+    // jadi felo sekarang membalas jawaban teks biasa tanpa bagian Sumber.
+    let answer = await askFreeAi(text)
+    conn.reply(m.chat, answer, m)
+  } catch (e) {
+    conn.reply(m.chat, aiErrorMessage(e), m)
+  }
 }
 
 handler.help = ['felo']

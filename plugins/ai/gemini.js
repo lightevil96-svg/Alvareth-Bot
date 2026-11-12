@@ -1,3 +1,5 @@
+import { askFreeAi, aiErrorMessage } from '../../lib/ai-chat.js'
+
 let handler = async (m, { conn, text, usedPrefix, command }) => {
   await m.react('✨')
 
@@ -10,15 +12,11 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
   }
 
   try {
-    let res = await fetch(`${global.APIs.faa}/faa/gemini-ai?text=${encodeURIComponent(text)}`)
-    let json = await res.json()
-
-    if (!json.status) throw 'API error'
-
-    conn.reply(m.chat, json.result.trim(), m)
+    let answer = await askFreeAi(text)
+    conn.reply(m.chat, answer, m)
   } catch (e) {
     console.error(e)
-    conn.reply(m.chat, '⚠️ Gagal mengambil jawaban.', m)
+    conn.reply(m.chat, aiErrorMessage(e), m)
   }
 }
 

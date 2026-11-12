@@ -1,7 +1,7 @@
 import fs from 'fs'
 import axios from 'axios'
 import FormData from 'form-data'
-import fetch from 'node-fetch'
+import { buildPollinationsImageUrl, aiErrorMessage } from '../../lib/ai-chat.js'
 
 async function uguu(filePath) {
   const form = new FormData()
@@ -33,20 +33,39 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
     )
   }
 
-  let media = await q.download()
+  let media
+  try {
+    media = await q.download()
+  } catch (e) {
+    await m.react('❌')
+    return conn.reply(m.chat, aiErrorMessage(e), m)
+  }
+  if (!media) {
+    await m.react('❌')
+    return conn.reply(m.chat, '❌ Gagal mengunduh gambar. Coba kirim ulang gambarnya.', m)
+  }
+
   let tmp = './tmp_' + Date.now() + '.jpg'
   fs.writeFileSync(tmp, media)
 
-  let urlGambar = await uguu(tmp)
-  fs.unlinkSync(tmp)
+  try {
+    let urlGambar = await uguu(tmp)
+    if (!urlGambar) throw new Error('Upload gambar ke uguu.se gagal.')
 
-  let url = `${global.APIs.faa}/faa/nano-banana?url=${encodeURIComponent(urlGambar)}&prompt=${encodeURIComponent(text)}`
-  let res = await fetch(url)
-
-  if (!res.ok) return
-
-  let buffer = Buffer.from(await res.arrayBuffer())
-  await conn.sendFile(m.chat, buffer, 'edit.png', '', m)
+    let imageUrl = buildPollinationsImageUrl(text, { image: urlGambar })
+    await conn.sendMessage(m.chat, {
+      image: { url: imageUrl },
+      caption: `✨ *Edit gambar selesai*\n\n📝 *Prompt:* ${text}`
+    }, { quoted: m })
+    await m.react('✅')
+  } catch (e) {
+    await m.react('❌')
+    await conn.reply(m.chat, aiErrorMessage(e), m)
+  } finally {
+    try {
+      if (fs.existsSync(tmp)) fs.unlinkSync(tmp)
+    } catch {}
+  }
 }
 
 handler.help = ['editimage', 'nanobanana']

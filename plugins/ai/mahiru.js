@@ -2,7 +2,7 @@
 Original creator: Hilman.
 Adapted and maintained for Alvareth Bot.
 */
-import fetch from "node-fetch"
+import { askFreeAi, aiErrorMessage } from '../../lib/ai-chat.js'
 
 let sessions = {}
 
@@ -47,66 +47,17 @@ User adalah orang yang dekat denganmu.
   sessions[user].chat.push(`User: ${text}`)
 
   let history = sessions[user].chat.slice(-5).join('\n')
-  let finalPrompt = `${system}\n${history}\nMahiru:`
 
   try {
-    const response = await fetch('https://www.puruboy.kozow.com/api/ai/gemini-v2', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ prompt: finalPrompt })
-    })
-
-    const json = await response.json()
-    const result = json?.result?.answer || null
-
-    if (!result) {
-      return m.reply('Maaf… aku tadi sedikit bingung jawabnya 😖 coba lagi ya…')
-    }
+    const result = await askFreeAi(history, { system })
 
     sessions[user].chat.push(`Mahiru: ${result}`)
     sessions[user].chat = sessions[user].chat.slice(-10)
 
-    const { prepareWAMessageMedia } = await import('baileys')
-
-    const urlB = global.repository || 'https://github.com/'
-    const img = "https://cdn.nekohime.site/file/CzoG-UNW.jpeg"
-
-    const { imageMessage: image } = await prepareWAMessageMedia({
-      image: { url: img }
-    }, {
-      upload: conn.waUploadToServer,
-      mediaTypeOverride: 'thumbnail-link'
-    })
-
-    image.width = 1280
-    image.height = 720
-
-    const thumb = Buffer.from(await (await fetch(img)).arrayBuffer())
-
-    const invisible = '\u200B'.repeat(400)
-
-    await conn.sendMessage(m.chat, {
-      text: `${urlB}${invisible}\n\n${result}`,
-      linkPreview: {
-        'matched-text': urlB,
-        title: "Mahiru AI",
-        description: "Shiina Mahiru sedang menemanimu 🤍",
-        previewType: 0,
-        jpegThumbnail: thumb,
-        highQualityThumbnail: image,
-        linkPreviewMetadata: {
-          linkMediaDuration: 0,
-          socialMediaPostType: 4
-        }
-      },
-      favicon: { url: img }
-    }, { quoted: m })
-
+    return await m.reply(result)
   } catch (err) {
     console.error(err)
-    await conn.reply(m.chat, `❌ Terjadi kesalahan pada sistem Mahiru.\n${err.message}`, m)
+    await conn.reply(m.chat, aiErrorMessage(err), m)
   }
 }
 

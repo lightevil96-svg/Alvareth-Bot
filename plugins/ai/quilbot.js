@@ -1,4 +1,4 @@
-import fetch from 'node-fetch'
+import { askFreeAi, aiErrorMessage } from '../../lib/ai-chat.js'
 
 let handler = async (m, { conn, text, usedPrefix, command }) => {
   await m.react('✨')
@@ -11,13 +11,12 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
     )
   }
 
-  let url = `${global.APIs.faa}/faa/quillbot?text=${encodeURIComponent(text)}`
-  let res = await fetch(url)
-  let json = await res.json()
-
-  if (!json.status) return
-
-  conn.reply(m.chat, json.result.trim(), m)
+  try {
+    let answer = await askFreeAi(text, { system: 'Parafrasekan teks berikut dengan kata-kata yang berbeda namun maknanya tetap sama. Jawab hanya dengan hasil parafrase.' })
+    conn.reply(m.chat, answer, m)
+  } catch (e) {
+    conn.reply(m.chat, aiErrorMessage(e), m)
+  }
 }
 
 handler.help = ['quillbot']

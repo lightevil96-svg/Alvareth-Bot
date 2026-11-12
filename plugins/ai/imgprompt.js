@@ -5,13 +5,19 @@
 import axios from "axios"
 import FormData from "form-data"
 import fs from "fs"
+import { aiErrorMessage } from "../../lib/ai-chat.js"
 
-let handler = async (m, { conn }) => {
+let handler = async (m, { conn, usedPrefix, command }) => {
   let q = m.quoted?.mimetype ? m.quoted : m
-  if (!q.mimetype?.includes("image")) return conn.reply(m.chat, "🍭 Kirim atau reply gambar!", m)
+  if (!q.mimetype?.includes("image")) return conn.reply(m.chat, `🍭 Kirim atau reply gambar!\n\nContoh: reply gambar lalu ketik *${usedPrefix + command}*`, m)
 
-  let img = await q.download?.()
-  if (!img) return conn.reply(m.chat, "🍬 Gagal ambil gambar", m)
+  let img
+  try {
+    img = await q.download?.()
+  } catch (e) {
+    return conn.reply(m.chat, "❌ Gagal mengambil gambar. Coba kirim ulang gambarnya.", m)
+  }
+  if (!img) return conn.reply(m.chat, "❌ Gagal mengambil gambar. Coba kirim ulang gambarnya.", m)
 
   try {
     const form = new FormData()
@@ -28,7 +34,7 @@ let handler = async (m, { conn }) => {
 
     conn.reply(m.chat, res.data?.caption || res.data?.prompt || "🍬 Tidak ada prompt ditemukan", m)
   } catch (e) {
-    conn.reply(m.chat, "❌ Yahh error: " + e.message, m)
+    conn.reply(m.chat, aiErrorMessage(e), m)
   }
 }
 

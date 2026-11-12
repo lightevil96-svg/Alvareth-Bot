@@ -1,3 +1,5 @@
+import { askFreeAi, aiErrorMessage } from '../../lib/ai-chat.js'
+
 let handler = async (m, { text, usedPrefix, command }) => {
   if (!text) {
     return m.reply(`Contoh:
@@ -6,30 +8,38 @@ ${usedPrefix + command} Halo`)
 
   await m.react('🕒')
 
-  try {
-    const res = await fetch(
-      `${global.APIs.nexray}/ai/claude?text=${encodeURIComponent(text)}`
-    )
-    const data = await res.json()
-
-    if (!data?.status) {
-      await m.react('❌')
-      return m.reply('❌ Gagal mendapatkan respons AI.')
-    }
-
-    const caption = `   *Claude AI*
+  const caption = (answer) => `   *Claude AI*
 
 ✿ *Question* : ${text}
 
 ✿ *Answer* :
-${data.result}`
+${answer}`
 
+  // Backend utama: Nexray Claude (masih berfungsi saat audit).
+  try {
+    const res = await fetch(
+      `${global.APIs.nexray}/ai/claude?text=${encodeURIComponent(text)}`
+    )
+    const data = await res.json().catch(() => null)
+
+    if (res.ok && data?.status && data.result) {
+      await m.react('✅')
+      return m.reply(caption(data.result))
+    }
+    console.error('[claude] Backend utama gagal:', res.status, data)
+  } catch (e) {
+    console.error('[claude] Backend utama gagal:', e)
+  }
+
+  // Fallback: backend AI gratis bersama (Pollinations, lalu Nexray).
+  try {
+    const answer = await askFreeAi(text)
     await m.react('✅')
-    m.reply(caption)
+    return m.reply(caption(answer))
   } catch (e) {
     console.error(e)
     await m.react('❌')
-    m.reply('❌ Terjadi kesalahan.')
+    return m.reply(aiErrorMessage(e))
   }
 }
 

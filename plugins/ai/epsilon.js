@@ -1,4 +1,4 @@
-import fetch from 'node-fetch'
+import { askFreeAi, aiErrorMessage } from '../../lib/ai-chat.js'
 
 let handler = async (m, { conn, text }) => {
   await m.react('✨')
@@ -7,22 +7,14 @@ let handler = async (m, { conn, text }) => {
     return conn.reply(m.chat, '*Example :* .epsilon Apa itu chatbot', m)
   }
 
-  let url = `${global.APIs.faa}/faa/epsilon-ai?text=${encodeURIComponent(text)}`
-  let res = await fetch(url)
-  let json = await res.json()
-
-  if (!json.status || !json.result?.length) return
-
-  let hasil = json.result.slice(0, 5).map((v, i) => `
-${i + 1}. ${v.title}
-Penulis: ${v.authors}
-Tahun: ${v.year}
-Link: ${v.url}
-
-${v.abstract.slice(0, 300)}...
-`.trim()).join('\n\n')
-
-  conn.reply(m.chat, hasil, m)
+  try {
+    // Backend gratis tidak menyediakan daftar paper, jadi epsilon
+    // sekarang menjawab sebagai asisten riset dengan jawaban teks biasa.
+    let answer = await askFreeAi(text, { system: 'Kamu adalah asisten riset. Jawab pertanyaan berikut secara informatif dan jelas dalam Bahasa Indonesia.' })
+    conn.reply(m.chat, answer, m)
+  } catch (e) {
+    conn.reply(m.chat, aiErrorMessage(e), m)
+  }
 }
 
 handler.help = ['epsilon']
