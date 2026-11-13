@@ -11,7 +11,7 @@
   },
   "scripts": {
     "start": "node scripts/start-with-update.js",
-    "test": "node --check index.js && node --check main.js && npm run test:pairing && node --check handler.js && node --check lib/simple.js && node --check lib/auto-update.js && node --check scripts/start-with-update.js && node --check lib/scrape/tikwm.js && node --check plugins/downloader/tiktok.js && node --check plugins/image/tohitam.js && node --check lib/scrape/youtube.js && node --check plugins/downloader/clip.js && node --check plugins/owner/sw.js && node --check lib/auto-download.js && node --test tests/auto-download.test.js && node --check plugins/sticker/sticker.js && node --test tests/quoted-media.test.js && node --check plugins/sticker/sticker-engine.js && node --test tests/sticker-engine.test.js && npm run test:clip && npm run test:download && npm run test:swgc && npm run test:ai && npm run test:image && npm run test:social && npm run test:media && node --test tests/update-transport.test.js tests/auto-update.test.js && node --check lib/disk-cleaner.js && node --check plugins/owner/disk.js && node --test tests/disk-cleaner.test.js && npm run test:render && npm run test:tiktok && npm run test:video-analysis",
+    "test": "node --check index.js && node --check main.js && npm run test:pairing && node --check handler.js && node --check lib/simple.js && node --check lib/auto-update.js && node --check scripts/start-with-update.js && node --check lib/scrape/tikwm.js && node --check plugins/downloader/tiktok.js && node --check plugins/image/tohitam.js && node --check lib/scrape/youtube.js && node --check plugins/downloader/clip.js && node --check plugins/owner/sw.js && node --check lib/auto-download.js && node --test tests/auto-download.test.js && node --check plugins/sticker/sticker.js && node --test tests/quoted-media.test.js && node --check plugins/sticker/sticker-engine.js && node --test tests/sticker-engine.test.js && npm run test:clip && npm run test:download && npm run test:swgc && npm run test:ai && npm run test:tts && npm run test:image && npm run test:social && npm run test:media && node --test tests/update-transport.test.js tests/auto-update.test.js && node --check lib/disk-cleaner.js && node --check plugins/owner/disk.js && node --test tests/disk-cleaner.test.js && npm run test:render && npm run test:tiktok && npm run test:video-analysis",
     "dev": "node --watch index.js",
     "test:clip": "node --check lib/scrape/youtube.js && node --check plugins/downloader/clip-progress.js && node --check plugins/downloader/clip.js && node --test tests/clip-progress.test.js tests/clip-policy.test.js",
     "test:download": "node --check lib/download-browser.js && node --check plugins/downloader/download.js && node --test tests/download-browser.test.js",
@@ -24,7 +24,8 @@
     "test:render": "npm run test:remotion && node --check lib/render-script.js && node --check plugins/owner/render.js && node --test tests/render-script.test.js",
     "test:video-analysis": "node --check lib/video-analysis-input.js && node --check lib/video-analysis-secrets.js && node --check lib/video-analysis.js && node --check plugins/owner/analisis.js && node --check handler.js && node --test tests/video-analysis.test.js tests/video-analysis-secrets.test.js tests/video-analysis-input.test.js",
     "test:ai": "node --check lib/ai-chat.js && node --test tests/ai-chat.test.js",
-    "test:image": "node --check lib/image-edit.js && node --check plugins/image/to3d.js && node --check plugins/image/tohitam.js && node --check plugins/image/toblonde.js && node --check plugins/image/hitamkan.js && node --check plugins/image/img2img.js && node --check plugins/image/picsart.js && node --check plugins/image/ai-flux.js && node --test tests/image-edit.test.js"
+    "test:image": "node --check lib/image-edit.js && node --check plugins/image/to3d.js && node --check plugins/image/tohitam.js && node --check plugins/image/toblonde.js && node --check plugins/image/hitamkan.js && node --check plugins/image/img2img.js && node --check plugins/image/picsart.js && node --check plugins/image/ai-flux.js && node --test tests/image-edit.test.js",
+    "test:tts": "node --check lib/tts-config.js && node --check lib/tts-edge.js && node --check plugins/voice/tts-anime.js && node --test tests/tts-edge.test.js"
   },
   "keywords": [
     "alvareth-bot",
@@ -101,6 +102,7 @@
     "xmldom": "^0.6.0",
     "yargs": "^17.7.2",
     "yt-search": "^2.10.4",
-    "zs-extract": "^1.4.2"
+    "zs-extract": "^1.4.2",
+    "node-edge-tts": "^1.2.12"
   }
 }
