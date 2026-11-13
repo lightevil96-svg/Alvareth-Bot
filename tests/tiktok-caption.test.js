@@ -2,7 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   buildTikTokCaptionCopy,
-  buildTikTokCaptionCopyButton
+  buildTikTokCaptionCopyButton,
+  buildTikTokVideoMenuButtons
 } from '../lib/tiktok-workflow.js'
 
 test('buildTikTokCaptionCopy mengembalikan null bila caption kosong', () => {
@@ -40,4 +41,28 @@ test('buildTikTokCaptionCopyButton membuat tombol cta_copy yang valid', () => {
 test('buildTikTokCaptionCopyButton memakai string kosong bila tidak ada teks', () => {
   const params = JSON.parse(buildTikTokCaptionCopyButton('').buttonParamsJson)
   assert.equal(params.copy_code, '')
+})
+
+const videoMenuOptions = {
+  url: 'https://www.tiktok.com/@alvareth/video/123',
+  usedPrefix: '!',
+  sourceInfo: { width: 720, height: 1280 }
+}
+
+test('menu video memuat pilihan kualitas dan tombol salin caption asli', () => {
+  const caption = 'Baris pertama\nBaris  kedua #tiktok'
+  const [quality, copy, ...other] = buildTikTokVideoMenuButtons({ ...videoMenuOptions, caption })
+  assert.equal(quality.text, 'Pilih Kualitas')
+  assert.deepEqual(quality.sections[0].rows.map(row => row.id), [720, 480, 360].map(
+    resolution => '!ttquality ' + videoMenuOptions.url + ' ' + resolution
+  ))
+  assert.equal(copy.name, 'cta_copy')
+  assert.equal(JSON.parse(copy.buttonParamsJson).copy_code, caption)
+  assert.deepEqual(other, [])
+})
+
+test('menu kualitas tetap tersedia untuk video tanpa caption', () => {
+  const buttons = buildTikTokVideoMenuButtons({ ...videoMenuOptions, caption: '   ' })
+  assert.equal(buttons.length, 1)
+  assert.equal(buttons[0].text, 'Pilih Kualitas')
 })

@@ -45,3 +45,16 @@ test('TikTok plugin registers photo actions, slideshow, and FFmpeg quality rende
   assert.match(plugin, /'-c:v',\s*'libx264'/)
   assert.match(plugin, /Render ulang MP4/)
 })
+
+test('TikTok downloads send caption-free MP4s and a single menu for the initial result', async () => {
+  const plugin = await readFile(new URL('../plugins/downloader/tiktok.js', import.meta.url), 'utf8')
+  const download = plugin.split('const fileName = safeFilename(title + (isQualityCommand')[1]
+    .split('} else if (!res.audio)')[0]
+  const [sendMedia, sendMenu] = download.split('if (!isQualityCommand && prepared.sourceInfo)')
+  assert.match(sendMedia, /document: prepared\.buffer/)
+  assert.match(sendMedia, /video: prepared\.buffer/)
+  assert.doesNotMatch(sendMedia, /caption\s*:/)
+  assert.doesNotMatch(download, /sendTikTokCaptionCopyButton/)
+  assert.match(sendMenu, /sendTikTokVideoQualityMenu[\s\S]*caption: res\.caption/)
+  assert.match(plugin, /const buttons = buildTikTokVideoMenuButtons\(menuOptions\)[\s\S]*nativeFlow: buttons/)
+})

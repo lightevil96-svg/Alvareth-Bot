@@ -9,6 +9,8 @@
 
 ## Pembaruan terbaru
 
+- 2026-11-13 — Unduhan video `.tiktok` mengirim MP4 tanpa caption dan menampilkan **Pilih Kualitas** serta **Salin Caption** dalam satu pesan. Video tanpa caption hanya menampilkan pilihan kualitas.
+
 - 2026-11-13: Added a "📋 Salin Caption" `cta_copy` button to `.tiktok` results: after the video (or photo preview) is sent, an interactive message shows the original TikTok caption with a button that copies it to the clipboard; helpers live in `lib/tiktok-workflow.js` (`buildTikTokCaptionCopy`, `buildTikTokCaptionCopyButton`), button failures never fail the download. `npm run test:tiktok` passes 9/9; live WhatsApp tap testing is still required after restart. See `docs/AI_CHANGELOG.md`.
 
 - 2026-11-13: Fixed `.tooil` character identity: AI Horde denoising 0.5 redrew the anime character's face into a different person, and anime model 526Mix-Animated at 0.45 also changed the face. `lib/image-edit.js` now uses denoising 0.35 + a negative prompt (different face/person, photorealistic, 3d render) and a stronger "same subject, face, character design and art style" prompt suffix — A/B-tested visually, the 0.35 result keeps the character while the painting style still shows. `npm run test:image` passes 10/10; live WhatsApp testing is still required after restart. See `docs/AI_CHANGELOG.md`.

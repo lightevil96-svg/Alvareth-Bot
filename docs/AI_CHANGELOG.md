@@ -1,3 +1,10 @@
+## 2026-11-13 — Gabungkan menu kualitas dan tombol salin caption TikTok
+
+- **Permintaan.** Tampilkan tombol salin caption bersama pilihan kualitas dan hilangkan caption dari pesan video unduhan.
+- **Penyebab.** Jalur unduhan video menempelkan ringkasan ke payload MP4 dan mengirim tombol salin serta daftar kualitas melalui dua pemanggilan terpisah.
+- **Perbaikan.** `plugins/downloader/tiktok.js` mengirim MP4 biasa maupun dokumen tanpa caption, termasuk hasil `.ttquality`. Menu awal mengirim satu `nativeFlow` yang dibuat di `lib/tiktok-workflow.js`. Tombol `single_select` mempertahankan ID perintah kualitas. Tombol `cta_copy` memakai caption asli dari `lib/scrape/tikwm.js`, termasuk baris baru dan spasi di tengah. Jika caption kosong, menu hanya berisi pilihan kualitas.
+- **Verifikasi.** `tests/tiktok-caption.test.js` dan `tests/tiktok-workflow.test.js` mencakup kedua tombol dalam satu menu, caption kosong, dan pengiriman MP4 tanpa caption. `npm run test:tiktok` lulus 12/12 dan `npm test` lulus. Pembuatan pesan dengan Baileys 0.3.18-final menghasilkan kedua tombol dalam satu payload dan ID pilihan terbaca oleh parser perintah bot. Tampilan dan interaksi tombol di WhatsApp aktif belum diuji.
+
 ## 2026-11-13 — Add "Salin Caption" copy button to .tiktok results
 
 - **Request:** tambahkan tombol untuk salin caption di fitur `.tiktok`.

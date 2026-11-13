@@ -10,7 +10,14 @@ import { spawn } from 'node:child_process'
 import { pipeline } from 'node:stream/promises'
 import { Transform } from 'node:stream'
 import { fileTypeFromFile } from 'file-type'
-import { getTikTokOutputQualities, getTikTokScaleFilter, parseTikTokSlideDurations, buildTikTokCaptionCopy, buildTikTokCaptionCopyButton } from '../../lib/tiktok-workflow.js'
+import {
+  getTikTokOutputQualities,
+  getTikTokScaleFilter,
+  parseTikTokSlideDurations,
+  buildTikTokCaptionCopy,
+  buildTikTokCaptionCopyButton,
+  buildTikTokVideoMenuButtons
+} from '../../lib/tiktok-workflow.js'
 
 const MAX_VIDEO_BYTES = 150 * 1024 * 1024
 const MAX_INLINE_VIDEO_BYTES = 50 * 1024 * 1024
@@ -783,38 +790,19 @@ async function sendTikTokSlideshowDurationMenu(conn, m, { url, usedPrefix }) {
   }, { quoted: m, noAlvarethPreview: true })
 }
 
-async function sendTikTokVideoQualityMenu(conn, m, { url, usedPrefix, sourceInfo }) {
-  const qualities = getTikTokOutputQualities(sourceInfo?.width, sourceInfo?.height)
-  if (!qualities.length) return
-  const rows = qualities.map((resolution, index) => ({
-    header: '',
-    title: resolution + 'p' + (index === 0 ? ' • Tertinggi' : ''),
-    description: 'Render ulang MP4 pada resolusi ' + resolution + 'p',
-    id: usedPrefix + 'ttquality ' + url + ' ' + resolution
-  }))
+async function sendTikTokVideoQualityMenu(conn, m, menuOptions) {
+  const buttons = buildTikTokVideoMenuButtons(menuOptions)
+  if (!buttons.length) return
+
   await sendMessageWithReconnect(conn, m.chat, {
     text: 'Video sudah dikirim pada resolusi tertinggi yang tersedia. Pilih kualitas lain jika ingin merender ulang.',
     footer: global.namebot || 'Alvareth Bot',
-    optionText: 'Pilih Kualitas',
-    optionTitle: '🎞️ Kualitas Video TikTok',
-    offerText: global.namebot || 'Alvareth Bot',
-    offerCode: global.namebot || 'Alvareth Bot',
-    offerUrl: global.botLink || 'https://spoo.me/Alvareth-Bot',
-    offerExpiration: Date.now() + 86400000,
-    nativeFlow: [{
-      text: 'Pilih kualitas',
-      sections: [{ title: 'Resolusi tersedia', rows }],
-      icon: 'video'
-    }],
+    nativeFlow: buttons,
     interactiveAsTemplate: false
   }, { quoted: m, noAlvarethPreview: true })
 }
 
-// Tombol "Salin Caption" (cta_copy) di bawah hasil .tiktok: mengetuk tombol
-// menyalin caption asli video ke clipboard, tanpa perlu memblokir teks
-// manual. Bentuk pesan mengikuti plugins/tools/tourl.js. Kegagalan
-// mengirim tombol tidak boleh menggagalkan unduhan yang sudah berhasil,
-// jadi pemanggil membungkusnya dengan .catch().
+// Pesan salin caption tersendiri untuk pratinjau postingan foto.
 async function sendTikTokCaptionCopyButton(conn, m, title) {
   const captionCopy = buildTikTokCaptionCopy(title)
   if (!captionCopy) return
@@ -1413,25 +1401,6 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
 
     const title = (res.title || 'TikTok Video').replace(/\s+/g, ' ').trim()
     const uploader = res.author || '-'
-    const displayTitle = title.length > 220 ? title.slice(0, 217).trimEnd() + '...' : title
-    const displayUploader = String(uploader).length > 80 ? String(uploader).slice(0, 77).trimEnd() + '...' : uploader
-    const mediaFormat = res.type === 'image' ? 'Foto / Slideshow' : res.video ? 'Video MP4' : 'Media'
-    const caption = [
-      '🎬 *ALVARETH TIKTOK DOWNLOADER*',
-      '',
-      '✅ *Video berhasil diunduh*',
-      '',
-      '📝 *Judul*',
-      displayTitle,
-      '',
-      '👤 *Kreator*',
-      displayUploader,
-      '',
-      '📥 *Status:* Siap ditonton',
-      '💠 *Format:* ' + mediaFormat,
-      '',
-      '✨ _Downloaded by Alvareth Bot_ ✨'
-    ].join('\n')
 
     const hasPhotoPost = res.type === 'image' && Array.isArray(res.images) && res.images.length > 0
     if (isQualityCommand && hasPhotoPost) {
@@ -1659,43 +1628,21 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
         throw error
       }
       const fileName = safeFilename(title + (isQualityCommand ? '-' + targetQuality + 'p' : ''))
-      const videoCaption = [
-        '🎬 *ALVARETH TIKTOK DOWNLOADER*',
-        '',
-        '✅ *Video berhasil diunduh dan dirender ulang*',
-        '',
-        '📝 *Judul:* ' + displayTitle,
-        '👤 *Kreator:* ' + displayUploader,
-        '📺 *Resolusi:* ' + prepared.width + 'x' + prepared.height,
-        '🎞️ *Kualitas:* ' + prepared.qualityResolution + 'p',
-        '',
-        '✨ _Downloaded by Alvareth Bot_ ✨'
-      ].join('\n')
-
-      if (prepared.size > MAX_INLINE_VIDEO_BYTES) {
-        await sendMessageWithReconnect(conn, m.chat, {
-          document: prepared.buffer,
-          mimetype: 'video/mp4',
-          fileName,
-          caption: videoCaption
-        }, { quoted: m, noAlvarethPreview: true })
-      } else {
-        await sendMessageWithReconnect(conn, m.chat, {
-          video: prepared.buffer,
-          mimetype: 'video/mp4',
-          fileName,
-          caption: videoCaption
-        }, { quoted: m, noAlvarethPreview: true })
-      }
-
-      await sendTikTokCaptionCopyButton(conn, m, title).catch(error =>
-        console.warn('[TikTok] Gagal mengirim tombol salin caption:', error?.message || error))
+      const media = prepared.size > MAX_INLINE_VIDEO_BYTES
+        ? { document: prepared.buffer }
+        : { video: prepared.buffer }
+      await sendMessageWithReconnect(conn, m.chat, {
+        ...media,
+        mimetype: 'video/mp4',
+        fileName
+      }, { quoted: m, noAlvarethPreview: true })
 
       if (!isQualityCommand && prepared.sourceInfo) {
         await sendTikTokVideoQualityMenu(conn, m, {
           url,
           usedPrefix,
-          sourceInfo: prepared.sourceInfo
+          sourceInfo: prepared.sourceInfo,
+          caption: res.caption
         }).catch(error => console.warn('[TikTok] Gagal mengirim menu kualitas:', error?.message || error))
       }
     } else if (!res.audio) {
