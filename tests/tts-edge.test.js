@@ -28,6 +28,9 @@ test('Japanese TTS remains available after replacing the old anime engine', () =
   assert.equal(TTS_VOICE_PROFILES['japanese-female'].voice, 'ja-JP-NanamiNeural')
   assert.equal(TTS_VOICE_PROFILES['japanese-male'].voice, 'ja-JP-KeitaNeural')
 })
+test('Japanese text without a voice prefix keeps the previous Japanese default', () => {
+  assert.equal(parseTtsRequest('こんにちは、元気ですか。').profile, 'japanese-female')
+})
 test('Javanese neural voices are available', () => {
   assert.equal(parseTtsRequest('jawa|Sugeng enjing').profile, 'javanese-female')
   assert.equal(parseTtsRequest('dimas|Sugeng enjing').profile, 'javanese-male')
