@@ -9,6 +9,8 @@
 
 ## Pembaruan terbaru
 
+- 2026-11-13: Fixed all image category plugins to use free working backends: new shared `lib/image-edit.js` detects quoted/caption images via `lib/simple.js` (fixes `.tooil` failing for both send-with-caption and reply) and edits with Pollinations image via `tmp.malvryx.dev` upload, no API key; `to3d` (11 styles), `tohitam` (28 styles, duplicates `toghibli`/`tojepang`/`tolego` removed), `toblonde`, `hitamkan`, `img2img` migrated, `picsart` now uses Sharpify like `.hd`, `flux` and `hd` kept their working backends. `npm run test:image` passes 10/10; live Pollinations oil-painting edit verified; live WhatsApp testing is still required after restart. See `docs/AI_CHANGELOG.md`.
+
 - 2026-11-13: Fixed all AI category plugins to use free working backends: new shared `lib/ai-chat.js` tries Pollinations text first, then Nexray Claude as fallback, with no API key; 15 character plugins, 12 faa plugins, gpt/perplexity/openai, nano/nanobana, and editimg2 migrated, and no plugin stays silent on failure. `npm run test:ai` passes 6/6; live WhatsApp testing is still required after restart. See `docs/AI_CHANGELOG.md`.
 
 - 2026-11-13: Fixed `.swgc` so one button can reach the full group list: WhatsApp caps a list/native-flow message at 10 rows total, so the picker now paginates inside the same list (9 groups + next on page 1, 8 + prev/next in the middle, remainder + prev on the last page) via the new internal `.swgcpage` command on the same pending session. `npm run test:swgc` passes 4/4; live WhatsApp testing with more than 10 groups is still required after restart. See `docs/AI_CHANGELOG.md`.

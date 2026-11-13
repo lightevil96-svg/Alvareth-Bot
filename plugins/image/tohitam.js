@@ -1,219 +1,57 @@
-/**
- * AI Image Converter — transformasi gambar berbasis API FAA.
- * Perbaikan: deteksi media reply dari payload Baileys dan teruskan error ke handler global.
- */
-import axios from "axios"
-import FormData from "form-data"
-import fetch from "node-fetch"
-import { fileTypeFromBuffer } from "file-type"
+// AI Image Converter — transformasi style gambar.
+// Dulu: backend api-faa.my.id (sekarang HTTP 500, mati) + upload uguu.se.
+// Sekarang: deteksi gambar dan edit lewat lib/image-edit.js — backend
+// Pollinations image gratis tanpa API key (gambar diunggah dulu ke tmp.malvryx.dev).
+// Perintah toghibli, tojepang, dan tolego dihapus dari file ini karena
+// sudah ada di plugins/image/to3d.js dan handler hanya menjalankan plugin
+// pertama yang cocok, jadi versi di sini tidak pernah terpanggil.
+import { runImageStyle } from '../../lib/image-edit.js'
 
-const API_TIMEOUT = 90000
-const MAX_IMAGE_BYTES = 20 * 1024 * 1024
-
-function isHttpUrl(value) {
-  if (typeof value !== "string") return false
-  try {
-    const parsed = new URL(value)
-    return parsed.protocol === "http:" || parsed.protocol === "https:"
-  } catch {
-    return false
-  }
+export const STYLE_PROMPTS = {
+  tobotak: 'Make the person in this photo completely bald, shaved head, keep the face, pose and composition the same',
+  tochibi: 'Transform this photo into chibi style, cute small character with big head, keep the subject and composition the same',
+  tofunk: 'Transform this photo into funky style, colorful and playful, keep the subject, pose and composition the same',
+  tofigura: 'Transform the person in this photo into a collectible action figure, keep the pose and composition the same',
+  tofigurav2: 'Transform the person in this photo into a collectible figurine standing on a display base, keep the pose and composition the same',
+  tofigurav3: 'Transform the person in this photo into a premium statue figurine, keep the pose and composition the same',
+  tohijab: 'Add a hijab to the person in this photo, modest and natural, keep the face, pose and composition the same',
+  tojapanese: 'Transform this photo into Japanese style illustration, keep the subject, pose and composition the same',
+  tokacamata: 'Add stylish glasses to the person in this photo, keep the face, pose and composition the same',
+  tokamboja: 'Transform this photo into Cambodian traditional style, keep the subject, pose and composition the same',
+  toliquor: 'Transform this photo into a vintage liquor poster style, dramatic lighting, keep the subject and composition the same',
+  tomaid: 'Dress the person in this photo in a maid outfit, keep the face, pose and composition the same',
+  tomirror: 'Transform this photo into a mirror reflection effect, keep the subject and composition the same',
+  tomoai: 'Transform the person in this photo into a Moai statue style, stone Easter Island statue, keep the pose and composition the same',
+  tomonyet: 'Transform the person in this photo into a monkey, keep the pose and composition the same',
+  topacar: 'Transform this photo into a romantic portrait style, warm and loving mood, keep the subject and composition the same',
+  topeci: 'Add a peci, Indonesian traditional black cap, to the person in this photo, keep the face, pose and composition the same',
+  topiramida: 'Transform this photo into ancient Egyptian pyramid style, keep the subject and composition the same',
+  toputih: 'Make the skin of the person in this photo fair and white, keep the face, hair color and composition the same',
+  toreal: 'Make this photo photorealistic, real photography look, keep the subject, pose and composition the same',
+  toroblox: 'Transform this photo into Roblox blocky character style, keep the subject, pose and composition the same',
+  toroh: 'Transform the person in this photo into a ghostly spirit, ethereal and translucent, keep the pose and composition the same',
+  totato: 'Add tattoo art to the person in this photo, keep the face, pose and composition the same',
+  totua: 'Make the person in this photo look old, aged with wrinkles and grey hair, keep the pose and composition the same',
+  toviking: 'Transform the person in this photo into a Viking warrior style, keep the pose and composition the same',
+  tozombie: 'Transform this photo into a zombie, keep the pose and composition the same',
+  tounderground: 'Transform this photo into gritty underground street style, dark and raw, keep the subject and composition the same',
+  tohitam: 'Make the skin of the person in this photo very black, pitch black #000000, keep the face and hair color unchanged'
 }
 
-function findQuotedMessage(value, depth = 0, seen = new Set()) {
-  if (!value || typeof value !== "object" || depth > 12 || seen.has(value)) return null
-  seen.add(value)
-  const directContext = value.contextInfo?.quotedMessage
-  if (directContext && typeof directContext === "object") return directContext
-  for (const key of ["ephemeralMessage", "viewOnceMessage", "viewOnceMessageV2", "viewOnceMessageV2Extension", "documentWithCaptionMessage", "editedMessage", "message"]) {
-    const child = value[key]
-    if (!child || typeof child !== "object") continue
-    const found = findQuotedMessage(child.message || child, depth + 1, seen)
-    if (found) return found
-  }
-  for (const [key, child] of Object.entries(value)) {
-    if (["contextInfo", "messageContextInfo", "senderKeyDistributionMessage"].includes(key)) continue
-    if (child && typeof child === "object") {
-      const found = findQuotedMessage(child, depth + 1, seen)
-      if (found) return found
-    }
-  }
-  return null
+const handler = async (m, { conn, command, usedPrefix }) => {
+  const style = String(command || '').toLowerCase()
+  const prompt = STYLE_PROMPTS[style]
+  if (!prompt) return m.reply('Style tidak dikenal.')
+  await runImageStyle(m, { conn, command: style, prompt, usedPrefix })
 }
 
-function findImageMessage(value, depth = 0, seen = new Set()) {
-  if (!value || typeof value !== "object" || depth > 10 || seen.has(value)) return null
-  seen.add(value)
-  if (value.imageMessage) return value.imageMessage
-  for (const key of ["ephemeralMessage", "viewOnceMessage", "viewOnceMessageV2", "viewOnceMessageV2Extension", "documentWithCaptionMessage", "editedMessage", "message"]) {
-    const child = value[key]
-    if (!child) continue
-    const found = findImageMessage(child.message || child, depth + 1, seen)
-    if (found) return found
-  }
-  for (const [key, child] of Object.entries(value)) {
-    if (["contextInfo", "messageContextInfo", "senderKeyDistributionMessage"].includes(key)) continue
-    if (child && typeof child === "object") {
-      const found = findImageMessage(child, depth + 1, seen)
-      if (found) return found
-    }
-  }
-  return null
-}
+handler.help = Object.keys(STYLE_PROMPTS)
 
-async function fetchWithTimeout(url, options = {}, timeout = API_TIMEOUT, label = "API") {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeout)
-  const startedAt = Date.now()
-  try {
-    return await fetch(url, { ...options, signal: controller.signal })
-  } catch (error) {
-    if (controller.signal.aborted || error?.name === "AbortError") {
-      throw new Error(`${label} tidak merespons dalam ${Math.round(timeout / 1000)} detik (timeout).`)
-    }
-    throw new Error(`Gagal menghubungi ${label}: ${error?.message || error}`)
-  } finally {
-    clearTimeout(timer)
-    console.log(`[IMAGE:NETWORK] ${label} selesai dalam ${((Date.now() - startedAt) / 1000).toFixed(1)}s`)
-  }
-}
-
-async function uploadImage(buffer) {
-  const form = new FormData()
-  form.append("files[]", buffer, { filename: "image.jpg", contentType: "image/jpeg" })
-  const { data } = await axios.post("https://uguu.se/upload", form, {
-    headers: form.getHeaders(),
-    timeout: API_TIMEOUT,
-    maxBodyLength: MAX_IMAGE_BYTES + 1024 * 1024
-  })
-  const url = data?.files?.[0]?.url
-  if (!url || !isHttpUrl(url)) {
-    throw new Error("Layanan upload tidak memberikan URL gambar yang valid.")
-  }
-  return url
-}
-
-let handler = async (m, { conn, command }) => {
-  const startedAt = Date.now()
-  const log = (stage, detail = "") => console.log(
-    `[IMAGE:.${command}] ${new Date().toISOString()} | ${stage}${detail ? " | " + detail : ""} | elapsed=${((Date.now() - startedAt) / 1000).toFixed(1)}s`
-  )
-  log("START", `sender=${String(m.sender || "").split("@")[0]}`)
-  await m.react("✨").catch(() => {})
-  const q = m.quoted || m
-  // Read the quoted payload from the untouched Baileys event first. The
-  // serializer's quoted-media getters may lose nested image metadata on this fork.
-  const rawQuoted = findQuotedMessage(m?.rawMessage?.message || m?.message)
-  const quotedSource = rawQuoted || q?.messages || q?.message || q?.mediaMessage || q?.rawMessage || q
-  const imageMessage = findImageMessage(quotedSource) ||
-    findImageMessage(q?.mediaMessage || q?.message || q?.msg || q?.rawMessage)
-  const mime = String(
-    imageMessage?.mimetype || q?.mimetype || q?.msg?.mimetype ||
-    q?.mediaMessage?.mimetype || ""
-  ).toLowerCase()
-
-  if (!imageMessage || !mime.startsWith("image/")) {
-    const list = handler.help.map(v => `.${v}`).join("\\n")
-    return m.reply(`✨ *AI IMAGE CONVERTER*\\n\\nReply gambar dengan caption salah satu command berikut:\\n\\n${list}`)
-  }
-
-  log("DOWNLOAD", "mengunduh gambar dari payload reply WhatsApp")
-  let buffer = null
-  if (typeof q.download === "function") {
-    try {
-      buffer = await q.download()
-    } catch (error) {
-      log("DOWNLOAD_FALLBACK", error?.message || "quoted.download gagal")
-    }
-  }
-  if ((!Buffer.isBuffer(buffer) || !buffer.length) && typeof conn.downloadM === "function") {
-    buffer = await conn.downloadM(imageMessage, "image")
-  }
-  if (!Buffer.isBuffer(buffer) || !buffer.length) {
-    throw new Error("Gagal mengambil data gambar dari pesan yang direply.")
-  }
-  if (buffer.length > MAX_IMAGE_BYTES) {
-    throw new Error("Ukuran gambar melebihi batas 20 MB.")
-  }
-  log("VALIDATE", `gambar diterima ${(buffer.length / 1024).toFixed(1)} KB; memeriksa format`)
-  const detected = await fileTypeFromBuffer(buffer)
-  if (!detected?.mime?.startsWith("image/")) {
-    throw new Error("Media yang direply bukan file gambar yang valid.")
-  }
-
-  await m.reply(`⏳ Sedang memproses gambar dengan style *${command}*... `)
-  log("UPLOAD", "mengunggah gambar sumber ke penyedia upload")
-  const imageUrl = await uploadImage(buffer)
-  log("API", "gambar terunggah; meminta konversi AI")
-  const apiUrl = `https://api-faa.my.id/faa/${encodeURIComponent(command)}?url=${encodeURIComponent(imageUrl)}`
-  const response = await fetchWithTimeout(apiUrl, {
-    headers: { accept: "image/*, application/json" }
-  }, API_TIMEOUT, `API ${command}`)
-  const contentType = String(response.headers.get("content-type") || "").toLowerCase()
-  log("API_RESPONSE", `HTTP ${response.status}; content-type=${contentType || "unknown"}`)
-  if (!response.ok) {
-    const body = await response.text().catch(() => "")
-    throw new Error(`API ${command} mengembalikan HTTP ${response.status}: ${body.slice(0, 500)}`)
-  }
-
-  let result
-  if (contentType.includes("application/json") || contentType.includes("+json")) {
-    const json = await response.json()
-    if (json?.status === false || json?.success === false || json?.status === "error") {
-      throw new Error(json?.message || json?.error || "API gagal memproses gambar.")
-    }
-    const resultUrl = json?.result?.url || json?.result?.image || json?.result || json?.url || json?.data?.url || json?.data?.image
-    if (typeof resultUrl !== "string" || !isHttpUrl(resultUrl)) {
-      const detail = json?.message || json?.error || JSON.stringify(Object.keys(json || {}))
-      throw new Error(`Respons API tidak berisi URL gambar hasil yang valid. Detail: ${String(detail).slice(0, 300)}`)
-    }
-    log("DOWNLOAD_RESULT", "mengunduh hasil dari URL yang diberikan API")
-    const imageResponse = await fetchWithTimeout(resultUrl, {}, API_TIMEOUT, "URL hasil gambar")
-    if (!imageResponse.ok) throw new Error(`Gagal mengunduh hasil gambar (HTTP ${imageResponse.status}).`)
-    result = Buffer.from(await imageResponse.arrayBuffer())
-  } else if (contentType.startsWith("image/")) {
-    result = Buffer.from(await response.arrayBuffer())
-  } else {
-    const body = await response.text().catch(() => "")
-    if (isHttpUrl(body.trim())) {
-      log("DOWNLOAD_RESULT", "API mengembalikan URL gambar sebagai teks")
-      const imageResponse = await fetchWithTimeout(body.trim(), {}, API_TIMEOUT, "URL hasil gambar")
-      if (!imageResponse.ok) throw new Error(`Gagal mengunduh hasil gambar (HTTP ${imageResponse.status}).`)
-      result = Buffer.from(await imageResponse.arrayBuffer())
-    } else {
-      throw new Error(`Format respons API tidak dikenali (content-type: ${contentType || "unknown"}): ${body.slice(0, 400)}`)
-    }
-  }
-
-  log("DOWNLOAD_RESULT", "mengunduh dan memeriksa file hasil AI")
-  if (!result.length) throw new Error("API mengembalikan hasil gambar kosong.")
-  if (result.length > MAX_IMAGE_BYTES) throw new Error("Hasil gambar melebihi batas 20 MB.")
-  const outputType = await fileTypeFromBuffer(result)
-  if (!outputType?.mime?.startsWith("image/")) {
-    throw new Error(`Respons API bukan gambar valid (content-type: ${contentType || "tidak diketahui"}).`)
-  }
-
-  log("SEND", "mengirim gambar hasil ke WhatsApp")
-  await conn.sendMessage(m.chat, {
-    image: result,
-    mimetype: outputType.mime,
-    fileName: `${command}.${outputType.ext}`,
-    caption: `✨ Berhasil mengubah gambar dengan style ${command}.`
-  }, { quoted: m })
-  await m.react("✅").catch(() => {})
-  log("SUCCESS", `hasil terkirim; total=${((Date.now() - startedAt) / 1000).toFixed(1)}s`)
-}
-
-handler.help = [
-  'tobotak','tochibi','tofunk',
-  'tofigura','tofigurav2','tofigurav3','toghibli','tohijab',
-  'tojapanese','tojepang','tokacamata','tokamboja','tolego',
-  'toliquor','tomaid','tomirror','tomoai','tomonyet',
-  'topacar','topeci','topiramida','toputih','toreal',
-  'toroblox','toroh','totato','totua','toviking',
-  'tozombie','tounderground','tohitam'
-]
 handler.tags = ['image']
-handler.command = /^(tobotak|tochibi|tofunk|tofigura|tofigurav2|tofigurav3|toghibli|tohijab|tojapanese|tojepang|tokacamata|tokamboja|tolego|toliquor|tomaid|tomirror|tomoai|tomonyet|topacar|topeci|topiramida|toputih|toreal|toroblox|toroh|totato|totua|toviking|tozombie|tounderground|tohitam)$/i
+
+handler.command =
+  /^(tobotak|tochibi|tofunk|tofigura|tofigurav2|tofigurav3|tohijab|tojapanese|tokacamata|tokamboja|toliquor|tomaid|tomirror|tomoai|tomonyet|topacar|topeci|topiramida|toputih|toreal|toroblox|toroh|totato|totua|toviking|tozombie|tounderground|tohitam)$/i
+
 handler.limit = true
+
 export default handler

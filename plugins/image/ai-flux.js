@@ -9,6 +9,12 @@ let handler = async (m, { conn, text, args, usedPrefix, command }) => {
 
     const endpoint = `https://fast-flux-demo.replicate.workers.dev/api/generate-image?text=${encodeURIComponent(prompt)}`
     const res = await fetch(endpoint, { method: 'GET', headers: { 'Accept': 'application/json' } })
+    // Backend ini mengembalikan gambar langsung (WebP) bila sukses; jangan
+    // parsing body error sebagai gambar.
+    if (!res.ok) {
+      const body = await res.text().catch(() => '')
+      throw new Error(`Layanan Flux mengembalikan HTTP ${res.status}: ${body.slice(0, 200)}`)
+    }
     const contentType = res.headers.get('content-type') || ''
 
     if (contentType.includes('application/json')) {
@@ -43,6 +49,7 @@ let handler = async (m, { conn, text, args, usedPrefix, command }) => {
     if (contentType.startsWith('image/') || contentType === '') {
       const arrayBuffer = await res.arrayBuffer()
       const buffer = Buffer.from(arrayBuffer)
+      if (!buffer.length) throw new Error('Layanan Flux mengembalikan gambar kosong.')
       return conn.sendMessage(m.chat, { image: buffer, caption: `Prompt: ${prompt}` }, { quoted: m })
     }
 

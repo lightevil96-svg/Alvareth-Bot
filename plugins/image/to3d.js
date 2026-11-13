@@ -1,93 +1,40 @@
-const endpoint = {
-	to3d: "to3d",
-	toanime: "toanime",
-	tocyberpunk: "tocyberpunk",
-	todisney: "todisney",
-	toghibli: "toghibli",
-	tojepang: "tojepang",
-	tolego: "tolego",
-	tomanga: "tomanga",
-	tooil: "tooil",
-	topixar: "topixar",
-	tosketch: "tosketch"
-};
+// Transformasi style gambar (.to3d, .tooil, dll).
+// Dulu: backend api.kyzzz.eu.cc (sekarang 403 Cloudflare) + deteksi gambar
+// hanya dari `(q.msg || q).mimetype`, sehingga kirim gambar dengan caption
+// maupun reply gambar sama-sama gagal dan bot hanya membalas "Reply gambar."
+// Sekarang: deteksi gambar lewat lib/image-edit.js (payload Baileys mentah
+// untuk reply, m.download() untuk gambar dengan caption) + backend
+// Pollinations image gratis tanpa API key (gambar diunggah dulu ke tmp.malvryx.dev).
+import { runImageStyle } from '../../lib/image-edit.js'
 
-const handler = async (m, { conn, command }) => {
-	const q = m.quoted ? m.quoted : m;
-	const mime = (q.msg || q).mimetype || "";
+export const STYLE_PROMPTS = {
+  to3d: 'Transform this photo into a 3D rendered style, Pixar-like 3D animation look, keep the subject, pose and composition the same',
+  toanime: 'Transform this photo into anime style illustration, keep the subject, pose and composition the same',
+  tocyberpunk: 'Transform this photo into cyberpunk style, neon lights, futuristic city glow, keep the subject and composition the same',
+  todisney: 'Transform this photo into Disney animation style, keep the subject, pose and composition the same',
+  toghibli: 'Transform this photo into Studio Ghibli anime style, soft colors and hand-drawn look, keep the subject and composition the same',
+  tojepang: 'Transform this photo into Japanese anime style illustration, keep the subject, pose and composition the same',
+  tolego: 'Transform this photo into LEGO style, built from LEGO bricks, keep the subject, pose and composition the same',
+  tomanga: 'Transform this photo into black and white manga style illustration, keep the subject, pose and composition the same',
+  tooil: 'Transform this photo into a classic oil painting, visible brush strokes, oil on canvas texture, keep the subject, pose and composition the same',
+  topixar: 'Transform this photo into Pixar 3D animation style, keep the subject, pose and composition the same',
+  tosketch: 'Transform this photo into a pencil sketch, black and white line drawing, keep the subject, pose and composition the same'
+}
 
-	if (!/image/.test(mime)) {
-		return m.reply("Reply gambar.");
-	}
+const handler = async (m, { conn, command, usedPrefix }) => {
+  const style = String(command || '').toLowerCase()
+  const prompt = STYLE_PROMPTS[style]
+  if (!prompt) return m.reply('Style tidak dikenal.')
+  await runImageStyle(m, { conn, command: style, prompt, usedPrefix })
+}
 
-	try {
-		await m.react("🍀");
+handler.help = Object.keys(STYLE_PROMPTS)
 
-		const api = global.APIs.kyzzz;
-		const apikey = global.APIKeys[api];
-
-		const media = await q.download();
-
-		const form = new FormData();
-		form.append("image", new Blob([media]), "image.jpg");
-
-		const res = await fetch(
-			`${api}/api/ai-image/${endpoint[command]}?apikey=${apikey}`,
-			{
-				method: "POST",
-				body: form
-			}
-		);
-
-		if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-		const type = res.headers.get("content-type") || "";
-		let buffer;
-
-		if (type.includes("application/json")) {
-			const json = await res.json();
-
-			if (!json.status) {
-				throw new Error(json.message || "Gagal memproses gambar.");
-			}
-
-			const url =
-				json.result ||
-				json.url ||
-				json.data?.url;
-
-			if (!url) throw new Error("Gambar tidak ditemukan.");
-
-			const img = await fetch(url);
-
-			if (!img.ok) throw new Error(`HTTP ${img.status}`);
-
-			buffer = Buffer.from(await img.arrayBuffer());
-		} else {
-			buffer = Buffer.from(await res.arrayBuffer());
-		}
-
-		await conn.sendMessage(
-			m.chat,
-			{ image: buffer },
-			{ quoted: m }
-		);
-	} catch (e) {
-		m.reply(`❌ Error: ${e.message}`);
-	}
-};
-
-handler.help = [
-	"to3d", "toanime", "tocyberpunk", "todisney",
-	"toghibli", "tojepang", "tolego",
-	"tomanga", "tooil", "topixar", "tosketch"
-];
-
-handler.tags = ["image"];
+handler.tags = ['image']
 
 handler.command =
-	/^(to3d|toanime|tocyberpunk|todisney|toghibli|tojepang|tolego|tomanga|tooil|topixar|tosketch)$/i;
+  /^(to3d|toanime|tocyberpunk|todisney|toghibli|tojepang|tolego|tomanga|tooil|topixar|tosketch)$/i
 
-handler.limit = true;
+handler.limit = true
 
-export default handler;
+export default handler

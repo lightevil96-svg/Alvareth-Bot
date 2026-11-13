@@ -1,41 +1,20 @@
-import scraper from '@zenaveline/scraper'
+// .hitamkan — hitamkan kulit karakter di gambar.
+// Dulu: scraper.nanobanana (live3d, sekarang gagal: TaskId cannot be found)
+// + deteksi gambar hanya dari m.quoted.mimetype.
+// Sekarang: deteksi gambar dan edit lewat lib/image-edit.js — backend
+// Pollinations image gratis tanpa API key.
+import { runImageStyle } from '../../lib/image-edit.js'
 
-let handler = async (m, { conn }) => {
-  const q = m.quoted || m
-  const mime = q.mimetype || ''
+const PROMPT =
+  'Make the skin of the character in this photo very black, pitch black #000000, only the skin, keep the face and hair color unchanged'
 
-  if (!/image/.test(mime)) {
-    throw 'Reply gambar dengan caption:\n.hitamkan'
-  }
-
-  await m.react('🕒')
-
-  try {
-    const buffer = await q.download()
-
-    const result = await scraper.nanobanana(
-      buffer,
-      'hitamkan kulit karakter ini tanpa mengubah wajah dan warna rambutnya yang dihitamkan cuma kulitnya saja, untuk warna kulitnya wajib hitam legam ("#000000")'
-    )
-
-    if (result.status !== 'success' || !result.image_url) {
-      throw 'Gagal mengedit gambar.'
-    }
-
-    await conn.sendFile(
-      m.chat,
-      result.image_url,
-      'hitamkan.jpg',
-      '',
-      m
-    )
-
-    await m.react('✅')
-  } catch (e) {
-    console.error(e)
-    await m.react('❌')
-    throw String(e?.message || e)
-  }
+let handler = async (m, { conn, usedPrefix }) => {
+  await runImageStyle(m, {
+    conn,
+    command: 'hitamkan',
+    prompt: PROMPT,
+    usedPrefix
+  })
 }
 
 handler.help = ['hitamkan']
