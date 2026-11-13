@@ -1,3 +1,4 @@
+import { generateWAMessageFromContent, proto } from 'baileys'
 import { tiktokSearch, tiktokScrape, getTikTokPhotoPost } from '../../lib/scrape/tikwm.js'
 import { downloadYoutubeVideoYtDlp, cleanupDownload as cleanupYtDlpDownload } from '../../lib/scrape/youtube.js'
 import axios from 'axios'
@@ -9,7 +10,7 @@ import { spawn } from 'node:child_process'
 import { pipeline } from 'node:stream/promises'
 import { Transform } from 'node:stream'
 import { fileTypeFromFile } from 'file-type'
-import { getTikTokOutputQualities, getTikTokScaleFilter, parseTikTokSlideDurations } from '../../lib/tiktok-workflow.js'
+import { getTikTokOutputQualities, getTikTokScaleFilter, parseTikTokSlideDurations, buildTikTokCaptionCopy, buildTikTokCaptionCopyButton } from '../../lib/tiktok-workflow.js'
 
 const MAX_VIDEO_BYTES = 150 * 1024 * 1024
 const MAX_INLINE_VIDEO_BYTES = 50 * 1024 * 1024
@@ -809,6 +810,35 @@ async function sendTikTokVideoQualityMenu(conn, m, { url, usedPrefix, sourceInfo
   }, { quoted: m, noAlvarethPreview: true })
 }
 
+// Tombol "Salin Caption" (cta_copy) di bawah hasil .tiktok: mengetuk tombol
+// menyalin caption asli video ke clipboard, tanpa perlu memblokir teks
+// manual. Bentuk pesan mengikuti plugins/tools/tourl.js. Kegagalan
+// mengirim tombol tidak boleh menggagalkan unduhan yang sudah berhasil,
+// jadi pemanggil membungkusnya dengan .catch().
+async function sendTikTokCaptionCopyButton(conn, m, title) {
+  const captionCopy = buildTikTokCaptionCopy(title)
+  if (!captionCopy) return
+  const active = await waitForActiveConnection(conn)
+  const msg = generateWAMessageFromContent(m.chat, {
+    viewOnceMessage: {
+      message: {
+        interactiveMessage: proto.Message.InteractiveMessage.create({
+          body: proto.Message.InteractiveMessage.Body.create({
+            text: '📝 *Caption TikTok*\n\n' + captionCopy.displayText
+          }),
+          footer: proto.Message.InteractiveMessage.Footer.create({
+            text: global.namebot || 'Alvareth Bot'
+          }),
+          nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+            buttons: [buildTikTokCaptionCopyButton(captionCopy.copyText)]
+          })
+        })
+      }
+    }
+  }, {})
+  await active.relayMessage(m.chat, msg.message, { messageId: msg.key.id })
+}
+
 async function sendTikTokSlideshowInstructions(conn, m, { url, imageCount, usedPrefix }) {
   await sendMessageWithReconnect(conn, m.chat, {
     text: [
@@ -1579,6 +1609,8 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
         image: { url: res.images[0] },
         caption: photoCaption
       }, { quoted: m, noAlvarethPreview: true })
+      await sendTikTokCaptionCopyButton(conn, m, title).catch(error =>
+        console.warn('[TikTok] Gagal mengirim tombol salin caption:', error?.message || error))
       await sendTikTokPhotoPostMenu(conn, m, { url, images: res.images, usedPrefix })
       await reactSafe(conn, m, '✅')
       return
@@ -1615,6 +1647,8 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
             image: { url: photoPost.images[0] },
             caption: photoCaption
           }, { quoted: m, noAlvarethPreview: true })
+          await sendTikTokCaptionCopyButton(conn, m, photoTitle).catch(error =>
+            console.warn('[TikTok] Gagal mengirim tombol salin caption:', error?.message || error))
           await sendTikTokPhotoPostMenu(conn, m, { url, images: photoPost.images, usedPrefix })
           await reactSafe(conn, m, '✅')
           return
@@ -1653,6 +1687,9 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
           caption: videoCaption
         }, { quoted: m, noAlvarethPreview: true })
       }
+
+      await sendTikTokCaptionCopyButton(conn, m, title).catch(error =>
+        console.warn('[TikTok] Gagal mengirim tombol salin caption:', error?.message || error))
 
       if (!isQualityCommand && prepared.sourceInfo) {
         await sendTikTokVideoQualityMenu(conn, m, {
