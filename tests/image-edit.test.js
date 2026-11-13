@@ -83,11 +83,15 @@ test('editImageWithAiHorde memakai img2img AI Horde dengan prompt pelindung', as
   const body = submitBody.captured
   assert.equal(body.source_processing, 'img2img')
   assert.equal(body.models[0], 'stable_diffusion')
-  assert.equal(body.params.denoising_strength, 0.5)
+  // denoising 0.35: uji A/B 2026-11-13 menunjukkan 0.5 mengubah wajah
+  // karakter anime jadi orang lain; 0.35 paling setia pada karakter asli.
+  assert.equal(body.params.denoising_strength, 0.35)
+  assert.match(body.params.negative_prompt, /different face/)
   assert.equal(body.nsfw, true)
   assert.equal(body.censor_nsfw, false)
   assert.match(body.prompt, /fully clothed/)
   assert.match(body.prompt, /keep the same subject/)
+  assert.match(body.prompt, /same subject, face, character design/)
   assert.ok(body.source_image.length > 0)
   assert.deepEqual(result, tinyJpeg)
 })
