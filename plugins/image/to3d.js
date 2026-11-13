@@ -4,7 +4,7 @@
 // maupun reply gambar sama-sama gagal dan bot hanya membalas "Reply gambar."
 // Sekarang: deteksi gambar lewat lib/image-edit.js (payload Baileys mentah
 // untuk reply, m.download() untuk gambar dengan caption) + backend
-// Pollinations image gratis tanpa API key (gambar diunggah dulu ke tmp.malvryx.dev).
+// AI Horde img2img gratis tanpa API key.
 import { runImageStyle } from '../../lib/image-edit.js'
 
 export const STYLE_PROMPTS = {

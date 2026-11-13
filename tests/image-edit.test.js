@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import {
   getImageBuffer,
-  editImageWithPollinations,
+  editImageWithAiHorde,
   upscaleImageBuffer,
   runImageStyle
 } from '../lib/image-edit.js'
@@ -53,33 +53,61 @@ test('getImageBuffer mengembalikan null bila tidak ada gambar', async () => {
   assert.equal(await getImageBuffer(m, {}), null)
 })
 
-test('editImageWithPollinations memakai Pollinations + URL upload', async () => {
-  let seenUrl = ''
-  const result = await editImageWithPollinations(tinyJpeg, 'turn into oil painting', {
-    uploadImpl: async () => 'https://d.uguu.se/test.jpg',
-    fetchImpl: async (url) => {
-      seenUrl = String(url)
-      return imageResponse()
+// Mock alur AI Horde: submit -> check done -> status -> unduh hasil.
+const hordeFetch = (submitBody) => async (url, options = {}) => {
+  const target = String(url)
+  if (target.includes('/generate/async')) {
+    submitBody.captured = JSON.parse(options.body)
+    return { ok: true, status: 202, json: async () => ({ id: 'job-1' }) }
+  }
+  if (target.includes('/generate/check/')) {
+    return { ok: true, status: 200, json: async () => ({ done: true }) }
+  }
+  if (target.includes('/generate/status/')) {
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ generations: [{ img: 'https://example.com/result.jpg' }] })
     }
+  }
+  return imageResponse()
+}
+
+test('editImageWithAiHorde memakai img2img AI Horde dengan prompt pelindung', async () => {
+  const submitBody = {}
+  const result = await editImageWithAiHorde(tinyJpeg, 'turn into oil painting', {
+    fetchImpl: hordeFetch(submitBody),
+    prepareImpl: async (buffer) => ({ buffer, width: 64, height: 64 }),
+    pollIntervalMs: 0
   })
-  assert.ok(seenUrl.includes('image.pollinations.ai'))
-  assert.ok(seenUrl.includes('image=' + encodeURIComponent('https://d.uguu.se/test.jpg')))
+  const body = submitBody.captured
+  assert.equal(body.source_processing, 'img2img')
+  assert.equal(body.models[0], 'stable_diffusion')
+  assert.equal(body.params.denoising_strength, 0.5)
+  assert.equal(body.nsfw, true)
+  assert.equal(body.censor_nsfw, false)
+  assert.match(body.prompt, /fully clothed/)
+  assert.match(body.prompt, /keep the same subject/)
+  assert.ok(body.source_image.length > 0)
   assert.deepEqual(result, tinyJpeg)
 })
 
-test('editImageWithPollinations menolak respons bukan gambar', async () => {
+test('editImageWithAiHorde menolak bila Horde tidak menghasilkan gambar', async () => {
   await assert.rejects(
-    editImageWithPollinations(tinyJpeg, 'turn into oil painting', {
-      uploadImpl: async () => 'https://d.uguu.se/test.jpg',
-      fetchImpl: async () => ({
-        ok: true,
-        status: 200,
-        headers: { get: () => 'application/json' },
-        arrayBuffer: async () => Buffer.from('{}'),
-        text: async () => '{}'
-      })
+    editImageWithAiHorde(tinyJpeg, 'turn into oil painting', {
+      fetchImpl: async (url) => {
+        if (String(url).includes('/generate/async')) {
+          return { ok: true, status: 202, json: async () => ({ id: 'job-1' }) }
+        }
+        if (String(url).includes('/generate/check/')) {
+          return { ok: true, status: 200, json: async () => ({ done: true }) }
+        }
+        return { ok: true, status: 200, json: async () => ({ generations: [] }) }
+      },
+      prepareImpl: async (buffer) => ({ buffer, width: 64, height: 64 }),
+      pollIntervalMs: 0
     }),
-    /bukan gambar/
+    /tidak menghasilkan gambar/
   )
 })
 
@@ -125,13 +153,15 @@ test('runImageStyle mengirim hasil dan memakai limit hanya bila sukses', async (
       return { key: { id: 'msg-1' } }
     }
   }
+  const submitBody = {}
   const ok = await runImageStyle(m, {
     conn,
     command: 'tooil',
     prompt: 'turn into oil painting',
     usedPrefix: '.',
-    uploadImpl: async () => 'https://d.uguu.se/test.jpg',
-    fetchImpl: async () => imageResponse()
+    fetchImpl: hordeFetch(submitBody),
+    prepareImpl: async (buffer) => ({ buffer, width: 64, height: 64 }),
+    pollIntervalMs: 0
   })
   assert.equal(ok, true)
   assert.equal(m.skipLimit, false)
@@ -173,4 +203,16 @@ test('Plugin image tidak lagi memakai backend mati', () => {
       assert.ok(!src.includes(needle), `${file} masih memakai ${needle}`)
     }
   }
+  // Helper edit tidak boleh lagi memakai Pollinations: parameter image-nya
+  // diabaikan di API gratis, jadi hasilnya gambar baru dari prompt saja.
+  const helperRaw = fs.readFileSync(new URL('../lib/image-edit.js', import.meta.url), 'utf8')
+  const helperCode = helperRaw
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n')
+    .filter((line) => !line.trim().startsWith('//'))
+    .join('\n')
+  for (const needle of ['pollinations', 'malvryx', 'uguu.se', 'buildPollinationsImageUrl']) {
+    assert.ok(!helperCode.includes(needle), `lib/image-edit.js masih memakai ${needle}`)
+  }
+  assert.ok(helperCode.includes('aihorde.net'), 'lib/image-edit.js harus memakai AI Horde')
 })

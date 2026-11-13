@@ -1,7 +1,7 @@
 // AI Image Converter — transformasi style gambar.
 // Dulu: backend api-faa.my.id (sekarang HTTP 500, mati) + upload uguu.se.
 // Sekarang: deteksi gambar dan edit lewat lib/image-edit.js — backend
-// Pollinations image gratis tanpa API key (gambar diunggah dulu ke tmp.malvryx.dev).
+// AI Horde img2img gratis tanpa API key.
 // Perintah toghibli, tojepang, dan tolego dihapus dari file ini karena
 // sudah ada di plugins/image/to3d.js dan handler hanya menjalankan plugin
 // pertama yang cocok, jadi versi di sini tidak pernah terpanggil.

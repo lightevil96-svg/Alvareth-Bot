@@ -3,7 +3,7 @@
 // gambar (m.quoted wajib ada, kirim gambar dengan caption tidak bisa),
 // dan file sementara ditulis ke folder kerja bot.
 // Sekarang: deteksi gambar dan edit lewat lib/image-edit.js — backend
-// Pollinations image gratis tanpa API key (gambar diunggah dulu ke tmp.malvryx.dev).
+// AI Horde img2img gratis tanpa API key.
 import { runImageStyle } from '../../lib/image-edit.js'
 
 const PROMPT =
