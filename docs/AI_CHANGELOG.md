@@ -1,3 +1,12 @@
+## 2026-11-15 — Fix .asisten setup prompt incorrectly consumed as Groq API key
+
+- **Symptom:** After `.asisten apikey`, the bot sent the correct key-entry instructions and immediately sent `Format API key Groq tidak valid` before the owner typed anything.
+- **Root cause:** `handler.all` accepted the bot's own outgoing text response as owner input. With owner and bot on the same linked WhatsApp account, an outgoing bot message is `fromMe=true` and `isROwner=true`; the prompt text is normal `conversation`/extended text, and its ID differs from the command ID. The previous check therefore consumed the instructions as the pending API key.
+- **Fix:** `plugins/owner/asisten.js` imports shared `wasBotSentMessage` from `lib/auto-download.js`, whose IDs are registered centrally by `lib/simple.js`'s `sendMessage` wrapper. Ignore bot-authored output in `handler.all`. Add a narrow outgoing setup-prompt-text safeguard for the timing window before the sent ID is registered. Do **not** reject every `fromMe` event, because real owner messages typed from the same linked account also have `fromMe=true`. Unrelated handler/router behavior is unchanged.
+- **Regression coverage:** `tests/owner-assistant.test.js` now simulates the three menu prompts (API key, target, owner status), tracked outgoing echoes, untracked early echoes, and legitimate manual owner input in the same chat. It checks that bot echoes do not consume pending sessions or generate invalid-key replies, while manual input updates stored configuration. Local test execution and live WhatsApp verification are still pending; no external credentials were used or committed.
+- **Files:** `plugins/owner/asisten.js`, `tests/owner-assistant.test.js`, `AI_CONTEXT.md`, `docs/AI_CHANGELOG.md`.
+- **Verification required:** Run `npm run test:asisten` and `npm test` after update, then test the real WhatsApp sequence `.asisten → Apikey → instruction (no extra warning) → owner types key → saved acknowledgement`. If using hot reload, ensure the new module is loaded; otherwise restart the bot. Never publish a real Groq key or WhatsApp chat containing it.
+
 ## 2026-11-15 — Add owner-only .asisten auto replies with Groq
 
 - **Request:** Create an assistant with `.asisten` menu buttons Target, Owner sedang ngapain, Apikey; automatically respond to selected WhatsApp contacts while the owner is unavailable using Groq model `openai/gpt-oss-120b`.
