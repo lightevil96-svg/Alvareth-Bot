@@ -9,6 +9,8 @@
 
 ## Pembaruan terbaru
 
+- 2026-11-15 — Added owner-only `.asisten`: three-button menu (Target, Owner sedang ngapain, Apikey), selected-contact auto replies through Groq `openai/gpt-oss-120b`, private config in `ALVARETH_DATA_DIR/asisten/config.json`, 15-second per-chat cooldown, input prompt expiry, and focused tests. Replies work for incoming private text from configured phone-number JIDs only; LID senders need a resolved `senderPN`. No Groq key or session is committed. Live WhatsApp delivery remains unverified.
+
 - 2026-11-13 — Unduhan video `.tiktok` mengirim MP4 tanpa caption dan menampilkan **Pilih Kualitas** serta **Salin Caption** dalam satu pesan. Video tanpa caption hanya menampilkan pilihan kualitas.
 
 - 2026-11-13: Added a "📋 Salin Caption" `cta_copy` button to `.tiktok` results: after the video (or photo preview) is sent, an interactive message shows the original TikTok caption with a button that copies it to the clipboard; helpers live in `lib/tiktok-workflow.js` (`buildTikTokCaptionCopy`, `buildTikTokCaptionCopyButton`), button failures never fail the download. `npm run test:tiktok` passes 9/9; live WhatsApp tap testing is still required after restart. See `docs/AI_CHANGELOG.md`.
