@@ -4,7 +4,7 @@
 - **Root cause:** The scraper extracted only `imageURL` and discarded TikTok's separate Live Photo video stored in `imagePost.images[].live_photo_info.live_photo`.
 - **Fix:** Extract each original Live Photo video URL from TikTok's hydrated item/detail response, preferring `download_no_watermark_addr` and then `play_addr`; preserve its position alongside the matching still image. The renderer now loops the actual Live Photo MP4 while the original soundtrack is muxed once and plays continuously (maximum 60 seconds). The menu offers motion-video actions only for photos with a real Live Photo clip; ordinary still photos are not turned into fake motion videos. Multi-photo slideshow behavior remains unchanged.
 - **Regression coverage:** Add parser fixtures for real and non-Live photos, assert that the renderer loops the video input rather than a still image, and verify menu/selection routing uses the matching Live Photo clip.
-- **Files:** `lib/scrape/tikwm.js`, `plugins/downloader/tiktok.js`, `tests/tiktok-workflow.test.js`, `package.json`, `.github/workflows/tiktok-regression.yml`, `AI_CONTEXT.md`, and this changelog.
+- **Files:** `lib/tiktok-live-photo.js`, `lib/scrape/tikwm.js`, `plugins/downloader/tiktok.js`, `tests/tiktok-workflow.test.js`, `package.json`, `.github/workflows/tiktok-regression.yml`, `AI_CONTEXT.md`, and this changelog.
 - **Verification:** GitHub Actions `npm run test:tiktok` is triggered by the commit and must pass before calling the code verified. Live extraction from the user's example post and WhatsApp delivery still require a real-link smoke test.
 
 ## 2026-11-15 — Loop single-photo TikTok posts to the original soundtrack
