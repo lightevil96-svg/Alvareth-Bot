@@ -9,6 +9,8 @@
 
 ## Pembaruan terbaru
 
+- 2026-11-15 — Fixed `.asisten apikey` immediately saying “Format API key Groq tidak valid” without owner input: bot's own setup reply was routed through `handler.all` as root owner in self-chat. `plugins/owner/asisten.js` now ignores outbound IDs using shared `wasBotSentMessage()` and recognizes early echoed setup prompts, while manually typed `fromMe` input remains valid. Added regression cases covering key/target/status prompts and owner self-chat input. Tests not executed locally; live WhatsApp verification pending.
+
 - 2026-11-15 — Added owner-only `.asisten`: three-button menu (Target, Owner sedang ngapain, Apikey), selected-contact auto replies through Groq `openai/gpt-oss-120b`, private config in `ALVARETH_DATA_DIR/asisten/config.json`, 15-second per-chat cooldown, input prompt expiry, and focused tests. Replies work for incoming private text from configured phone-number JIDs only; LID senders need a resolved `senderPN`. No Groq key or session is committed. Live WhatsApp delivery remains unverified.
 
 - 2026-11-13 — Unduhan video `.tiktok` mengirim MP4 tanpa caption dan menampilkan **Pilih Kualitas** serta **Salin Caption** dalam satu pesan. Video tanpa caption hanya menampilkan pilihan kualitas.
