@@ -234,3 +234,18 @@ Sebelum mengubah kode, AI/developer wajib membaca [`AGENTS.md`](AGENTS.md), [`AI
 Alvareth includes an owner-only, private-chat `.analisis` command. Reply to a video with `.analisis` to open an interactive menu for full analysis, transcript/subtitles, speaker detection, character descriptions, scenes, highlights, summary, and Skills-Clip export. The menu also has an API Key Gemini button: send the key in the next private message and the bot stores it in a permission-restricted local file, without logging or returning the value. The key message remains in WhatsApp chat history, so delete it after setup. The bot creates a ZIP handoff package; it does not render the final video.
 
 The default engine uses Gemini Files API and standard `generateContent` endpoint using `gemini-3.8-flash` by default; it requires `GEMINI_API_KEY`. An optional Cutroom sidecar adds faster-whisper transcription, pyannote diarization, face tracking, and LR-ASD active-speaker candidates. Cutroom must be deployed separately and should remain on localhost/private network because its upstream API is unauthenticated by default. FFprobe is optional for source-duration metadata. Transcript output remains `ASR_RAW`; speaker-to-face matches remain `CANDIDATE` or `UNKNOWN` until a human reviews the source. Setup, limits, artifacts, and security notes are in [Video Analysis](docs/VIDEO_ANALYSIS.md).
+
+
+## Asisten WhatsApp otomatis (`.asisten`)
+
+Fitur khusus owner untuk membalas pesan teks dari kontak yang dipilih ketika owner tidak tersedia. Model Groq: `openai/gpt-oss-120b`.
+
+1. Di chat pribadi akun owner ketik `.asisten`; menu menampilkan tiga tombol **🎯 Target**, **💤 Owner sedang ngapain**, dan **🔑 Apikey**. Jika tombol tidak terlihat, gunakan perintah teks pada menu.
+2. Pilih Target dan kirim nomor kontak internasional, contoh `6281234567890`. Bisa langsung `.asisten target tambah 6281234567890`; lihat daftar dengan `.asisten target list`, hapus dengan `.asisten target hapus NOMOR`.
+3. Pilih Owner sedang ngapain dan kirim status singkat, misalnya *Owner sedang off; jika ada yang ingin dibantu silakan titip pesan.* Bisa langsung `.asisten status Owner sedang off`.
+4. Pilih Apikey, lalu kirim Groq API key di chat pribadi owner dalam waktu 5 menit. API key disimpan di `ALVARETH_DATA_DIR/asisten/config.json` di luar repository. Alternatif: isi `GROQ_API_KEY` di environment server. Hapus pesan WhatsApp berisi API key setelah disimpan.
+5. Aktifkan dengan `.asisten on`. Matikan dengan `.asisten off`; lihat apakah kunci tersedia melalui `.asisten apikey status`, atau hapus kunci lokal dengan `.asisten apikey clear`.
+
+Fitur ini hanya membalas teks biasa dari nomor target di chat pribadi bot, bukan pesan grup atau akun lain. Konteks chat yang dikirim ke Groq adalah data pihak ketiga; informasikan kepada kontak bahwa balasan berasal dari AI. Balasan dibatasi satu per 15 detik per chat, dan permintaan Groq memiliki timeout 25 detik. Jika tidak ada sumber key, bot tidak mengirim balasan. Perintah ini tidak menyalakan dirinya otomatis sampai `.asisten on` dijalankan.
+
+Jalankan `npm run test:asisten` untuk tes spesifik fitur ini. Hasil live WhatsApp (terutama dukungan tombol dan JID/LID) perlu diverifikasi setelah deployment.
