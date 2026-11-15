@@ -3,6 +3,7 @@ import {
   isValidGroqKey, loadAsistenConfig, updateAsistenConfig, getAsistenApiKey,
   asistenIsActiveFor, askAsistenGroq
 } from '../../lib/owner-assistant.js'
+import { wasBotSentMessage } from '../../lib/auto-download.js'
 
 const pending = global.__alvarethAsistenPending || (global.__alvarethAsistenPending = new Map())
 const conversations = global.__alvarethAsistenConversations || (global.__alvarethAsistenConversations = new Map())
@@ -16,6 +17,12 @@ const FALLBACK = 'Halo! Saya asisten otomatis owner. Saat ini owner sedang tidak
 function pendingKey(m) { return String(m.chat || '') + ':' + String(m.sender || '') }
 function cleanMessageId(m) { return String(m.id || m.key?.id || '') }
 function hasCommandPrefix(text) { return /^[.!/#]/.test(String(text || '').trim()) }
+// Outgoing prompt echoes can arrive before sendMessage's ID tracking is registered.
+// This narrow fallback only rejects the assistant's own setup instructions.
+function isOwnSetupPromptEcho(m, text) {
+  if (!m?.fromMe && m?.key?.fromMe !== true && m?.rawMessage?.key?.fromMe !== true) return false
+  return /^(?:🔑 \*API KEY GROQ\*|🎯 \*TAMBAH TARGET\*|💤 \*OWNER SEDANG NGAPAIN\?\*)/.test(String(text || '').trim())
+}
 function isOwnerPrivate(m, context) {
   return context?.isROwner === true && !m.isGroup && !String(m.chat || '').endsWith('@g.us')
 }
@@ -159,6 +166,10 @@ handler.private = true
 
 handler.all = async function (m, context = {}) {
   if (!m?.chat || m.isGroup || m.chat === 'status@broadcast') return
+  // Root owner may use the same WhatsApp account as the linked bot. In that case
+  // the bot's outbound prompt also appears with isROwner/fromMe. Ignore bot
+  // message IDs while still allowing manually typed fromMe messages.
+  if (wasBotSentMessage(m) || isOwnSetupPromptEcho(m, textContent(m))) return
   const key = pendingKey(m)
   const input = pending.get(key)
   if (input && isOwnerPrivate(m, context) && isAsistenPlainText(m) &&
