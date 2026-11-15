@@ -6,6 +6,7 @@ import {
   getTikTokScaleFilter,
   parseTikTokSlideDurations
 } from '../lib/tiktok-workflow.js'
+import { extractPhotoLiveVideos } from '../lib/scrape/tikwm.js'
 
 test('TikTok quality options are limited to source resolution and lower standard tiers', () => {
   assert.deepEqual(getTikTokOutputQualities(1080, 1920), [1080, 720, 480, 360])
@@ -46,29 +47,67 @@ test('TikTok plugin registers photo actions, slideshow, and FFmpeg quality rende
   assert.match(plugin, /Render ulang MP4/)
 })
 
-test('single TikTok photo is looped for the original soundtrack without restarting the audio', async () => {
+test('TikTok photo parser extracts original Live Photo motion clips in image order', () => {
+  const liveVideo = 'https://cdn.example/live-photo-1.mp4'
+  const result = extractPhotoLiveVideos({
+    itemInfo: {
+      itemStruct: {
+        imagePost: {
+          images: [
+            {
+              imageURL: { urlList: ['https://cdn.example/still-1.jpeg'] },
+              live_photo_info: {
+                is_live_photo: true,
+                live_photo: {
+                  download_no_watermark_addr: { url_list: [liveVideo] }
+                }
+              }
+            },
+            {
+              imageURL: { urlList: ['https://cdn.example/still-2.jpeg'] },
+              live_photo_info: {
+                is_live_photo: false,
+                live_photo: {
+                  play_addr: { url_list: ['https://cdn.example/not-live.mp4'] }
+                }
+              }
+            },
+            { imageURL: { urlList: ['https://cdn.example/still-3.jpeg'] } }
+          ]
+        }
+      }
+    }
+  })
+  assert.deepEqual(result, [liveVideo, null, null])
+})
+
+test('single TikTok Live Photo loops its original motion clip while music plays once', async () => {
   const plugin = await readFile(new URL('../plugins/downloader/tiktok.js', import.meta.url), 'utf8')
   const renderer = plugin
-    .split('async function renderSinglePhotoWithMusic')[1]
+    .split('async function renderTikTokLivePhotoWithMusic')[1]
     .split('async function renderTikTokPhotoSlideshow')[0]
-  assert.match(renderer, /'-loop', '1'/)
+  assert.match(renderer, /'-stream_loop', '-1', '-i', liveVideoPath/)
   assert.match(renderer, /duration = Math\.min\(audioDuration, 60\)/)
   assert.match(renderer, /'-shortest'/)
+  assert.doesNotMatch(renderer, /'-loop', '1'/)
   assert.doesNotMatch(renderer, /'-stream_loop', '-1', '-i', audioPath/)
 
   const sender = plugin
     .split('async function sendTikTokSinglePhotoVideo')[1]
     .split('async function sendTikTokPhotoAlbum')[0]
-  assert.match(sender, /renderSinglePhotoWithMusic\(imageUrl, audioUrl, outputPath\)/)
-  assert.match(sender, /Foto diulang terus selama musik diputar/)
-  assert.match(sender, /Musik asli diputar terus tanpa restart/)
+  assert.match(sender, /renderTikTokLivePhotoWithMusic\(liveVideoUrl, audioUrl, outputPath\)/)
+  assert.match(sender, /Gerakan asli Live Photo diulang sampai musik selesai/)
+  assert.match(sender, /Musik asli diputar satu kali tanpa restart/)
 })
 
-test('single-photo TikTok posts and selected photos use the same looping video renderer', async () => {
+test('TikTok Live Photo actions only render photos that have an original motion clip', async () => {
   const plugin = await readFile(new URL('../plugins/downloader/tiktok.js', import.meta.url), 'utf8')
   const menu = plugin
     .split('async function sendTikTokPhotoPostMenu')[1]
     .split('async function sendTikTokSlideshowDurationMenu')[0]
+  const selectedMenu = plugin
+    .split('async function sendPhotoToVideoActionMenus')[1]
+    .split('async function cleanupStaleTikTokTemps')[0]
   const slideshow = plugin
     .split('if (isSlideshowCommand)')[1]
     .split('if (isSlideshowCustomCommand)')[0]
@@ -78,11 +117,16 @@ test('single-photo TikTok posts and selected photos use the same looping video r
   const selected = plugin
     .split('if (isPhotoToVideoCommand)')[1]
     .split('if (isPhotoOnlyCommand)')[0]
-  assert.match(menu, /images\.length === 1 \? '2\. Foto → video loop'/)
-  assert.match(menu, /ttfoto2video/)
-  assert.match(slideshow, /res\.images\.length === 1[\s\S]*sendTikTokSinglePhotoVideo/)
-  assert.match(custom, /res\.images\.length === 1[\s\S]*sendTikTokSinglePhotoVideo/)
+
+  assert.match(menu, /images\.length === 1 && liveVideos\[0\]/)
+  assert.match(menu, /Live Photo → video/)
+  assert.match(selectedMenu, /filter\(index => Boolean\(liveVideos\[index\]\)\)/)
+  assert.match(slideshow, /res\.liveVideos\?\.\[0\]/)
+  assert.match(custom, /res\.liveVideos\?\.\[0\]/)
+  assert.match(selected, /res\.liveVideos\?\.\[photoIndex - 1\]/)
   assert.match(selected, /sendTikTokSinglePhotoVideo/)
+  assert.match(plugin, /tidak akan membuat video statis/)
+  assert.doesNotMatch(plugin, /renderSinglePhotoWithMusic/)
 })
 
 test('TikTok downloads send caption-free MP4s and a single menu for the initial result', async () => {
