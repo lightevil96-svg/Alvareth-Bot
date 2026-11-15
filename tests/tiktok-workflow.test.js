@@ -68,9 +68,16 @@ test('TikTok photo parser extracts original Live Photo motion clips in image ord
         }
       }
     },
-    { imageURL: { urlList: ['https://cdn.example/still-3.jpeg'] } }
+    { imageURL: { urlList: ['https://cdn.example/still-3.jpeg'] } },
+    {
+      imageURL: { urlList: ['https://cdn.example/still-4.jpeg'] },
+      clip_type: 3,
+      video: { play_addr: { url_list: ['https://cdn.example/direct-live.mp4'] } }
+    }
   ]
-  assert.deepEqual(images.map(extractTikTokLivePhotoVideoUrl), [liveVideo, null, null])
+  assert.deepEqual(images.map(extractTikTokLivePhotoVideoUrl), [
+    liveVideo, null, null, 'https://cdn.example/direct-live.mp4'
+  ])
 })
 
 test('single TikTok Live Photo loops its original motion clip while music plays once', async () => {
@@ -92,7 +99,26 @@ test('single TikTok Live Photo loops its original motion clip while music plays 
   assert.match(sender, /Musik asli diputar satu kali tanpa restart/)
 })
 
-test('TikTok Live Photo actions only render photos that have an original motion clip', async () => {
+test('Live Photo extractor reads official live_photo_info and direct image.video payloads', () => {
+  const officialLiveVideo = 'https://cdn.example/official-live-photo.mp4'
+  const directLiveVideo = 'https://cdn.example/direct-live-photo.mp4'
+  assert.equal(extractTikTokLivePhotoVideoUrl({
+    live_photo_info: {
+      is_live_photo: true,
+      live_photo: { play_addr: { url_list: [officialLiveVideo] } }
+    }
+  }), officialLiveVideo)
+  assert.equal(extractTikTokLivePhotoVideoUrl({
+    clip_type: 3,
+    video: { download_no_watermark_addr: { url_list: [directLiveVideo] } }
+  }), directLiveVideo)
+  assert.equal(extractTikTokLivePhotoVideoUrl({
+    clip_type: 2,
+    video: { play_addr: { url_list: ['https://cdn.example/still-not-motion.mp4'] } }
+  }), null)
+})
+
+test('TikTok photo menu always offers select-one-photo and all-photo video actions', async () => {
   const plugin = await readFile(new URL('../plugins/downloader/tiktok.js', import.meta.url), 'utf8')
   const menu = plugin
     .split('async function sendTikTokPhotoPostMenu')[1]
@@ -110,9 +136,11 @@ test('TikTok Live Photo actions only render photos that have an original motion 
     .split('if (isPhotoToVideoCommand)')[1]
     .split('if (isPhotoOnlyCommand)')[0]
 
-  assert.match(menu, /images\.length === 1 && liveVideos\[0\]/)
-  assert.match(menu, /Live Photo → video/)
-  assert.match(selectedMenu, /filter\(index => Boolean\(liveVideos\[index\]\)\)/)
+  assert.match(menu, /title: '2\. Pilih satu foto → video'/)
+  assert.match(menu, /id: usedPrefix \+ 'ttfotopilih ' \+ url/)
+  assert.match(menu, /title: '3\. Semua foto → video'/)
+  assert.match(selectedMenu, /images\.map\(\(_image, index\) => index\)/)
+  assert.doesNotMatch(selectedMenu, /filter\(index => Boolean\(liveVideos\[index\]\)\)/)
   assert.match(slideshow, /res\.liveVideos\?\.\[0\]/)
   assert.match(custom, /res\.liveVideos\?\.\[0\]/)
   assert.match(selected, /res\.liveVideos\?\.\[photoIndex - 1\]/)
