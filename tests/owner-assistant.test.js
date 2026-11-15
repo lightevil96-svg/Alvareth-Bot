@@ -136,3 +136,68 @@ test('bot setup prompts are never interpreted as owner input in self-chat', asyn
     await fs.rm(directory, { recursive: true, force: true })
   }
 })
+
+
+test('.ai and .asisten share Groq API key and model without sharing owner status', async () => {
+  const fs = await import('node:fs/promises')
+  const os = await import('node:os')
+  const path = await import('node:path')
+  const { askGroqAi, updateAsistenConfig } = await import('../lib/owner-assistant.js')
+  const { default: aiPlugin } = await import('../plugins/ai/gemini.js')
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'alvareth-groq-ai-'))
+  const oldDir = process.env.ALVARETH_DATA_DIR
+  const oldEnvKey = process.env.GROQ_API_KEY
+  const oldFetch = globalThis.fetch
+  process.env.ALVARETH_DATA_DIR = dir
+  delete process.env.GROQ_API_KEY
+  const observed = []
+  const stub = async (url, options) => {
+    const data = JSON.parse(options.body)
+    observed.push({ url, authorization: options.headers.Authorization, data })
+    return { ok: true, json: async () => ({ choices: [{ message: { content: 'Jawaban Groq.' } }] }) }
+  }
+  try {
+    await updateAsistenConfig(cfg => ({
+      ...cfg, groqApiKey: key, ownerStatus: 'Status owner privat'
+    }))
+    assert.equal(await askGroqAi('Apa itu AI?', { fetchImpl: stub }), 'Jawaban Groq.')
+    assert.equal(observed[0].url, 'https://api.groq.com/openai/v1/chat/completions')
+    assert.equal(observed[0].authorization, 'Bearer ' + key)
+    assert.equal(observed[0].data.model, ASISTEN_MODEL)
+    assert.equal(JSON.stringify(observed[0].data).includes('Status owner privat'), false)
+
+    const replacement = 'gsk_' + 'B'.repeat(32)
+    await updateAsistenConfig(cfg => ({ ...cfg, groqApiKey: replacement }))
+    assert.equal(await askGroqAi('Halo', { fetchImpl: stub }), 'Jawaban Groq.')
+    assert.equal(observed[1].authorization, 'Bearer ' + replacement)
+
+    globalThis.fetch = stub
+    const replies = []
+    const msg = { chat: '6281234567890@s.whatsapp.net', react: async () => {} }
+    const conn = { reply: async (_chat, body) => replies.push(body) }
+    await aiPlugin(msg, { conn, command: 'ai', usedPrefix: '.', text: 'Jelaskan komputer' })
+    assert.deepEqual(replies, ['Jawaban Groq.'])
+    assert.equal(observed[2].authorization, 'Bearer ' + replacement)
+    assert.equal(observed[2].data.model, ASISTEN_MODEL)
+    assert.equal(aiPlugin.command.test('gemini'), true)
+
+    globalThis.fetch = async () => ({ ok: false, status: 429 })
+    const rateLimited = { chat: msg.chat, react: async () => {}, skipLimit: false }
+    await aiPlugin(rateLimited, { conn, command: 'ai', usedPrefix: '.', text: 'Tes' })
+    assert.equal(rateLimited.skipLimit, true)
+    assert.match(replies.at(-1), /batas permintaan Groq/)
+
+    await updateAsistenConfig(cfg => ({ ...cfg, groqApiKey: '' }))
+    const noKey = { chat: msg.chat, react: async () => {}, skipLimit: false }
+    await aiPlugin(noKey, { conn, command: 'ai', usedPrefix: '.', text: 'Tes' })
+    assert.equal(noKey.skipLimit, true)
+    assert.match(replies.at(-1), /API key Groq belum tersedia/)
+  } finally {
+    globalThis.fetch = oldFetch
+    if (oldDir === undefined) delete process.env.ALVARETH_DATA_DIR
+    else process.env.ALVARETH_DATA_DIR = oldDir
+    if (oldEnvKey === undefined) delete process.env.GROQ_API_KEY
+    else process.env.GROQ_API_KEY = oldEnvKey
+    await fs.rm(dir, { recursive: true, force: true })
+  }
+})
