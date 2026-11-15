@@ -249,3 +249,12 @@ Fitur khusus owner untuk membalas pesan teks dari kontak yang dipilih ketika own
 Fitur ini hanya membalas teks biasa dari nomor target di chat pribadi bot, bukan pesan grup atau akun lain. Konteks chat yang dikirim ke Groq adalah data pihak ketiga; informasikan kepada kontak bahwa balasan berasal dari AI. Balasan dibatasi satu per 15 detik per chat, dan permintaan Groq memiliki timeout 25 detik. Jika tidak ada sumber key, bot tidak mengirim balasan. Perintah ini tidak menyalakan dirinya otomatis sampai `.asisten on` dijalankan.
 
 Jalankan `npm run test:asisten` untuk tes spesifik fitur ini. Hasil live WhatsApp (terutama dukungan tombol dan JID/LID) perlu diverifikasi setelah deployment.
+
+## Groq untuk .ai (API key bersama .asisten)
+
+`.ai <pertanyaan>` sekarang menggunakan Groq `openai/gpt-oss-120b` dan key yang sama dengan fitur `.asisten`.
+Owner cukup memilih menu **Apikey** pada `.asisten` sekali; alternatif gunakan `GROQ_API_KEY` di environment server. Key lokal pada `ALVARETH_DATA_DIR/asisten/config.json` selalu diprioritaskan dan penggantian key berlaku di request berikutnya.
+Contoh: `.ai Jelaskan cara kerja internet`. Jika key belum diatur, bot akan meminta owner menambahkan key melalui `.asisten apikey`, tanpa fallback ke layanan AI gratis.
+`.ai` menggunakan prompt asisten AI umum dan tidak mengirim status pribadi owner. `.gemini` dan fitur AI lainnya tetap memakai backend sebelumnya.
+Perintah `.asisten on/off` hanya mengatur balasan otomatis target, bukan mengaktifkan atau mematikan `.ai`.
+Jalankan `npm run test:asisten` serta lakukan uji langsung setelah update.
