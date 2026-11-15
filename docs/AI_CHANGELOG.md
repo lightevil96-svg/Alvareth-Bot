@@ -5,7 +5,7 @@
 - **Fix:** Added one shared single-photo video sender and route selected-photo conversion plus one-image slideshow/custom-slideshow requests through it. One-image posts now skip the unnecessary duration menu; the photo loops until the original soundtrack ends (up to the existing 60-second safety cap), while audio is encoded once and is not restarted on each visual loop. Multi-photo slideshow behavior and timing are unchanged. The initial photo menu now offers a direct loop action for a one-image post.
 - **Regression coverage:** `tests/tiktok-workflow.test.js` verifies the infinite image input, audio end behavior, no audio stream loop, and that one-image and selected-image routes use the shared renderer.
 - **Files:** `plugins/downloader/tiktok.js`, `tests/tiktok-workflow.test.js`, `AI_CONTEXT.md`, and this changelog.
-- **Verification:** Test execution and live TikTok/WhatsApp rendering are pending; no production behavior is claimed until the focused test and deployed WhatsApp flow are checked.
+- **Verification:** GitHub Actions `TikTok downloader regression` run [43735834549](https://github.com/lightevil96-svg/Alvareth-Bot/actions/runs/43735834549) passed `npm run test:tiktok` (14/14). `JavaScript syntax checks` run [43735834499](https://github.com/lightevil96-svg/Alvareth-Bot/actions/runs/43735834499) passed across the repository. Live TikTok extraction and WhatsApp rendering/delivery remain unverified and should be smoke-tested after the bot reloads.
 ## 2026-11-15 — Route .ai to Groq with the same API key as .asisten
 
 - **Request:** `.ai` should use Groq `openai/gpt-oss-120b` with precisely the same saved API key as owner-only `.asisten`.
