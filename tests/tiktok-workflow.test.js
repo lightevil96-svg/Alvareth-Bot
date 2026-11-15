@@ -6,7 +6,7 @@ import {
   getTikTokScaleFilter,
   parseTikTokSlideDurations
 } from '../lib/tiktok-workflow.js'
-import { extractPhotoLiveVideos } from '../lib/scrape/tikwm.js'
+import { extractTikTokLivePhotoVideoUrl } from '../lib/tiktok-live-photo.js'
 
 test('TikTok quality options are limited to source resolution and lower standard tiers', () => {
   assert.deepEqual(getTikTokOutputQualities(1080, 1920), [1080, 720, 480, 360])
@@ -49,36 +49,28 @@ test('TikTok plugin registers photo actions, slideshow, and FFmpeg quality rende
 
 test('TikTok photo parser extracts original Live Photo motion clips in image order', () => {
   const liveVideo = 'https://cdn.example/live-photo-1.mp4'
-  const result = extractPhotoLiveVideos({
-    itemInfo: {
-      itemStruct: {
-        imagePost: {
-          images: [
-            {
-              imageURL: { urlList: ['https://cdn.example/still-1.jpeg'] },
-              live_photo_info: {
-                is_live_photo: true,
-                live_photo: {
-                  download_no_watermark_addr: { url_list: [liveVideo] }
-                }
-              }
-            },
-            {
-              imageURL: { urlList: ['https://cdn.example/still-2.jpeg'] },
-              live_photo_info: {
-                is_live_photo: false,
-                live_photo: {
-                  play_addr: { url_list: ['https://cdn.example/not-live.mp4'] }
-                }
-              }
-            },
-            { imageURL: { urlList: ['https://cdn.example/still-3.jpeg'] } }
-          ]
+  const images = [
+    {
+      imageURL: { urlList: ['https://cdn.example/still-1.jpeg'] },
+      live_photo_info: {
+        is_live_photo: true,
+        live_photo: {
+          download_no_watermark_addr: { url_list: [liveVideo] }
         }
       }
-    }
-  })
-  assert.deepEqual(result, [liveVideo, null, null])
+    },
+    {
+      imageURL: { urlList: ['https://cdn.example/still-2.jpeg'] },
+      live_photo_info: {
+        is_live_photo: false,
+        live_photo: {
+          play_addr: { url_list: ['https://cdn.example/not-live.mp4'] }
+        }
+      }
+    },
+    { imageURL: { urlList: ['https://cdn.example/still-3.jpeg'] } }
+  ]
+  assert.deepEqual(images.map(extractTikTokLivePhotoVideoUrl), [liveVideo, null, null])
 })
 
 test('single TikTok Live Photo loops its original motion clip while music plays once', async () => {
