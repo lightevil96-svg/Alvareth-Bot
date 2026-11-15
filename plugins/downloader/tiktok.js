@@ -790,23 +790,12 @@ async function sendTikTokPhotoPostMenu(conn, m, { url, images, liveVideos = [], 
     title: '1. Ambil semua foto',
     description: 'Kirim semua ' + images.length + ' foto asli',
     id: usedPrefix + 'ttphotoall ' + url
+  }, {
+    header: '',
+    title: '2. Pilih satu foto → video',
+    description: 'Pilih foto tertentu; video dibuat hanya jika klip gerak Live Photo tersedia',
+    id: usedPrefix + 'ttfotopilih ' + url
   }]
-
-  if (images.length === 1 && liveVideos[0]) {
-    rows.push({
-      header: '',
-      title: '2. Live Photo → video',
-      description: 'Gunakan klip gerak asli dan ulangi sampai musik selesai',
-      id: usedPrefix + 'ttfoto2video ' + url + ' 1'
-    })
-  } else if (images.length > 1 && livePhotoCount > 0) {
-    rows.push({
-      header: '',
-      title: '2. Pilih Live Photo → video',
-      description: 'Pilih salah satu dari ' + livePhotoCount + ' klip gerak asli',
-      id: usedPrefix + 'ttfotopilih ' + url
-    })
-  }
 
   if (images.length > 1) {
     rows.push({
@@ -818,8 +807,8 @@ async function sendTikTokPhotoPostMenu(conn, m, { url, images, liveVideos = [], 
   }
 
   const livePhotoStatus = livePhotoCount > 0
-    ? '🎞️ Live Photo tersedia: ' + livePhotoCount + ' klip gerak asli.'
-    : 'ℹ️ Postingan ini hanya menyediakan foto diam; klip gerak Live Photo tidak ditemukan.'
+    ? '🎞️ Live Photo terdeteksi: ' + livePhotoCount + ' klip gerak asli.'
+    : 'ℹ️ Klip gerak Live Photo belum terbaca. Pilihan video hanya akan berhasil jika sumber menyediakan klip gerak asli.'
   await sendMessageWithReconnect(conn, m.chat, {
     text: 'Pilih tindakan untuk postingan foto TikTok (' + images.length + ' foto).\n\n' + livePhotoStatus,
     footer: global.namebot || 'Alvareth Bot',
@@ -921,40 +910,42 @@ async function sendTikTokSlideshowInstructions(conn, m, { url, imageCount, usedP
 }
 
 async function sendPhotoToVideoActionMenus(conn, m, { url, images, liveVideos = [], usedPrefix }) {
-  const livePhotoIndexes = images
-    .map((_image, index) => index)
-    .filter(index => Boolean(liveVideos[index]))
-  if (!livePhotoIndexes.length) {
+  if (!Array.isArray(images) || !images.length) {
     await sendMessageWithReconnect(conn, m.chat, {
-      text: 'Tidak ada klip gerak Live Photo pada postingan ini. Bot hanya menemukan foto diam, jadi tidak akan membuat video palsu dari gambar statis.'
+      text: 'Foto pada postingan TikTok tidak tersedia.'
     }, { quoted: m, noAlvarethPreview: true })
     return
   }
 
   const rowsPerMenu = 10
-  for (let offset = 0; offset < livePhotoIndexes.length; offset += rowsPerMenu) {
-    const pageIndexes = livePhotoIndexes.slice(offset, offset + rowsPerMenu)
+  for (let offset = 0; offset < images.length; offset += rowsPerMenu) {
+    const pageIndexes = images.map((_image, index) => index).slice(offset, offset + rowsPerMenu)
     const end = offset + pageIndexes.length
-    const rows = pageIndexes.map(index => ({
-      header: '',
-      title: '🎞️ Live Photo ' + (index + 1) + ' → Video',
-      description: 'Unduh klip gerak asli foto ke-' + (index + 1),
-      id: usedPrefix + 'ttfoto2video ' + url + ' ' + (index + 1)
-    }))
+    const rows = pageIndexes.map(index => {
+      const hasMotion = Boolean(liveVideos[index])
+      return {
+        header: '',
+        title: (hasMotion ? '🎞️ Live Photo ' : '🖼️ Foto ') + (index + 1) + ' → Video',
+        description: hasMotion
+          ? 'Klip gerak asli tersedia; ulangi sampai musik selesai'
+          : 'Klip gerak belum terdeteksi; foto diam tidak akan dipaksakan menjadi Live Photo',
+        id: usedPrefix + 'ttfoto2video ' + url + ' ' + (index + 1)
+      }
+    })
     try {
       await sendMessageWithReconnect(conn, m.chat, {
-        text: 'Postingan ini memiliki ' + livePhotoIndexes.length + ' klip Live Photo dari ' + images.length + ' foto. Pilih klip gerak yang ingin dijadikan video.',
+        text: 'Pilih foto yang ingin dijadikan video. Hanya foto dengan klip gerak Live Photo asli yang dapat menghasilkan video bergerak.',
         footer: global.namebot || 'Alvareth Bot',
-        optionText: 'Pilih Live Photo',
-        optionTitle: '🎞️ Live Photo TikTok',
+        optionText: 'Pilih Foto',
+        optionTitle: '🎞️ Pilih Foto → Video',
         offerText: global.namebot || 'Alvareth Bot',
         offerCode: global.namebot || 'Alvareth Bot',
         offerUrl: global.botLink || 'https://spoo.me/Alvareth-Bot',
         offerExpiration: Date.now() + 86400000,
         nativeFlow: [{
-          text: 'Pilih Live Photo',
+          text: 'Pilih foto',
           sections: [{
-            title: 'Live Photo ' + (offset + 1) + '–' + end,
+            title: 'Foto ' + (offset + 1) + '–' + end,
             rows
           }],
           icon: 'video'
