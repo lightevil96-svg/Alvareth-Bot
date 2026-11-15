@@ -562,7 +562,7 @@ async function downloadToBuffer(url, maxBytes = MAX_VIDEO_BYTES) {
 }
 
 async function renderTikTokLivePhotoWithMusic(liveVideoUrl, audioUrl, outputPath) {
-  if (!/^https?:\\/\\//i.test(String(liveVideoUrl || ''))) {
+  if (!/^https?:\/\//i.test(String(liveVideoUrl || ''))) {
     throw new Error('Klip gerak asli Live Photo tidak tersedia untuk foto ini.')
   }
   const tempDir = await createTikTokTempDir('live-photo-render')
@@ -743,7 +743,7 @@ async function sendTikTokSinglePhotoVideo(conn, m, {
         : '🔇 Musik asli tidak tersedia; klip Live Photo tetap bergerak.',
       '',
       '✨ _Downloaded by Alvareth Bot_ ✨'
-    ].join('\\n')
+    ].join('\n')
     await sendMessageWithReconnect(conn, m.chat, {
       video: rendered.buffer,
       mimetype: 'video/mp4',
@@ -821,7 +821,7 @@ async function sendTikTokPhotoPostMenu(conn, m, { url, images, liveVideos = [], 
     ? '🎞️ Live Photo tersedia: ' + livePhotoCount + ' klip gerak asli.'
     : 'ℹ️ Postingan ini hanya menyediakan foto diam; klip gerak Live Photo tidak ditemukan.'
   await sendMessageWithReconnect(conn, m.chat, {
-    text: 'Pilih tindakan untuk postingan foto TikTok (' + images.length + ' foto).\\n\\n' + livePhotoStatus,
+    text: 'Pilih tindakan untuk postingan foto TikTok (' + images.length + ' foto).\n\n' + livePhotoStatus,
     footer: global.namebot || 'Alvareth Bot',
     optionText: 'Pilih Aksi',
     optionTitle: '📷 Menu Foto TikTok',
@@ -1352,7 +1352,7 @@ async function prepareBestTikTokVideo(res, sourceUrl = '', targetResolution = nu
       }
     }
 
-    throw new Error('Semua sumber TikTok gagal. Detail per tahap:\\n- ' + errors.join('\\n- '))
+    throw new Error('Semua sumber TikTok gagal. Detail per tahap:\n- ' + errors.join('\n- '))
   } finally {
     await fsp.rm(tempDir, { recursive: true, force: true }).catch(() => {})
   }
