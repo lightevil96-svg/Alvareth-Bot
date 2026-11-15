@@ -26,7 +26,7 @@
     "test:ai": "node --check lib/ai-chat.js && node --test tests/ai-chat.test.js",
     "test:image": "node --check lib/image-edit.js && node --check plugins/image/to3d.js && node --check plugins/image/tohitam.js && node --check plugins/image/toblonde.js && node --check plugins/image/hitamkan.js && node --check plugins/image/img2img.js && node --check plugins/image/picsart.js && node --check plugins/image/ai-flux.js && node --test tests/image-edit.test.js",
     "test:tts": "node --check lib/tts-config.js && node --check lib/tts-edge.js && node --check plugins/voice/tts-anime.js && node --test tests/tts-edge.test.js",
-    "test:asisten": "node --check lib/owner-assistant.js && node --check plugins/owner/asisten.js && node --test tests/owner-assistant.test.js"
+    "test:asisten": "node --check lib/owner-assistant.js && node --check plugins/owner/asisten.js && node --check plugins/ai/gemini.js && node --test tests/owner-assistant.test.js"
   },
   "keywords": [
     "alvareth-bot",
