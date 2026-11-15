@@ -67,3 +67,72 @@ test('status HTTP Groq yang gagal harus ditolak', async () => {
     fetchImpl: async () => ({ ok: false, status: 429 })
   }), /Groq HTTP 429/)
 })
+
+
+test('bot setup prompts are never interpreted as owner input in self-chat', async () => {
+  const fs = await import('node:fs/promises')
+  const os = await import('node:os')
+  const path = await import('node:path')
+  const { default: asisten } = await import('../plugins/owner/asisten.js')
+  const { markBotSentMessage } = await import('../lib/auto-download.js')
+  const { loadAsistenConfig } = await import('../lib/owner-assistant.js')
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'asisten-regression-'))
+  const previousDataDir = process.env.ALVARETH_DATA_DIR
+  process.env.ALVARETH_DATA_DIR = directory
+  const chat = '6281222222222@s.whatsapp.net'
+  const pendingKey = chat + ':' + chat
+  const pending = global.__alvarethAsistenPending
+  try {
+    const samples = [
+      { action: 'apikey', typed: key, expected: 'groqApiKey' },
+      { action: 'target', typed: '6281333333333', expected: 'targets' },
+      { action: 'status', typed: 'Owner sedang offline', expected: 'ownerStatus' }
+    ]
+    for (const { action, typed, expected } of samples) {
+      const replies = []
+      const createMessage = (content, id) => ({
+        chat, sender: chat, senderPN: chat,
+        fromMe: true, isGroup: false, id,
+        key: { id, remoteJid: chat, fromMe: true },
+        rawMessage: { key: { id, remoteJid: chat, fromMe: true }, message: { conversation: content } },
+        text: content,
+        reply: async message => { replies.push(message) }
+      })
+      await asisten(createMessage('.asisten ' + action, 'command-' + action), {
+        conn: {}, text: action
+      })
+      assert.equal(pending.get(pendingKey)?.kind, action)
+      assert.equal(replies.length, 1)
+
+      const sentByBot = createMessage(replies[0], 'bot-prompt-' + action)
+      markBotSentMessage(sentByBot)
+      await asisten.all.call({}, sentByBot, { isROwner: true })
+      assert.equal(replies.length, 1, 'tracked bot prompt must not trigger an error')
+      assert.equal(pending.get(pendingKey)?.kind, action)
+
+      // Covers the small window where WhatsApp echoes an outgoing prompt
+      // before sendMessage registers its message ID.
+      const earlyEcho = createMessage(replies[0], 'early-echo-' + action)
+      await asisten.all.call({}, earlyEcho, { isROwner: true })
+      assert.equal(replies.length, 1, 'untracked setup prompt must not be accepted')
+      assert.equal(pending.get(pendingKey)?.kind, action)
+
+      // A message typed manually on the same linked account is fromMe too.
+      // It must still work when its ID has not been marked as bot-generated.
+      const humanInput = createMessage(typed, 'manual-input-' + action)
+      await asisten.all.call({}, humanInput, { isROwner: true })
+      assert.equal(pending.has(pendingKey), false, 'human input should consume the prompt')
+      assert.match(humanInput.text, /^\[ASISTEN /)
+      assert.equal(replies.length, 2, 'human input receives exactly one acknowledgment')
+      const stored = await loadAsistenConfig()
+      if (expected === 'groqApiKey') assert.equal(stored.groqApiKey, typed)
+      if (expected === 'targets') assert.ok(stored.targets.includes(typed))
+      if (expected === 'ownerStatus') assert.equal(stored.ownerStatus, typed)
+    }
+  } finally {
+    pending.delete(pendingKey)
+    if (previousDataDir === undefined) delete process.env.ALVARETH_DATA_DIR
+    else process.env.ALVARETH_DATA_DIR = previousDataDir
+    await fs.rm(directory, { recursive: true, force: true })
+  }
+})
