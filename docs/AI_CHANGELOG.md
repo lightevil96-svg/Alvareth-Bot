@@ -1,3 +1,12 @@
+## 2026-11-15 — Route .ai to Groq with the same API key as .asisten
+
+- **Request:** `.ai` should use Groq `openai/gpt-oss-120b` with precisely the same saved API key as owner-only `.asisten`.
+- **Root cause:** `.ai` was an alias of `plugins/ai/gemini.js` and called the free `askFreeAi()` rather than Groq. Maintaining a second key would make credentials diverge.
+- **Fix:** Only `.ai` calls `askGroqAi()` from `lib/owner-assistant.js`. This resolves the key on each request from the same private configuration used by `.asisten` (or `GROQ_API_KEY` environment fallback), and uses the same model and shared Groq transport. The owner's status is not included in generic `.ai` prompts. `.gemini` and other AI commands stay unchanged. Missing/invalid key, 401/403, 429, timeout and generic failures return safe errors; unsuccessful `.ai` requests do not consume limit.
+- **Files:** `lib/owner-assistant.js`, `plugins/ai/gemini.js`, `tests/owner-assistant.test.js`, `package.json`, `README.md`, `AI_CONTEXT.md`, `docs/AI_CHANGELOG.md`.
+- **Tests:** Updated `test:asisten` to syntax-check `.ai` plugin. New regression covers shared local key, changed key, same model, dispatch via `.ai`, owner-status isolation, HTTP 429 and missing key. `npm test` and live WhatsApp/Groq not executed in this environment; syntax and isolated checks must not be represented as production validation.
+- **Deployment:** Apply update, reload/restart if required; owner checks `.asisten apikey status`, then send `.ai Halo`. No second key needed and `.asisten on` is not needed for `.ai`.
+
 ## 2026-11-15 — Fix .asisten setup prompt incorrectly consumed as Groq API key
 
 - **Symptom:** After `.asisten apikey`, the bot sent the correct key-entry instructions and immediately sent `Format API key Groq tidak valid` before the owner typed anything.
