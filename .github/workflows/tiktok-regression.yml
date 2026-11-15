@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'plugins/downloader/tiktok.js'
+      - 'lib/scrape/tikwm.js'
       - 'lib/tiktok-workflow.js'
       - 'tests/tiktok-workflow.test.js'
       - 'package.json'
