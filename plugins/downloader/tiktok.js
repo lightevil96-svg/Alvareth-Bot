@@ -792,7 +792,7 @@ async function sendTikTokPhotoPostMenu(conn, m, { url, images, liveVideos = [], 
     id: usedPrefix + 'ttphotoall ' + url
   }, {
     header: '',
-    title: '2. Pilih satu foto → video',
+    title: '2. Pilih satu foto untuk dijadikan video',
     description: 'Pilih foto tertentu; video dibuat hanya jika klip gerak Live Photo tersedia',
     id: usedPrefix + 'ttfotopilih ' + url
   }]
