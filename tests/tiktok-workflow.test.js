@@ -136,7 +136,7 @@ test('TikTok photo menu always offers select-one-photo and all-photo video actio
     .split('if (isPhotoToVideoCommand)')[1]
     .split('if (isPhotoOnlyCommand)')[0]
 
-  assert.match(menu, /title: '2\. Pilih satu foto → video'/)
+  assert.match(menu, /title: '2\. Pilih satu foto untuk dijadikan video'/)
   assert.match(menu, /id: usedPrefix \+ 'ttfotopilih ' \+ url/)
   assert.match(menu, /title: '3\. Semua foto → video'/)
   assert.match(selectedMenu, /images\.map\(\(_image, index\) => index\)/)
