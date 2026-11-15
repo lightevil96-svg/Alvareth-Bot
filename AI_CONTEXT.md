@@ -9,6 +9,8 @@
 
 ## Pembaruan terbaru
 
+- 2026-11-15 — TikTok photo-to-video: single-photo posts now render as a continuous still-image loop for the original soundtrack; choosing one photo from a multi-photo post uses the same renderer. The photo repeats while the soundtrack plays once without restarting; multi-photo slideshow timing remains unchanged. `npm run test:tiktok` regression coverage added; live WhatsApp rendering/delivery still needs verification.
+
 - 2026-11-15 — `.ai` now uses Groq `openai/gpt-oss-120b` and the same API key as `.asisten`, loaded afresh from private storage or `GROQ_API_KEY` environment on each request. `.gemini` retains its free provider. Groq requests share one helper, but `.ai` uses a general AI persona and never includes owner status. Regression tests added; live WhatsApp/Groq verification pending.
 
 - 2026-11-15 — Fixed `.asisten apikey` immediately saying “Format API key Groq tidak valid” without owner input: bot's own setup reply was routed through `handler.all` as root owner in self-chat. `plugins/owner/asisten.js` now ignores outbound IDs using shared `wasBotSentMessage()` and recognizes early echoed setup prompts, while manually typed `fromMe` input remains valid. Added regression cases covering key/target/status prompts and owner self-chat input. Tests not executed locally; live WhatsApp verification pending.

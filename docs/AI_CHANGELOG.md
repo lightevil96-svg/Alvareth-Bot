@@ -1,3 +1,11 @@
+## 2026-11-15 — Loop single-photo TikTok posts to the original soundtrack
+
+- **Request:** When a TikTok photo post contains one image, or the user selects one image from a multi-photo post, render it as an MP4 that keeps displaying the image while the original music plays continuously.
+- **Root cause:** The selected-photo command already used the single-image FFmpeg loop renderer, but the all-photos-to-video path always used the slideshow renderer and asked for per-slide timing—even when there was only one photo. That could end the video after the chosen slide duration instead of following the music.
+- **Fix:** Added one shared single-photo video sender and route selected-photo conversion plus one-image slideshow/custom-slideshow requests through it. One-image posts now skip the unnecessary duration menu; the photo loops until the original soundtrack ends (up to the existing 60-second safety cap), while audio is encoded once and is not restarted on each visual loop. Multi-photo slideshow behavior and timing are unchanged. The initial photo menu now offers a direct loop action for a one-image post.
+- **Regression coverage:** `tests/tiktok-workflow.test.js` verifies the infinite image input, audio end behavior, no audio stream loop, and that one-image and selected-image routes use the shared renderer.
+- **Files:** `plugins/downloader/tiktok.js`, `tests/tiktok-workflow.test.js`, `AI_CONTEXT.md`, and this changelog.
+- **Verification:** Test execution and live TikTok/WhatsApp rendering are pending; no production behavior is claimed until the focused test and deployed WhatsApp flow are checked.
 ## 2026-11-15 — Route .ai to Groq with the same API key as .asisten
 
 - **Request:** `.ai` should use Groq `openai/gpt-oss-120b` with precisely the same saved API key as owner-only `.asisten`.

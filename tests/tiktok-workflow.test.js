@@ -46,6 +46,45 @@ test('TikTok plugin registers photo actions, slideshow, and FFmpeg quality rende
   assert.match(plugin, /Render ulang MP4/)
 })
 
+test('single TikTok photo is looped for the original soundtrack without restarting the audio', async () => {
+  const plugin = await readFile(new URL('../plugins/downloader/tiktok.js', import.meta.url), 'utf8')
+  const renderer = plugin
+    .split('async function renderSinglePhotoWithMusic')[1]
+    .split('async function renderTikTokPhotoSlideshow')[0]
+  assert.match(renderer, /'-loop', '1'/)
+  assert.match(renderer, /duration = Math\.min\(audioDuration, 60\)/)
+  assert.match(renderer, /'-shortest'/)
+  assert.doesNotMatch(renderer, /'-stream_loop', '-1', '-i', audioPath/)
+
+  const sender = plugin
+    .split('async function sendTikTokSinglePhotoVideo')[1]
+    .split('async function sendTikTokPhotoAlbum')[0]
+  assert.match(sender, /renderSinglePhotoWithMusic\(imageUrl, audioUrl, outputPath\)/)
+  assert.match(sender, /Foto diulang terus selama musik diputar/)
+  assert.match(sender, /Musik asli diputar terus tanpa restart/)
+})
+
+test('single-photo TikTok posts and selected photos use the same looping video renderer', async () => {
+  const plugin = await readFile(new URL('../plugins/downloader/tiktok.js', import.meta.url), 'utf8')
+  const menu = plugin
+    .split('async function sendTikTokPhotoPostMenu')[1]
+    .split('async function sendTikTokSlideshowDurationMenu')[0]
+  const slideshow = plugin
+    .split('if (isSlideshowCommand)')[1]
+    .split('if (isSlideshowCustomCommand)')[0]
+  const custom = plugin
+    .split('if (isSlideshowCustomCommand)')[1]
+    .split('let targetQuality = null')[0]
+  const selected = plugin
+    .split('if (isPhotoToVideoCommand)')[1]
+    .split('if (isPhotoOnlyCommand)')[0]
+  assert.match(menu, /images\.length === 1 \? '2\. Foto → video loop'/)
+  assert.match(menu, /ttfoto2video/)
+  assert.match(slideshow, /res\.images\.length === 1[\s\S]*sendTikTokSinglePhotoVideo/)
+  assert.match(custom, /res\.images\.length === 1[\s\S]*sendTikTokSinglePhotoVideo/)
+  assert.match(selected, /sendTikTokSinglePhotoVideo/)
+})
+
 test('TikTok downloads send caption-free MP4s and a single menu for the initial result', async () => {
   const plugin = await readFile(new URL('../plugins/downloader/tiktok.js', import.meta.url), 'utf8')
   const download = plugin.split('const fileName = safeFilename(title + (isQualityCommand')[1]
