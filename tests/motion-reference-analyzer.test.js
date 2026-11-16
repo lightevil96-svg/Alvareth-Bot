@@ -15,9 +15,10 @@ function makeFrames(values, width = 16, height = 16) {
       for (let x = 0; x < width; x++) {
         const index = offset + (y * width + x) * 3;
         const variation = (x * 7 + y * 3) % 48;
-        output[index] = Math.min(255, base + variation);
-        output[index + 1] = Math.min(255, Math.round(base * 0.78 + variation * 0.6));
-        output[index + 2] = Math.min(255, Math.round(base * 0.55 + variation * 0.3));
+        const darkSide = x >= Math.floor(width / 2);
+        output[index] = darkSide ? 8 : Math.min(255, base + variation);
+        output[index + 1] = darkSide ? 8 : Math.min(255, Math.round(base * 0.78 + variation * 0.6));
+        output[index + 2] = darkSide ? 8 : Math.min(255, Math.round(base * 0.55 + variation * 0.3));
       }
     }
   });
@@ -32,7 +33,7 @@ test('parseReferenceFrameRate supports rational FPS values and rejects invalid v
 });
 
 test('summarizeReferenceFrames reports palette, ink candidates, edge density and frame motion', () => {
-  const report = summarizeReferenceFrames(makeFrames([40, 90, 140, 190]));
+  const report = summarizeReferenceFrames(makeFrames([40, 90, 140, 190]), { width: 16, height: 16 });
   assert.equal(report.sampleCount, 4);
   assert.ok(report.averageLuma > 0);
   assert.ok(report.averageSaturation > 0);
