@@ -109,7 +109,7 @@ async function makeZip(files = projectFiles) {
 }
 
 test('motion style catalogue contains every repository visual preset and unique selectable styles', () => {
-  assert.equal(MOTION_STYLES.length, 16)
+  assert.equal(MOTION_STYLES.length, 17)
   assert.equal(new Set(MOTION_STYLES.map(style => style.id)).size, MOTION_STYLES.length)
   assert.equal(getMotionStyle('crayon-book').name, 'Crayon Picture Book')
   assert.equal(getMotionStyle('cinematic-illustrated').name, 'Cinematic 2.5D Explainer')
@@ -118,6 +118,7 @@ test('motion style catalogue contains every repository visual preset and unique 
   assert.equal(getMotionStyle('clean-editorial').name, 'Clean Editorial')
   assert.equal(getMotionStyle('real-3d').name, 'Real 3D Animation (Three.js)')
   assert.equal(getMotionStyle('storybook-3d').name, 'Stylized 3D Story Animation')
+  assert.equal(getMotionStyle('voxel-3d-story').name, 'Voxel 3D Story Animation')
   assert.equal(getMotionStyle('missing-style'), null)
 })
 
@@ -149,6 +150,25 @@ test('storybook 3D prompt matches the hand-inked 2.5D character / true 3D world 
   assert.match(prompt, /character sheet/i)
   assert.match(prompt, /Jangan membawa bengkel/i)
   assert.match(prompt, /#FFD93D/)
+  assert.match(prompt, /useCurrentFrame/)
+  assert.match(prompt, /jangan memakai useFrame/i)
+})
+
+test('voxel 3D prompt matches the blocky Minecraft-like reference style', () => {
+  const prompt = buildMotionPrompt('voxel-3d-story')
+  assert.match(prompt, /Voxel 3D Story Animation/)
+  assert.match(prompt, /ThreeCanvas/)
+  assert.match(prompt, /@remotion\/three/)
+  assert.match(prompt, /@react-three\/fiber/)
+  assert.match(prompt, /voxel/i)
+  assert.match(prompt, /BoxGeometry/)
+  assert.match(prompt, /kepala kubus/i)
+  assert.match(prompt, /Jangan membuat kepala bola/i)
+  assert.match(prompt, /sphereGeometry/)
+  assert.match(prompt, /character sheet/i)
+  assert.match(prompt, /Jangan membawa ayam raksasa/i)
+  assert.match(prompt, /#FFD93D/)
+  assert.match(prompt, /voiceProfile to "male"/)
   assert.match(prompt, /useCurrentFrame/)
   assert.match(prompt, /jangan memakai useFrame/i)
 })

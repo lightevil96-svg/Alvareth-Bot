@@ -9,6 +9,8 @@
 
 ## Pembaruan terbaru
 
+- 2026-11-16 — `.motion` has a new **Voxel 3D Story Animation** style matching the owner's voxel reference video: cube-head/pixel-face characters built only from BoxGeometry, pastel voxel world, `#FFD93D` keyword subtitles, viral overlays, and energetic male Indonesian narration (`voiceProfile "male"`). The prompt forces real Three.js via ThreeCanvas; a minimal voxel project (boy + giant chicken) rendered end-to-end through the bot's own pipeline (90/90 frames, 1080x1920, swangle) and was visually verified. `npm run test:motion` passes 16/16 and full `npm test` exits 0. Live WhatsApp test still pending.
+
 - 2026-11-16 — TikTok Live Photo conversion now extracts each original motion clip through the pure helper in `lib/tiktok-live-photo.js` from `imagePost.images[].live_photo_info.live_photo` (preferring `download_no_watermark_addr`, then `play_addr`) and keeps it aligned with its still image. The bot loops that actual moving clip while the original soundtrack plays once (up to 60 seconds); ordinary still photos are no longer mislabeled or rendered as fake Live Photos. The selection menu only offers motion-video actions for photos with a real Live Photo clip. `npm run test:tiktok` and live WhatsApp verification are pending.
 
 - 2026-11-15 — `.ai` now uses Groq `openai/gpt-oss-120b` and the same API key as `.asisten`, loaded afresh from private storage or `GROQ_API_KEY` environment on each request. `.gemini` retains its free provider. Groq requests share one helper, but `.ai` uses a general AI persona and never includes owner status. Regression tests added; live WhatsApp/Groq verification pending.
