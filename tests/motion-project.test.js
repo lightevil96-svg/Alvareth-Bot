@@ -142,6 +142,8 @@ test('storybook 3D prompt synthesizes both references with true volumetric chara
   assert.match(prompt, /Stylized 3D Story Animation/)
   assert.match(prompt, /390381\.mp4/)
   assert.match(prompt, /390306\.mp4/)
+  assert.match(prompt, /ALVARETH STYLE DNA/)
+  assert.match(prompt, /head\/body width ratio about 1\.2/)
   assert.match(prompt, /TRUE 3D CHARACTER CONTRACT/)
   assert.match(prompt, /actual THREE\.Mesh objects/i)
   assert.match(prompt, /never a 2D card, sprite, or billboard/i)
