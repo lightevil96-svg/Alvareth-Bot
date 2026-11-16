@@ -400,7 +400,7 @@ test('runRenderScript reports FFmpeg time-based percentage progress', async t =>
   const scriptPath = path.join(directory, 'render.sh')
   const inputPath = path.join(directory, 'input.mp4')
   await writeFile(inputPath, 'input')
-  await writeFile(scriptPath, "printf 'frame=1 time=00:00:03.25 speed=1x\\\\n' >&2\n")
+  await writeFile(scriptPath, "printf 'frame=1 time=00:00:03.25 speed=1x\\n' >&2\n")
 
   const updates = []
   await runRenderScript({
@@ -520,6 +520,27 @@ test('runRenderScript reports shell stages and parses FFmpeg progress from stdou
   assert.ok(stages.some(value => value.stage === 'Menyiapkan aset' && value.command === 'cp'))
   assert.ok(updates.some(value => value.percent === 50))
   assert.ok(updates.some(value => value.percent === 69))
+})
+
+test('runRenderScript preserves both output streams and identifies Puppeteer target closure', async t => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'alvareth-render-target-close-'))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const scriptPath = path.join(directory, 'render.sh')
+  const inputPath = path.join(directory, 'input.mp4')
+  await writeFile(inputPath, 'input')
+  await writeFile(scriptPath, [
+    "printf 'stdout render context\\n'",
+    "printf 'Was not able to close puppeteer page: Protocol error (Target.closeTarget): No target found for targetId\\n' >&2",
+    'exit 23'
+  ].join('\n') + '\n')
+
+  await assert.rejects(
+    runRenderScript({ scriptPath, workingDirectory: directory, inputPath }),
+    error => error.code === 'RENDER_BROWSER_TARGET_CLOSED' &&
+      error.exitCode === 23 &&
+      error.message.includes('stdout render context') &&
+      error.message.includes('Target.closeTarget')
+  )
 })
 
 test('runRenderScript reports a nonzero exit code when the render script stops unexpectedly', async t => {
