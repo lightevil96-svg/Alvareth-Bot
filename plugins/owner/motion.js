@@ -595,12 +595,14 @@ async function processMotionProject({ m, key, session }) {
       compositionId: project.compositionId,
       outputPath: outputRelativePath,
       browserExecutable,
-      concurrency: 2
+      concurrency: 2,
+      gl: project.renderGL
     })
     await fs.writeFile(scriptPath, script, { encoding: 'utf8', mode: 0o600, flag: 'wx' })
 
     progress.update(15, 'Menyiapkan proyek Remotion',
-      project.packageName + ' · ' + project.entryPoint + ' · ' + project.compositionId, true)
+      project.packageName + ' · ' + project.entryPoint + ' · ' + project.compositionId +
+      (project.usesWebGL ? ' · WebGL ' + project.renderGL : ''), true)
     progress.update(18, 'Menginstal dependency', 'Lifecycle scripts dinonaktifkan untuk keamanan.', true)
 
     const processResult = await runRenderScript({
