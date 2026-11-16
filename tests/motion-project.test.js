@@ -31,7 +31,7 @@ const projectFiles = {
     voiceProfile: 'female'
   }),
   'src/index.tsx': 'registerRoot(Root);',
-  'src/Root.tsx': 'const Root = () => <Composition calculateMetadata={async () => { const duration = await getAudioDuration(staticFile("voiceover.mp3")); return { durationInFrames: Math.ceil(duration * 30) }; }} />;',
+  'src/Root.tsx': 'const estimateVoiceoverDurationInSeconds = () => 2; const calculateMetadata = async () => { let audioDurationInSeconds = Number.NaN; try { audioDurationInSeconds = await getAudioDuration(staticFile("voiceover.mp3")); } catch {} const safeDuration = Number.isFinite(audioDurationInSeconds) && audioDurationInSeconds > 0 ? audioDurationInSeconds : estimateVoiceoverDurationInSeconds(); const durationInFrames = Math.ceil(safeDuration * 30); if (!Number.isSafeInteger(durationInFrames)) throw new Error("invalid duration"); return { durationInFrames }; };',
   'src/Video.tsx': '<Audio src={staticFile("voiceover.mp3")} />'
 }
 
@@ -157,6 +157,10 @@ test('buildMotionPrompt requires a downloadable ZIP and forbids source code in c
   assert.match(prompt, /lampiran/)
   assert.match(prompt, /motion\.config\.json/)
   assert.match(prompt, /getAudioDuration/)
+  assert.match(prompt, /Number\.isFinite\(audioDurationInSeconds\)/)
+  assert.match(prompt, /fallback estimasi konservatif dari teks voiceover/)
+  assert.match(prompt, /Number\.isSafeInteger\(durationInFrames\)/)
+  assert.match(prompt, /Jangan menetapkan batas maksimal durasi/)
   assert.doesNotMatch(prompt, /===FILE:/)
   assert.throws(() => buildMotionPrompt('not-a-style'), /tidak dikenal/)
 })
@@ -283,11 +287,32 @@ test('parseMotionConfig validates narration and supported TTS voice profiles', (
   assert.equal(parseMotionConfig({ voiceoverText: longNarration }).voiceoverText, longNarration.trim())
 })
 
-test('validateMotionVoiceoverImplementation requires audio-based dynamic duration and playback', () => {
+test('validateMotionVoiceoverImplementation requires finite duration, safe fallback, and audio playback', () => {
   const files = [
-    { path: 'src/Root.tsx', content: 'import { getAudioDuration } from "@remotion/media-utils"; const calculateMetadata = async () => getAudioDuration(staticFile("voiceover.mp3"));' },
+    {
+      path: 'src/Root.tsx',
+      content: [
+        'import { getAudioDuration } from "@remotion/media-utils";',
+        'const estimateVoiceoverDurationInSeconds = () => 12;',
+        'const calculateMetadata = async () => {',
+        'let audioDurationInSeconds = Number.NaN;',
+        'try { audioDurationInSeconds = await getAudioDuration(staticFile("voiceover.mp3")); } catch {}',
+        'const safeDuration = Number.isFinite(audioDurationInSeconds) && audioDurationInSeconds > 0 ? audioDurationInSeconds : estimateVoiceoverDurationInSeconds();',
+        'const safeFps = Number.isFinite(fps) && fps > 0 ? fps : 30;',
+        'const durationInFrames = Math.ceil(safeDuration * safeFps);',
+        'if (!Number.isSafeInteger(durationInFrames)) throw new Error("invalid duration");',
+        'return { durationInFrames };',
+        '};'
+      ].join(' ')
+    },
     { path: 'src/Video.tsx', content: '<Audio src={staticFile("voiceover.mp3")} />' }
   ]
   assert.doesNotThrow(() => validateMotionVoiceoverImplementation(files))
   assert.throws(() => validateMotionVoiceoverImplementation(files.slice(1)), /belum menyinkronkan/)
+
+  const unsafeFiles = [
+    { path: 'src/Root.tsx', content: 'import { getAudioDuration } from "@remotion/media-utils"; const calculateMetadata = async () => { const audioDurationInSeconds = await getAudioDuration(staticFile("voiceover.mp3")); return { durationInFrames: Math.ceil(audioDurationInSeconds * 30) }; };' },
+    files[1]
+  ]
+  assert.throws(() => validateMotionVoiceoverImplementation(unsafeFiles), /pemeriksaan Number\.isFinite/)
 })
