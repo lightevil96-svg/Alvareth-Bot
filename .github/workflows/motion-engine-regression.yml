@@ -1,0 +1,43 @@
+name: Motion engine regression
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "lib/motion-engine/**"
+      - "lib/motion-project.js"
+      - "lib/motion-qa.js"
+      - "plugins/owner/motion.js"
+      - "tests/motion-project.test.js"
+      - "tests/motion-engine.test.js"
+      - "tests/motion-qa.test.js"
+      - "package.json"
+      - ".github/workflows/motion-engine-regression.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "lib/motion-engine/**"
+      - "lib/motion-project.js"
+      - "lib/motion-qa.js"
+      - "plugins/owner/motion.js"
+      - "tests/motion-project.test.js"
+      - "tests/motion-engine.test.js"
+      - "tests/motion-qa.test.js"
+      - "package.json"
+      - ".github/workflows/motion-engine-regression.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  motion-engine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run .motion engine and render regressions
+        run: |
+          npm run test:motion
+          npm run test:render

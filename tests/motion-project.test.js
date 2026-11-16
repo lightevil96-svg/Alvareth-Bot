@@ -7,7 +7,8 @@ import {
   getMotionStyle,
   parseMotionZip,
   parseMotionConfig,
-  validateMotionVoiceoverImplementation
+  validateMotionVoiceoverImplementation,
+  validateStorybookEngineImplementation
 } from '../lib/motion-project.js'
 
 const projectFiles = {
@@ -134,23 +135,57 @@ test('real 3D prompt requires real Three.js meshes and Remotion-synchronized Thr
   assert.match(prompt, /swangle/)
 })
 
-test('storybook 3D prompt matches the hand-inked 2.5D character / true 3D world reference style', () => {
+test('storybook 3D prompt synthesizes both references with true volumetric characters', () => {
   const prompt = buildMotionPrompt('storybook-3d')
   assert.match(prompt, /Stylized 3D Story Animation/)
+  assert.match(prompt, /390381\.mp4/)
+  assert.match(prompt, /390306\.mp4/)
+  assert.match(prompt, /TRUE 3D CHARACTER CONTRACT/)
+  assert.match(prompt, /actual THREE\.Mesh objects/i)
+  assert.match(prompt, /never a 2D card, sprite, or billboard/i)
+  assert.match(prompt, /src\/alvareth-engine/i)
+  assert.match(prompt, /createCharacter/)
+  assert.match(prompt, /applyCharacterPose/)
+  assert.match(prompt, /createStoryWorld/)
+  assert.match(prompt, /applyCinematicCamera/)
+  assert.match(prompt, /assertVisualContract/)
   assert.match(prompt, /ThreeCanvas/)
-  assert.match(prompt, /@remotion\/three/)
-  assert.match(prompt, /@react-three\/fiber/)
-  assert.match(prompt, /hybrid 2\.5D/i)
-  assert.match(prompt, /hand-inked/i)
-  assert.match(prompt, /flat illustrated characters/i)
-  assert.match(prompt, /lingkungan.*3D/i)
-  assert.match(prompt, /Jangan membuat kepala bola/i)
-  assert.match(prompt, /sphereGeometry/i)
-  assert.match(prompt, /character sheet/i)
-  assert.match(prompt, /Jangan membawa bengkel/i)
-  assert.match(prompt, /#FFD93D/)
   assert.match(prompt, /useCurrentFrame/)
-  assert.match(prompt, /jangan memakai useFrame/i)
+  assert.match(prompt, /Do not use useFrame/i)
+  assert.match(prompt, /#FFD93D/)
+  assert.match(prompt, /never force a forge/i)
+})
+
+test('storybook 3D project validator requires the injected engine and actual API integration', () => {
+  const packageJson = { dependencies: {
+    '@remotion/three': '4.0.534',
+    '@react-three/fiber': '8.17.10',
+    three: '0.170.0'
+  } }
+  const files = [
+    { path: 'src/Scene.tsx', content: [
+      "import { createCharacter, applyCharacterPose, setCharacterExpression, createStoryWorld, createMotionEngine, applyCinematicCamera, assertVisualContract } from './alvareth-engine/index.js';",
+      "import { ThreeCanvas } from '@remotion/three';",
+      "import { useCurrentFrame } from 'remotion';",
+      "const character = createCharacter({ id: 'hero' });",
+      "applyCharacterPose(character, {}); setCharacterExpression(character, 'happy');",
+      "createStoryWorld(scene, {}); createMotionEngine({ fps: 30 });",
+      "applyCinematicCamera(camera, frame, []); assertVisualContract({ scene, camera, characters: [character] });",
+      "<ThreeCanvas />; useCurrentFrame();"
+    ].join('\n') },
+    { path: 'src/alvareth-engine/style-dna.js', content: 'export const ALVARETH_STYLE_DNA = {};'},
+    { path: 'src/alvareth-engine/character-engine.js', content: 'export function createCharacter() {} new THREE.Mesh(); new THREE.MeshToonMaterial();'},
+    { path: 'src/alvareth-engine/world-engine.js', content: 'export function createStoryWorld() {}'},
+    { path: 'src/alvareth-engine/motion-engine.js', content: 'export function createWalkPose() {}'},
+    { path: 'src/alvareth-engine/camera-engine.js', content: 'export function applyCinematicCamera() {}'},
+    { path: 'src/alvareth-engine/visual-qa.js', content: 'export function assertVisualContract() {}'},
+    { path: 'src/alvareth-engine/index.js', content: 'export * from "./character-engine.js";'}
+  ]
+  assert.doesNotThrow(() => validateStorybookEngineImplementation(files, packageJson))
+  assert.throws(
+    () => validateStorybookEngineImplementation(files.filter(file => file.path !== 'src/alvareth-engine/character-engine.js'), packageJson),
+    /engine belum terpasang lengkap/i
+  )
 })
 
 test('buildMotionPrompt requires a downloadable ZIP and forbids source code in chat', () => {

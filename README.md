@@ -196,6 +196,22 @@ Paket harus berisi tepat satu file bernama **render.sh**. Script dijalankan dari
 
 Folder kerja default berada di **~/.alvareth-bot-data/render-jobs/**; lokasinya dapat diganti dengan **ALVARETH_RENDER_TMPDIR**. Untuk membatalkan sesi yang sedang menunggu ZIP, ketik **.render cancel** di chat yang sama. Jika bot tidak merespons setelah ZIP dikirim, periksa log `[RENDER] ZIP masuk` untuk mengetahui apakah dokumen dikenali dan sesi cocok; jika sesi tidak ditemukan, ulangi urutan video → `.render` → ZIP tanpa melewati batas 15 menit.
 
+## Produksi animasi cerita 3D dengan .motion
+
+Fitur owner-only **.motion** membuat prompt produksi berdasarkan gaya animasi, menerima proyek Remotion sebagai **ZIP**, membuat voiceover otomatis dari motion.config.json, merender video, lalu mengirim MP4 ke WhatsApp.
+
+1. Ketik **.motion** dan pilih **Stylized 3D Story Animation**.
+2. Tekan **Salin Prompt GPT**, tempel prompt ke ChatGPT, lalu berikan tema/cerita.
+3. GPT menyiapkan satu ZIP proyek Remotion. Kirim ZIP sebagai **dokumen** ke chat bot yang sama.
+4. Bot memvalidasi proyek, memasang engine 3D resmi untuk gaya ini, membuat voiceover, dan merender video.
+5. Gunakan **.motion status**, **.motion retry**, **.motion send**, atau **.motion cancel** bila diperlukan.
+
+**Reference-matched Style DNA:** karakter utama menggunakan geometri mesh 3D sungguhan dan rig artikulasi, bukan gambar 2D, sprite, atau billboard. Visual menggabungkan karakter membulat dan material matte dari referensi pertama dengan outline cel-shaded, dunia storybook 3D, warna earthy, pencahayaan, subtitle, dan penyutradaraan dari referensi kedua. Character Engine, World Engine, Motion Engine, Camera Engine, dan Visual QA resmi disisipkan otomatis ke folder src/alvareth-engine/ saat ZIP diproses.
+
+Durasi komposisi mengikuti durasi audio voiceover yang dibuat dari naskah; tidak ada durasi tetap atau batas waktu render otomatis. Tidak ditambahkan batas jumlah file secara sembarangan. Lama proses tetap bergantung pada kompleksitas scene, RAM, CPU/GPU, storage, dan kemampuan server. **Progres render hanya tampil di terminal server**; WhatsApp menerima acknowledgement, pesan error bila perlu, dan video akhir—bukan spam indikator progres.
+
+**Keamanan:** hanya super-owner yang dapat menggunakan fitur ini. Source proyek Remotion tetap dieksekusi saat bundling/render dan bukan sandbox OS; kirim hanya ZIP dari sumber yang dipercaya. Jangan menyertakan node_modules, .git, .env, .npmrc, atau folder src/alvareth-engine/ (engine tersebut dipasang otomatis).
+
 ## Database dan sesi
 
 Data runtime disimpan di luar checkout Git secara default:

@@ -1,3 +1,16 @@
+## 2026-11-16 — Build reference-matched true-3D engine for .motion
+
+- **Request:** Continue the .motion production system against the two uploaded reference clips; keep main characters as genuine 3D geometry, build reusable Character/World/Motion/Camera engines, add Visual QA, and preserve ZIP-to-WhatsApp delivery, voiceover-driven duration, terminal-only progress, and long renders without automatic timeout.
+- **Audit/root cause:** The latest main was 44e52ce2; PR #37 was already merged. Its storybook-3d prompt described a 2.5D flat-character/3D-world hybrid and explicitly prohibited volumetric characters. The bot validated voiceover/Remotion structure but did not inject a reusable visual engine or run post-render frame sanity checks. That contradicted the current true-3D character requirement.
+- **Reference synthesis:** 390381.mp4 contributes rounded volumetric character appeal and matte surfaces; 390306.mp4 contributes hand-inked cel shading, earthy story-world design, lighting, subtitle treatment, and cinematic story coverage. The implementation keeps both cast and environment volumetric 3D while applying selective toon outlines and matte shading.
+- **License/compatibility audit:** 4mJ0k3r/3d-animation and 4mJ0k3r/remotionshorts expose no detected SPDX license and no root LICENSE file in the inspected trees, so their source code was not copied. Their public architecture/techniques were studied only. mromidev/claude-animated-shorts is MIT but its main characters are 2D cards and its skill contains unrelated caption/language constraints; no code was copied. The new engine is independently authored and targets the bot's pinned Remotion 4.0.534 / React 18.3.1 / Three 0.170.0 stack.
+- **Implementation:** add Style DNA plus canonical Character, World, Motion, Camera, and Visual QA modules under lib/motion-engine/; inject the official modules into incoming storybook-3d ZIP projects; validate dependencies, imports, and engine API usage before rendering; run FFprobe/FFmpeg post-render checks for resolution, FPS, audio, dark frames, low contrast, and likely frozen samples. Existing ZIP input, voiceover-driven duration, WhatsApp final delivery, terminal-only progress, retry/send/cancel behavior, and no automatic render timeout remain unchanged.
+- **Files:** lib/motion-engine/*, lib/motion-qa.js, lib/motion-project.js, plugins/owner/motion.js, motion regression tests, .github/workflows/motion-engine-regression.yml, package.json, README.md, AI_CONTEXT.md, and this changelog.
+- **Tests:** focused Node regression suite and GitHub Actions run are pending at commit time; results will be recorded after CI completes.
+- **Not verified:** no live TokoPanel render or WhatsApp delivery was performed in this environment. The two reference videos were inspected, but no story ZIP was rendered here, so reference similarity across multiple stories is not yet proven. Automated frame QA is a sanity check, not a substitute for visual side-by-side review.
+- **Reference:** branch feat/motion-reference-3d-engine; PR to main will be opened after CI review.
+
+
 ## 2026-11-16 — Fix TikTok Live Photo output to use the original motion clip
 
 - **Symptom:** The previous photo-to-video output was an MP4 container but looked like a still image because FFmpeg repeated a JPEG frame.
