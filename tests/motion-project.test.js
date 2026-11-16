@@ -298,7 +298,8 @@ test('validateMotionVoiceoverImplementation requires finite duration, safe fallb
         'let audioDurationInSeconds = Number.NaN;',
         'try { audioDurationInSeconds = await getAudioDuration(staticFile("voiceover.mp3")); } catch {}',
         'const safeDuration = Number.isFinite(audioDurationInSeconds) && audioDurationInSeconds > 0 ? audioDurationInSeconds : estimateVoiceoverDurationInSeconds();',
-        'const durationInFrames = Math.ceil(safeDuration * 30);',
+        'const safeFps = Number.isFinite(fps) && fps > 0 ? fps : 30;',
+        'const durationInFrames = Math.ceil(safeDuration * safeFps);',
         'if (!Number.isSafeInteger(durationInFrames)) throw new Error("invalid duration");',
         'return { durationInFrames };',
         '};'
