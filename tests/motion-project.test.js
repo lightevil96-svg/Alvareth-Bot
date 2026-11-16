@@ -314,5 +314,5 @@ test('validateMotionVoiceoverImplementation requires finite duration, safe fallb
     { path: 'src/Root.tsx', content: 'import { getAudioDuration } from "@remotion/media-utils"; const calculateMetadata = async () => { const audioDurationInSeconds = await getAudioDuration(staticFile("voiceover.mp3")); return { durationInFrames: Math.ceil(audioDurationInSeconds * 30) }; };' },
     files[1]
   ]
-  assert.throws(() => validateMotionVoiceoverImplementation(unsafeFiles), /durasi audio aman/)
+  assert.throws(() => validateMotionVoiceoverImplementation(unsafeFiles), /pemeriksaan Number\\.isFinite/)
 })
