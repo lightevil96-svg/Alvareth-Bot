@@ -43,6 +43,40 @@ test('findRemotionProject detects a wrapped project and its static Composition I
   assert.ok(result.packageJsonPath.endsWith(path.join('hujan-mendadak', 'package.json')))
 })
 
+test('findRemotionProject scans projects with more than 500 files without a count cap', async t => {
+  const manyFiles = {
+    'package.json': JSON.stringify({
+      ...packageJson,
+      alvarethRemotion: { entryPoint: 'src/index.ts', compositionId: 'Main' }
+    }),
+    'src/index.ts': 'registerRoot(Root);',
+    'src/Root.tsx': '<Composition id="Main" />',
+    ...Object.fromEntries(Array.from({ length: 505 }, (_, index) => [
+      'project-data/file-' + index + '.txt',
+      'metadata ' + index
+    ]))
+  }
+  const root = await createFixture(t, manyFiles)
+  const result = await findRemotionProject(root)
+  assert.equal(result.compositionId, 'Main')
+  assert.equal(result.packageName, 'fixture-remotion')
+})
+
+test('findRemotionProject scans nested project folders deeper than eight levels', async t => {
+  const nestedRoot = Array.from({ length: 10 }, (_, index) => 'level-' + index).join('/')
+  const root = await createFixture(t, {
+    [nestedRoot + '/package.json']: JSON.stringify({
+      ...packageJson,
+      alvarethRemotion: { entryPoint: 'src/index.ts', compositionId: 'DeepScene' }
+    }),
+    [nestedRoot + '/src/index.ts']: 'registerRoot(Root);',
+    [nestedRoot + '/src/Root.tsx']: '<Composition id="DeepScene" />'
+  })
+  const result = await findRemotionProject(root)
+  assert.equal(result.compositionId, 'DeepScene')
+  assert.ok(result.packageJsonPath.includes(path.join('level-0', 'level-1')))
+})
+
 test('findRemotionProject detects Three.js projects and defaults to the software WebGL renderer', async t => {
   const threePackage = {
     ...packageJson,
