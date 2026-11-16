@@ -183,6 +183,21 @@ test('parseMotionZip accepts more than 500 source files without a file-count cap
   assert.equal(result.files.some(file => file.path === 'src/generated/file-500.txt'), true)
 })
 
+test('parseMotionZip has no fixed 1 MB per-file or 10 MB total source-size cap', async () => {
+  const largeText = 'Large generated source content. '.repeat(40_000)
+  const largeFiles = {
+    ...projectFiles,
+    ...Object.fromEntries(Array.from({ length: 11 }, (_, index) => [
+      'src/generated/large-' + index + '.txt',
+      largeText
+    ]))
+  }
+  const result = await parseMotionZip(await makeZip(largeFiles))
+  assert.equal(result.fileCount, 16)
+  assert.ok(result.totalFileBytes > 10 * 1024 * 1024)
+  assert.ok(Buffer.byteLength(result.files.find(file => file.path === 'src/generated/large-0.txt').content) > 1024 * 1024)
+})
+
 test('parseMotionZip silently skips empty .gitkeep and .keep placeholders', async () => {
   const withPlaceholders = {
     ...projectFiles,
