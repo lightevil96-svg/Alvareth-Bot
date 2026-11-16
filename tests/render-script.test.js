@@ -62,7 +62,7 @@ test('runRenderScript forwards structured Remotion progress events to the termin
   await writeFile(scriptPath, [
     "printf '%s\\n' '__ALVARETH_REMOTION_PROGRESS__{\\"kind\\":\\"bundle\\",\\"percent\\":50}'",
     "printf '%s\\n' '__ALVARETH_REMOTION_PROGRESS__{\\"kind\\":\\"render\\",\\"progress\\":0.5,\\"renderedFrames\\":150,\\"encodedFrames\\":140,\\"stitchStage\\":\\"encoding\\"}'"
-  ].join('\\n') + '\\n')
+  ].join('\n') + '\n')
 
   const events = []
   const result = await runRenderScript({
