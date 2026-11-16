@@ -634,15 +634,34 @@ async function processMotionProject({ m, key, session }) {
       },
       onProgress: value => {
         const raw = Number(value.percent)
-        const percent = Number.isFinite(raw)
-          ? 35 + Math.round(Math.max(0, Math.min(100, raw)) * 0.5)
-          : 35
+        if (!Number.isFinite(raw)) return
+        const normalized = Math.max(0, Math.min(100, raw))
+        let percent
+        let stage
+
+        if (value.phase === 'bundling') {
+          percent = 35 + Math.round(normalized * 0.08)
+          stage = 'Membundel proyek Remotion'
+        } else if (value.phase === 'rendering') {
+          percent = 43 + Math.round(normalized * 0.35)
+          stage = 'Merender animasi'
+        } else if (value.phase === 'encoding') {
+          percent = 78 + Math.round(normalized * 0.1)
+          stage = 'Mengodekan video'
+        } else {
+          percent = 43 + Math.round(normalized * 0.35)
+          stage = 'Merender animasi'
+        }
+
         const detail = [
-          Number.isFinite(value.frame) ? 'Frame ' + value.frame : '',
+          Number.isFinite(value.frame) && Number.isFinite(value.totalFrames)
+            ? 'Frame ' + value.frame.toLocaleString('en-US') + '/' + value.totalFrames.toLocaleString('en-US')
+            : Number.isFinite(value.frame) ? 'Frame ' + value.frame : '',
           Number.isFinite(value.fps) ? value.fps + ' FPS' : '',
-          Number.isFinite(value.currentTimeSeconds) ? value.currentTimeSeconds.toFixed(1) + ' detik' : ''
+          Number.isFinite(value.currentTimeSeconds) ? value.currentTimeSeconds.toFixed(1) + ' detik' : '',
+          value.eta ? 'Sisa ' + value.eta : ''
         ].filter(Boolean).join(' · ')
-        progress.update(percent, 'Merender animasi', detail)
+        progress.update(percent, stage, detail)
       }
     })
     throwIfCancelled(session)
