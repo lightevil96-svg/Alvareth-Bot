@@ -28,7 +28,6 @@ import {
   validateMotionVoiceoverImplementation
 } from '../../lib/motion-project.js'
 
-const MAX_OUTPUT_BYTES = 500 * 1024 * 1024
 const MAX_INPUT_ZIP_BYTES = 25 * 1024 * 1024
 const HEARTBEAT_MS = 60_000
 const pendingJobs = new Map()
@@ -286,7 +285,7 @@ async function ensureMotionRecovery() {
       const restoredOutputs = await restorePendingRenderSessions({
         root,
         staleTtlMs: Number.POSITIVE_INFINITY,
-        maxOutputBytes: MAX_OUTPUT_BYTES
+        maxOutputBytes: Number.MAX_SAFE_INTEGER
       })
 
       for (const item of restoredOutputs) {
@@ -448,9 +447,8 @@ async function persistOutput(key, session) {
 async function deliverMotionOutput({ m, key, session, progress }) {
   const outputPath = session.outputPath
   const outputInfo = await fs.lstat(outputPath)
-  if (!outputInfo.isFile() || outputInfo.isSymbolicLink() ||
-      outputInfo.size < 1 || outputInfo.size > MAX_OUTPUT_BYTES) {
-    throw new Error('File hasil .motion tidak valid atau melebihi batas ' + formatBytes(MAX_OUTPUT_BYTES) + '.')
+  if (!outputInfo.isFile() || outputInfo.isSymbolicLink() || outputInfo.size < 1) {
+    throw new Error('File hasil .motion tidak valid atau kosong.')
   }
 
   await persistOutput(key, session)
@@ -657,10 +655,6 @@ async function processMotionProject({ m, key, session }) {
     if (!outputInfo.isFile() || outputInfo.isSymbolicLink() || outputInfo.size < 1) {
       throw new Error('Remotion selesai, tetapi MP4 hasil render tidak ditemukan atau kosong.')
     }
-    if (outputInfo.size > MAX_OUTPUT_BYTES) {
-      throw new Error('Ukuran MP4 ' + formatBytes(outputInfo.size) + ' melebihi batas ' + formatBytes(MAX_OUTPUT_BYTES) + '.')
-    }
-
     const handle = await fs.open(outputPath, 'r')
     const header = Buffer.alloc(4100)
     try { await handle.read(header, 0, header.length, 0) } finally { await handle.close() }
