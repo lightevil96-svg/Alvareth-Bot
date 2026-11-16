@@ -109,7 +109,7 @@ async function makeZip(files = projectFiles) {
 }
 
 test('motion style catalogue contains every repository visual preset and unique selectable styles', () => {
-  assert.equal(MOTION_STYLES.length, 15)
+  assert.equal(MOTION_STYLES.length, 16)
   assert.equal(new Set(MOTION_STYLES.map(style => style.id)).size, MOTION_STYLES.length)
   assert.equal(getMotionStyle('crayon-book').name, 'Crayon Picture Book')
   assert.equal(getMotionStyle('cinematic-illustrated').name, 'Cinematic 2.5D Explainer')
@@ -117,6 +117,7 @@ test('motion style catalogue contains every repository visual preset and unique 
   assert.equal(getMotionStyle('kinetic-bold').name, 'Bold Kinetic Typography')
   assert.equal(getMotionStyle('clean-editorial').name, 'Clean Editorial')
   assert.equal(getMotionStyle('real-3d').name, 'Real 3D Animation (Three.js)')
+  assert.equal(getMotionStyle('storybook-3d').name, 'Stylized 3D Story Animation')
   assert.equal(getMotionStyle('missing-style'), null)
 })
 
@@ -131,6 +132,21 @@ test('real 3D prompt requires real Three.js meshes and Remotion-synchronized Thr
   assert.match(prompt, /jangan memakai useFrame/i)
   assert.match(prompt, /webglRenderer/)
   assert.match(prompt, /swangle/)
+})
+
+test('storybook 3D prompt applies one reusable 3D visual identity to different story genres', () => {
+  const prompt = buildMotionPrompt('storybook-3d')
+  assert.match(prompt, /Stylized 3D Story Animation/)
+  assert.match(prompt, /ThreeCanvas/)
+  assert.match(prompt, /@remotion\/three/)
+  assert.match(prompt, /@react-three\/fiber/)
+  assert.match(prompt, /karakter kartun 3D sederhana dan ekspresif/i)
+  assert.match(prompt, /Jangan menggunakan latar bengkel yang sama untuk semua cerita/i)
+  assert.match(prompt, /character sheet internal/i)
+  assert.match(prompt, /misteri.*komedi.*sejarah.*fantasi/i)
+  assert.match(prompt, /#FFD93D/)
+  assert.match(prompt, /useCurrentFrame/)
+  assert.match(prompt, /jangan memakai useFrame/i)
 })
 
 test('buildMotionPrompt requires a downloadable ZIP and forbids source code in chat', () => {
