@@ -890,6 +890,7 @@ async function before(m, { conn } = {}) {
 
   const session = pendingJobs.get(key)
   if (!session || session.status !== 'awaiting-code') return false
+  m.__alvarethMotionCodeHandled = true
 
   let parsed
   try {
