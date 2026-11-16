@@ -108,10 +108,14 @@ async function makeZip(files = projectFiles) {
   return Buffer.concat([localData, centralData, endRecord])
 }
 
-test('motion style catalogue contains unique selectable styles', () => {
-  assert.ok(MOTION_STYLES.length >= 10)
+test('motion style catalogue contains every repository visual preset and unique selectable styles', () => {
+  assert.equal(MOTION_STYLES.length, 14)
   assert.equal(new Set(MOTION_STYLES.map(style => style.id)).size, MOTION_STYLES.length)
   assert.equal(getMotionStyle('crayon-book').name, 'Crayon Picture Book')
+  assert.equal(getMotionStyle('cinematic-illustrated').name, 'Cinematic 2.5D Explainer')
+  assert.equal(getMotionStyle('3d-glass').name, 'Premium 3D Glass')
+  assert.equal(getMotionStyle('kinetic-bold').name, 'Bold Kinetic Typography')
+  assert.equal(getMotionStyle('clean-editorial').name, 'Clean Editorial')
   assert.equal(getMotionStyle('missing-style'), null)
 })
 
