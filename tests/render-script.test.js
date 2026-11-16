@@ -53,6 +53,32 @@ test('runRenderScript executes in its job directory with a minimal environment',
   assert.equal(await readFile(envPath, 'utf8'), 'not-inherited')
 })
 
+test('runRenderScript forwards structured Remotion progress events to the terminal progress callback', async t => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'alvareth-remotion-progress-'))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const scriptPath = path.join(directory, 'render.sh')
+  const inputPath = path.join(directory, 'package.json')
+  await writeFile(inputPath, '{}')
+  await writeFile(scriptPath, [
+    "printf '%s\\n' '__ALVARETH_REMOTION_PROGRESS__{\\"kind\\":\\"bundle\\",\\"percent\\":50}'",
+    "printf '%s\\n' '__ALVARETH_REMOTION_PROGRESS__{\\"kind\\":\\"render\\",\\"progress\\":0.5,\\"renderedFrames\\":150,\\"encodedFrames\\":140,\\"stitchStage\\":\\"encoding\\"}'"
+  ].join('\\n') + '\\n')
+
+  const events = []
+  const result = await runRenderScript({
+    scriptPath,
+    workingDirectory: directory,
+    inputPath,
+    onProgress: value => events.push(value)
+  })
+
+  assert.equal(result.code, 0)
+  assert.deepEqual(events, [
+    { kind: 'bundle', percent: 50 },
+    { kind: 'render', progress: 0.5, renderedFrames: 150, encodedFrames: 140, stitchStage: 'encoding' }
+  ])
+})
+
 test('runRenderScript rejects script and input paths outside the job directory', async t => {
   const directory = await mkdtemp(path.join(tmpdir(), 'alvareth-render-path-'))
   t.after(() => rm(directory, { recursive: true, force: true }))
