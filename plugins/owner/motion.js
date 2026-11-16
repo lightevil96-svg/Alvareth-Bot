@@ -391,6 +391,7 @@ async function readAndValidateMotionProject(projectDirectory) {
       const target = path.join(directory, entry.name)
       if (entry.isSymbolicLink()) throw new Error('Proyek kode berisi symbolic link yang tidak diizinkan.')
       if (entry.isDirectory()) {
+        if (['node_modules', '.git', 'out', 'dist', '.cache', '.render-home', '.render-tmp'].includes(entry.name.toLowerCase())) continue
         await walk(target)
       } else if (entry.isFile() && /\.(?:js|jsx|ts|tsx|mjs|cjs)$/i.test(entry.name)) {
         sourceFiles.push({
