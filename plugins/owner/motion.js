@@ -26,7 +26,8 @@ import {
   parseMotionZip,
   parseMotionConfig,
   validateMotionVoiceoverImplementation,
-  validateStorybookEngineImplementation
+  validateStorybookEngineImplementation,
+  resolveMotionProjectRoot
 } from '../../lib/motion-project.js'
 import { installMotionEngine } from '../../lib/motion-engine/install.js'
 import { runMotionRenderQa } from '../../lib/motion-qa.js'
@@ -365,11 +366,7 @@ async function writeMotionZip(session, parsed) {
   }
 
   if (session.styleId === 'storybook-3d') {
-    const projectRoot = path.resolve(session.projectDirectory,
-      ...(String(parsed.projectRoot || '').split('/').filter(Boolean)));
-    if (!isInside(session.projectDirectory, projectRoot)) {
-      throw new Error('Root proyek Stylized 3D berada di luar folder ZIP.');
-    }
+    const projectRoot = resolveMotionProjectRoot(session.projectDirectory, parsed.projectRoot);
     const enginePrefix = [
       String(parsed.projectRoot || '').replace(/\/+$/, ''),
       'src',
