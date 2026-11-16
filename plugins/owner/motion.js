@@ -939,13 +939,12 @@ async function downloadMotionZip(m, conn, media = getCurrentRenderDocument(m)) {
 }
 
 async function before(m, { conn } = {}) {
-  if (!m?.chat || m?.__alvarethRenderZipHandled) return false
+  // This hook runs for every incoming message. Only ZIP documents belong to
+  // this workflow; replying to ordinary text here causes a self-chat reply loop.
+  if (!m?.chat || m?.__alvarethRenderZipHandled || m?.__alvarethMotionZipHandled) return false
+
   const document = getCurrentRenderDocument(m)
-  const isZip = isZipDocumentEvent(m)
-  const text = typeof m.text === 'string' ? m.text.trim() : ''
-  const hasMedia = Boolean(m.mediaMessage || m.mediaType || document)
-  if (!isZip && (!text || /^[.!/]\S+/.test(text)) && !hasMedia) return false
-  if (!isZip && text && /^[.!/]\S+/.test(text)) return false
+  if (!isZipDocumentEvent(m)) return false
 
   const key = createRenderSessionKey(m)
   if (!key) return false
@@ -957,17 +956,13 @@ async function before(m, { conn } = {}) {
 
   const session = pendingJobs.get(key)
   if (!session || session.status !== 'awaiting-zip') return false
-  if (isZip) m.__alvarethMotionZipHandled = true
-  m.__alvarethMotionCodeHandled = true
 
-  if (!isZip) {
-    await safeReply(m,
-      '📦 Saya sedang menunggu file proyek .zip. Kirim ZIP sebagai dokumen WhatsApp, bukan kode yang ditempel di chat.')
-    return true
-  }
+  // Claim this document only after confirming that this chat owns a waiting
+  // .motion session. Unrelated ZIPs remain available to other workflows.
+  m.__alvarethMotionZipHandled = true
 
   if (global.__alvarethUpdateRunning) {
-    await safeReply(m, '⏳ Pembaruan bot sedang berlangsung. ZIP belum diproses. Kirim ulang file ZIP setelah update selesai.')
+    await safeReply(m, '⏳ Pembaruan bot sedang berlangsung. ZIP belum diproses. Kirim ulang ZIP setelah update selesai.')
     return true
   }
 
@@ -980,7 +975,7 @@ async function before(m, { conn } = {}) {
     await safeReact(m, '⚠️')
     await safeReply(m,
       '⚠️ ZIP belum bisa diproses: ' + safeError(error) +
-      '\n\nPastikan ZIP berisi satu proyek Remotion, package.json, motion.config.json, dan folder src/. Perbaiki lalu kirim ulang ZIP.')
+      '\\n\\nPastikan ZIP berisi satu proyek Remotion, package.json, motion.config.json, dan folder src/. Perbaiki lalu kirim ulang ZIP.')
     return true
   }
 
@@ -1010,15 +1005,15 @@ async function before(m, { conn } = {}) {
     await persistMotionState()
     await safeReact(m, '❌')
     await safeReply(m, '❌ Gagal mengekstrak ZIP: ' + safeError(error) +
-      '\nSesi tetap menunggu ZIP. Coba kirim ulang file ZIP.')
+      '\\nSesi tetap menunggu ZIP. Coba kirim ulang file ZIP.')
     return true
   }
 
   await safeReact(m, '🎬')
   await safeReply(m,
     '📦 ZIP diterima dan berhasil diekstrak (' + parsed.fileCount + ' file, ' +
-    formatBytes(parsed.totalFileBytes) + ').\n' +
-    'Bot sedang memeriksa proyek, membuat voiceover otomatis, dan merender MP4 di background.\n\n' +
+    formatBytes(parsed.totalFileBytes) + ').\\n' +
+    'Bot sedang memeriksa proyek, membuat voiceover otomatis, dan merender MP4 di background.\\n\\n' +
     'Tidak ada batas waktu kedaluwarsa. Gunakan *.motion status* untuk mengecek proses.')
   void processMotionProject({ m, key, session })
   return true
