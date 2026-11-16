@@ -6,6 +6,7 @@ import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import {
   buildRemotionRenderScript,
+  ensureRemotionProgressDependencies,
   findRemotionProject
 } from '../lib/remotion-project.js'
 
@@ -29,6 +30,46 @@ async function createFixture(t, files) {
   }
   return root
 }
+
+test('ensureRemotionProgressDependencies adds matching SSR packages without changing existing versions', async t => {
+  const root = await createFixture(t, {
+    'package.json': JSON.stringify(packageJson)
+  })
+  const project = {
+    projectRoot: root,
+    packageJsonPath: path.join(root, 'package.json')
+  }
+
+  const result = await ensureRemotionProgressDependencies(project)
+  const updated = JSON.parse(await fs.readFile(project.packageJsonPath, 'utf8'))
+
+  assert.deepEqual(result.added.sort(), ['@remotion/bundler', '@remotion/renderer'])
+  assert.equal(result.version, '4.0.534')
+  assert.equal(updated.dependencies['@remotion/bundler'], '4.0.534')
+  assert.equal(updated.dependencies['@remotion/renderer'], '4.0.534')
+  assert.equal(updated.dependencies.remotion, '4.0.534')
+})
+
+test('ensureRemotionProgressDependencies does not rewrite projects that already have SSR packages', async t => {
+  const configured = {
+    ...packageJson,
+    dependencies: {
+      ...packageJson.dependencies,
+      '@remotion/bundler': '4.0.534',
+      '@remotion/renderer': '4.0.534'
+    }
+  }
+  const root = await createFixture(t, {
+    'package.json': JSON.stringify(configured)
+  })
+  const project = {
+    projectRoot: root,
+    packageJsonPath: path.join(root, 'package.json')
+  }
+
+  const result = await ensureRemotionProgressDependencies(project)
+  assert.deepEqual(result.added, [])
+})
 
 test('findRemotionProject detects a wrapped project and its static Composition ID', async t => {
   const root = await createFixture(t, {
@@ -223,7 +264,7 @@ test('findRemotionProject rejects an unsafe configured entry point', async t => 
   await assert.rejects(findRemotionProject(root), /Entry point/)
 })
 
-test('buildRemotionRenderScript disables npm lifecycle scripts and renders the selected composition', () => {
+test('buildRemotionRenderScript runs the SSR progress runner with the selected composition', () => {
   const script = buildRemotionRenderScript({
     entryPoint: 'src/entry point.ts',
     compositionId: 'HujanMendadak',
@@ -233,10 +274,11 @@ test('buildRemotionRenderScript disables npm lifecycle scripts and renders the s
 
   assert.match(script, /npm install --ignore-scripts/)
   assert.match(script, /--registry=https:\/\/registry\.npmjs\.org\//)
+  assert.match(script, /node '__alvareth_remotion_runner\.mjs'/)
   assert.match(script, /'src\/entry point\.ts'/)
   assert.match(script, /'HujanMendadak'/)
   assert.match(script, /'\/opt\/chrome\/chrome stable'/)
-  assert.match(script, /--concurrency=3/)
+  assert.match(script, /'3'/)
 })
 
 test('buildRemotionRenderScript uses memory-safe browser settings and retries a closed Puppeteer target', () => {
@@ -247,13 +289,10 @@ test('buildRemotionRenderScript uses memory-safe browser settings and retries a 
     gl: 'swangle'
   })
 
-  assert.match(script, /--concurrency=1/)
-  assert.match(script, /--disable-shared-memory-capture/)
-  assert.match(script, /--disallow-parallel-encoding/)
-  assert.match(script, /--log=verbose/)
+  assert.match(script, /node '__alvareth_remotion_runner\.mjs'/)
   assert.ok(script.includes('Target\\.closeTarget'))
   assert.match(script, /No target found for targetId/)
-  assert.match(script, /--gl=swiftshader/)
+  assert.match(script, /'swiftshader'/)
   assert.ok(script.includes("rm -f 'out/render-result.mp4'"))
 
   const syntax = spawnSync('bash', ['-n'], { input: script, encoding: 'utf8' })
@@ -266,7 +305,7 @@ test('buildRemotionRenderScript enables WebGL for a Three.js project', () => {
     compositionId: 'ThreeScene',
     gl: 'swangle'
   })
-  assert.match(script, /--gl=swangle/)
+  assert.match(script, /'swangle'/)
   assert.throws(() => buildRemotionRenderScript({
     entryPoint: 'src/index.ts',
     compositionId: 'ThreeScene',
