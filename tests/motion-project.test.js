@@ -170,6 +170,19 @@ test('parseMotionZip extracts a complete Remotion project', async () => {
   assert.match(result.files.find(file => file.path === 'src/Root.tsx').content, /getAudioDuration/)
 })
 
+test('parseMotionZip accepts more than 500 source files without a file-count cap', async () => {
+  const manyFiles = {
+    ...projectFiles,
+    ...Object.fromEntries(Array.from({ length: 501 }, (_, index) => [
+      'src/generated/file-' + index + '.txt',
+      'generated source metadata ' + index
+    ]))
+  }
+  const result = await parseMotionZip(await makeZip(manyFiles))
+  assert.equal(result.fileCount, 506)
+  assert.equal(result.files.some(file => file.path === 'src/generated/file-500.txt'), true)
+})
+
 test('parseMotionZip silently skips empty .gitkeep and .keep placeholders', async () => {
   const withPlaceholders = {
     ...projectFiles,
