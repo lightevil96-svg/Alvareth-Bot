@@ -900,6 +900,8 @@ const handler = async (m, { conn, text }) => {
 }
 
 handler.all = async function (m) {
+  // A document can belong to another ZIP workflow such as .motion.
+  if (m?.__alvarethMotionZipHandled || m?.__alvarethRenderZipHandled) return
   if (!isRenderDocumentEvent(m)) return
 
   try {
@@ -919,31 +921,12 @@ handler.all = async function (m) {
   const isZip = isZipDocument(filename, mimetype)
   const key = sessionKey(m)
 
-  if (!key) {
-    if (isZip) {
-      console.warn('[RENDER] ZIP masuk tetapi identitas chat/pengirim tidak terbaca:', {
-        mtype: String(m?.mtype || ''),
-        filename,
-        mimetype
-      })
-      await safeReply(m, '📦 File ZIP terdeteksi, tetapi identitas chat/pengirim tidak terbaca. Coba kirim ulang video dan ZIP di chat yang sama.')
-    }
-    return
-  }
+  if (!key) return
 
+  // This hook sees every document in every chat. Do not claim or warn about a
+  // ZIP unless this chat actually started a .render session.
   const session = pendingSessions.get(key)
-  if (!session) {
-    if (isZip) {
-      console.warn('[RENDER] ZIP masuk tanpa sesi aktif:', {
-        mtype: String(m?.mtype || ''),
-        filename,
-        mimetype,
-        activeSessions: pendingSessions.size
-      })
-      await safeReply(m, '📦 ZIP terdeteksi, tetapi sesi render tidak ditemukan. Kirim ulang video, reply dengan *.render*, kemudian kirim ZIP di chat yang sama.')
-    }
-    return
-  }
+  if (!session) return
 
   if (!document) {
     return safeReply(m, 'Dokumen terdeteksi, tetapi metadata file tidak dapat dibaca. Kirim ulang pack.zip sebagai dokumen WhatsApp.')
@@ -961,6 +944,8 @@ handler.all = async function (m) {
     return safeReply(m, 'File yang diminta harus berupa paket *.zip* dan dikirim sebagai dokumen. Video masih tersimpan; kirim file ZIP dari Claude.')
   }
 
+  // Prevent .motion from also consuming a ZIP when both workflows are pending.
+  m.__alvarethRenderZipHandled = true
   session.processing = true
   session.processingStartedAt = Date.now()
   session.cancelRequested = false
