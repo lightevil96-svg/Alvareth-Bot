@@ -923,7 +923,8 @@ function isMotionZipDocument(m) {
   return fileName.endsWith('.zip') ||
     mime === 'application/zip' ||
     mime === 'application/x-zip-compressed' ||
-    mime === 'application/x-zip'
+    mime === 'application/x-zip' ||
+    mime === 'application/octet-stream'
 }
 
 async function downloadMotionZip(m, conn) {
@@ -935,7 +936,9 @@ async function downloadMotionZip(m, conn) {
 
   let buffer = null
   if (typeof m?.download === 'function') {
-    buffer = await m.download()
+    try { buffer = await m.download() } catch (error) {
+      console.warn('[MOTION] Download dokumen ZIP melalui serializer gagal:', error?.message || error)
+    }
   }
   if ((!Buffer.isBuffer(buffer) && !(buffer instanceof Uint8Array)) &&
       typeof conn?.downloadM === 'function') {
