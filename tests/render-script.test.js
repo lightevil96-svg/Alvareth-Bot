@@ -532,7 +532,7 @@ test('runRenderScript preserves both output streams and identifies Puppeteer tar
     "printf 'stdout render context\\n'",
     "printf 'Was not able to close puppeteer page: Protocol error (Target.closeTarget): No target found for targetId\\n' >&2",
     'exit 23'
-  ].join('\\n') + '\\n')
+  ].join('\n') + '\n')
 
   await assert.rejects(
     runRenderScript({ scriptPath, workingDirectory: directory, inputPath }),
