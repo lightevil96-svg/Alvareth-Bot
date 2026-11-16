@@ -545,8 +545,21 @@ async function processMotionProject({ m, key, session }) {
     const scriptPath = path.join(project.projectRoot, '__alvareth_remotion_run.sh')
 
     try {
-      await fs.lstat(scriptPath)
-      throw new Error('Proyek memakai nama file sementara yang dicadangkan: __alvareth_remotion_run.sh.')
+      const existingScript = await fs.lstat(scriptPath)
+      if (!existingScript.isFile() || existingScript.isSymbolicLink()) {
+        throw new Error('File sementara Remotion yang sudah ada tidak aman.')
+      }
+      await fs.rm(scriptPath, { force: true })
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error
+    }
+
+    try {
+      const existingOutput = await fs.lstat(outputPath)
+      if (!existingOutput.isFile() || existingOutput.isSymbolicLink()) {
+        throw new Error('File output sementara Remotion yang sudah ada tidak aman.')
+      }
+      await fs.rm(outputPath, { force: true })
     } catch (error) {
       if (error?.code !== 'ENOENT') throw error
     }
