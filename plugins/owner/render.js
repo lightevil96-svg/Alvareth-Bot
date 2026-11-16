@@ -907,8 +907,10 @@ handler.all = async function (m) {
   try {
     await ensureRenderRecovery()
   } catch (error) {
-    console.error('[RENDER] ZIP ditahan karena pemulihan sesi gagal:', safeError(error))
-    return safeReply(m, '⏳ Bot belum dapat memastikan status hasil render sebelumnya. ZIP ditahan agar tidak mengganggu pemulihan file.')
+    // This global listener also sees ZIPs owned by other workflows. Keep it
+    // silent when .render recovery is unavailable so unrelated jobs continue.
+    console.error('[RENDER] Pemulihan sesi belum siap; dokumen diabaikan:', safeError(error))
+    return
   }
 
   const document = getCurrentDocument(m)
@@ -932,6 +934,8 @@ handler.all = async function (m) {
     return safeReply(m, 'Dokumen terdeteksi, tetapi metadata file tidak dapat dibaca. Kirim ulang pack.zip sebagai dokumen WhatsApp.')
   }
 
+  if (isZip) m.__alvarethRenderZipHandled = true
+
   if (session.processing) {
     return safeReply(m, 'Paket render untuk sesi ini sedang diproses. Tunggu sampai selesai.')
   }
@@ -944,8 +948,6 @@ handler.all = async function (m) {
     return safeReply(m, 'File yang diminta harus berupa paket *.zip* dan dikirim sebagai dokumen. Video masih tersimpan; kirim file ZIP dari Claude.')
   }
 
-  // Prevent .motion from also consuming a ZIP when both workflows are pending.
-  m.__alvarethRenderZipHandled = true
   session.processing = true
   session.processingStartedAt = Date.now()
   session.cancelRequested = false
