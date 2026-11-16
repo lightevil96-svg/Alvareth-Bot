@@ -400,7 +400,7 @@ test('runRenderScript reports FFmpeg time-based percentage progress', async t =>
   const scriptPath = path.join(directory, 'render.sh')
   const inputPath = path.join(directory, 'input.mp4')
   await writeFile(inputPath, 'input')
-  await writeFile(scriptPath, "printf 'frame=1 time=00:00:03.25 speed=1x\\\\n' >&2\n")
+  await writeFile(scriptPath, "printf 'frame=1 time=00:00:03.25 speed=1x\\n' >&2\n")
 
   const updates = []
   await runRenderScript({
