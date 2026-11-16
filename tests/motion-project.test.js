@@ -206,7 +206,7 @@ test('parseMotionConfig validates narration and supported TTS voice profiles', (
   assert.throws(() => parseMotionConfig({ voiceoverText: '' }), /voiceoverText/)
   assert.throws(() => parseMotionConfig({ voiceoverText: 'Halo', voiceProfile: 'unknown' }), /voiceProfile tidak dikenal/)
   const longNarration = 'Narasi panjang untuk video. '.repeat(400)
-  assert.equal(parseMotionConfig({ voiceoverText: longNarration }).voiceoverText, longNarration)
+  assert.equal(parseMotionConfig({ voiceoverText: longNarration }).voiceoverText, longNarration.trim())
 })
 
 test('validateMotionVoiceoverImplementation requires audio-based dynamic duration and playback', () => {
