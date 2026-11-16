@@ -657,9 +657,7 @@ async function processMotionProject({ m, key, session }) {
         session.renderChildPid = value.pid || null
         session.renderChildState = value.running ? 'running' : String(value.state || 'unknown')
         if (value.state === 'started') {
-          progress.update(25, 'Proses render aktif', 'PID ' + String(value.pid || 'tidak diketahui'), true)
-        } else if (value.state === 'closed') {
-          progress.update(88, 'Proses Remotion selesai', 'Exit code: ' + String(value.code), true)
+          progress.update(20, 'Proses Remotion aktif', 'PID ' + String(value.pid || 'tidak diketahui'), true)
         }
       },
       onProgress: value => {
@@ -721,7 +719,7 @@ async function processMotionProject({ m, key, session }) {
     })
     throwIfCancelled(session)
 
-    console.log('[MOTION] Render CLI selesai:', {
+    console.log('[MOTION] Remotion SSR render selesai:', {
       package: project.packageName,
       composition: project.compositionId,
       entryPoint: project.entryPoint,
