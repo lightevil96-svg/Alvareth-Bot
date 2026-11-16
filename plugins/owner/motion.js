@@ -975,7 +975,7 @@ async function before(m, { conn } = {}) {
     await safeReact(m, '⚠️')
     await safeReply(m,
       '⚠️ ZIP belum bisa diproses: ' + safeError(error) +
-      '\\n\\nPastikan ZIP berisi satu proyek Remotion, package.json, motion.config.json, dan folder src/. Perbaiki lalu kirim ulang ZIP.')
+      '\n\nPastikan ZIP berisi satu proyek Remotion, package.json, motion.config.json, dan folder src/. Perbaiki lalu kirim ulang ZIP.')
     return true
   }
 
@@ -1005,15 +1005,15 @@ async function before(m, { conn } = {}) {
     await persistMotionState()
     await safeReact(m, '❌')
     await safeReply(m, '❌ Gagal mengekstrak ZIP: ' + safeError(error) +
-      '\\nSesi tetap menunggu ZIP. Coba kirim ulang file ZIP.')
+      '\nSesi tetap menunggu ZIP. Coba kirim ulang file ZIP.')
     return true
   }
 
   await safeReact(m, '🎬')
   await safeReply(m,
     '📦 ZIP diterima dan berhasil diekstrak (' + parsed.fileCount + ' file, ' +
-    formatBytes(parsed.totalFileBytes) + ').\\n' +
-    'Bot sedang memeriksa proyek, membuat voiceover otomatis, dan merender MP4 di background.\\n\\n' +
+    formatBytes(parsed.totalFileBytes) + ').\n' +
+    'Bot sedang memeriksa proyek, membuat voiceover otomatis, dan merender MP4 di background.\n\n' +
     'Tidak ada batas waktu kedaluwarsa. Gunakan *.motion status* untuk mengecek proses.')
   void processMotionProject({ m, key, session })
   return true
