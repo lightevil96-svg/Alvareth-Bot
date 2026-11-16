@@ -28,7 +28,6 @@ import {
   validateMotionVoiceoverImplementation
 } from '../../lib/motion-project.js'
 
-const MAX_INPUT_ZIP_BYTES = 25 * 1024 * 1024
 const HEARTBEAT_MS = 60_000
 const pendingJobs = new Map()
 let recoveryPromise = null
@@ -946,11 +945,6 @@ async function handler(m, { conn, text = '', usedPrefix = '.' } = {}) {
 
 async function downloadMotionZip(m, conn, media = getCurrentRenderDocument(m)) {
   media = media || {}
-  const declaredSize = Number(media.fileLength?.toString?.() || media.fileLength || 0)
-  if (Number.isFinite(declaredSize) && declaredSize > MAX_INPUT_ZIP_BYTES) {
-    throw new Error('Ukuran ZIP melebihi batas ' + formatBytes(MAX_INPUT_ZIP_BYTES) + '.')
-  }
-
   let buffer = null
   if (typeof m?.download === 'function') {
     try { buffer = await m.download() } catch (error) {
@@ -967,9 +961,6 @@ async function downloadMotionZip(m, conn, media = getCurrentRenderDocument(m)) {
 
   const result = Buffer.from(buffer)
   if (!result.length) throw new Error('File ZIP yang dikirim kosong.')
-  if (result.length > MAX_INPUT_ZIP_BYTES) {
-    throw new Error('Ukuran ZIP ' + formatBytes(result.length) + ' melebihi batas ' + formatBytes(MAX_INPUT_ZIP_BYTES) + '.')
-  }
   return result
 }
 
@@ -1004,7 +995,7 @@ async function before(m, { conn } = {}) {
   let parsed
   try {
     const archiveBuffer = await downloadMotionZip(m, conn, document)
-    parsed = await parseMotionZip(archiveBuffer, { maxArchiveBytes: MAX_INPUT_ZIP_BYTES })
+    parsed = await parseMotionZip(archiveBuffer)
     validateMotionVoiceoverImplementation(parsed.files)
   } catch (error) {
     await safeReact(m, '⚠️')
