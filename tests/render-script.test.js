@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, writeFile, readFile, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { createRenderSessionKey, getCurrentRenderDocument, isRenderDocumentEvent } from '../lib/render-message.js'
+import { createRenderSessionKey, getCurrentRenderDocument, isRenderDocumentEvent, isZipDocumentEvent } from '../lib/render-message.js'
 import {
   normalizeShellScript,
   normalizeArchiveEntryPath,
@@ -285,6 +285,36 @@ test('render message parser uses direct serialized document metadata as fallback
   const message = { mtype: 'documentMessage', msg: media }
   assert.equal(isRenderDocumentEvent(message), true)
   assert.equal(getCurrentRenderDocument(message), media)
+})
+
+test('ZIP document detection accepts nested WhatsApp document wrappers for .motion', () => {
+  const media = { fileName: 'alvareth-motion-project.zip', mimetype: 'application/zip' }
+  const message = {
+    mtype: 'ephemeralMessage',
+    rawMessage: {
+      message: {
+        ephemeralMessage: {
+          message: {
+            documentWithCaptionMessage: {
+              message: { documentMessage: media }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  assert.equal(isRenderDocumentEvent(message), true)
+  assert.equal(getCurrentRenderDocument(message), media)
+  assert.equal(isZipDocumentEvent(message), true)
+})
+
+test('ZIP document detection ignores non-ZIP documents and text messages', () => {
+  assert.equal(isZipDocumentEvent({
+    mtype: 'documentMessage',
+    msg: { fileName: 'catatan.pdf', mimetype: 'application/pdf' }
+  }), false)
+  assert.equal(isZipDocumentEvent({ mtype: 'conversation', text: 'halo' }), false)
 })
 
 test('render session keys normalize phone aliases and WhatsApp device suffixes', () => {
