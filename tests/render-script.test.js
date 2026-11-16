@@ -430,7 +430,7 @@ test('runRenderScript parses live Remotion frame-rendering and video-encoding pr
     "printf '\\033[2KEncoding video      ███ 500/1000\\r' >&2",
     'sleep 0.05',
     "printf '\\033[2KEncoding video      █████ 1000/1000\\r' >&2"
-  ].join('\\n') + '\\n')
+  ].join('\n') + '\n')
 
   const updates = []
   await runRenderScript({
