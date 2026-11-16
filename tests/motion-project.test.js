@@ -149,6 +149,7 @@ test('storybook 3D prompt synthesizes both references with true volumetric chara
   assert.match(prompt, /never a 2D card, sprite, or billboard/i)
   assert.match(prompt, /src\/alvareth-engine/i)
   assert.match(prompt, /createCharacter/)
+  assert.match(prompt, /attachCharacterProp/)
   assert.match(prompt, /applyCharacterPose/)
   assert.match(prompt, /createStoryWorld/)
   assert.match(prompt, /applyCinematicCamera/)
