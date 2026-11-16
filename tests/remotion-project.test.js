@@ -251,10 +251,10 @@ test('buildRemotionRenderScript uses memory-safe browser settings and retries a 
   assert.match(script, /--disable-shared-memory-capture/)
   assert.match(script, /--disallow-parallel-encoding/)
   assert.match(script, /--log=verbose/)
-  assert.match(script, /Target\\.closeTarget/)
+  assert.ok(script.includes('Target\\.closeTarget'))
   assert.match(script, /No target found for targetId/)
   assert.match(script, /--gl=swiftshader/)
-  assert.match(script, /rm -f 'out\\/render-result\\.mp4'/)
+  assert.ok(script.includes("rm -f 'out/render-result.mp4'"))
 
   const syntax = spawnSync('bash', ['-n'], { input: script, encoding: 'utf8' })
   assert.equal(syntax.status, 0, syntax.stderr || 'Generated render script must be valid Bash.')
