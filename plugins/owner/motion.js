@@ -714,30 +714,54 @@ async function processMotionProject({ m, key, session }) {
   }
 }
 
-async function showStyleMenu(m, conn, usedPrefix = '.') {
+async function showStyleMenu(m, conn, usedPrefix = '.', requestedPage = 0) {
   const prefix = usedPrefix || '.'
-  const rows = MOTION_STYLES.map(style => ({
+  const pageSize = 8
+  const pageCount = Math.max(1, Math.ceil(MOTION_STYLES.length / pageSize))
+  const page = Math.max(0, Math.min(pageCount - 1,
+    Number.isSafeInteger(requestedPage) ? requestedPage : 0))
+  const start = page * pageSize
+  const visibleStyles = MOTION_STYLES.slice(start, start + pageSize)
+  const rows = visibleStyles.map(style => ({
     header: '',
     title: style.name,
     description: style.description.slice(0, 72),
     id: prefix + 'motion style ' + style.id
   }))
 
+  if (page > 0) {
+    rows.unshift({
+      header: '',
+      title: '⬅️ Gaya sebelumnya',
+      description: 'Kembali ke halaman ' + page,
+      id: prefix + 'motion page ' + page
+    })
+  }
+  if (page < pageCount - 1) {
+    rows.push({
+      header: '',
+      title: '➡️ Gaya lainnya',
+      description: 'Lihat ' + (MOTION_STYLES.length - start - visibleStyles.length) + ' gaya berikutnya',
+      id: prefix + 'motion page ' + (page + 2)
+    })
+  }
+
   return conn.sendMessage(m.chat, {
     text: [
       '🎬 *ALVARETH MOTION*',
       '',
       'Pilih gaya animasi terlebih dahulu.',
+      'Halaman ' + (page + 1) + '/' + pageCount + ' · ' + MOTION_STYLES.length + ' gaya tersedia.',
       'Setelah dipilih, bot akan membuat prompt khusus untuk disalin ke GPT.',
       '',
       'Visual video dibuat dari kode. Tidak perlu mengirim gambar, video, atau aset.'
     ].join('\n'),
     footer: 'Alvareth Bot · ZIP-to-Animation',
     optionText: '🎨 Pilih Gaya Animasi',
-    optionTitle: 'Gaya Animasi .motion',
+    optionTitle: 'Gaya Animasi ' + (page + 1) + '/' + pageCount,
     nativeFlow: [{
       text: 'Pilih salah satu gaya',
-      sections: [{ title: 'Gaya Animasi', rows }],
+      sections: [{ title: 'Gaya ' + (start + 1) + '–' + (start + visibleStyles.length) + ' dari ' + MOTION_STYLES.length, rows }],
       icon: 'review'
     }],
     interactiveAsTemplate: false
@@ -834,6 +858,14 @@ async function handler(m, { conn, text = '', usedPrefix = '.' } = {}) {
 
   if (!action) return showStyleMenu(m, conn, usedPrefix)
 
+  if (action.toLowerCase() === 'page') {
+    const requestedPage = Number(argument)
+    if (!Number.isSafeInteger(requestedPage) || requestedPage < 1) {
+      return showStyleMenu(m, conn, usedPrefix)
+    }
+    return showStyleMenu(m, conn, usedPrefix, requestedPage - 1)
+  }
+
   if (action.toLowerCase() === 'style') {
     const style = getMotionStyle(argument)
     if (!style) return safeReply(m, 'Gaya animasi tidak dikenal. Ketik *.motion* untuk melihat daftar gaya.')
@@ -902,6 +934,7 @@ async function handler(m, { conn, text = '', usedPrefix = '.' } = {}) {
   return safeReply(m, [
     '*Perintah .motion*',
     '• .motion — pilih gaya animasi',
+    '• .motion page 2 — lihat halaman gaya berikutnya',
     '• .motion status — cek proses atau sesi',
     '• .motion retry — ulangi render yang gagal',
     '• .motion send — kirim ulang MP4 yang tersimpan',
