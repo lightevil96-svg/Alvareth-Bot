@@ -23,12 +23,13 @@ import {
   MOTION_STYLES,
   buildMotionPrompt,
   getMotionStyle,
-  parseMotionCode,
+  parseMotionZip,
   parseMotionConfig,
   validateMotionVoiceoverImplementation
 } from '../../lib/motion-project.js'
 
 const MAX_OUTPUT_BYTES = 500 * 1024 * 1024
+const MAX_INPUT_ZIP_BYTES = 25 * 1024 * 1024
 const HEARTBEAT_MS = 60_000
 const pendingJobs = new Map()
 let recoveryPromise = null
@@ -109,7 +110,7 @@ function isInside(parent, candidate) {
 
 function getPersistableSessions() {
   return [...pendingJobs.entries()]
-    .filter(([, session]) => ['awaiting-code', 'processing', 'failed'].includes(session.status))
+    .filter(([, session]) => ['awaiting-zip', 'processing', 'failed'].includes(session.status))
     .map(([key, session]) => ({
       key,
       status: session.status,
@@ -173,10 +174,10 @@ async function restoreMotionState(root) {
   for (const item of state.sessions) {
     if (!item || typeof item.key !== 'string' || !item.key || item.key.length > 512) continue
     if (pendingJobs.has(item.key)) continue
-    if (!['awaiting-code', 'processing', 'failed'].includes(item.status)) continue
+    if (!['awaiting-zip', 'awaiting-code', 'processing', 'failed'].includes(item.status)) continue
 
     const session = {
-      status: item.status === 'processing' ? 'failed' : item.status,
+      status: item.status === 'processing' ? 'failed' : item.status === 'awaiting-code' ? 'awaiting-zip' : item.status,
       styleId: getMotionStyle(item.styleId)?.id || '',
       createdAt: Number(item.createdAt) > 0 ? Number(item.createdAt) : Date.now(),
       processingStartedAt: null,
@@ -209,9 +210,9 @@ async function restoreMotionState(root) {
       }
     }
 
-    if (session.status !== 'awaiting-code' && !session.projectDirectory) {
+    if (session.status !== 'awaiting-zip' && !session.projectDirectory) {
       session.status = 'failed'
-      session.lastError = 'Folder proyek tidak ditemukan setelah bot dimulai ulang. Kirim ulang kode proyek.'
+      session.lastError = 'Folder proyek tidak ditemukan setelah bot dimulai ulang. Kirim ulang file ZIP proyek.'
     }
     pendingJobs.set(item.key, session)
     restored++
@@ -338,7 +339,7 @@ async function findConfiguredBrowser() {
   return configured
 }
 
-async function writeMotionFiles(session, parsed) {
+async function writeMotionZip(session, parsed) {
   const root = await ensureMotionRoot()
   session.directory = await fs.mkdtemp(path.join(root, 'alvareth-render-'))
   await fs.chmod(session.directory, 0o700).catch(() => {})
@@ -348,7 +349,7 @@ async function writeMotionFiles(session, parsed) {
   for (const file of parsed.files) {
     const destination = path.resolve(session.projectDirectory, ...file.path.split('/'))
     if (!isInside(session.projectDirectory, destination)) {
-      throw new Error('Path file proyek keluar dari folder sesi.')
+      throw new Error('Path file ZIP keluar dari folder sesi.')
     }
     await fs.mkdir(path.dirname(destination), { recursive: true, mode: 0o700 })
     await fs.writeFile(destination, file.content, {
@@ -360,8 +361,9 @@ async function writeMotionFiles(session, parsed) {
 }
 
 async function readAndValidateMotionProject(projectDirectory) {
-  const configPath = path.join(projectDirectory, 'motion.config.json')
-  const packagePath = path.join(projectDirectory, 'package.json')
+  const project = await findRemotionProject(projectDirectory)
+  const configPath = path.join(project.projectRoot, 'motion.config.json')
+  const packagePath = project.packageJsonPath
   const [configSource, packageSource] = await Promise.all([
     fs.readFile(configPath, 'utf8'),
     fs.readFile(packagePath, 'utf8')
@@ -389,21 +391,21 @@ async function readAndValidateMotionProject(projectDirectory) {
     const entries = await fs.readdir(directory, { withFileTypes: true })
     for (const entry of entries) {
       const target = path.join(directory, entry.name)
-      if (entry.isSymbolicLink()) throw new Error('Proyek kode berisi symbolic link yang tidak diizinkan.')
+      if (entry.isSymbolicLink()) throw new Error('Proyek ZIP berisi symbolic link yang tidak diizinkan.')
       if (entry.isDirectory()) {
         if (['node_modules', '.git', 'out', 'dist', '.cache', '.render-home', '.render-tmp'].includes(entry.name.toLowerCase())) continue
         await walk(target)
       } else if (entry.isFile() && /\.(?:js|jsx|ts|tsx|mjs|cjs)$/i.test(entry.name)) {
         sourceFiles.push({
-          path: path.relative(projectDirectory, target).split(path.sep).join('/'),
+          path: path.relative(project.projectRoot, target).split(path.sep).join('/'),
           content: await fs.readFile(target, 'utf8')
         })
       }
     }
   }
-  await walk(projectDirectory)
+  await walk(project.projectRoot)
   validateMotionVoiceoverImplementation(sourceFiles)
-  return config
+  return { config, project }
 }
 
 async function persistOutput(key, session) {
@@ -522,27 +524,27 @@ async function processMotionProject({ m, key, session }) {
     }
 
     if (!session.projectDirectory) {
-      throw new Error('Folder proyek .motion tidak ditemukan. Kirim ulang seluruh kode proyek.')
+      throw new Error('Folder proyek .motion tidak ditemukan. Kirim ulang file ZIP proyek.')
     }
 
     acquireUpdateLock(session)
     throwIfCancelled(session)
-    progress.update(3, 'Memeriksa kode proyek', 'Memvalidasi konfigurasi, struktur file, dan voiceover.', true)
+    progress.update(3, 'Memeriksa proyek ZIP', 'Memvalidasi konfigurasi, struktur file, dan voiceover.', true)
 
-    const config = await readAndValidateMotionProject(session.projectDirectory)
+    const { config, project } = await readAndValidateMotionProject(session.projectDirectory)
     const { audio, profile } = await synthesizeEdgeTTS(config.voiceoverText, config.voiceProfile)
     throwIfCancelled(session)
 
-    const publicDirectory = path.join(session.projectDirectory, 'public')
+    const publicDirectory = path.join(project.projectRoot, 'public')
     await fs.mkdir(publicDirectory, { recursive: true, mode: 0o700 })
     const voiceoverPath = path.join(publicDirectory, 'voiceover.mp3')
     await fs.writeFile(voiceoverPath, audio, { mode: 0o600 })
     progress.update(10, 'Voiceover selesai dibuat', profile.label + ' · ' + formatBytes(audio.length), true)
 
-    // A failed npm install can leave a partial node_modules directory. It is
-    // generated by this worker (the pasted-code parser rejects user-supplied
-    // node_modules), so remove it before a retry/project re-scan.
-    const nodeModulesPath = path.join(session.projectDirectory, 'node_modules')
+    // A failed npm install can leave a partial node_modules directory.
+    // ZIP intake rejects user-supplied dependency folders, so this is generated
+    // by this worker and safe to clear before a retry.
+    const nodeModulesPath = path.join(project.projectRoot, 'node_modules')
     try {
       const nodeModulesInfo = await fs.lstat(nodeModulesPath)
       if (!nodeModulesInfo.isDirectory() || nodeModulesInfo.isSymbolicLink()) {
@@ -553,7 +555,6 @@ async function processMotionProject({ m, key, session }) {
       if (error?.code !== 'ENOENT') throw error
     }
 
-    const project = await findRemotionProject(session.projectDirectory)
     const outputRelativePath = 'out/render-result.mp4'
     const outputPath = path.join(project.projectRoot, outputRelativePath)
     const scriptPath = path.join(project.projectRoot, '__alvareth_remotion_run.sh')
@@ -700,7 +701,7 @@ async function processMotionProject({ m, key, session }) {
       await safeReact(m, '❌')
       await safeReply(m,
         '❌ Proses .motion gagal: ' + safeError(error) +
-        '\n\nKode proyek tetap disimpan. Perbaiki kode di GPT lalu kirim ulang, atau ketik *.motion retry* untuk mencoba kode yang sama.')
+        '\n\nProyek dari ZIP tetap disimpan. Perbaiki proyek di GPT, kirim ulang ZIP, atau ketik *.motion retry* untuk mencoba proyek yang sama.')
     }
   } finally {
     progress.close()
@@ -725,7 +726,7 @@ async function showStyleMenu(m, conn, usedPrefix = '.') {
       '',
       'Visual video dibuat dari kode. Tidak perlu mengirim gambar, video, atau aset.'
     ].join('\n'),
-    footer: 'Alvareth Bot · Code-to-Animation',
+    footer: 'Alvareth Bot · ZIP-to-Animation',
     optionText: '🎨 Pilih Gaya Animasi',
     optionTitle: 'Gaya Animasi .motion',
     nativeFlow: [{
@@ -741,7 +742,7 @@ async function sendPromptCopyButton(m, conn, style, usedPrefix = '.') {
   const prompt = buildMotionPrompt(style.id)
   const prefix = usedPrefix || '.'
   const session = {
-    status: 'awaiting-code',
+    status: 'awaiting-zip',
     styleId: style.id,
     createdAt: Date.now(),
     processingStartedAt: null,
@@ -772,12 +773,12 @@ async function sendPromptCopyButton(m, conn, style, usedPrefix = '.') {
     text: [
       '🎨 *Gaya dipilih: ' + style.name + '*',
       '',
-      'Tekan tombol *Salin Prompt GPT*, tempel prompt tersebut ke ChatGPT, lalu minta GPT membuat seluruh kode proyek.',
-      'Setelah kode selesai, salin semua file beserta marker FILE dan kirim sebagai satu pesan ke chat ini.',
+      'Tekan tombol *Salin Prompt GPT*, tempel prompt tersebut ke ChatGPT, lalu berikan tema video.',
+      'GPT akan membuat satu file ZIP yang dapat diunduh. Kirim file ZIP itu ke chat ini sebagai dokumen WhatsApp.',
       '',
-      'Bot akan menyusun file otomatis, membuat voiceover dari naskah di motion.config.json, lalu merender MP4.',
+      'Bot akan mengekstrak proyek, membuat voiceover otomatis dari motion.config.json, lalu merender MP4.',
       '',
-      'Tidak perlu upload gambar, video, audio, ZIP, atau aset lainnya.'
+      'Kirim satu file .zip saja. Jangan tempel kode proyek ke chat.'
     ].join('\n'),
     footer: 'Prompt disesuaikan dengan gaya ' + style.name,
     nativeFlow: [
@@ -835,10 +836,10 @@ async function handler(m, { conn, text = '', usedPrefix = '.' } = {}) {
 
   if (action.toLowerCase() === 'status') {
     if (!session) return safeReply(m, 'Tidak ada sesi .motion aktif.')
-    if (session.status === 'awaiting-code') {
+    if (session.status === 'awaiting-zip') {
       const style = getMotionStyle(session.styleId)
-      return safeReply(m, '🎨 Menunggu kode GPT untuk gaya ' + (style?.name || 'animasi') +
-        '. Tempel seluruh kode proyek dalam satu pesan. Sesi ini tidak kedaluwarsa otomatis.')
+      return safeReply(m, '🎨 Menunggu file ZIP proyek untuk gaya ' + (style?.name || 'animasi') +
+        '. Kirim file .zip sebagai dokumen WhatsApp. Sesi ini tidak kedaluwarsa otomatis.')
     }
     if (session.status === 'processing') {
       return safeReply(m, '🎬 Rendering .motion sedang berjalan.\nTahap: ' +
@@ -851,7 +852,7 @@ async function handler(m, { conn, text = '', usedPrefix = '.' } = {}) {
         '), tetapi belum terkirim. Ketik *.motion send* untuk mengirim tanpa render ulang.')
     }
     if (session.status === 'failed') {
-      return safeReply(m, '⚠️ Kode proyek masih tersimpan. Error: ' + String(session.lastError || 'Render gagal') +
+      return safeReply(m, '⚠️ Proyek dari ZIP masih tersimpan. Error: ' + String(session.lastError || 'Render gagal') +
         '\nKetik *.motion retry* untuk mencoba lagi atau *.motion cancel* untuk menghapus sesi.')
     }
     return safeReply(m, 'Status sesi .motion: ' + String(session.status || 'tidak diketahui'))
@@ -861,10 +862,10 @@ async function handler(m, { conn, text = '', usedPrefix = '.' } = {}) {
 
   if (action.toLowerCase() === 'retry') {
     if (!session || session.status !== 'failed' || !session.projectDirectory) {
-      return safeReply(m, 'Tidak ada proyek gagal yang bisa dicoba ulang. Kirim kode proyek setelah memilih gaya.')
+      return safeReply(m, 'Tidak ada proyek gagal yang bisa dicoba ulang. Kirim ZIP proyek setelah memilih gaya.')
     }
     if (global.__alvarethUpdateRunning) {
-      return safeReply(m, '⏳ Render ditunda karena pembaruan bot sedang berlangsung. Kode tetap tersimpan; coba *.motion retry* setelah update selesai.')
+      return safeReply(m, '⏳ Render ditunda karena pembaruan bot sedang berlangsung. ZIP proyek tetap tersimpan; coba *.motion retry* setelah update selesai.')
     }
     session.status = 'processing'
     session.processingStartedAt = Date.now()
@@ -874,7 +875,7 @@ async function handler(m, { conn, text = '', usedPrefix = '.' } = {}) {
     session.progress = { percent: 0, stage: 'Mengulang render', detail: '', updatedAt: Date.now() }
     await persistMotionState()
     await safeReact(m, '🎬')
-    await safeReply(m, '🔁 Mencoba render ulang dari kode yang tersimpan. Tidak perlu mengirim kode lagi.')
+    await safeReply(m, '🔁 Mencoba render ulang dari proyek ZIP yang tersimpan. Tidak perlu mengirim ZIP lagi.')
     void processMotionProject({ m, key, session })
     return
   }
@@ -902,10 +903,51 @@ async function handler(m, { conn, text = '', usedPrefix = '.' } = {}) {
   ].join('\n'))
 }
 
+function isMotionZipDocument(m) {
+  if (String(m?.mtype || '') !== 'documentMessage') return false
+  const media = m?.msg || {}
+  const fileName = String(media.fileName || '').trim().toLowerCase()
+  const mime = String(media.mimetype || '').trim().toLowerCase()
+  return fileName.endsWith('.zip') ||
+    mime === 'application/zip' ||
+    mime === 'application/x-zip-compressed' ||
+    mime === 'application/x-zip'
+}
+
+async function downloadMotionZip(m, conn) {
+  const media = m?.msg || {}
+  const declaredSize = Number(media.fileLength?.toString?.() || media.fileLength || 0)
+  if (Number.isFinite(declaredSize) && declaredSize > MAX_INPUT_ZIP_BYTES) {
+    throw new Error('Ukuran ZIP melebihi batas ' + formatBytes(MAX_INPUT_ZIP_BYTES) + '.')
+  }
+
+  let buffer = null
+  if (typeof m?.download === 'function') {
+    buffer = await m.download()
+  }
+  if ((!Buffer.isBuffer(buffer) && !(buffer instanceof Uint8Array)) &&
+      typeof conn?.downloadM === 'function') {
+    buffer = await conn.downloadM(media, 'document')
+  }
+  if (!Buffer.isBuffer(buffer) && !(buffer instanceof Uint8Array)) {
+    throw new Error('Bot tidak berhasil mengunduh dokumen ZIP dari WhatsApp.')
+  }
+
+  const result = Buffer.from(buffer)
+  if (!result.length) throw new Error('File ZIP yang dikirim kosong.')
+  if (result.length > MAX_INPUT_ZIP_BYTES) {
+    throw new Error('Ukuran ZIP ' + formatBytes(result.length) + ' melebihi batas ' + formatBytes(MAX_INPUT_ZIP_BYTES) + '.')
+  }
+  return result
+}
+
 async function before(m, { conn } = {}) {
-  if (!m?.chat || typeof m.text !== 'string' || !m.text.trim()) return false
-  const text = m.text.trim()
-  if (/^[.!/]\S+/.test(text)) return false
+  if (!m?.chat) return false
+  const isZip = isMotionZipDocument(m)
+  const text = typeof m.text === 'string' ? m.text.trim() : ''
+  const hasMedia = Boolean(m.mediaMessage || m.mediaType)
+  if (!isZip && (!text || /^[.!/]\S+/.test(text)) && !hasMedia) return false
+  if (!isZip && text && /^[.!/]\S+/.test(text)) return false
 
   const key = createRenderSessionKey(m)
   if (!key) return false
@@ -916,22 +958,30 @@ async function before(m, { conn } = {}) {
   }
 
   const session = pendingJobs.get(key)
-  if (!session || session.status !== 'awaiting-code') return false
+  if (!session || session.status !== 'awaiting-zip') return false
   m.__alvarethMotionCodeHandled = true
 
-  let parsed
-  try {
-    parsed = parseMotionCode(text)
-    validateMotionVoiceoverImplementation(parsed.files)
-  } catch (error) {
+  if (!isZip) {
     await safeReply(m,
-      '⚠️ Kode belum bisa dibaca: ' + safeError(error) +
-      '\n\nKembali ke GPT dan pastikan setiap file memakai marker ===FILE: nama/file===, lalu kirim ulang seluruh kode.')
+      '📦 Saya sedang menunggu file proyek .zip. Kirim ZIP sebagai dokumen WhatsApp, bukan kode yang ditempel di chat.')
     return true
   }
 
   if (global.__alvarethUpdateRunning) {
-    await safeReply(m, '⏳ Pembaruan bot sedang berlangsung. Kode belum diproses. Kirim ulang kode ini setelah update selesai.')
+    await safeReply(m, '⏳ Pembaruan bot sedang berlangsung. ZIP belum diproses. Kirim ulang file ZIP setelah update selesai.')
+    return true
+  }
+
+  let parsed
+  try {
+    const archiveBuffer = await downloadMotionZip(m, conn)
+    parsed = await parseMotionZip(archiveBuffer, { maxArchiveBytes: MAX_INPUT_ZIP_BYTES })
+    validateMotionVoiceoverImplementation(parsed.files)
+  } catch (error) {
+    await safeReact(m, '⚠️')
+    await safeReply(m,
+      '⚠️ ZIP belum bisa diproses: ' + safeError(error) +
+      '\n\nPastikan ZIP berisi satu proyek Remotion, package.json, motion.config.json, dan folder src/. Perbaiki lalu kirim ulang ZIP.')
     return true
   }
 
@@ -940,24 +990,35 @@ async function before(m, { conn } = {}) {
   session.abortController = new AbortController()
   session.cancelRequested = false
   session.lastError = ''
-  session.progress = { percent: 0, stage: 'Menerima kode proyek', detail: parsed.files.length + ' file kode', updatedAt: Date.now() }
+  session.progress = {
+    percent: 0,
+    stage: 'Menerima ZIP proyek',
+    detail: parsed.fileCount + ' file · ' + formatBytes(parsed.totalFileBytes),
+    updatedAt: Date.now()
+  }
 
   try {
-    await writeMotionFiles(session, parsed)
+    await writeMotionZip(session, parsed)
     await persistMotionState()
   } catch (error) {
-    session.status = 'failed'
-    session.lastError = safeError(error)
+    await removeJob(session)
+    session.directory = null
+    session.projectDirectory = null
+    session.status = 'awaiting-zip'
     session.abortController = null
+    session.processingStartedAt = null
+    session.lastError = safeError(error)
     await persistMotionState()
-    await safeReply(m, '❌ Gagal menyusun file proyek: ' + safeError(error) +
-      '\nSesi tetap tersimpan. Ketik *.motion cancel* lalu coba kembali.')
+    await safeReact(m, '❌')
+    await safeReply(m, '❌ Gagal mengekstrak ZIP: ' + safeError(error) +
+      '\nSesi tetap menunggu ZIP. Coba kirim ulang file ZIP.')
     return true
   }
 
   await safeReact(m, '🎬')
   await safeReply(m,
-    '🎬 Kode diterima (' + parsed.files.length + ' file, ' + formatBytes(parsed.totalFileBytes) + ').\n' +
+    '📦 ZIP diterima dan berhasil diekstrak (' + parsed.fileCount + ' file, ' +
+    formatBytes(parsed.totalFileBytes) + ').\n' +
     'Bot sedang memeriksa proyek, membuat voiceover otomatis, dan merender MP4 di background.\n\n' +
     'Tidak ada batas waktu kedaluwarsa. Gunakan *.motion status* untuk mengecek proses.')
   void processMotionProject({ m, key, session })
