@@ -423,13 +423,13 @@ test('runRenderScript parses live Remotion frame-rendering and video-encoding pr
   const inputPath = path.join(directory, 'input.mp4')
   await writeFile(inputPath, 'input')
   await writeFile(scriptPath, [
-    "printf '\\033[2KRendering frames     ███ 250/1000 5s remaining\\r' >&2",
+    String.raw`printf '\\033[2KRendering frames     ███ 250/1000 5s remaining\\r' >&2`,
     'sleep 0.05',
-    "printf '\\033[2KRendering frames     ███████ 750/1000 2s remaining\\r' >&2",
+    String.raw`printf '\\033[2KRendering frames     ███████ 750/1000 2s remaining\\r' >&2`,
     'sleep 0.05',
-    "printf '\\033[2KEncoding video      ███ 500/1000\\r' >&2",
+    String.raw`printf '\\033[2KEncoding video      ███ 500/1000\\r' >&2`,
     'sleep 0.05',
-    "printf '\\033[2KEncoding video      █████ 1000/1000\\r' >&2"
+    String.raw`printf '\\033[2KEncoding video      █████ 1000/1000\\r' >&2`
   ].join('\n') + '\n')
 
   const updates = []
