@@ -109,14 +109,28 @@ async function makeZip(files = projectFiles) {
 }
 
 test('motion style catalogue contains every repository visual preset and unique selectable styles', () => {
-  assert.equal(MOTION_STYLES.length, 14)
+  assert.equal(MOTION_STYLES.length, 15)
   assert.equal(new Set(MOTION_STYLES.map(style => style.id)).size, MOTION_STYLES.length)
   assert.equal(getMotionStyle('crayon-book').name, 'Crayon Picture Book')
   assert.equal(getMotionStyle('cinematic-illustrated').name, 'Cinematic 2.5D Explainer')
   assert.equal(getMotionStyle('3d-glass').name, 'Premium 3D Glass')
   assert.equal(getMotionStyle('kinetic-bold').name, 'Bold Kinetic Typography')
   assert.equal(getMotionStyle('clean-editorial').name, 'Clean Editorial')
+  assert.equal(getMotionStyle('real-3d').name, 'Real 3D Animation (Three.js)')
   assert.equal(getMotionStyle('missing-style'), null)
+})
+
+test('real 3D prompt requires real Three.js meshes and Remotion-synchronized ThreeCanvas', () => {
+  const prompt = buildMotionPrompt('real-3d')
+  assert.match(prompt, /Real 3D Animation \(Three\.js\)/)
+  assert.match(prompt, /@remotion\/three/)
+  assert.match(prompt, /@react-three\/fiber/)
+  assert.match(prompt, /ThreeCanvas/)
+  assert.match(prompt, /useCurrentFrame/)
+  assert.match(prompt, /mesh dan geometri 3D nyata/)
+  assert.match(prompt, /jangan memakai useFrame/i)
+  assert.match(prompt, /webglRenderer/)
+  assert.match(prompt, /swangle/)
 })
 
 test('buildMotionPrompt requires a downloadable ZIP and forbids source code in chat', () => {

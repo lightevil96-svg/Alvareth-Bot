@@ -43,6 +43,71 @@ test('findRemotionProject detects a wrapped project and its static Composition I
   assert.ok(result.packageJsonPath.endsWith(path.join('hujan-mendadak', 'package.json')))
 })
 
+test('findRemotionProject detects Three.js projects and defaults to the software WebGL renderer', async t => {
+  const threePackage = {
+    ...packageJson,
+    dependencies: {
+      ...packageJson.dependencies,
+      '@remotion/three': '4.0.534',
+      '@react-three/fiber': '8.17.10',
+      'three': '0.170.0'
+    },
+    alvarethRemotion: {
+      entryPoint: 'src/index.ts',
+      compositionId: 'ThreeScene'
+    }
+  }
+  const root = await createFixture(t, {
+    'package.json': JSON.stringify(threePackage),
+    'src/index.ts': "import {registerRoot} from 'remotion'; registerRoot(Root);",
+    'src/Root.tsx': '<Composition id="ThreeScene" component={Scene} />'
+  })
+
+  const result = await findRemotionProject(root)
+  assert.equal(result.usesWebGL, true)
+  assert.equal(result.renderGL, 'swangle')
+})
+
+test('findRemotionProject accepts an explicit WebGL renderer from the safe allowlist', async t => {
+  const configured = {
+    ...packageJson,
+    dependencies: {
+      ...packageJson.dependencies,
+      '@remotion/three': '4.0.534',
+      '@react-three/fiber': '8.17.10',
+      'three': '0.170.0'
+    },
+    alvarethRemotion: {
+      entryPoint: 'src/index.ts',
+      compositionId: 'ThreeScene',
+      webglRenderer: 'angle-egl'
+    }
+  }
+  const root = await createFixture(t, {
+    'package.json': JSON.stringify(configured),
+    'src/index.ts': 'registerRoot(Root);',
+    'src/Root.tsx': '<Composition id="ThreeScene" component={Scene} />'
+  })
+  const result = await findRemotionProject(root)
+  assert.equal(result.renderGL, 'angle-egl')
+})
+
+test('findRemotionProject rejects incomplete Three.js dependencies', async t => {
+  const incomplete = {
+    ...packageJson,
+    dependencies: {
+      ...packageJson.dependencies,
+      '@remotion/three': '4.0.534'
+    }
+  }
+  const root = await createFixture(t, {
+    'package.json': JSON.stringify(incomplete),
+    'src/index.ts': 'registerRoot(Root);',
+    'src/Root.tsx': '<Composition id="ThreeScene" component={Scene} />'
+  })
+  await assert.rejects(findRemotionProject(root), /Proyek 3D belum lengkap/)
+})
+
 test('findRemotionProject accepts an explicit composition ID when the project has several', async t => {
   const configured = {
     ...packageJson,
@@ -137,6 +202,20 @@ test('buildRemotionRenderScript disables npm lifecycle scripts and renders the s
   assert.match(script, /'HujanMendadak'/)
   assert.match(script, /'\/opt\/chrome\/chrome stable'/)
   assert.match(script, /--concurrency=3/)
+})
+
+test('buildRemotionRenderScript enables WebGL for a Three.js project', () => {
+  const script = buildRemotionRenderScript({
+    entryPoint: 'src/index.ts',
+    compositionId: 'ThreeScene',
+    gl: 'swangle'
+  })
+  assert.match(script, /--gl=swangle/)
+  assert.throws(() => buildRemotionRenderScript({
+    entryPoint: 'src/index.ts',
+    compositionId: 'ThreeScene',
+    gl: 'untrusted-renderer'
+  }), /OpenGL renderer tidak didukung/)
 })
 
 test('buildRemotionRenderScript rejects path traversal and invalid composition IDs', () => {
