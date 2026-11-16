@@ -360,6 +360,31 @@ async function writeMotionZip(session, parsed) {
   }
 }
 
+async function removeGeneratedNodeModules(rootDirectory) {
+  const root = path.resolve(rootDirectory)
+
+  async function walk(directory, depth = 0) {
+    if (depth > 16) throw new Error('Struktur folder proyek terlalu dalam saat membersihkan dependency.')
+    const entries = await fs.readdir(directory, { withFileTypes: true })
+    for (const entry of entries) {
+      const target = path.join(directory, entry.name)
+      if (entry.isSymbolicLink()) throw new Error('Folder proyek berisi symbolic link yang tidak diizinkan.')
+      if (!entry.isDirectory()) continue
+      if (entry.name.toLowerCase() === 'node_modules') {
+        const info = await fs.lstat(target)
+        if (!info.isDirectory() || info.isSymbolicLink()) {
+          throw new Error('Folder node_modules hasil proses sebelumnya tidak aman.')
+        }
+        await fs.rm(target, { recursive: true, force: true })
+        continue
+      }
+      await walk(target, depth + 1)
+    }
+  }
+
+  await walk(root)
+}
+
 async function readAndValidateMotionProject(projectDirectory) {
   const project = await findRemotionProject(projectDirectory)
   const configPath = path.join(project.projectRoot, 'motion.config.json')
@@ -531,6 +556,7 @@ async function processMotionProject({ m, key, session }) {
     throwIfCancelled(session)
     progress.update(3, 'Memeriksa proyek ZIP', 'Memvalidasi konfigurasi, struktur file, dan voiceover.', true)
 
+    await removeGeneratedNodeModules(session.projectDirectory)
     const { config, project } = await readAndValidateMotionProject(session.projectDirectory)
     const { audio, profile } = await synthesizeEdgeTTS(config.voiceoverText, config.voiceProfile)
     throwIfCancelled(session)
@@ -540,20 +566,6 @@ async function processMotionProject({ m, key, session }) {
     const voiceoverPath = path.join(publicDirectory, 'voiceover.mp3')
     await fs.writeFile(voiceoverPath, audio, { mode: 0o600 })
     progress.update(10, 'Voiceover selesai dibuat', profile.label + ' · ' + formatBytes(audio.length), true)
-
-    // A failed npm install can leave a partial node_modules directory.
-    // ZIP intake rejects user-supplied dependency folders, so this is generated
-    // by this worker and safe to clear before a retry.
-    const nodeModulesPath = path.join(project.projectRoot, 'node_modules')
-    try {
-      const nodeModulesInfo = await fs.lstat(nodeModulesPath)
-      if (!nodeModulesInfo.isDirectory() || nodeModulesInfo.isSymbolicLink()) {
-        throw new Error('Folder node_modules hasil proses sebelumnya tidak aman.')
-      }
-      await fs.rm(nodeModulesPath, { recursive: true, force: true })
-    } catch (error) {
-      if (error?.code !== 'ENOENT') throw error
-    }
 
     const outputRelativePath = 'out/render-result.mp4'
     const outputPath = path.join(project.projectRoot, outputRelativePath)
