@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import JSZip from 'jszip'
+import { deflateRawSync } from 'node:zlib'
 import {
   MOTION_STYLES,
   buildMotionPrompt,
@@ -35,10 +35,77 @@ const projectFiles = {
   'src/Video.tsx': '<Audio src={staticFile("voiceover.mp3")} />'
 }
 
+function crc32(buffer) {
+  let crc = 0xffffffff
+  for (const byte of buffer) {
+    crc ^= byte
+    for (let bit = 0; bit < 8; bit++) {
+      crc = crc & 1 ? 0xedb88320 ^ (crc >>> 1) : crc >>> 1
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0
+}
+
 async function makeZip(files = projectFiles) {
-  const zip = new JSZip()
-  for (const [name, content] of Object.entries(files)) zip.file(name, content)
-  return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' })
+  const localParts = []
+  const centralParts = []
+  let localOffset = 0
+
+  for (const [name, value] of Object.entries(files)) {
+    const content = Buffer.from(typeof value === 'object' && value !== null ? value.content : value, 'utf8')
+    const unixMode = typeof value === 'object' && value !== null ? value.unixMode ?? 0o100644 : 0o100644
+    const nameBuffer = Buffer.from(name, 'utf8')
+    const compressed = deflateRawSync(content)
+    const checksum = crc32(content)
+
+    const localHeader = Buffer.alloc(30 + nameBuffer.length)
+    localHeader.writeUInt32LE(0x04034b50, 0)
+    localHeader.writeUInt16LE(20, 4)
+    localHeader.writeUInt16LE(0x0800, 6)
+    localHeader.writeUInt16LE(8, 8)
+    localHeader.writeUInt32LE(checksum, 14)
+    localHeader.writeUInt32LE(compressed.length, 18)
+    localHeader.writeUInt32LE(content.length, 22)
+    localHeader.writeUInt16LE(nameBuffer.length, 26)
+    localHeader.writeUInt16LE(0, 28)
+    nameBuffer.copy(localHeader, 30)
+    localParts.push(Buffer.concat([localHeader, compressed]))
+
+    const centralHeader = Buffer.alloc(46 + nameBuffer.length)
+    centralHeader.writeUInt32LE(0x02014b50, 0)
+    centralHeader.writeUInt16LE((3 << 8) | 20, 4)
+    centralHeader.writeUInt16LE(20, 6)
+    centralHeader.writeUInt16LE(0x0800, 8)
+    centralHeader.writeUInt16LE(8, 10)
+    centralHeader.writeUInt32LE(checksum, 16)
+    centralHeader.writeUInt32LE(compressed.length, 20)
+    centralHeader.writeUInt32LE(content.length, 24)
+    centralHeader.writeUInt16LE(nameBuffer.length, 28)
+    centralHeader.writeUInt16LE(0, 30)
+    centralHeader.writeUInt16LE(0, 32)
+    centralHeader.writeUInt16LE(0, 34)
+    centralHeader.writeUInt16LE(0, 36)
+    centralHeader.writeUInt32LE((unixMode << 16) >>> 0, 38)
+    centralHeader.writeUInt32LE(localOffset, 42)
+    nameBuffer.copy(centralHeader, 46)
+    centralParts.push(centralHeader)
+
+    localOffset += localHeader.length + compressed.length
+  }
+
+  const localData = Buffer.concat(localParts)
+  const centralData = Buffer.concat(centralParts)
+  const entryCount = centralParts.length
+  const endRecord = Buffer.alloc(22)
+  endRecord.writeUInt32LE(0x06054b50, 0)
+  endRecord.writeUInt16LE(0, 4)
+  endRecord.writeUInt16LE(0, 6)
+  endRecord.writeUInt16LE(entryCount, 8)
+  endRecord.writeUInt16LE(entryCount, 10)
+  endRecord.writeUInt32LE(centralData.length, 12)
+  endRecord.writeUInt32LE(localData.length, 16)
+  endRecord.writeUInt16LE(0, 20)
+  return Buffer.concat([localData, centralData, endRecord])
 }
 
 test('motion style catalogue contains unique selectable styles', () => {
@@ -86,9 +153,7 @@ test('parseMotionZip rejects invalid archives and archive size overflow', async 
 })
 
 test('parseMotionZip rejects path traversal, duplicate case-insensitive names, and unsupported binary assets', async () => {
-  const traversal = new JSZip()
-  traversal.file('../escape.js', 'bad')
-  await assert.rejects(parseMotionZip(await traversal.generateAsync({ type: 'nodebuffer' })), /path|package\.json/i)
+  await assert.rejects(parseMotionZip(await makeZip({ '../escape.js': 'bad' })), /Path file proyek|path/i)
 
   const duplicate = {
     ...projectFiles,
@@ -98,6 +163,9 @@ test('parseMotionZip rejects path traversal, duplicate case-insensitive names, a
 
   const binary = { ...projectFiles, 'public/image.png': 'fake-image-data' }
   await assert.rejects(parseMotionZip(await makeZip(binary)), /Aset\/binary/)
+
+  const symlink = { ...projectFiles, 'src/link.tsx': { content: 'target', unixMode: 0o120777 } }
+  await assert.rejects(parseMotionZip(await makeZip(symlink)), /symbolic link/)
 })
 
 test('parseMotionZip rejects dependency folders and oversized uncompressed content', async () => {
