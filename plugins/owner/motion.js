@@ -17,6 +17,7 @@ import {
 } from '../../lib/render-script.js'
 import {
   buildRemotionRenderScript,
+  ensureRemotionProgressDependencies,
   findRemotionProject
 } from '../../lib/remotion-project.js'
 import {
@@ -387,6 +388,28 @@ async function removeGeneratedNodeModules(rootDirectory) {
   await walk(root)
 }
 
+async function prepareRemotionProgressRunner(project) {
+  const runnerPath = path.join(project.projectRoot, '__alvareth_remotion_runner.mjs')
+  try {
+    const info = await fs.lstat(runnerPath)
+    if (!info.isFile() || info.isSymbolicLink()) {
+      throw new Error('File runner Remotion sementara tidak aman.')
+    }
+    await fs.rm(runnerPath, { force: true })
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error
+  }
+
+  const sourcePath = new URL('../../lib/remotion-progress-runner.mjs', import.meta.url)
+  const source = await fs.readFile(sourcePath, 'utf8')
+  await fs.writeFile(runnerPath, source, {
+    encoding: 'utf8',
+    mode: 0o600,
+    flag: 'wx'
+  })
+  return runnerPath
+}
+
 async function readAndValidateMotionProject(projectDirectory) {
   const project = await findRemotionProject(projectDirectory)
   const configPath = path.join(project.projectRoot, 'motion.config.json')
@@ -559,6 +582,13 @@ async function processMotionProject({ m, key, session }) {
 
     await removeGeneratedNodeModules(session.projectDirectory)
     const { config, project } = await readAndValidateMotionProject(session.projectDirectory)
+    const progressDependencies = await ensureRemotionProgressDependencies(project)
+    const runnerPath = await prepareRemotionProgressRunner(project)
+    console.log('[MOTION] Renderer progres Remotion disiapkan:', {
+      version: progressDependencies.version,
+      addedDependencies: progressDependencies.added,
+      runner: path.basename(runnerPath)
+    })
     const { audio, profile } = await synthesizeEdgeTTS(config.voiceoverText, config.voiceProfile)
     throwIfCancelled(session)
 
@@ -617,8 +647,8 @@ async function processMotionProject({ m, key, session }) {
         const command = String(value.command || '').toLowerCase()
         if (command === 'npm') {
           progress.update(18, 'Menginstal dependency', 'Menggunakan --ignore-scripts.', true)
-        } else if (command === 'remotion') {
-          progress.update(35, 'Merender animasi', project.compositionId, true)
+        } else if (command === 'node') {
+          progress.update(20, 'Menjalankan Remotion SSR renderer', project.compositionId, true)
         } else {
           progress.update(22, 'Menjalankan pipeline', command, true)
         }
@@ -633,16 +663,60 @@ async function processMotionProject({ m, key, session }) {
         }
       },
       onProgress: value => {
-        const raw = Number(value.percent)
-        const percent = Number.isFinite(raw)
-          ? 35 + Math.round(Math.max(0, Math.min(100, raw)) * 0.5)
-          : 35
-        const detail = [
-          Number.isFinite(value.frame) ? 'Frame ' + value.frame : '',
-          Number.isFinite(value.fps) ? value.fps + ' FPS' : '',
-          Number.isFinite(value.currentTimeSeconds) ? value.currentTimeSeconds.toFixed(1) + ' detik' : ''
-        ].filter(Boolean).join(' · ')
-        progress.update(percent, 'Merender animasi', detail)
+        if (value.kind === 'bundle') {
+          const raw = Number(value.percent)
+          if (!Number.isFinite(raw)) return
+          const bundlePercent = Math.max(0, Math.min(100, raw))
+          progress.update(
+            20 + Math.round(bundlePercent * 0.1),
+            'Membundelkan proyek Remotion',
+            bundlePercent.toFixed(1) + '%'
+          )
+          return
+        }
+
+        if (value.kind === 'composition') {
+          const frames = Number(value.durationInFrames)
+          const fps = Number(value.fps)
+          const detail = [
+            Number.isSafeInteger(frames) ? frames.toLocaleString('id-ID') + ' frame' : '',
+            Number.isFinite(fps) && fps > 0 ? fps + ' FPS' : ''
+          ].filter(Boolean).join(' · ')
+          progress.update(30, 'Composition siap dirender', detail, true)
+          return
+        }
+
+        if (value.kind === 'render-start') {
+          session.renderFrameCount = Number.isSafeInteger(Number(value.frameCount))
+            ? Number(value.frameCount)
+            : null
+          session.renderFps = Number.isFinite(Number(value.fps)) ? Number(value.fps) : null
+          progress.update(30, 'Rendering dimulai',
+            (session.renderFrameCount ? session.renderFrameCount.toLocaleString('id-ID') + ' frame' : '') +
+            (session.renderFps ? ' · ' + session.renderFps + ' FPS' : '') +
+            (Number.isFinite(Number(value.concurrency)) ? ' · concurrency ' + value.concurrency : ''), true)
+          return
+        }
+
+        if (value.kind === 'render') {
+          const raw = Number(value.progress)
+          const normalized = Number.isFinite(raw) ? Math.max(0, Math.min(1, raw)) : null
+          const percent = normalized === null ? 30 : 30 + Math.round(normalized * 61)
+          const rendered = Number(value.renderedFrames)
+          const encoded = Number(value.encodedFrames)
+          const detail = [
+            Number.isFinite(rendered) && session.renderFrameCount
+              ? 'Frame ' + Math.min(rendered, session.renderFrameCount).toLocaleString('id-ID') +
+                '/' + session.renderFrameCount.toLocaleString('id-ID')
+              : Number.isFinite(rendered) ? 'Frame ' + rendered.toLocaleString('id-ID') : '',
+            Number.isFinite(encoded) && encoded > 0 ? 'Encoded ' + encoded.toLocaleString('id-ID') : '',
+            session.renderFps ? session.renderFps + ' FPS' : ''
+          ].filter(Boolean).join(' · ')
+          const stage = value.stitchStage === 'muxing'
+            ? 'Menggabungkan audio dan video'
+            : 'Merender animasi'
+          progress.update(percent, stage, detail)
+        }
       }
     })
     throwIfCancelled(session)
@@ -885,10 +959,7 @@ async function handler(m, { conn, text = '', usedPrefix = '.' } = {}) {
         '. Kirim file .zip sebagai dokumen WhatsApp. Sesi ini tidak kedaluwarsa otomatis.')
     }
     if (session.status === 'processing') {
-      return safeReply(m, '🎬 Rendering .motion sedang berjalan.\nTahap: ' +
-        String(session.progress?.stage || 'Menyiapkan render') +
-        '\nWaktu berjalan: ' + formatElapsed(Date.now() - Number(session.processingStartedAt || session.createdAt)) +
-        (session.progress?.detail ? '\nDetail: ' + String(session.progress.detail).slice(0, 240) : ''))
+      return safeReply(m, '🎬 Rendering .motion sedang berjalan di server. Detail progres hanya tersedia di terminal bot.')
     }
     if (session.status === 'output-ready' && session.outputPath) {
       return safeReply(m, '✅ MP4 selesai dan tersimpan (' + formatBytes(session.outputSize) +
