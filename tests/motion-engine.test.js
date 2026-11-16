@@ -6,6 +6,7 @@ import path from 'node:path';
 import { installMotionEngine, MOTION_ENGINE_VERSION } from '../lib/motion-engine/install.js';
 import { ALVARETH_STYLE_DNA, cloneStyleDNA, getStyleDNAContract } from '../lib/motion-engine/style-dna.js';
 import { inspectCharacter3D, createVisualQaReport, assertVisualContract } from '../lib/motion-engine/visual-qa.js';
+import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
 import {
   createCharacter,
@@ -211,4 +212,14 @@ test('World, Camera and Motion engines build a dimensional set and frame-address
   assert.ok(pose.headYaw > 0.4 && pose.headYaw < 0.6);
   assert.equal(motion.beatAt(15).beat.id, 'action');
   assert.ok(Number.isFinite(motion.walkAt(10).leftLegPitch));
+});
+
+
+test('storybook production skill enforces true volumetric 3D and no longer instructs 2.5D character cards', () => {
+  const skill = readFileSync(new URL('../skills/storybook-3d-reference/SKILL.md', import.meta.url), 'utf8');
+  assert.match(skill, /true volumetric 3D characters inside a true 3D world/i);
+  assert.match(skill, /getCharacterAnchor/);
+  assert.match(skill, /attachCharacterProp/);
+  assert.match(skill, /assertVisualContract/);
+  assert.doesNotMatch(skill, /hybrid 2\.5D|2D artwork in 3D space|transparent planes\/cards/i);
 });
