@@ -136,6 +136,18 @@ test('parseMotionZip extracts a complete Remotion project', async () => {
   assert.match(result.files.find(file => file.path === 'src/Root.tsx').content, /getAudioDuration/)
 })
 
+test('parseMotionZip silently skips empty .gitkeep and .keep placeholders', async () => {
+  const withPlaceholders = {
+    ...projectFiles,
+    'public/.gitkeep': '',
+    'public/.keep': ''
+  }
+  const result = await parseMotionZip(await makeZip(withPlaceholders))
+  assert.equal(result.fileCount, 5)
+  assert.equal(result.files.some(file => file.path.endsWith('.gitkeep') || file.path.endsWith('.keep')), false)
+  assert.equal(result.files.some(file => file.path === 'motion.config.json'), true)
+})
+
 test('parseMotionZip supports one enclosing project folder', async () => {
   const nested = Object.fromEntries(
     Object.entries(projectFiles).map(([name, content]) => ['my-motion-project/' + name, content])
