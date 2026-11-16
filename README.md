@@ -212,6 +212,8 @@ Durasi komposisi mengikuti durasi audio voiceover yang dibuat dari naskah; tidak
 
 **Keamanan:** hanya super-owner yang dapat menggunakan fitur ini. Source proyek Remotion tetap dieksekusi saat bundling/render dan bukan sandbox OS; kirim hanya ZIP dari sumber yang dipercaya. Jangan menyertakan node_modules, .git, .env, .npmrc, atau folder src/alvareth-engine/ (engine tersebut dipasang otomatis).
 
+**Reference Analyzer:** analisis metadata, palet warna, kontras, edge density, perubahan frame dan kandidat posisi subtitle dari video referensi lokal dengan `npm run motion:analyze-reference -- /path/390381.mp4 /path/390306.mp4`. Ringkasan semantik dan batas analisis dijelaskan di [docs/MOTION_REFERENCE_ANALYSIS.md](docs/MOTION_REFERENCE_ANALYSIS.md). Metrik otomatis bukan pengganti pemeriksaan visual hasil render.
+
 ## Database dan sesi
 
 Data runtime disimpan di luar checkout Git secara default:
