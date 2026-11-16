@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { DEFAULT_TTS_PROFILE, MAX_TTS_CHARACTERS, TTS_VOICE_PROFILES, parseTtsRequest, getTtsVoiceList } from '../lib/tts-config.js'
+import { DEFAULT_TTS_PROFILE, MAX_TTS_CHUNK_CHARACTERS, TTS_VOICE_PROFILES, parseTtsRequest, getTtsVoiceList, splitTtsText } from '../lib/tts-config.js'
 
 test('plain .tts text uses Indonesian female neural voice by default', () => {
   const result = parseTtsRequest('Halo, selamat datang.')
@@ -42,7 +42,21 @@ test('voice list command and help state are recognized', () => {
   assert.match(getTtsVoiceList(), /jepang/)
   assert.match(getTtsVoiceList(), /jawapria/)
 })
-test('maximum text length is explicit and Unicode code points are counted', () => {
-  assert.equal(MAX_TTS_CHARACTERS, 5000)
-  assert.equal(Array.from('😀').length, 1)
+test('long voiceover text is split into provider-sized chunks without losing words or punctuation', () => {
+  const input = ('Ini kalimat panjang untuk pengujian voiceover. ').repeat(250)
+  const chunks = splitTtsText(input)
+
+  assert.ok(chunks.length > 1)
+  assert.ok(chunks.every(chunk => Array.from(chunk).length <= MAX_TTS_CHUNK_CHARACTERS))
+  assert.equal(chunks.join(''), input.trim())
+})
+
+test('TTS chunking counts Unicode code points and handles empty input', () => {
+  const input = '😀'.repeat(9000)
+  const chunks = splitTtsText(input, 1000)
+
+  assert.equal(chunks.length, 9)
+  assert.equal(chunks.join(''), input)
+  assert.deepEqual(splitTtsText('   '), [])
+  assert.throws(() => splitTtsText('test', 0), /tidak valid/)
 })

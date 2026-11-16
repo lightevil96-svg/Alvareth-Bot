@@ -1,5 +1,5 @@
 import { synthesizeEdgeTTS } from '../../lib/tts-edge.js'
-import { parseTtsRequest, getTtsVoiceList, MAX_TTS_CHARACTERS } from '../../lib/tts-config.js'
+import { parseTtsRequest, getTtsVoiceList } from '../../lib/tts-config.js'
 
 let activeJobs = 0
 const MAX_CONCURRENT_JOBS = 2
@@ -20,7 +20,7 @@ const handler = async (m, { conn, text, usedPrefix = '.', command }) => {
       `• ${usedPrefix + command} en|Welcome to Alvareth.`,
       `• ${usedPrefix + command} suara`,
       '',
-      `Maksimal ${MAX_TTS_CHARACTERS.toLocaleString('id-ID')} karakter per proses.`
+      'Naskah panjang diproses otomatis dalam beberapa bagian.'
     ].join('\n'))
   }
 

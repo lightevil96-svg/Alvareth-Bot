@@ -900,13 +900,17 @@ const handler = async (m, { conn, text }) => {
 }
 
 handler.all = async function (m) {
+  // A document can belong to another ZIP workflow such as .motion.
+  if (m?.__alvarethMotionZipHandled || m?.__alvarethRenderZipHandled) return
   if (!isRenderDocumentEvent(m)) return
 
   try {
     await ensureRenderRecovery()
   } catch (error) {
-    console.error('[RENDER] ZIP ditahan karena pemulihan sesi gagal:', safeError(error))
-    return safeReply(m, '⏳ Bot belum dapat memastikan status hasil render sebelumnya. ZIP ditahan agar tidak mengganggu pemulihan file.')
+    // This global listener also sees ZIPs owned by other workflows. Keep it
+    // silent when .render recovery is unavailable so unrelated jobs continue.
+    console.error('[RENDER] Pemulihan sesi belum siap; dokumen diabaikan:', safeError(error))
+    return
   }
 
   const document = getCurrentDocument(m)
@@ -919,35 +923,18 @@ handler.all = async function (m) {
   const isZip = isZipDocument(filename, mimetype)
   const key = sessionKey(m)
 
-  if (!key) {
-    if (isZip) {
-      console.warn('[RENDER] ZIP masuk tetapi identitas chat/pengirim tidak terbaca:', {
-        mtype: String(m?.mtype || ''),
-        filename,
-        mimetype
-      })
-      await safeReply(m, '📦 File ZIP terdeteksi, tetapi identitas chat/pengirim tidak terbaca. Coba kirim ulang video dan ZIP di chat yang sama.')
-    }
-    return
-  }
+  if (!key) return
 
+  // This hook sees every document in every chat. Do not claim or warn about a
+  // ZIP unless this chat actually started a .render session.
   const session = pendingSessions.get(key)
-  if (!session) {
-    if (isZip) {
-      console.warn('[RENDER] ZIP masuk tanpa sesi aktif:', {
-        mtype: String(m?.mtype || ''),
-        filename,
-        mimetype,
-        activeSessions: pendingSessions.size
-      })
-      await safeReply(m, '📦 ZIP terdeteksi, tetapi sesi render tidak ditemukan. Kirim ulang video, reply dengan *.render*, kemudian kirim ZIP di chat yang sama.')
-    }
-    return
-  }
+  if (!session) return
 
   if (!document) {
     return safeReply(m, 'Dokumen terdeteksi, tetapi metadata file tidak dapat dibaca. Kirim ulang pack.zip sebagai dokumen WhatsApp.')
   }
+
+  if (isZip) m.__alvarethRenderZipHandled = true
 
   if (session.processing) {
     return safeReply(m, 'Paket render untuk sesi ini sedang diproses. Tunggu sampai selesai.')

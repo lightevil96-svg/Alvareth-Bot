@@ -4,7 +4,7 @@ import { homedir } from 'node:os'
 import { constants as fsConstants } from 'node:fs'
 import { fileTypeFromBuffer } from 'file-type'
 import { synthesizeEdgeTTS } from '../../lib/tts-edge.js'
-import { createRenderSessionKey } from '../../lib/render-message.js'
+import { createRenderSessionKey, getCurrentRenderDocument, isZipDocumentEvent } from '../../lib/render-message.js'
 import { sendLocalFile } from '../../lib/whatsapp-file-sender.js'
 import { isWhatsAppSocketOpen, sendWithWhatsAppReconnect } from '../../lib/whatsapp-connection.js'
 import {
@@ -28,7 +28,6 @@ import {
   validateMotionVoiceoverImplementation
 } from '../../lib/motion-project.js'
 
-const MAX_OUTPUT_BYTES = 500 * 1024 * 1024
 const MAX_INPUT_ZIP_BYTES = 25 * 1024 * 1024
 const HEARTBEAT_MS = 60_000
 const pendingJobs = new Map()
@@ -286,7 +285,7 @@ async function ensureMotionRecovery() {
       const restoredOutputs = await restorePendingRenderSessions({
         root,
         staleTtlMs: Number.POSITIVE_INFINITY,
-        maxOutputBytes: MAX_OUTPUT_BYTES
+        maxOutputBytes: Number.MAX_SAFE_INTEGER
       })
 
       for (const item of restoredOutputs) {
@@ -448,9 +447,8 @@ async function persistOutput(key, session) {
 async function deliverMotionOutput({ m, key, session, progress }) {
   const outputPath = session.outputPath
   const outputInfo = await fs.lstat(outputPath)
-  if (!outputInfo.isFile() || outputInfo.isSymbolicLink() ||
-      outputInfo.size < 1 || outputInfo.size > MAX_OUTPUT_BYTES) {
-    throw new Error('File hasil .motion tidak valid atau melebihi batas ' + formatBytes(MAX_OUTPUT_BYTES) + '.')
+  if (!outputInfo.isFile() || outputInfo.isSymbolicLink() || outputInfo.size < 1) {
+    throw new Error('File hasil .motion tidak valid atau kosong.')
   }
 
   await persistOutput(key, session)
@@ -657,10 +655,6 @@ async function processMotionProject({ m, key, session }) {
     if (!outputInfo.isFile() || outputInfo.isSymbolicLink() || outputInfo.size < 1) {
       throw new Error('Remotion selesai, tetapi MP4 hasil render tidak ditemukan atau kosong.')
     }
-    if (outputInfo.size > MAX_OUTPUT_BYTES) {
-      throw new Error('Ukuran MP4 ' + formatBytes(outputInfo.size) + ' melebihi batas ' + formatBytes(MAX_OUTPUT_BYTES) + '.')
-    }
-
     const handle = await fs.open(outputPath, 'r')
     const header = Buffer.alloc(4100)
     try { await handle.read(header, 0, header.length, 0) } finally { await handle.close() }
@@ -915,20 +909,8 @@ async function handler(m, { conn, text = '', usedPrefix = '.' } = {}) {
   ].join('\n'))
 }
 
-function isMotionZipDocument(m) {
-  if (String(m?.mtype || '') !== 'documentMessage') return false
-  const media = m?.msg || {}
-  const fileName = String(media.fileName || '').trim().toLowerCase()
-  const mime = String(media.mimetype || '').trim().toLowerCase()
-  return fileName.endsWith('.zip') ||
-    mime === 'application/zip' ||
-    mime === 'application/x-zip-compressed' ||
-    mime === 'application/x-zip' ||
-    mime === 'application/octet-stream'
-}
-
-async function downloadMotionZip(m, conn) {
-  const media = m?.msg || {}
+async function downloadMotionZip(m, conn, media = getCurrentRenderDocument(m)) {
+  media = media || {}
   const declaredSize = Number(media.fileLength?.toString?.() || media.fileLength || 0)
   if (Number.isFinite(declaredSize) && declaredSize > MAX_INPUT_ZIP_BYTES) {
     throw new Error('Ukuran ZIP melebihi batas ' + formatBytes(MAX_INPUT_ZIP_BYTES) + '.')
@@ -957,10 +939,11 @@ async function downloadMotionZip(m, conn) {
 }
 
 async function before(m, { conn } = {}) {
-  if (!m?.chat) return false
-  const isZip = isMotionZipDocument(m)
+  if (!m?.chat || m?.__alvarethRenderZipHandled) return false
+  const document = getCurrentRenderDocument(m)
+  const isZip = isZipDocumentEvent(m)
   const text = typeof m.text === 'string' ? m.text.trim() : ''
-  const hasMedia = Boolean(m.mediaMessage || m.mediaType)
+  const hasMedia = Boolean(m.mediaMessage || m.mediaType || document)
   if (!isZip && (!text || /^[.!/]\S+/.test(text)) && !hasMedia) return false
   if (!isZip && text && /^[.!/]\S+/.test(text)) return false
 
@@ -974,6 +957,7 @@ async function before(m, { conn } = {}) {
 
   const session = pendingJobs.get(key)
   if (!session || session.status !== 'awaiting-zip') return false
+  if (isZip) m.__alvarethMotionZipHandled = true
   m.__alvarethMotionCodeHandled = true
 
   if (!isZip) {
@@ -989,7 +973,7 @@ async function before(m, { conn } = {}) {
 
   let parsed
   try {
-    const archiveBuffer = await downloadMotionZip(m, conn)
+    const archiveBuffer = await downloadMotionZip(m, conn, document)
     parsed = await parseMotionZip(archiveBuffer, { maxArchiveBytes: MAX_INPUT_ZIP_BYTES })
     validateMotionVoiceoverImplementation(parsed.files)
   } catch (error) {

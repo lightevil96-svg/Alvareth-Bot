@@ -27,3 +27,5 @@ jobs:
         run: npm run test:video-analysis
       - name: Run motion code parser and prompt tests
         run: npm run test:motion
+      - name: Run long voiceover chunking tests
+        run: npm run test:tts
