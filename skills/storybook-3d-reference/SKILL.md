@@ -1,113 +1,191 @@
 ---
 name: storybook-3d-reference
-description: Build reference-faithful Stylized 3D Story Animation for Alvareth Bot: hand-inked 2.5D character cutouts inside real 3D story environments, with consistent character identity, motivated directing, and visual QA.
+description: Produce reference-matched Stylized 3D Story Animation for Alvareth Bot using volumetric Three.js characters, articulated rigs, matte cel shading, selective ink outlines, dimensional story worlds and frame-synchronized cinematic direction.
 ---
 
-# Storybook 3D Reference Style — Alvareth Bot
+# Alvareth Reference-Matched True 3D Story Animation
 
-## Purpose and visual target
+## Purpose
 
-This skill adapts the production methods in:
-- https://github.com/4mJ0k3r/remotionshorts/tree/main/animated-3d-story-video
-- https://github.com/4mJ0k3r/remotionshorts/blob/main/ANIMATION_STYLE_HANDOFF.md
-- https://github.com/4mJ0k3r/remotionshorts/blob/main/animated-3d-story-video/references/cel-studio-contract.md
-- https://github.com/4mJ0k3r/remotionshorts/blob/main/src/engine/README.md
+Create vertical story animation that preserves the visual grammar of the two supplied references while allowing the cast, plot, costume, props, location and mood to change for every new story.
 
-The target reference is a **hybrid 2.5D visual language**: flat, hand-inked illustrated characters staged in a genuine 3D environment. This is intentional, not a compromise. The characters should not be converted into smooth volumetric toy people. The environment, architecture, props, lights, shadows, camera, depth, parallax, and occlusion must be real 3D.
+- `390381.mp4` contributes rounded volumetric character appeal, friendly proportions, matte surfaces and clean silhouette design.
+- `390306.mp4` contributes the hand-inked storybook look, earthy cel-shaded world, layered environments, motivated camera coverage, acting beats and white/yellow subtitles.
 
-Do not promise pixel-identical or 100% reproduction. Match the measurable visual grammar and verify the rendered output against the supplied reference.
+The synthesis is **true volumetric 3D characters inside a true 3D world**. Do not turn the characters into SVG cards, image planes, sprites, cutouts or camera-facing billboards. Do not silently fall back to a 2D character when rigging becomes difficult.
 
-## 1. Reference breakdown before coding
+Read `docs/MOTION_REFERENCE_ANALYSIS.md` for the reviewed reference profile. The canonical Style DNA is injected into the production prompt and is also available in the engine at `src/alvareth-engine/index.js`.
 
-Inspect representative frames from the reference and write a short style bible containing:
-- Character head/body ratio, head silhouette, face layout, hair silhouette, outfit shapes, limb thickness, hand/foot shape, and outline color/weight.
-- Character palette, background palette, material texture, lighting direction, shadow softness, and contrast.
-- Camera height, focal length/FOV, shot scale, perspective, depth layers, and cut rhythm.
-- Subtitle font weight, outline thickness, keyword color, line count, vertical position, and safe margins.
-- Typical acting beats: anticipation, action, reaction, settle, held pose, mouth movement, eye-line, and gesture size.
+## 1. Non-negotiable visual contract
 
-Do not infer the plot or force the reference's exact props/locations into a new story. Extract its visual language only.
+- Portrait composition: respect the project config; default target is 9:16 at 1080×1920 and 30 fps.
+- Characters: real Three.js meshes with volume, attached 3D face features, articulated pivots, stable silhouette and consistent identity across shots.
+- World: actual 3D architecture, terrain, furniture, props, foliage and foreground/midground/background depth.
+- Shading: matte three-tone cel shading with warm, controlled lighting.
+- Ink: dark warm-plum/brown character contours; thinner, selective world outlines.
+- Acting: readable anticipation → action → consequence/reaction → settle.
+- Camera: motivated establishing wide, medium action, close-up reaction and prop-insert shots.
+- Subtitles: bold white text with dark outline/shadow and a yellow keyword highlight; use an upper or lower safe area per shot.
+- Adapt story content freely without changing the visual DNA.
 
-## 2. Character construction — 2D artwork in 3D space
+## 2. Reference analysis before building
 
-Use bespoke vector/Canvas/SVG artwork or alpha-cutout layers for the character:
-- Large warm cream head with a slightly organic hand-drawn contour.
-- Thick dark warm-plum/brown outline, stable and readable at phone size.
-- Minimal face: simple dark eyes/pupils, restrained brows, small mouth; expression changes are intentional.
-- Compact bean/rounded torso with flat clothing-color blocks.
-- Thin tapered curved arms and legs; small dark rounded hands and shoes.
-- Distinct hair silhouettes, clothing, accessories, and body proportions per character.
+Use the supplied visual profile as the baseline. When a new reference clip is explicitly supplied, inspect representative frames and record:
 
-Rig semantic layers where needed: head, hair, face features, torso, upper/lower arms, hands, legs, and held props. Place them as transparent planes/cards in the 3D world. Use a camera-facing head pivot independent of torso rotation. Preserve alpha edges; no white halo. Avoid full-screen flat sprites or a single unarticulated character card.
+1. Character head/body proportions, head silhouette, face layout, hair, clothing, limb thickness, hands and feet.
+2. Material response, cel-shading bands, character/world outline hierarchy and approximate outline thickness.
+3. Dominant palette, lighting direction, shadow softness, contrast and atmosphere.
+4. Architecture, furniture, set dressing, prop scale, contact points and depth layers.
+5. Camera height, FOV, shot scale, camera motion and cut rhythm.
+6. Acting beats, gaze, facial expression, gesture size and held poses.
+7. Subtitle font weight, outline, keyword color, line count, safe margin and vertical placement.
 
-**Forbidden look:** sphereGeometry heads, boxGeometry torsos, cylinderGeometry limbs, glossy plastic, metallic skin, oversized robot eyes, mechanical joints, generic mascot/robot bodies, random per-frame outline wobble, and continuous whole-body bobbing.
+Do not copy the reference plot, exact character identity, brand marks or unique props unless the new story asks for them. Distinguish observed facts from estimates.
 
-## 3. Environment — actual 3D
+## 3. Character Engine — volumetric meshes only
 
-Build story-specific sets from actual Three.js geometry:
-- Architecture with believable wall thickness, openings, frames, floor/wall intersections, furniture, supports, and set dressing.
-- Distinct near/mid/far planes with real perspective, foreground occlusion, parallax, and contact shadows.
-- Story-critical props with plausible dimensions, named grip/contact anchors, and consistent identity across cuts.
-- Matte/painterly materials: plaster, wood, stone, fabric, dirt, foliage, metal, water, and other materials demanded by the story.
-- Motivated key/fill/rim lighting, warm/cool contrast, soft atmosphere, and shadows that ground both characters and props.
+The bot injects the canonical engine into `src/alvareth-engine/`. Import and use it; do not replace it or create a competing character system.
 
-Use a restrained world-ink pass on selected architecture/prop silhouettes and hard creases. Do not outline every polygon, texture feature, brick, or leaf. Keep world ink thinner/subordinate to character ink.
+Required APIs:
+- `createCharacter(spec)`
+- `applyCharacterPose(character, pose)`
+- `setCharacterExpression(character, expression)`
+- `getCharacterAnchor(character, anchorName)`
+- `attachCharacterProp(character, side, object, offset)`
 
-## 4. Palette and graphic treatment
+Create each character once and keep the same object, identity and material choices across every scene. Do not rebuild the character on every frame.
 
-Default palette: warm cream, plaster beige, sand, ochre, wood brown, terracotta, muted olive, burgundy/maroon, and dusty blue. Adapt accents and lighting mood to the story while preserving the same visual DNA. Avoid neon/teal tech palettes unless the story calls for them.
+### Character specification
 
-Character outlines are the strongest graphic feature. Keep flat cel fills and restrained shadow/crescent accents. No glossy specular skin or photorealistic materials.
+Choose story-appropriate values for:
+- `id`, `name`
+- `skinColor`, `outfitColor`, `accentColor`, `hairColor`, `shoeColor`, `limbColor`
+- `headShape`: `rounded`, `round` or `oval`
+- `headScale`: approximately 0.82–1.22
+- `bodyScale`: approximately 0.75–1.35
+- `outfitStyle`: `tunic`, `robe`, `shirt`, `coat` or `dress`
+- `hairStyle`: `short`, `tuft`, `spiky`, `side-swept`, `bun` or `long`
+- `accessories` and initial `expression`
 
-Subtitles follow the reference: bold white text with thick dark outline/shadow; highlight only the key spoken word in #FFD93D. Use one or two short lines in a flexible upper/central safe area. No rounded dark UI panel, permanent lower third, logo, watermark, or decorative brand strip unless explicitly requested. Never cover faces, hands, or story-critical props.
+Use the engine's organic deformed head mesh, LatheGeometry outfit profiles and tapered limb geometry as the base. Add story-specific geometry where needed: hats, armor, coats, jewelry, tools, bags, uniforms or other costume details. Keep each character recognizably distinct without breaking the shared silhouette language.
 
-## 5. Acting, timing, and camera
+### Face and expression
 
-Create a beat table before implementation:
-`frame/time | narration cue | visible action | pose/gaze | camera/focus | contact/prop/FX`.
+Use small readable eyes, expressive brows and attached 3D mouth geometry. At minimum, vary neutral, happy, sad, worried, angry, surprised and speaking expressions when the script calls for them. Expressions must be synchronized to the narration and shot timing, not randomized.
 
-For each beat, direct:
-1. anticipation,
-2. readable action,
-3. consequence/reaction,
-4. settle into a stable hold.
+### Rigging and held props
 
-Use deterministic frame-addressable animation from Remotion's current frame. Mouth movement follows the actual voice envelope and only the active speaker talks. Listeners hold a deliberate expression/eye-line. Use outward-bending two-bone IK, pin stance feet, and solve hands against actual prop/fixture anchors. Never fake contact by moving the fixture to the hand.
+Animate the head, shoulders, elbows, hips and knees through `applyCharacterPose`. Use `getCharacterAnchor` and `attachCharacterProp` so a hand-held object follows the correct hand. Props must meet the hand at the grip point and remain consistent across cuts. Feet must remain grounded during planted poses.
 
-Use motivated coverage: establishing wide, medium/two-shot, close-up reaction, and insert for small story-critical actions. Camera moves (push, track, pan, crane, orbit) must support a beat. Avoid repeated eye-level framing, random drift, constant zoom, and universal cut intervals. Check projected crop bounds in the final 9:16 frame.
+## 4. World Engine — story-specific 3D environments
 
-## 6. Flexible adaptation
+Required APIs:
+- `createStoryWorld(scene, options)`
+- `createWorldLighting(scene, options)`
+- `createBuilding(parent, options)`
+- `createTree(parent, options)`
+- `createWoodenProp(parent, options)`
 
-Keep fixed:
-- hand-inked flat character language,
-- head/body proportions and simplified facial grammar,
-- dark organic outlines,
-- matte cel fills and warm palette logic,
-- real 3D world construction,
-- grounded contact, depth, and camera grammar,
-- subtitle treatment.
+Use these helpers as foundations, then add custom geometry for the specific story. A world is not complete when it contains only a floor, sky color and a few generic cubes.
 
-Change for every new story:
-- cast identity, age impression, hair, clothes, accessories,
-- location, architecture, culture-specific objects and props,
-- weather, time of day, mood, lighting accents,
-- actions, shot order, pacing, and story-specific effects.
+Build:
+- believable architecture with thickness, openings, frames, roof shapes and floor/wall intersections;
+- furniture and set dressing with plausible scale and contact points;
+- story-critical props with stable shape, material and grip/contact anchors;
+- foreground occluders, midground action and distant background layers;
+- ground contact, perspective, occlusion and parallax.
 
-Do not reuse a forge, blacksmith, hammer, medieval village, or any reference-specific object unless the new story requires it. Create a character sheet for each recurring character and reuse it across every scene.
+Use material choices that read as wood, plaster, stone, fabric, soil, foliage, water or other story-specific surfaces. Avoid generic colored primitives as finished assets. Primitive geometry may be used as a construction base only when it is shaped, combined and detailed into a deliberate form.
 
-## 7. Visual QA gates
+## 5. Motion Engine — deterministic acting
 
-Render calibration stills for each shot and inspect native crops at phone size. Also inspect short motion previews for speaking, contact, and reaction beats; stills alone cannot validate motion.
+Required APIs:
+- `createMotionEngine(options)`
+- `createWalkPose(frame, options)`
+- `sampleKeyframes(frame, keyframes)`
 
-Check:
-- character silhouette, head proportions, facial readability, and outline weight;
-- stable identity/outfit across cuts and no unwanted sphere/box/cylinder toy anatomy;
-- connected neck/shoulders/hips/limbs and supported feet;
-- correct prop grip/contact and continuity across the full contact interval;
-- clear near/mid/far depth, correct occlusion, and grounded shadows;
-- world ink subordinate to character ink, no texture wireframe;
-- face readability, subtitle safe area, camera crop, and motivated shot changes;
-- mouth sync, stable holds, no jitter, no perpetual bobbing, no pose pop;
-- the final rendered movie, not only code or one preview frame.
+All animation must be deterministic from the current Remotion frame. Do not use timers, random values, browser animation loops or wall-clock time.
 
-Report observed facts separately from inferred causes. A clean render or passing numeric check does not by itself prove visual fidelity.
+Stage each important beat:
+1. anticipation and gaze/weight shift;
+2. action with clear body mechanics;
+3. consequence or reaction;
+4. settle or held pose.
+
+Use varied gestures, walk cycles, head turns, arm poses and facial expressions. Avoid continuous whole-body bobbing, repeated generic waving and random per-frame outline wobble.
+
+## 6. Camera Engine — motivated cinematic coverage
+
+Required APIs:
+- `applyCinematicCamera(camera, frame, keyframes)`
+- `fitCameraToSubjects(camera, subjects, options)`
+
+Use a perspective camera and frame-based camera keyframes. Plan coverage around story beats:
+- establishing wide to establish location and spatial relationships;
+- medium/two-shot for interaction;
+- close-up for emotional reaction;
+- prop insert when an object drives the story.
+
+Use dolly, tracking, pan, orbit or gentle push only when motivated. Keep camera movement smooth and purposeful. Do not hide weak staging with constant zooming. Keep faces, hands, subtitles and critical props inside the portrait safe area.
+
+## 7. ThreeCanvas and Remotion synchronization
+
+Render the main visual scene through `ThreeCanvas` from `@remotion/three` with React Three Fiber. Use `useCurrentFrame()` and `useVideoConfig()` to derive all character, object and camera transforms from the current frame. Enable WebGL shadows and antialiasing as supported by the project renderer.
+
+Create static geometry and character rigs once (for example with `useMemo`); update their transforms and expressions from the current frame. Do not recreate geometry every frame. Keep DOM subtitle overlays outside the ThreeCanvas, but never use DOM/image planes as substitutes for the main characters or story world.
+
+## 8. Lighting, material and outline hierarchy
+
+- Use `MeshToonMaterial` or the engine's toon material helper for character and story-critical world meshes.
+- Use three readable tonal bands; avoid glossy plastic, mirror highlights, metallic skin and neon saturation.
+- Use a warm directional key, soft fill and restrained rim light; adapt temperature for night, underwater, storm or interior scenes.
+- Enable cast and receive shadows; keep contact shadows beneath feet and props.
+- Character ink is the strongest contour. World ink is thinner and selective.
+- Keep outline color dark warm plum/brown. Do not outline every leaf, brick, polygon or texture mark.
+
+## 9. Subtitles and composition
+
+- Use bold, highly legible Indonesian subtitles.
+- Main text is white with a dark outline or shadow.
+- Highlight one important keyword in `#FFD93D`.
+- Use an adaptive upper/lower safe area according to the shot; never cover a face, hand interaction or critical prop.
+- Avoid permanent lower-third panels, logo plates, watermarks and decorative title cards unless the brief explicitly asks for promo graphics.
+- Preserve readable negative space and clear silhouette separation on a phone screen.
+
+## 10. Visual Quality Assurance — must pass
+
+Call `assertVisualContract({ scene, camera, characters })` after scene assembly and before final rendering. Fix failures; never disable or bypass the checks.
+
+The contract verifies:
+- volumetric character meshes, not sprites, planes or billboards;
+- toon materials and ink outlines on the cast;
+- dimensional world geometry and selective world ink;
+- a perspective camera;
+- multiple motivated lights;
+- shadow casters and receivers.
+
+After rendering, run the bot's media/frame QA and inspect actual rendered frames. Automated metrics are sanity checks, not proof of visual similarity. Compare character proportions, silhouette, palette, outline, lighting, set dressing, acting, camera and subtitle placement against the references.
+
+## 11. ZIP and delivery contract
+
+- Deliver the complete Remotion project as one ZIP with `package.json` at the ZIP root (or one enclosing project folder).
+- Include the required entry point, composition, `motion.config.json`, source code and render script required by the current bot contract.
+- Do not include `node_modules`, `.git`, `.env`, `.npmrc` or a hand-made `src/alvareth-engine/`; the bot injects its canonical engine.
+- Keep the composition duration driven by the generated voiceover and project configuration. Do not add a fixed story-duration cap.
+- Do not add an arbitrary file-count cap or automatic render timeout.
+- Render progress is terminal-only. Do not send progress percentages or progress spam to WhatsApp. The finished MP4 is delivered through WhatsApp.
+
+## 12. Final self-review
+
+Before packaging the ZIP, verify:
+- every main character is a true 3D articulated mesh;
+- the same character identity is used across all scenes;
+- costumes, props and environment match the story, not the source clip's plot;
+- hands meet props and feet meet the ground;
+- expressions and body acting match narration;
+- camera coverage has wide, medium, close and insert shots where useful;
+- lighting, cel shading, outlines and subtitle hierarchy remain consistent;
+- `assertVisualContract` passes;
+- the project builds and renders without relying on external assets.
+
+Do not claim the result is reference-matched until rendered frames and motion have been visually inspected.
