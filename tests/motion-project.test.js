@@ -1,3 +1,4 @@
+import path from 'node:path'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { deflateRawSync } from 'node:zlib'
@@ -8,7 +9,8 @@ import {
   parseMotionZip,
   parseMotionConfig,
   validateMotionVoiceoverImplementation,
-  validateStorybookEngineImplementation
+  validateStorybookEngineImplementation,
+  resolveMotionProjectRoot
 } from '../lib/motion-project.js'
 
 const projectFiles = {
@@ -354,4 +356,14 @@ test('validateMotionVoiceoverImplementation requires finite duration, safe fallb
     files[1]
   ]
   assert.throws(() => validateMotionVoiceoverImplementation(unsafeFiles), /pemeriksaan Number\.isFinite/)
+})
+
+
+test('resolveMotionProjectRoot accepts root-level ZIP projects and safe nested project folders', () => {
+  const base = path.resolve('/tmp/alvareth-motion-root')
+  assert.equal(resolveMotionProjectRoot(base, ''), base)
+  assert.equal(resolveMotionProjectRoot(base, '.'), base)
+  assert.equal(resolveMotionProjectRoot(base, 'package'), path.join(base, 'package'))
+  assert.throws(() => resolveMotionProjectRoot(base, '../outside'), /tidak aman|tidak boleh keluar|di luar/i)
+  assert.throws(() => resolveMotionProjectRoot(base, '/tmp/outside'), /tidak aman/i)
 })
