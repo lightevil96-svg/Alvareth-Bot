@@ -11,6 +11,8 @@ on:
       - "tests/motion-project.test.js"
       - "tests/motion-engine.test.js"
       - "tests/motion-qa.test.js"
+      - "tests/motion-reference-analyzer.test.js"
+      - "scripts/analyze-motion-reference.js"
       - "package.json"
       - ".github/workflows/motion-engine-regression.yml"
   pull_request:
@@ -23,6 +25,8 @@ on:
       - "tests/motion-project.test.js"
       - "tests/motion-engine.test.js"
       - "tests/motion-qa.test.js"
+      - "tests/motion-reference-analyzer.test.js"
+      - "scripts/analyze-motion-reference.js"
       - "package.json"
       - ".github/workflows/motion-engine-regression.yml"
 
