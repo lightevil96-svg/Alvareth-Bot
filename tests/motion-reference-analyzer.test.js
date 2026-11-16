@@ -71,6 +71,8 @@ test('analyzeReferenceVideo extracts sampled frames and returns source metadata'
   assert.equal(report.metadata.fps, 30);
   assert.equal(report.metadata.durationSeconds, 1);
   assert.equal(report.visual.sampleCount, 3);
+  assert.ok(report.semanticProfile.camera.includes('Vertical 9:16'));
+  assert.equal(report.semanticProfile.subtitles.emphasisColor, '#FFD93D');
   assert.equal(report.sampledFrameIndexes.length, 3);
 });
 
