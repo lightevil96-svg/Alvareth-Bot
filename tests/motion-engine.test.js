@@ -12,6 +12,9 @@ test('Style DNA combines volumetric characters with inked 3D story worlds', () =
   assert.equal(ALVARETH_STYLE_DNA.world.representation, 'true-three-dimensional-geometry');
   assert.match(getStyleDNAContract(), /390381\.mp4/);
   assert.match(getStyleDNAContract(), /390306\.mp4/);
+  assert.equal(ALVARETH_STYLE_DNA.referenceAnalysis.volumetricCharacter.durationSeconds, 59.243)
+  assert.equal(ALVARETH_STYLE_DNA.referenceAnalysis.inkedStoryWorld.fps, 60)
+  assert.match(getStyleDNAContract(), /head\/body width ratio about 1\.2/)
   assert.notEqual(cloneStyleDNA(), ALVARETH_STYLE_DNA);
 });
 
