@@ -17,6 +17,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      - name: Install pinned Three.js for engine tests
+        run: |
+          mkdir -p "$RUNNER_TEMP/alvareth-three"
+          npm install --prefix "$RUNNER_TEMP/alvareth-three" --no-save --no-package-lock --ignore-scripts --no-audit --no-fund three@0.170.0
+          mkdir -p node_modules
+          ln -s "$RUNNER_TEMP/alvareth-three/node_modules/three" node_modules/three
       - name: Check all JavaScript files
         shell: bash
         run: |

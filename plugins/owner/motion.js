@@ -25,8 +25,12 @@ import {
   getMotionStyle,
   parseMotionZip,
   parseMotionConfig,
-  validateMotionVoiceoverImplementation
+  validateMotionVoiceoverImplementation,
+  validateStorybookEngineImplementation,
+  resolveMotionProjectRoot
 } from '../../lib/motion-project.js'
+import { installMotionEngine } from '../../lib/motion-engine/install.js'
+import { runMotionRenderQa } from '../../lib/motion-qa.js'
 
 const HEARTBEAT_MS = 60_000
 const pendingJobs = new Map()
@@ -360,6 +364,24 @@ async function writeMotionZip(session, parsed) {
       flag: 'wx'
     })
   }
+
+  if (session.styleId === 'storybook-3d') {
+    const projectRoot = resolveMotionProjectRoot(session.projectDirectory, parsed.projectRoot);
+    const enginePrefix = [
+      String(parsed.projectRoot || '').replace(/\/+$/, ''),
+      'src',
+      'alvareth-engine'
+    ].filter(Boolean).join('/') + '/';
+    if (parsed.files.some(file => file.path === enginePrefix.slice(0, -1) || file.path.startsWith(enginePrefix))) {
+      throw new Error('Jangan sertakan src/alvareth-engine di ZIP. Bot memasang engine resmi secara otomatis.');
+    }
+    const installed = await installMotionEngine(projectRoot);
+    console.log('[MOTION] Canonical 3D engine injected:', {
+      version: installed.version,
+      directory: installed.directory,
+      files: installed.files.length
+    });
+  }
 }
 
 async function removeGeneratedNodeModules(rootDirectory) {
@@ -387,7 +409,7 @@ async function removeGeneratedNodeModules(rootDirectory) {
   await walk(root)
 }
 
-async function readAndValidateMotionProject(projectDirectory) {
+async function readAndValidateMotionProject(projectDirectory, styleId = '') {
   const project = await findRemotionProject(projectDirectory)
   const configPath = path.join(project.projectRoot, 'motion.config.json')
   const packagePath = project.packageJsonPath
@@ -432,6 +454,10 @@ async function readAndValidateMotionProject(projectDirectory) {
   }
   await walk(project.projectRoot)
   validateMotionVoiceoverImplementation(sourceFiles)
+  if (styleId === 'storybook-3d') {
+    validateStorybookEngineImplementation(sourceFiles, packageJson)
+    if (!project.usesWebGL) throw new Error('Stylized 3D Story wajib memakai renderer WebGL Three.js.')
+  }
   return { config, project }
 }
 
@@ -558,7 +584,7 @@ async function processMotionProject({ m, key, session }) {
     progress.update(3, 'Memeriksa proyek ZIP', 'Memvalidasi konfigurasi, struktur file, dan voiceover.', true)
 
     await removeGeneratedNodeModules(session.projectDirectory)
-    const { config, project } = await readAndValidateMotionProject(session.projectDirectory)
+    const { config, project } = await readAndValidateMotionProject(session.projectDirectory, session.styleId)
     const { audio, profile } = await synthesizeEdgeTTS(config.voiceoverText, config.voiceProfile)
     throwIfCancelled(session)
 
@@ -686,6 +712,16 @@ async function processMotionProject({ m, key, session }) {
     if (detected && !['mp4', 'mov'].includes(String(detected.ext || '').toLowerCase())) {
       throw new Error('File keluaran tidak dikenali sebagai video MP4.')
     }
+
+    progress.update(92, 'Visual QA', 'Memeriksa resolusi, FPS, audio, frame gelap, dan frame beku.', true)
+    const visualQa = await runMotionRenderQa(outputPath)
+    console.log('[MOTION QA] Report:', JSON.stringify(visualQa))
+    if (visualQa.status === 'failed') {
+      throw new Error('Visual QA menemukan output video yang tidak valid: ' +
+        (visualQa.warnings || []).join('; '))
+    }
+    progress.update(93, 'Visual QA selesai', visualQa.status +
+      (visualQa.warnings?.length ? ' · ' + visualQa.warnings.length + ' peringatan' : ''), true)
 
     session.outputPath = path.join(session.directory, 'render-result.mp4')
     session.outputFileName = 'render-result.mp4'
