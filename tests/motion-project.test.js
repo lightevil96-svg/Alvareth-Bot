@@ -146,7 +146,7 @@ test('storybook 3D prompt matches the hand-inked 2.5D character / true 3D world 
   assert.match(prompt, /lingkungan.*3D/i)
   assert.match(prompt, /Jangan membuat kepala bola/i)
   assert.match(prompt, /sphereGeometry/i)
-  assert.match(prompt, /character sheets/i)
+  assert.match(prompt, /character sheet/i)
   assert.match(prompt, /Jangan membawa bengkel/i)
   assert.match(prompt, /#FFD93D/)
   assert.match(prompt, /useCurrentFrame/)
