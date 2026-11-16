@@ -56,11 +56,15 @@ function formatElapsed(milliseconds) {
 }
 
 function safeError(error) {
-  return String(error?.message || error || 'Kesalahan tidak diketahui')
-    .replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, '')
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .slice(0, 700)
+  const message = String(error?.message || error || 'Kesalahan tidak diketahui')
+    .replace(/\\x1B\\[[0-?]*[ -/]*[@-~]/g, '')
+    .replace(/[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F]/g, ' ')
+    .replace(/\\s+/g, ' ')
+  if (message.length <= 700) return message
+  if (['RENDER_SCRIPT_FAILED', 'RENDER_BROWSER_TARGET_CLOSED'].includes(error?.code)) {
+    return message.slice(0, 150) + ' … ' + message.slice(-520)
+  }
+  return message.slice(0, 700)
 }
 
 function getSocket(m) {
@@ -594,7 +598,7 @@ async function processMotionProject({ m, key, session }) {
       compositionId: project.compositionId,
       outputPath: outputRelativePath,
       browserExecutable,
-      concurrency: 2,
+      concurrency: 1,
       gl: project.renderGL
     })
     await fs.writeFile(scriptPath, script, { encoding: 'utf8', mode: 0o600, flag: 'wx' })
