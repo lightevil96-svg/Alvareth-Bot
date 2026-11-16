@@ -179,7 +179,7 @@ test('storybook 3D project validator requires the injected engine and actual API
       "<ThreeCanvas />; useCurrentFrame();"
     ].join('\n') },
     { path: 'src/alvareth-engine/style-dna.js', content: 'export const ALVARETH_STYLE_DNA = {};'},
-    { path: 'src/alvareth-engine/character-engine.js', content: 'export function createCharacter() {} new THREE.Mesh(); new THREE.MeshToonMaterial();'},
+    { path: 'src/alvareth-engine/character-engine.js', content: 'export function createCharacter() {} export function createOrganicHeadGeometry() {} export function createTunicGeometry() {} export function getCharacterAnchor() {} export function attachCharacterProp() {} new THREE.Mesh(); new THREE.MeshToonMaterial();'},
     { path: 'src/alvareth-engine/world-engine.js', content: 'export function createStoryWorld() {}'},
     { path: 'src/alvareth-engine/motion-engine.js', content: 'export function createWalkPose() {}'},
     { path: 'src/alvareth-engine/camera-engine.js', content: 'export function applyCinematicCamera() {}'},
