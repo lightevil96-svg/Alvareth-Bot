@@ -1057,7 +1057,10 @@ for (let name in global.plugins) {
                     if (await plugin.before.call(this, m, {
                         match, conn: this, participants, groupMetadata, user, bot,
                         isROwner, isOwner, isRAdmin, isAdmin, isBotAdmin, isPrems, chatUpdate, __dirname: ___dirname, __filename
-                    })) continue
+                    })) {
+                        if (m.__alvarethMotionCodeHandled === true) return
+                        continue
+                    }
                 } catch (e) {
                     console.error('[PLUGIN BEFORE ERROR]', name, e)
                     await sendErrorReport(this, m, e, name, 'plugin.before')

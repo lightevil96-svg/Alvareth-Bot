@@ -1,0 +1,973 @@
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import { homedir } from 'node:os'
+import { constants as fsConstants } from 'node:fs'
+import { fileTypeFromBuffer } from 'file-type'
+import { synthesizeEdgeTTS } from '../../lib/tts-edge.js'
+import { createRenderSessionKey } from '../../lib/render-message.js'
+import { sendLocalFile } from '../../lib/whatsapp-file-sender.js'
+import { isWhatsAppSocketOpen, sendWithWhatsAppReconnect } from '../../lib/whatsapp-connection.js'
+import {
+  persistRenderOutputSession,
+  restorePendingRenderSessions
+} from '../../lib/render-session-store.js'
+import {
+  runRenderScript,
+  createRenderProgressReporter
+} from '../../lib/render-script.js'
+import {
+  buildRemotionRenderScript,
+  findRemotionProject
+} from '../../lib/remotion-project.js'
+import {
+  MOTION_STYLES,
+  buildMotionPrompt,
+  getMotionStyle,
+  parseMotionCode,
+  parseMotionConfig,
+  validateMotionVoiceoverImplementation
+} from '../../lib/motion-project.js'
+
+const MAX_OUTPUT_BYTES = 500 * 1024 * 1024
+const HEARTBEAT_MS = 60_000
+const pendingJobs = new Map()
+let recoveryPromise = null
+let stateWritePromise = Promise.resolve()
+
+function getMotionRoot() {
+  const configured = String(process.env.ALVARETH_MOTION_TMPDIR || '').trim()
+  const dataRoot = String(process.env.ALVARETH_DATA_DIR || path.join(homedir(), '.alvareth-bot-data'))
+  return path.resolve(configured || path.join(dataRoot, 'motion-jobs'))
+}
+
+function formatBytes(bytes) {
+  const value = Math.max(0, Number(bytes) || 0)
+  if (value < 1024) return value.toFixed(0) + ' B'
+  if (value < 1024 * 1024) return (value / 1024).toFixed(1) + ' KB'
+  return (value / (1024 * 1024)).toFixed(1) + ' MB'
+}
+
+function formatElapsed(milliseconds) {
+  const seconds = Math.max(0, Math.floor(Number(milliseconds) / 1000) || 0)
+  const minutes = Math.floor(seconds / 60)
+  const remainder = seconds % 60
+  if (minutes >= 60) return Math.floor(minutes / 60) + 'j ' + (minutes % 60) + 'm'
+  if (minutes) return minutes + 'm ' + remainder + ' dtk'
+  return remainder + ' dtk'
+}
+
+function safeError(error) {
+  return String(error?.message || error || 'Kesalahan tidak diketahui')
+    .replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, '')
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .slice(0, 700)
+}
+
+function getSocket(m) {
+  const socket = typeof global.conn?.sendMessage === 'function' ? global.conn : m?.conn
+  return socket && typeof socket.sendMessage === 'function' ? socket : null
+}
+
+async function safeReply(m, message) {
+  try {
+    const socket = getSocket(m)
+    if (!socket || !m?.chat || !isWhatsAppSocketOpen(socket)) return null
+    return await socket.sendMessage(m.chat, { text: message }, socket === m.conn && m?.key ? { quoted: m } : {})
+  } catch (error) {
+    console.warn('[MOTION] Gagal mengirim balasan WhatsApp:', error?.message || error)
+    return null
+  }
+}
+
+async function safeReact(m, emoji) {
+  try {
+    const socket = getSocket(m)
+    if (!socket || !m?.chat || !m?.key || !isWhatsAppSocketOpen(socket)) return null
+    return await socket.sendMessage(m.chat, { react: { text: emoji, key: m.key } })
+  } catch (error) {
+    console.warn('[MOTION] Gagal mengirim reaksi WhatsApp:', error?.message || error)
+    return null
+  }
+}
+
+async function ensureMotionRoot() {
+  const root = getMotionRoot()
+  await fs.mkdir(root, { recursive: true, mode: 0o700 })
+  const info = await fs.lstat(root)
+  if (!info.isDirectory() || info.isSymbolicLink()) {
+    throw new Error('ALVARETH_MOTION_TMPDIR harus berupa direktori biasa, bukan symbolic link.')
+  }
+  return root
+}
+
+function isInside(parent, candidate) {
+  const relative = path.relative(parent, candidate)
+  return relative !== '' && relative !== '..' &&
+    !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative)
+}
+
+function getPersistableSessions() {
+  return [...pendingJobs.entries()]
+    .filter(([, session]) => ['awaiting-code', 'processing', 'failed'].includes(session.status))
+    .map(([key, session]) => ({
+      key,
+      status: session.status,
+      styleId: session.styleId,
+      createdAt: session.createdAt,
+      projectDirectory: session.projectDirectory || null,
+      progress: session.progress || null,
+      lastError: session.lastError || ''
+    }))
+}
+
+async function persistMotionState() {
+  const root = await ensureMotionRoot()
+  const statePath = path.join(root, 'motion-sessions.json')
+  const snapshot = JSON.stringify({ schema: 1, sessions: getPersistableSessions() }, null, 2) + '\n'
+
+  stateWritePromise = stateWritePromise.then(async () => {
+    try {
+      const current = await fs.lstat(statePath)
+      if (!current.isFile() || current.isSymbolicLink()) {
+        throw new Error('File status sesi .motion tidak aman.')
+      }
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error
+    }
+
+    const temporary = statePath + '.tmp-' + process.pid
+    await fs.writeFile(temporary, snapshot, { encoding: 'utf8', mode: 0o600 })
+    await fs.rename(temporary, statePath)
+    await fs.chmod(statePath, 0o600).catch(() => {})
+  })
+
+  return stateWritePromise
+}
+
+async function restoreMotionState(root) {
+  const statePath = path.join(root, 'motion-sessions.json')
+  let raw
+  try {
+    const info = await fs.lstat(statePath)
+    if (!info.isFile() || info.isSymbolicLink() || info.size > 2 * 1024 * 1024) {
+      throw new Error('File status sesi .motion tidak aman atau terlalu besar.')
+    }
+    raw = await fs.readFile(statePath, 'utf8')
+  } catch (error) {
+    if (error?.code === 'ENOENT') return 0
+    throw error
+  }
+
+  let state
+  try {
+    state = JSON.parse(raw)
+  } catch (error) {
+    throw new Error('Status sesi .motion tidak dapat dibaca: ' + safeError(error))
+  }
+  if (state?.schema !== 1 || !Array.isArray(state.sessions)) {
+    throw new Error('Format status sesi .motion tidak dikenal.')
+  }
+
+  let restored = 0
+  for (const item of state.sessions) {
+    if (!item || typeof item.key !== 'string' || !item.key || item.key.length > 512) continue
+    if (pendingJobs.has(item.key)) continue
+    if (!['awaiting-code', 'processing', 'failed'].includes(item.status)) continue
+
+    const session = {
+      status: item.status === 'processing' ? 'failed' : item.status,
+      styleId: getMotionStyle(item.styleId)?.id || '',
+      createdAt: Number(item.createdAt) > 0 ? Number(item.createdAt) : Date.now(),
+      processingStartedAt: null,
+      progress: item.progress && typeof item.progress === 'object' ? item.progress : null,
+      directory: null,
+      projectDirectory: null,
+      outputPath: null,
+      outputSize: 0,
+      abortController: null,
+      cancelRequested: false,
+      updateLockHeld: false,
+      lastError: item.status === 'processing'
+        ? 'Server bot sempat berhenti saat rendering. Gunakan .motion retry untuk melanjutkan.'
+        : String(item.lastError || '')
+    }
+
+    if (typeof item.projectDirectory === 'string') {
+      const projectDirectory = path.resolve(item.projectDirectory)
+      const directory = path.dirname(projectDirectory)
+      if (isInside(root, directory) && path.basename(directory).startsWith('alvareth-render-')) {
+        try {
+          const directoryInfo = await fs.lstat(directory)
+          const projectInfo = await fs.lstat(projectDirectory)
+          if (directoryInfo.isDirectory() && !directoryInfo.isSymbolicLink() &&
+              projectInfo.isDirectory() && !projectInfo.isSymbolicLink()) {
+            session.directory = directory
+            session.projectDirectory = projectDirectory
+          }
+        } catch {}
+      }
+    }
+
+    if (session.status !== 'awaiting-code' && !session.projectDirectory) {
+      session.status = 'failed'
+      session.lastError = 'Folder proyek tidak ditemukan setelah bot dimulai ulang. Kirim ulang kode proyek.'
+    }
+    pendingJobs.set(item.key, session)
+    restored++
+  }
+  return restored
+}
+
+function acquireUpdateLock(session) {
+  if (!session || session.updateLockHeld) return
+  if (global.__alvarethUpdateRunning) {
+    const error = new Error('Pembaruan bot sedang berlangsung. Coba lagi setelah update selesai.')
+    error.code = 'MOTION_UPDATE_RUNNING'
+    throw error
+  }
+  session.updateLockHeld = true
+  global.__alvarethRenderJobs = Math.max(0, Number(global.__alvarethRenderJobs) || 0) + 1
+}
+
+function releaseUpdateLock(session) {
+  if (!session?.updateLockHeld) return false
+  session.updateLockHeld = false
+  global.__alvarethRenderJobs = Math.max(0, (Number(global.__alvarethRenderJobs) || 1) - 1)
+  return true
+}
+
+function createTerminalProgress(session) {
+  const progress = createRenderProgressReporter(session, message => console.log(message))
+  let closed = false
+  const heartbeat = setInterval(() => {
+    if (closed || session.status !== 'processing') return
+    const current = session.progress || {}
+    console.log('[MOTION] HEARTBEAT | elapsed=' +
+      formatElapsed(Date.now() - Number(session.processingStartedAt || session.createdAt || Date.now())) +
+      ' | stage=' + String(current.stage || 'Menyiapkan render') +
+      ' | childPid=' + String(session.renderChildPid || 'not-started') +
+      ' | childState=' + String(session.renderChildState || 'not-started'))
+  }, HEARTBEAT_MS)
+  heartbeat.unref?.()
+
+  return {
+    update: progress.update,
+    close() {
+      if (closed) return
+      closed = true
+      clearInterval(heartbeat)
+    }
+  }
+}
+
+async function removeJob(session) {
+  if (!session) return
+  releaseUpdateLock(session)
+  if (!session.directory) return
+  try {
+    const root = getMotionRoot()
+    const directory = path.resolve(session.directory)
+    if (!isInside(root, directory) || !path.basename(directory).startsWith('alvareth-render-')) {
+      throw new Error('Direktori job .motion berada di luar root penyimpanan.')
+    }
+    await fs.rm(directory, { recursive: true, force: true, maxRetries: 2, retryDelay: 250 })
+  } catch (error) {
+    console.warn('[MOTION] Cleanup job gagal:', error?.message || error)
+  }
+}
+
+async function ensureMotionRecovery() {
+  if (!recoveryPromise) {
+    recoveryPromise = (async () => {
+      const root = await ensureMotionRoot()
+      const restoredStateCount = await restoreMotionState(root)
+      const restoredOutputs = await restorePendingRenderSessions({
+        root,
+        staleTtlMs: Number.POSITIVE_INFINITY,
+        maxOutputBytes: MAX_OUTPUT_BYTES
+      })
+
+      for (const item of restoredOutputs) {
+        pendingJobs.set(item.key, {
+          ...item.session,
+          status: 'output-ready',
+          styleId: '',
+          processingStartedAt: null,
+          deliveryWaiting: false,
+          deliveryStarted: false
+        })
+      }
+
+      if (restoredStateCount || restoredOutputs.length) {
+        console.log('[MOTION] Sesi dipulihkan:', {
+          waitingOrFailed: restoredStateCount,
+          outputReady: restoredOutputs.length
+        })
+        await persistMotionState()
+      }
+      return restoredStateCount + restoredOutputs.length
+    })().catch(error => {
+      global.__alvarethMotionRecoveryError = error
+      console.error('[MOTION] Pemulihan sesi gagal:', error?.stack || error)
+      throw error
+    })
+    global.__alvarethMotionRecoveryReady = recoveryPromise
+  }
+  return recoveryPromise
+}
+
+void ensureMotionRecovery().catch(() => {})
+
+function throwIfCancelled(session) {
+  if (!session?.cancelRequested && !session?.abortController?.signal?.aborted) return
+  const error = new Error('Render .motion dibatalkan atas permintaan pengguna.')
+  error.code = 'RENDER_SCRIPT_CANCELLED'
+  throw error
+}
+
+async function findConfiguredBrowser() {
+  const configured = String(process.env.ALVARETH_REMOTION_BROWSER_EXECUTABLE || '').trim()
+  if (!configured) return ''
+  if (!path.isAbsolute(configured)) {
+    throw new Error('ALVARETH_REMOTION_BROWSER_EXECUTABLE harus berupa path absolut.')
+  }
+  await fs.access(configured, fsConstants.X_OK)
+  const info = await fs.stat(configured)
+  if (!info.isFile()) throw new Error('Browser executable Remotion bukan file biasa.')
+  return configured
+}
+
+async function writeMotionFiles(session, parsed) {
+  const root = await ensureMotionRoot()
+  session.directory = await fs.mkdtemp(path.join(root, 'alvareth-render-'))
+  await fs.chmod(session.directory, 0o700).catch(() => {})
+  session.projectDirectory = path.join(session.directory, 'project')
+  await fs.mkdir(session.projectDirectory, { recursive: true, mode: 0o700 })
+
+  for (const file of parsed.files) {
+    const destination = path.resolve(session.projectDirectory, ...file.path.split('/'))
+    if (!isInside(session.projectDirectory, destination)) {
+      throw new Error('Path file proyek keluar dari folder sesi.')
+    }
+    await fs.mkdir(path.dirname(destination), { recursive: true, mode: 0o700 })
+    await fs.writeFile(destination, file.content, {
+      encoding: 'utf8',
+      mode: 0o600,
+      flag: 'wx'
+    })
+  }
+}
+
+async function readAndValidateMotionProject(projectDirectory) {
+  const configPath = path.join(projectDirectory, 'motion.config.json')
+  const packagePath = path.join(projectDirectory, 'package.json')
+  const [configSource, packageSource] = await Promise.all([
+    fs.readFile(configPath, 'utf8'),
+    fs.readFile(packagePath, 'utf8')
+  ])
+  const config = parseMotionConfig(configSource)
+
+  let packageJson
+  try {
+    packageJson = JSON.parse(packageSource)
+  } catch (error) {
+    throw new Error('package.json tidak valid: ' + safeError(error))
+  }
+
+  const dependencies = {
+    ...(packageJson.dependencies && typeof packageJson.dependencies === 'object' ? packageJson.dependencies : {}),
+    ...(packageJson.devDependencies && typeof packageJson.devDependencies === 'object' ? packageJson.devDependencies : {}),
+    ...(packageJson.optionalDependencies && typeof packageJson.optionalDependencies === 'object' ? packageJson.optionalDependencies : {})
+  }
+  if (!dependencies['@remotion/media-utils']) {
+    throw new Error('package.json wajib mencantumkan @remotion/media-utils untuk menghitung durasi voiceover.')
+  }
+
+  const sourceFiles = []
+  async function walk(directory) {
+    const entries = await fs.readdir(directory, { withFileTypes: true })
+    for (const entry of entries) {
+      const target = path.join(directory, entry.name)
+      if (entry.isSymbolicLink()) throw new Error('Proyek kode berisi symbolic link yang tidak diizinkan.')
+      if (entry.isDirectory()) {
+        if (['node_modules', '.git', 'out', 'dist', '.cache', '.render-home', '.render-tmp'].includes(entry.name.toLowerCase())) continue
+        await walk(target)
+      } else if (entry.isFile() && /\.(?:js|jsx|ts|tsx|mjs|cjs)$/i.test(entry.name)) {
+        sourceFiles.push({
+          path: path.relative(projectDirectory, target).split(path.sep).join('/'),
+          content: await fs.readFile(target, 'utf8')
+        })
+      }
+    }
+  }
+  await walk(projectDirectory)
+  validateMotionVoiceoverImplementation(sourceFiles)
+  return config
+}
+
+async function persistOutput(key, session) {
+  return persistRenderOutputSession({
+    root: getMotionRoot(),
+    directory: session.directory,
+    key,
+    outputPath: session.outputPath,
+    outputFileName: 'render-result.mp4',
+    createdAt: session.createdAt,
+    progress: session.progress
+  })
+}
+
+async function deliverMotionOutput({ m, key, session, progress }) {
+  const outputPath = session.outputPath
+  const outputInfo = await fs.lstat(outputPath)
+  if (!outputInfo.isFile() || outputInfo.isSymbolicLink() ||
+      outputInfo.size < 1 || outputInfo.size > MAX_OUTPUT_BYTES) {
+    throw new Error('File hasil .motion tidak valid atau melebihi batas ' + formatBytes(MAX_OUTPUT_BYTES) + '.')
+  }
+
+  await persistOutput(key, session)
+  releaseUpdateLock(session)
+  session.status = 'output-ready'
+  session.deliveryWaiting = true
+  session.deliveryStarted = false
+
+  try {
+    const result = await sendWithWhatsAppReconnect({
+      getSocket: () => global.conn || m?.conn || null,
+      signal: session.abortController?.signal,
+      onWait: details => {
+        if (details?.reason === 'waiting-for-connection' ||
+            details?.reason === 'connection-still-unavailable' ||
+            details?.reason === 'retry-after-disconnect') {
+          try {
+            global.requestWhatsAppReconnect?.('Video .motion selesai, tetapi koneksi WhatsApp belum siap.')
+          } catch (error) {
+            console.warn('[MOTION] Permintaan reconnect gagal:', error?.message || error)
+          }
+        }
+      },
+      onReconnectRequired: details => {
+        try {
+          global.requestWhatsAppReconnect?.('Pengiriman hasil .motion terputus: ' + safeError(details?.error))
+        } catch (error) {
+          console.warn('[MOTION] Permintaan reconnect gagal:', error?.message || error)
+        }
+      },
+      send: socket => {
+        if (session.abortController?.signal.aborted) {
+          const error = new Error('Pengiriman .motion dibatalkan.')
+          error.code = 'RENDER_SCRIPT_CANCELLED'
+          throw error
+        }
+        if (global.__alvarethUpdateRunning) {
+          const error = new Error('Pembaruan bot sedang berlangsung. Hasil tetap tersimpan untuk dikirim setelah update.')
+          error.code = 'MOTION_DELIVERY_DEFERRED'
+          throw error
+        }
+        acquireUpdateLock(session)
+        if (global.__alvarethUpdateRunning) {
+          releaseUpdateLock(session)
+          const error = new Error('Pembaruan bot dimulai sebelum upload. Hasil tetap tersimpan untuk dikirim setelah update.')
+          error.code = 'MOTION_DELIVERY_DEFERRED'
+          throw error
+        }
+        session.deliveryWaiting = false
+        session.deliveryStarted = true
+        progress.update(96, 'Mengirim MP4 ke WhatsApp', formatBytes(outputInfo.size), true)
+        return sendLocalFile(socket, m.chat, outputPath, {
+          quoted: socket === m.conn ? m : undefined,
+          caption: '🎬 Video .motion selesai dirender. Berikut hasilnya.'
+        })
+      }
+    })
+
+    await safeReact(m, '✅')
+    progress.update(100, 'Selesai', 'MP4 berhasil dikirim ke WhatsApp.', true)
+    if (pendingJobs.get(key) === session) pendingJobs.delete(key)
+    await removeJob(session)
+    await persistMotionState()
+    console.log('[MOTION] Hasil terkirim:', {
+      fileName: 'render-result.mp4',
+      size: formatBytes(result?.size || outputInfo.size),
+      messageId: result?.messageId
+    })
+    return true
+  } catch (error) {
+    session.status = 'output-ready'
+    session.processingStartedAt = null
+    session.deliveryWaiting = false
+    session.deliveryStarted = false
+    session.abortController = null
+    releaseUpdateLock(session)
+    if (session.outputPath) {
+      progress.update(95, 'Video tersimpan - pengiriman tertunda', safeError(error), true)
+      try { await persistOutput(key, session) } catch (persistError) {
+        console.error('[MOTION] Manifest hasil gagal disimpan:', persistError?.stack || persistError)
+      }
+      await safeReact(m, '⚠️')
+      await safeReply(m,
+        '⚠️ Video sudah selesai dirender dan tetap tersimpan di server, tetapi belum terkirim: ' +
+        safeError(error) + '\n\nKetik *.motion send* untuk mengirim video yang sama tanpa render ulang.')
+    }
+    return false
+  }
+}
+
+async function processMotionProject({ m, key, session }) {
+  const progress = createTerminalProgress(session)
+  try {
+    if (Number(String(process.versions.node).split('.')[0]) < 20) {
+      throw new Error('Fitur .motion membutuhkan Node.js 20 atau lebih baru pada server bot.')
+    }
+
+    if (!session.projectDirectory) {
+      throw new Error('Folder proyek .motion tidak ditemukan. Kirim ulang seluruh kode proyek.')
+    }
+
+    acquireUpdateLock(session)
+    throwIfCancelled(session)
+    progress.update(3, 'Memeriksa kode proyek', 'Memvalidasi konfigurasi, struktur file, dan voiceover.', true)
+
+    const config = await readAndValidateMotionProject(session.projectDirectory)
+    const { audio, profile } = await synthesizeEdgeTTS(config.voiceoverText, config.voiceProfile)
+    throwIfCancelled(session)
+
+    const publicDirectory = path.join(session.projectDirectory, 'public')
+    await fs.mkdir(publicDirectory, { recursive: true, mode: 0o700 })
+    const voiceoverPath = path.join(publicDirectory, 'voiceover.mp3')
+    await fs.writeFile(voiceoverPath, audio, { mode: 0o600 })
+    progress.update(10, 'Voiceover selesai dibuat', profile.label + ' · ' + formatBytes(audio.length), true)
+
+    // A failed npm install can leave a partial node_modules directory. It is
+    // generated by this worker (the pasted-code parser rejects user-supplied
+    // node_modules), so remove it before a retry/project re-scan.
+    const nodeModulesPath = path.join(session.projectDirectory, 'node_modules')
+    try {
+      const nodeModulesInfo = await fs.lstat(nodeModulesPath)
+      if (!nodeModulesInfo.isDirectory() || nodeModulesInfo.isSymbolicLink()) {
+        throw new Error('Folder node_modules hasil proses sebelumnya tidak aman.')
+      }
+      await fs.rm(nodeModulesPath, { recursive: true, force: true })
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error
+    }
+
+    const project = await findRemotionProject(session.projectDirectory)
+    const outputRelativePath = 'out/render-result.mp4'
+    const outputPath = path.join(project.projectRoot, outputRelativePath)
+    const scriptPath = path.join(project.projectRoot, '__alvareth_remotion_run.sh')
+
+    try {
+      const existingScript = await fs.lstat(scriptPath)
+      if (!existingScript.isFile() || existingScript.isSymbolicLink()) {
+        throw new Error('File sementara Remotion yang sudah ada tidak aman.')
+      }
+      await fs.rm(scriptPath, { force: true })
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error
+    }
+
+    try {
+      const existingOutput = await fs.lstat(outputPath)
+      if (!existingOutput.isFile() || existingOutput.isSymbolicLink()) {
+        throw new Error('File output sementara Remotion yang sudah ada tidak aman.')
+      }
+      await fs.rm(outputPath, { force: true })
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error
+    }
+
+    const browserExecutable = await findConfiguredBrowser()
+    const script = buildRemotionRenderScript({
+      entryPoint: project.entryPoint,
+      compositionId: project.compositionId,
+      outputPath: outputRelativePath,
+      browserExecutable,
+      concurrency: 2
+    })
+    await fs.writeFile(scriptPath, script, { encoding: 'utf8', mode: 0o600, flag: 'wx' })
+
+    progress.update(15, 'Menyiapkan proyek Remotion',
+      project.packageName + ' · ' + project.entryPoint + ' · ' + project.compositionId, true)
+    progress.update(18, 'Menginstal dependency', 'Lifecycle scripts dinonaktifkan untuk keamanan.', true)
+
+    const processResult = await runRenderScript({
+      scriptPath,
+      workingDirectory: project.projectRoot,
+      inputPath: project.packageJsonPath,
+      signal: session.abortController?.signal,
+      onStage: value => {
+        const command = String(value.command || '').toLowerCase()
+        if (command === 'npm') {
+          progress.update(18, 'Menginstal dependency', 'Menggunakan --ignore-scripts.', true)
+        } else if (command === 'remotion') {
+          progress.update(35, 'Merender animasi', project.compositionId, true)
+        } else {
+          progress.update(22, 'Menjalankan pipeline', command, true)
+        }
+      },
+      onProcess: value => {
+        session.renderChildPid = value.pid || null
+        session.renderChildState = value.running ? 'running' : String(value.state || 'unknown')
+        if (value.state === 'started') {
+          progress.update(25, 'Proses render aktif', 'PID ' + String(value.pid || 'tidak diketahui'), true)
+        } else if (value.state === 'closed') {
+          progress.update(88, 'Proses Remotion selesai', 'Exit code: ' + String(value.code), true)
+        }
+      },
+      onProgress: value => {
+        const raw = Number(value.percent)
+        const percent = Number.isFinite(raw)
+          ? 35 + Math.round(Math.max(0, Math.min(100, raw)) * 0.5)
+          : 35
+        const detail = [
+          Number.isFinite(value.frame) ? 'Frame ' + value.frame : '',
+          Number.isFinite(value.fps) ? value.fps + ' FPS' : '',
+          Number.isFinite(value.currentTimeSeconds) ? value.currentTimeSeconds.toFixed(1) + ' detik' : ''
+        ].filter(Boolean).join(' · ')
+        progress.update(percent, 'Merender animasi', detail)
+      }
+    })
+    throwIfCancelled(session)
+
+    console.log('[MOTION] Render CLI selesai:', {
+      package: project.packageName,
+      composition: project.compositionId,
+      entryPoint: project.entryPoint,
+      duration: formatElapsed(processResult.durationMs),
+      exitCode: processResult.code
+    })
+
+    progress.update(91, 'Memvalidasi MP4 hasil render', '', true)
+    const outputInfo = await fs.lstat(outputPath)
+    if (!outputInfo.isFile() || outputInfo.isSymbolicLink() || outputInfo.size < 1) {
+      throw new Error('Remotion selesai, tetapi MP4 hasil render tidak ditemukan atau kosong.')
+    }
+    if (outputInfo.size > MAX_OUTPUT_BYTES) {
+      throw new Error('Ukuran MP4 ' + formatBytes(outputInfo.size) + ' melebihi batas ' + formatBytes(MAX_OUTPUT_BYTES) + '.')
+    }
+
+    const handle = await fs.open(outputPath, 'r')
+    const header = Buffer.alloc(4100)
+    try { await handle.read(header, 0, header.length, 0) } finally { await handle.close() }
+    const detected = await fileTypeFromBuffer(header)
+    if (detected && !['mp4', 'mov'].includes(String(detected.ext || '').toLowerCase())) {
+      throw new Error('File keluaran tidak dikenali sebagai video MP4.')
+    }
+
+    session.outputPath = path.join(session.directory, 'render-result.mp4')
+    session.outputFileName = 'render-result.mp4'
+    session.outputSize = outputInfo.size
+    await fs.rm(session.outputPath, { force: true }).catch(() => {})
+    await fs.rename(outputPath, session.outputPath)
+    await fs.chmod(session.outputPath, 0o600).catch(() => {})
+    session.status = 'output-ready'
+    session.processingStartedAt = null
+    progress.update(94, 'Menyimpan hasil render', formatBytes(session.outputSize), true)
+    await persistOutput(key, session)
+    releaseUpdateLock(session)
+    await persistMotionState()
+    await deliverMotionOutput({ m, key, session, progress })
+  } catch (error) {
+    console.error('[MOTION] Proses rendering gagal:', error?.stack || error)
+    session.processingStartedAt = null
+    session.abortController = null
+    session.deliveryWaiting = false
+    session.deliveryStarted = false
+
+    const cancelled = error?.code === 'RENDER_SCRIPT_CANCELLED' ||
+      session.cancelRequested
+    if (session.outputPath) {
+      session.status = 'output-ready'
+      releaseUpdateLock(session)
+      try { await persistOutput(key, session) } catch (persistError) {
+        console.error('[MOTION] Manifest pemulihan gagal:', persistError?.stack || persistError)
+      }
+      await safeReact(m, '⚠️')
+      await safeReply(m, '⚠️ MP4 sudah tersimpan. Gunakan *.motion send* untuk mengirimnya tanpa render ulang.')
+    } else if (cancelled) {
+      if (pendingJobs.get(key) === session) pendingJobs.delete(key)
+      await removeJob(session)
+      await persistMotionState()
+      await safeReact(m, '🛑')
+      await safeReply(m, '🛑 Proses .motion dibatalkan dan file sementara dibersihkan.')
+    } else {
+      session.status = 'failed'
+      session.lastError = safeError(error)
+      releaseUpdateLock(session)
+      await persistMotionState()
+      await safeReact(m, '❌')
+      await safeReply(m,
+        '❌ Proses .motion gagal: ' + safeError(error) +
+        '\n\nKode proyek tetap disimpan. Perbaiki kode di GPT lalu kirim ulang, atau ketik *.motion retry* untuk mencoba kode yang sama.')
+    }
+  } finally {
+    progress.close()
+  }
+}
+
+async function showStyleMenu(m, conn, usedPrefix = '.') {
+  const prefix = usedPrefix || '.'
+  const rows = MOTION_STYLES.map(style => ({
+    header: '',
+    title: style.name,
+    description: style.description.slice(0, 72),
+    id: prefix + 'motion style ' + style.id
+  }))
+
+  return conn.sendMessage(m.chat, {
+    text: [
+      '🎬 *ALVARETH MOTION*',
+      '',
+      'Pilih gaya animasi terlebih dahulu.',
+      'Setelah dipilih, bot akan membuat prompt khusus untuk disalin ke GPT.',
+      '',
+      'Visual video dibuat dari kode. Tidak perlu mengirim gambar, video, atau aset.'
+    ].join('\n'),
+    footer: 'Alvareth Bot · Code-to-Animation',
+    optionText: '🎨 Pilih Gaya Animasi',
+    optionTitle: 'Gaya Animasi .motion',
+    nativeFlow: [{
+      text: 'Pilih salah satu gaya',
+      sections: [{ title: 'Gaya Animasi', rows }],
+      icon: 'review'
+    }],
+    interactiveAsTemplate: false
+  }, m.key ? { quoted: m } : {})
+}
+
+async function sendPromptCopyButton(m, conn, style, usedPrefix = '.') {
+  const prompt = buildMotionPrompt(style.id)
+  const prefix = usedPrefix || '.'
+  const session = {
+    status: 'awaiting-code',
+    styleId: style.id,
+    createdAt: Date.now(),
+    processingStartedAt: null,
+    progress: null,
+    directory: null,
+    projectDirectory: null,
+    outputPath: null,
+    outputSize: 0,
+    abortController: null,
+    cancelRequested: false,
+    updateLockHeld: false,
+    lastError: ''
+  }
+  const key = createRenderSessionKey(m)
+  if (!key) throw new Error('Identitas chat/pengirim tidak terbaca.')
+  const previous = pendingJobs.get(key)
+  if (previous?.status === 'processing') {
+    return safeReply(m, 'Job .motion sebelumnya masih berjalan. Gunakan *.motion status* atau *.motion cancel*.')
+  }
+  if (previous?.status === 'output-ready') {
+    return safeReply(m, 'Hasil sebelumnya masih tersimpan. Gunakan *.motion send* atau *.motion cancel* terlebih dahulu.')
+  }
+  if (previous?.directory) await removeJob(previous)
+  pendingJobs.set(key, session)
+  await persistMotionState()
+
+  return conn.sendMessage(m.chat, {
+    text: [
+      '🎨 *Gaya dipilih: ' + style.name + '*',
+      '',
+      'Tekan tombol *Salin Prompt GPT*, tempel prompt tersebut ke ChatGPT, lalu minta GPT membuat seluruh kode proyek.',
+      'Setelah kode selesai, salin semua file beserta marker FILE dan kirim sebagai satu pesan ke chat ini.',
+      '',
+      'Bot akan menyusun file otomatis, membuat voiceover dari naskah di motion.config.json, lalu merender MP4.',
+      '',
+      'Tidak perlu upload gambar, video, audio, ZIP, atau aset lainnya.'
+    ].join('\n'),
+    footer: 'Prompt disesuaikan dengan gaya ' + style.name,
+    nativeFlow: [
+      { text: '📋 Salin Prompt GPT', copy: prompt },
+      { text: '🎨 Pilih Gaya Lain', id: prefix + 'motion' },
+      { text: '❌ Batalkan', id: prefix + 'motion cancel' }
+    ],
+    interactiveAsTemplate: false
+  }, m.key ? { quoted: m } : {})
+}
+
+async function handleSend(m, key, session) {
+  if (!session?.outputPath) return safeReply(m, 'Belum ada MP4 .motion yang menunggu dikirim.')
+  if (session.status === 'processing') return safeReply(m, 'Job .motion masih berjalan.')
+  session.status = 'output-ready'
+  session.processingStartedAt = Date.now()
+  session.abortController = new AbortController()
+  const progress = createTerminalProgress(session)
+  await safeReply(m, '📤 Mengirim ulang MP4 yang sudah tersimpan. Bot tidak akan merender ulang.')
+  void deliverMotionOutput({ m, key, session, progress })
+    .catch(async error => {
+      session.status = 'output-ready'
+      session.abortController = null
+      releaseUpdateLock(session)
+      try { await persistOutput(key, session) } catch (persistError) {
+        console.error('[MOTION] Gagal menyimpan status pengiriman:', persistError?.stack || persistError)
+      }
+      await safeReply(m, '⚠️ MP4 tetap tersimpan, tetapi belum terkirim: ' + safeError(error) +
+        '\n\nKetik *.motion send* untuk mencoba lagi.')
+    })
+    .finally(() => progress.close())
+}
+
+async function handler(m, { conn, text = '', usedPrefix = '.' } = {}) {
+  if (!m?.chat) return
+  try {
+    await ensureMotionRecovery()
+  } catch (error) {
+    return safeReply(m, '⏳ Penyimpanan sesi .motion belum siap: ' + safeError(error))
+  }
+
+  const key = createRenderSessionKey(m)
+  if (!key) return safeReply(m, 'Identitas chat/pengirim tidak terbaca. Coba ulangi perintah di chat pribadi bot.')
+  const actionText = String(text || '').trim()
+  const [action = '', argument = ''] = actionText.split(/\s+/, 2)
+  const session = pendingJobs.get(key)
+
+  if (!action) return showStyleMenu(m, conn, usedPrefix)
+
+  if (action.toLowerCase() === 'style') {
+    const style = getMotionStyle(argument)
+    if (!style) return safeReply(m, 'Gaya animasi tidak dikenal. Ketik *.motion* untuk melihat daftar gaya.')
+    return sendPromptCopyButton(m, conn, style, usedPrefix)
+  }
+
+  if (action.toLowerCase() === 'status') {
+    if (!session) return safeReply(m, 'Tidak ada sesi .motion aktif.')
+    if (session.status === 'awaiting-code') {
+      const style = getMotionStyle(session.styleId)
+      return safeReply(m, '🎨 Menunggu kode GPT untuk gaya ' + (style?.name || 'animasi') +
+        '. Tempel seluruh kode proyek dalam satu pesan. Sesi ini tidak kedaluwarsa otomatis.')
+    }
+    if (session.status === 'processing') {
+      return safeReply(m, '🎬 Rendering .motion sedang berjalan.\nTahap: ' +
+        String(session.progress?.stage || 'Menyiapkan render') +
+        '\nWaktu berjalan: ' + formatElapsed(Date.now() - Number(session.processingStartedAt || session.createdAt)) +
+        (session.progress?.detail ? '\nDetail: ' + String(session.progress.detail).slice(0, 240) : ''))
+    }
+    if (session.status === 'output-ready' && session.outputPath) {
+      return safeReply(m, '✅ MP4 selesai dan tersimpan (' + formatBytes(session.outputSize) +
+        '), tetapi belum terkirim. Ketik *.motion send* untuk mengirim tanpa render ulang.')
+    }
+    if (session.status === 'failed') {
+      return safeReply(m, '⚠️ Kode proyek masih tersimpan. Error: ' + String(session.lastError || 'Render gagal') +
+        '\nKetik *.motion retry* untuk mencoba lagi atau *.motion cancel* untuk menghapus sesi.')
+    }
+    return safeReply(m, 'Status sesi .motion: ' + String(session.status || 'tidak diketahui'))
+  }
+
+  if (action.toLowerCase() === 'send') return handleSend(m, key, session)
+
+  if (action.toLowerCase() === 'retry') {
+    if (!session || session.status !== 'failed' || !session.projectDirectory) {
+      return safeReply(m, 'Tidak ada proyek gagal yang bisa dicoba ulang. Kirim kode proyek setelah memilih gaya.')
+    }
+    if (global.__alvarethUpdateRunning) {
+      return safeReply(m, '⏳ Render ditunda karena pembaruan bot sedang berlangsung. Kode tetap tersimpan; coba *.motion retry* setelah update selesai.')
+    }
+    session.status = 'processing'
+    session.processingStartedAt = Date.now()
+    session.abortController = new AbortController()
+    session.cancelRequested = false
+    session.lastError = ''
+    session.progress = { percent: 0, stage: 'Mengulang render', detail: '', updatedAt: Date.now() }
+    await persistMotionState()
+    await safeReact(m, '🎬')
+    await safeReply(m, '🔁 Mencoba render ulang dari kode yang tersimpan. Tidak perlu mengirim kode lagi.')
+    void processMotionProject({ m, key, session })
+    return
+  }
+
+  if (action.toLowerCase() === 'cancel') {
+    if (!session) return safeReply(m, 'Tidak ada sesi .motion yang bisa dibatalkan.')
+    if (session.status === 'processing') {
+      session.cancelRequested = true
+      session.abortController?.abort()
+      return safeReply(m, '🛑 Permintaan pembatalan diterima. Proses rendering sedang dihentikan.')
+    }
+    pendingJobs.delete(key)
+    await removeJob(session)
+    await persistMotionState()
+    return safeReply(m, '🛑 Sesi .motion dibatalkan dan file sementara dibersihkan.')
+  }
+
+  return safeReply(m, [
+    '*Perintah .motion*',
+    '• .motion — pilih gaya animasi',
+    '• .motion status — cek proses atau sesi',
+    '• .motion retry — ulangi render yang gagal',
+    '• .motion send — kirim ulang MP4 yang tersimpan',
+    '• .motion cancel — batalkan dan bersihkan sesi'
+  ].join('\n'))
+}
+
+async function before(m, { conn } = {}) {
+  if (!m?.chat || typeof m.text !== 'string' || !m.text.trim()) return false
+  const text = m.text.trim()
+  if (/^[.!/]\S+/.test(text)) return false
+
+  const key = createRenderSessionKey(m)
+  if (!key) return false
+  try {
+    await ensureMotionRecovery()
+  } catch {
+    return false
+  }
+
+  const session = pendingJobs.get(key)
+  if (!session || session.status !== 'awaiting-code') return false
+  m.__alvarethMotionCodeHandled = true
+
+  let parsed
+  try {
+    parsed = parseMotionCode(text)
+    validateMotionVoiceoverImplementation(parsed.files)
+  } catch (error) {
+    await safeReply(m,
+      '⚠️ Kode belum bisa dibaca: ' + safeError(error) +
+      '\n\nKembali ke GPT dan pastikan setiap file memakai marker ===FILE: nama/file===, lalu kirim ulang seluruh kode.')
+    return true
+  }
+
+  if (global.__alvarethUpdateRunning) {
+    await safeReply(m, '⏳ Pembaruan bot sedang berlangsung. Kode belum diproses. Kirim ulang kode ini setelah update selesai.')
+    return true
+  }
+
+  session.status = 'processing'
+  session.processingStartedAt = Date.now()
+  session.abortController = new AbortController()
+  session.cancelRequested = false
+  session.lastError = ''
+  session.progress = { percent: 0, stage: 'Menerima kode proyek', detail: parsed.files.length + ' file kode', updatedAt: Date.now() }
+
+  try {
+    await writeMotionFiles(session, parsed)
+    await persistMotionState()
+  } catch (error) {
+    session.status = 'failed'
+    session.lastError = safeError(error)
+    session.abortController = null
+    await persistMotionState()
+    await safeReply(m, '❌ Gagal menyusun file proyek: ' + safeError(error) +
+      '\nSesi tetap tersimpan. Ketik *.motion cancel* lalu coba kembali.')
+    return true
+  }
+
+  await safeReact(m, '🎬')
+  await safeReply(m,
+    '🎬 Kode diterima (' + parsed.files.length + ' file, ' + formatBytes(parsed.totalFileBytes) + ').\n' +
+    'Bot sedang memeriksa proyek, membuat voiceover otomatis, dan merender MP4 di background.\n\n' +
+    'Tidak ada batas waktu kedaluwarsa. Gunakan *.motion status* untuk mengecek proses.')
+  void processMotionProject({ m, key, session })
+  return true
+}
+
+handler.help = ['motion', 'motion status', 'motion retry', 'motion send', 'motion cancel']
+handler.tags = ['owner']
+handler.command = /^motion$/i
+handler.rowner = true
+handler.before = before
+
+export default handler
