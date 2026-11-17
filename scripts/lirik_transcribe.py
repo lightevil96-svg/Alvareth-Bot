@@ -79,7 +79,7 @@ def extract_on_screen_text(input_path: Path, sample_fps: float,
                            min_confidence: float) -> tuple[list[dict[str, Any]], str]:
     try:
         import cv2
-        from rapidocr_onnxruntime import RapidOCR
+        from rapidocr import RapidOCR
     except ImportError as exc:
         return [], (
             "RapidOCR/OpenCV belum terpasang. Jalankan: "
