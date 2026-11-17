@@ -199,7 +199,20 @@ function safeBaseName(value) {
 async function runTranscription(source, jobDirectory) {
   const scriptPath = path.resolve('scripts/lirik_transcribe.py')
   await fs.access(scriptPath)
-  const python = String(process.env.ALVARETH_LIRIK_PYTHON || 'python3').trim() || 'python3'
+  const configuredPython = String(process.env.ALVARETH_LIRIK_PYTHON || '').trim()
+  const venvDirectory = path.resolve(
+    process.env.ALVARETH_LIRIK_VENV || path.join(process.cwd(), '.venv-lirik')
+  )
+  const venvPython = process.platform === 'win32'
+    ? path.join(venvDirectory, 'Scripts', 'python.exe')
+    : path.join(venvDirectory, 'bin', 'python')
+  let python = configuredPython || 'python3'
+  if (!configuredPython || configuredPython === 'python3' || configuredPython === 'python') {
+    try {
+      await fs.access(venvPython)
+      python = venvPython
+    } catch {}
+  }
   const outputPath = path.join(jobDirectory, 'transcript.json')
   const model = String(process.env.ALVARETH_LIRIK_WHISPER_MODEL || 'small').trim() || 'small'
   const device = String(process.env.ALVARETH_LIRIK_WHISPER_DEVICE || 'auto').trim() || 'auto'
