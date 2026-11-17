@@ -9,11 +9,18 @@ Perintah ini membuat transkrip lirik dari audio/video menggunakan model lokal:
 
 ## Persiapan server
 
-Pastikan Python 3.10+ dan FFmpeg/FFprobe tersedia, lalu jalankan perintah berikut di folder utama bot:
+Pastikan server menyediakan Python 3.10+ dan FFmpeg/FFprobe. Untuk instalasi TokoPanel, owner cukup mengetik:
 
-    python3 -m pip install -r requirements-lirik.txt
+    .update
 
-Model Whisper akan diunduh otomatis pada penggunaan pertama. Sediakan ruang disk dan koneksi internet saat pertama kali menjalankan fitur.
+Saat perintah `.update` manual dijalankan, updater akan membuat virtual environment `.venv-lirik`, memasang isi `requirements-lirik.txt`, memverifikasi import `faster_whisper`, `rapidocr`, dan `cv2`, lalu menyimpan hash dependensi di direktori data privat. Pemeriksaan update otomatis di latar belakang tidak menjalankan pip. Jika dependensi dan hash tidak berubah, instalasi dilewati.
+
+Instalasi manual tetap tersedia bila diperlukan:
+
+    python3 -m venv .venv-lirik
+    .venv-lirik/bin/python -m pip install -r requirements-lirik.txt
+
+Jika pembuatan virtual environment gagal, image server harus menyediakan modul Python `venv`/`ensurepip` (pada beberapa image Debian disediakan oleh paket `python3-venv`). Jangan memasang paket ke Python sistem yang dikelola OS dengan memaksa `--break-system-packages`. Model Whisper akan diunduh otomatis pada penggunaan pertama; sediakan ruang disk dan koneksi internet.
 
 ## YouTube meminta verifikasi akun
 
@@ -39,7 +46,7 @@ Cookies adalah kredensial sesi akun. Jangan kirim file ini ke WhatsApp, jangan c
 
 | Variabel | Default | Fungsi |
 |---|---:|---|
-| ALVARETH_LIRIK_PYTHON | python3 | Perintah Python |
+| ALVARETH_LIRIK_PYTHON | otomatis: `.venv-lirik/bin/python`; fallback `python3` | Override interpreter Python |
 | ALVARETH_LIRIK_WHISPER_MODEL | small | Model faster-whisper, misalnya small atau large-v3-turbo |
 | ALVARETH_LIRIK_WHISPER_DEVICE | auto | Perangkat inferensi |
 | ALVARETH_LIRIK_COMPUTE_TYPE | int8 | Tipe komputasi |
