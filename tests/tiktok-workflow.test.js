@@ -7,7 +7,7 @@ import {
   parseTikTokSlideDurations
 } from '../lib/tiktok-workflow.js'
 import { extractTikTokLivePhotoVideoUrl } from '../lib/tiktok-live-photo.js'
-import { buildTikTokProviderFallback } from '../lib/scrape/tikwm.js'
+import { buildTikTokProviderFallback } from '../lib/tiktok-provider-fallback.js'
 
 test('TikTok quality options are limited to source resolution and lower standard tiers', () => {
   assert.deepEqual(getTikTokOutputQualities(1080, 1920), [1080, 720, 480, 360])
