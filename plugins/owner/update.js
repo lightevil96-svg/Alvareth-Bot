@@ -4,6 +4,7 @@ import os from 'node:os'
 import crypto from 'node:crypto'
 import { spawn } from 'node:child_process'
 import JSZip from 'jszip'
+import { ensureLirikPythonDependencies } from '../../lib/lirik-python.js'
 
 const REPOSITORY = 'lightevil96-svg/Alvareth-Bot'
 const BRANCH = process.env.AUTO_UPDATE_BRANCH || 'main'
@@ -161,6 +162,7 @@ function protectedPath(rel) {
     p === '.git' || p.startsWith('.git/') ||
     p === '.env' || (p.startsWith('.env.') && p !== '.env.example') ||
     p === 'node_modules' || p.startsWith('node_modules/') ||
+    p === '.venv-lirik' || p.startsWith('.venv-lirik/') ||
     p === 'sessions' || p.startsWith('sessions/') ||
     p === 'session' || p.startsWith('session/') ||
     p === 'auth_info' || p.startsWith('auth_info/') ||
@@ -723,10 +725,23 @@ async function handleUpdate(m, context = {}) {
       .filter(item => !protectedPath(item.path))
 
     if (!changedPaths.length) {
+      const lirikSetup = context.automatic === true
+        ? null
+        : await ensureLirikPythonDependencies({
+            root,
+            stateDirectory: STATE_DIRECTORY,
+            env: process.env,
+            reply: message => m.reply(message)
+          })
       await saveState(headSha)
       await m.reply(
         '✅ Tidak ada file proyek yang perlu diterapkan dari perubahan GitHub sejak versi dasar. ' +
-        'File lain, konfigurasi, sesi, database, dan file lokal tidak disentuh.'
+        'File lain, konfigurasi, sesi, dan database tidak disentuh.' +
+        (lirikSetup?.ready
+          ? (lirikSetup.installed
+              ? '\n\n🐍 Dependensi .lirik berhasil dipasang dan siap digunakan.'
+              : '\n\n🐍 Dependensi .lirik sudah siap.')
+          : '')
       )
       return
     }
@@ -901,12 +916,28 @@ async function handleUpdate(m, context = {}) {
       restartNeeded = true
     }
 
+    // Python media packages are installed only for an explicit owner .update.
+    // Background checks remain lightweight and never invoke pip.
+    const lirikSetup = context.automatic === true
+      ? null
+      : await ensureLirikPythonDependencies({
+          root,
+          stateDirectory: STATE_DIRECTORY,
+          env: process.env,
+          reply: message => m.reply(message)
+        })
+
     // If local edits conflicted with changed upstream files, keep the old base
     // so the user can resolve the conflict and run .update again. Files that
     // were already applied are recognized by their hash and won't be rewritten.
     await saveState(conflicts.length ? baseSha : headSha)
 
     const sections = []
+    if (lirikSetup?.ready) {
+      sections.push(lirikSetup.installed
+        ? 'Dependensi Python .lirik berhasil dipasang dan siap digunakan.'
+        : 'Dependensi Python .lirik sudah siap.')
+    }
     if (forceMode) {
       sections.push(
         'Mode paksa aktif: hanya file yang berubah pada commit GitHub diproses; file terlindungi dan file di luar daftar perubahan tidak disentuh.'
