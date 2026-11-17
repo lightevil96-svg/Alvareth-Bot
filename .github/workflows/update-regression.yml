@@ -19,6 +19,8 @@ on:
   pull_request:
     paths:
       - 'plugins/owner/update.js'
+      - 'lib/lirik-python.js'
+      - 'tests/lirik-python.test.js'
       - 'tests/update-transport.test.js'
       - '.github/workflows/update-regression.yml'
 
