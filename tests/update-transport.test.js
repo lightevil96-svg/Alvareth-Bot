@@ -308,17 +308,3 @@ test('GitHub archive response body retries from the beginning after UND_ERR_SOCK
   assert.equal(result.toString(), 'archive-ok')
   assert.equal(calls, 2)
 })
-
-
-test('optional lyrics setup failure is reported without aborting the code updater', async () => {
-  const code = extract('async function ensureLirikDependenciesSafely(', 'function describeFetchCause(')
-  const messages = []
-  const safeSetup = new Function('ensureLirikPythonDependencies', 'log', code + '\nreturn ensureLirikDependenciesSafely')(
-    async () => { throw new Error('No module named pip') },
-    message => messages.push(message)
-  )
-  const result = await safeSetup({ root: '/tmp/project' })
-  assert.equal(result.ready, false)
-  assert.match(result.error, /No module named pip/)
-  assert.match(messages[0], /pembaruan kode tetap dilanjutkan/)
-})

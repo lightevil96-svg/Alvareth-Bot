@@ -1,3 +1,12 @@
+## 2026-11-17 — Remove audio/video transcription feature .lirik
+
+- **Request:** Remove the local audio/video lyric transcription feature after repeated Python/pip, Faster-Whisper, RapidOCR, and OpenCV installation failures.
+- **Removal:** Delete the `.lirik` downloader command, Python transcription worker, Python environment/bootstrap helper, dependency requirements, feature documentation, and dedicated transcription tests. Remove the npm `postinstall` hook and `test:lirik` script so installation, startup, and `.update` no longer create a Python environment or run pip.
+- **Updater:** Remove all optional `.lirik` dependency setup and status handling from the owner updater. The updater continues to apply code and Node.js dependency changes as before.
+- **Preserved:** The separate online song-lyrics lookup remains available as `.lyrics <judul>` only; its old `.lirik` alias is removed to avoid exposing the deleted command. The `.tebaklirik` quiz remains unchanged.
+- **Storage:** Existing local `.venv-lirik` data is not automatically deleted; it is left untouched to avoid removing local files without a separate cleanup request.
+- **Verification:** GitHub Actions will run the updater regression checks. Live WhatsApp command discovery should be checked after the bot restarts.
+
 ## 2026-11-17 — Install local .lirik Python dependencies through manual .update
 
 - **Observed failure:** `.lirik` downloaded its source media but returned `faster-whisper belum terpasang`, `RapidOCR/OpenCV belum terpasang`, and `No module named 'cv2'` on TokoPanel.

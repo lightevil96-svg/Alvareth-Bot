@@ -39,7 +39,7 @@ ${song.plainLyrics || 'Tidak ada lirik tersedia.'}`
 
 handler.help = ['lyrics <judul>']
 handler.tags = ['internet']
-handler.command = /^lyrics|lirik$/i
+handler.command = /^lyrics$/i
 handler.limit = false
 
 export default handler
