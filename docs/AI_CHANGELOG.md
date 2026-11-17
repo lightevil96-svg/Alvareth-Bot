@@ -1,3 +1,12 @@
+## 2026-11-17 — Install local .lirik Python dependencies through manual .update
+
+- **Observed failure:** `.lirik` downloaded its source media but returned `faster-whisper belum terpasang`, `RapidOCR/OpenCV belum terpasang`, and `No module named 'cv2'` on TokoPanel.
+- **Root cause:** `requirements-lirik.txt` existed, but the owner updater only ran npm when package manifests changed; the transcription worker defaulted directly to system `python3`, so no managed Python environment or dependency bootstrap existed.
+- **Fix:** add `lib/lirik-python.js` to create/repair a project-local `.venv-lirik`, install `requirements-lirik.txt`, verify Python 3.10+ plus `faster_whisper`, `rapidocr`, and `cv2`, and cache the requirements SHA-256 plus interpreter in the private updater data directory. Manual owner `.update` runs this check even when GitHub has no code changes; unchanged verified environments skip pip. `.lirik` resolves the managed venv by default while preserving explicit `ALVARETH_LIRIK_PYTHON` overrides. Background automatic checks pass `automatic: true` and never invoke pip. The updater protects `.venv-lirik` from repository writes.
+- **Regression coverage:** add helper tests for first-time venv creation/install, idempotent repeat update, requirements-hash changes, explicit interpreter override, and default interpreter resolution. Extend the updater regression workflow and `npm run test:lirik`.
+- **Files:** `lib/lirik-python.js`, `plugins/owner/update.js`, `plugins/downloader/lirik.js`, `lib/auto-update.js`, `tests/lirik-python.test.js`, `tests/auto-update.test.js`, `package.json`, `.github/workflows/update-regression.yml`, `docs/LIRIK.md`, `README.md`, `AI_CONTEXT.md`, and this changelog.
+- **Verification:** pending GitHub Actions after the direct-to-main commit. The Python packages, Whisper model download, FFmpeg processing, and WhatsApp transcript delivery have not been installed or smoke-tested on the owner's TokoPanel server.
+
 ## 2026-11-16 — Add Voxel 3D Story Animation style to .motion
 
 - **Request:** Add a `.motion` video style that truly matches the owner's reference video (57-second vertical 9:16 voxel animation: giant chicken chase, dream-recorder device, dream going viral) — genuinely 3D blocky characters/models that do not error, from video style down to audio.
