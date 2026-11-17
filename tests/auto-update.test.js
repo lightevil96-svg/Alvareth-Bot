@@ -10,7 +10,7 @@ test('automatic update reuses the owner updater and writes status only to server
   }
   const result = await runAutomaticUpdate(updater)
   assert.equal(result, true)
-  assert.deepEqual(calls, [{ isOwner: true }])
+  assert.deepEqual(calls, [{ isOwner: true, automatic: true }])
 })
 
 test('automatic update skips while the manual updater owns the update lock', async () => {
