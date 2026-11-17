@@ -9,6 +9,10 @@ on:
       - 'main.js'
       - 'package.json'
       - 'tests/auto-update.test.js'
+      - 'lib/lirik-python.js'
+      - 'plugins/downloader/lirik.js'
+      - 'tests/lirik-python.test.js'
+      - 'tests/lirik-output.test.js'
       - 'tests/update-transport.test.js'
       - '.github/workflows/update-regression.yml'
   pull_request:
@@ -30,3 +34,5 @@ jobs:
         run: node --check plugins/owner/update.js && node --check lib/auto-update.js && node --check main.js
       - name: Test safe updater transport and automatic scheduling bridge
         run: node --test tests/update-transport.test.js tests/auto-update.test.js
+      - name: Test manual .update Python setup and local lyrics worker
+        run: npm run test:lirik
