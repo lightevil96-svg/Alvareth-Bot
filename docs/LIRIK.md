@@ -13,7 +13,7 @@ Pastikan server menyediakan Python 3.10+ dan FFmpeg/FFprobe. Untuk instalasi Tok
 
     .update
 
-Saat perintah `.update` manual dijalankan, updater akan membuat virtual environment `.venv-lirik`, memasang isi `requirements-lirik.txt`, memverifikasi import `faster_whisper`, `rapidocr`, dan `cv2`, lalu menyimpan hash dependensi di direktori data privat. Pemeriksaan update otomatis di latar belakang tidak menjalankan pip. Jika dependensi dan hash tidak berubah, instalasi dilewati.
+Saat perintah `.update` manual dijalankan, updater akan membuat virtual environment `.venv-lirik`, memasang isi `requirements-lirik.txt`, memverifikasi import `faster_whisper`, `rapidocr`, dan `cv2`, lalu menyimpan hash dependensi di direktori data privat. Pada pembaruan pertama dari updater versi lama, perubahan `package.json` memicu `npm install` dan hook `postinstall` menjalankan bootstrap yang sama sebelum bot restart. Pemeriksaan update otomatis di latar belakang secara eksplisit melewati hook pip. Jika dependensi dan hash tidak berubah, instalasi dilewati.
 
 Instalasi manual tetap tersedia bila diperlukan:
 
