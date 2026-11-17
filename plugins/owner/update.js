@@ -903,6 +903,10 @@ async function handleUpdate(m, context = {}) {
       await new Promise((resolve, reject) => {
         const child = spawn('npm', ['install', '--omit=dev', '--no-audit', '--no-fund'], {
           cwd: root,
+          env: {
+            ...process.env,
+            ...(context.automatic === true ? { ALVARETH_SKIP_LIRIK_PYTHON_SETUP: 'true' } : {})
+          },
           stdio: 'inherit',
           shell: process.platform === 'win32'
         })
