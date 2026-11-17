@@ -117,17 +117,22 @@ async function prepareInput(m, conn, jobDirectory, url) {
       outputRoot: downloadRoot,
       maxFileBytes: MAX_INPUT_BYTES
     })
-    const stat = await fs.stat(downloaded.path)
-    if (!stat.isFile() || stat.size < 1) throw new Error('Downloader tidak menghasilkan file video yang valid.')
-    if (stat.size > MAX_INPUT_BYTES) {
-      throw new Error('Ukuran video ' + Math.ceil(stat.size / 1024 / 1024) +
-        ' MB melebihi batas ' + Math.ceil(MAX_INPUT_BYTES / 1024 / 1024) + ' MB.')
-    }
-    return {
-      filePath: downloaded.path,
-      kind: 'video',
-      title: downloaded.title || 'youtube-video',
-      cleanupDir: downloaded.outputDir
+    try {
+      const stat = await fs.stat(downloaded.path)
+      if (!stat.isFile() || stat.size < 1) throw new Error('Downloader tidak menghasilkan file video yang valid.')
+      if (stat.size > MAX_INPUT_BYTES) {
+        throw new Error('Ukuran video ' + Math.ceil(stat.size / 1024 / 1024) +
+          ' MB melebihi batas ' + Math.ceil(MAX_INPUT_BYTES / 1024 / 1024) + ' MB.')
+      }
+      return {
+        filePath: downloaded.path,
+        kind: 'video',
+        title: downloaded.title || 'youtube-video',
+        cleanupDir: downloaded.outputDir
+      }
+    } catch (error) {
+      if (downloaded.outputDir) await cleanupDownload(downloaded.outputDir).catch(() => {})
+      throw error
     }
   }
 
@@ -137,8 +142,12 @@ async function prepareInput(m, conn, jobDirectory, url) {
   }
   const mediaType = String(mediaInfo.type || '').toLowerCase()
   const mime = String(mediaInfo.mime || mediaInfo.media?.mimetype || '').toLowerCase()
-  const isVideo = mime.startsWith('video/') || /(?:video|ptv)message/.test(mediaType)
-  const isAudio = mime.startsWith('audio/') || /audio/.test(mediaType)
+  const fileName = mediaInfo.media?.fileName || mediaInfo.media?.file_name || ''
+  const fileExtension = path.extname(String(fileName)).toLowerCase()
+  const isVideo = mime.startsWith('video/') || /(?:video|ptv)message/.test(mediaType) ||
+    /\.(?:mp4|m4v|mov|mkv|webm|avi|3gp|mpeg|mpg)$/i.test(fileExtension)
+  const isAudio = mime.startsWith('audio/') || /audio/.test(mediaType) ||
+    /\.(?:mp3|m4a|aac|ogg|opus|wav|flac|amr)$/i.test(fileExtension)
   if (!isVideo && !isAudio) {
     throw new Error('Media yang dikutip harus berupa video atau audio. Dokumen lain tidak diproses.')
   }
@@ -165,7 +174,6 @@ async function prepareInput(m, conn, jobDirectory, url) {
   }
 
   const kind = isVideo || resolvedMime.startsWith('video/') ? 'video' : 'audio'
-  const fileName = mediaInfo.media?.fileName || mediaInfo.media?.file_name || ''
   const extension = extensionFromMime(resolvedMime, fileName, kind === 'video' ? 'mp4' : 'ogg')
   const filePath = path.join(jobDirectory, 'source.' + extension)
   await fs.writeFile(filePath, buffer, { mode: 0o600, flag: 'wx' })
