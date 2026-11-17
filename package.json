@@ -23,12 +23,13 @@
     "test:remotion": "node --check lib/remotion-project.js && node --check plugins/owner/remotion.js && node --test tests/remotion-project.test.js",
     "test:render": "npm run test:remotion && node --check lib/render-script.js && node --check plugins/owner/render.js && node --test tests/render-script.test.js",
     "test:video-analysis": "node --check lib/video-analysis-input.js && node --check lib/video-analysis-secrets.js && node --check lib/video-analysis.js && node --check plugins/owner/analisis.js && node --check handler.js && node --test tests/video-analysis.test.js tests/video-analysis-secrets.test.js tests/video-analysis-input.test.js",
-    "test:lirik": "node --check lib/lirik-output.js && node --check plugins/downloader/lirik.js && node --test tests/lirik-output.test.js",
+    "test:lirik": "node --check scripts/install-lirik-deps.js && node --check lib/lirik-output.js && node --check plugins/downloader/lirik.js && node --test tests/lirik-output.test.js",
     "test:ai": "node --check lib/ai-chat.js && node --test tests/ai-chat.test.js",
     "test:image": "node --check lib/image-edit.js && node --check plugins/image/to3d.js && node --check plugins/image/tohitam.js && node --check plugins/image/toblonde.js && node --check plugins/image/hitamkan.js && node --check plugins/image/img2img.js && node --check plugins/image/picsart.js && node --check plugins/image/ai-flux.js && node --test tests/image-edit.test.js",
     "test:tts": "node --check lib/tts-config.js && node --check lib/tts-edge.js && node --check plugins/voice/tts-anime.js && node --test tests/tts-edge.test.js",
     "test:asisten": "node --check lib/owner-assistant.js && node --check plugins/owner/asisten.js && node --check plugins/ai/gemini.js && node --test tests/owner-assistant.test.js",
-    "test:motion": "node --check lib/motion-project.js && node --check plugins/owner/motion.js && node --test tests/motion-project.test.js"
+    "test:motion": "node --check lib/motion-project.js && node --check plugins/owner/motion.js && node --test tests/motion-project.test.js",
+    "postinstall": "node scripts/install-lirik-deps.js"
   },
   "keywords": [
     "alvareth-bot",
