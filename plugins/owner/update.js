@@ -157,35 +157,47 @@ async function ensureLirikPythonDependencies(root, m) {
   }
 
   await m.reply('🐍 Memeriksa dan menyiapkan dependensi Python untuk .lirik. Instalasi pertama dapat memerlukan beberapa menit...')
-  await new Promise((resolve, reject) => {
-    let settled = false
-    const child = spawn(process.execPath, [installerPath, '--strict'], {
-      cwd: root,
-      env: process.env,
-      stdio: 'inherit',
-      shell: process.platform === 'win32',
-      windowsHide: true
+  try {
+    await new Promise((resolve, reject) => {
+      let settled = false
+      const child = spawn(process.execPath, [installerPath, '--strict'], {
+        cwd: root,
+        env: process.env,
+        stdio: 'inherit',
+        shell: process.platform === 'win32',
+        windowsHide: true
+      })
+      const finish = (error) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        if (error) reject(error)
+        else resolve()
+      }
+      const timer = setTimeout(() => {
+        child.kill('SIGTERM')
+        setTimeout(() => child.kill('SIGKILL'), 5000).unref?.()
+        finish(new Error('Pemasangan dependensi .lirik melewati batas waktu 35 menit.'))
+      }, 35 * 60 * 1000)
+      timer.unref?.()
+      child.once('error', error => finish(new Error('Installer Python .lirik tidak dapat dijalankan: ' + error.message)))
+      child.once('close', code => code === 0
+        ? finish()
+        : finish(new Error('Installer Python .lirik gagal dengan exit code ' + code +
+          '. Periksa Python 3, modul venv, koneksi internet, dan log server.')))
     })
-    const finish = (error) => {
-      if (settled) return
-      settled = true
-      clearTimeout(timer)
-      if (error) reject(error)
-      else resolve()
-    }
-    const timer = setTimeout(() => {
-      child.kill('SIGTERM')
-      setTimeout(() => child.kill('SIGKILL'), 5000).unref?.()
-      finish(new Error('Pemasangan dependensi .lirik melewati batas waktu 35 menit.'))
-    }, 35 * 60 * 1000)
-    timer.unref?.()
-    child.once('error', error => finish(new Error('Installer Python .lirik tidak dapat dijalankan: ' + error.message)))
-    child.once('close', code => code === 0
-      ? finish()
-      : finish(new Error('Installer Python .lirik gagal dengan exit code ' + code +
-        '. Periksa Python 3, modul venv, koneksi internet, dan log server.')))
-  })
-  return true
+    await m.reply('✅ Dependensi Python .lirik siap digunakan.')
+    return true
+  } catch (error) {
+    log('Dependensi Python .lirik belum siap: ' + String(error?.message || error).slice(0, 400))
+    await m.reply(
+      '⚠️ Kode bot sudah diperbarui, tetapi instalasi Whisper/OCR belum berhasil. ' +
+      'Periksa Python 3, modul venv, koneksi internet, dan log server. ' +
+      'Jalankan .update lagi setelah memperbaiki lingkungan Python. Detail: ' +
+      String(error?.message || error).slice(0, 350)
+    )
+    return false
+  }
 }
 
 // Protect runtime files, credentials, and generated state. .env.example is safe
