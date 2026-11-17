@@ -1481,6 +1481,12 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
     const uploader = res.author || '-'
 
     const hasPhotoPost = res.type === 'image' && Array.isArray(res.images) && res.images.length > 0
+    if ((res.isPhotoPost || res.type === 'image') && !hasPhotoPost) {
+      throw new Error(
+        'Postingan foto TikTok terdeteksi, tetapi URL fotonya belum berhasil diambil. ' +
+        'Coba kirim tautan lengkap dari TikTok melalui Bagikan > Salin tautan.'
+      )
+    }
     if (isQualityCommand && hasPhotoPost) {
       throw new Error('Tautan ini merupakan postingan foto TikTok, bukan video. Gunakan menu foto untuk membuat slideshow.')
     }
@@ -1686,7 +1692,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
       throw new Error('Postingan ini terdeteksi sebagai foto/slideshow TikTok, tetapi URL foto belum berhasil diperoleh. Coba lagi nanti saat TikTok atau provider media tersedia.')
     }
 
-    if (res.video || (Array.isArray(res.videoCandidates) && res.videoCandidates.length)) {
+    if (res.video || (Array.isArray(res.videoCandidates) && res.videoCandidates.length) || res.providerFallback === true) {
       const fallbackSourceUrl = getTikTokFallbackSourceUrl(res, url)
       let prepared
       try {

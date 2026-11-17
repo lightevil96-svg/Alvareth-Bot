@@ -7,6 +7,7 @@ on:
       - 'plugins/downloader/tiktok.js'
       - 'lib/scrape/tikwm.js'
       - 'lib/tiktok-live-photo.js'
+      - 'lib/tiktok-provider-fallback.js'
       - 'lib/tiktok-workflow.js'
       - 'tests/tiktok-workflow.test.js'
       - 'package.json'
@@ -15,6 +16,7 @@ on:
     paths:
       - 'plugins/downloader/tiktok.js'
       - 'lib/tiktok-workflow.js'
+      - 'lib/tiktok-provider-fallback.js'
       - 'tests/tiktok-workflow.test.js'
       - 'package.json'
       - '.github/workflows/tiktok-regression.yml'
