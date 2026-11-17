@@ -8,6 +8,7 @@ import { fileTypeFromBuffer } from 'file-type'
 import { getQuotedMediaInfo, downloadQuotedMedia } from '../../lib/simple.js'
 import { sendLocalFile } from '../../lib/whatsapp-file-sender.js'
 import { downloadYoutubeVideoBest, cleanupDownload } from '../../lib/scrape/youtube.js'
+import { resolveLirikPythonExecutable } from '../../lib/lirik-python.js'
 import { buildLirikSrt, buildLirikText, normalizeLirikResult } from '../../lib/lirik-output.js'
 
 const execFileAsync = promisify(execFile)
@@ -199,7 +200,7 @@ function safeBaseName(value) {
 async function runTranscription(source, jobDirectory) {
   const scriptPath = path.resolve('scripts/lirik_transcribe.py')
   await fs.access(scriptPath)
-  const python = String(process.env.ALVARETH_LIRIK_PYTHON || 'python3').trim() || 'python3'
+  const python = await resolveLirikPythonExecutable({ root: process.cwd() })
   const outputPath = path.join(jobDirectory, 'transcript.json')
   const model = String(process.env.ALVARETH_LIRIK_WHISPER_MODEL || 'small').trim() || 'small'
   const device = String(process.env.ALVARETH_LIRIK_WHISPER_DEVICE || 'auto').trim() || 'auto'
