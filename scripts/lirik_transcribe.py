@@ -113,25 +113,45 @@ def extract_on_screen_text(input_path: Path, sample_fps: float,
                 continue
 
             raw = engine(frame)
-            rows = raw[0] if isinstance(raw, tuple) else raw
             detected: list[tuple[float, float, str]] = []
-            for item in rows or []:
-                if not isinstance(item, (list, tuple)) or len(item) < 3:
-                    continue
-                text = " ".join(str(item[1] or "").split()).strip()
-                try:
-                    confidence = float(item[2])
-                except (TypeError, ValueError):
-                    confidence = 0.0
-                if not text or confidence < min_confidence:
-                    continue
-                box = item[0]
-                try:
-                    center_x = sum(float(point[0]) for point in box) / len(box)
-                    center_y = sum(float(point[1]) for point in box) / len(box)
-                except Exception:
-                    center_x, center_y = 0.0, 0.0
-                detected.append((center_y, center_x, text))
+            if hasattr(raw, "boxes"):
+                boxes = raw.boxes if raw.boxes is not None else []
+                texts = raw.txts if raw.txts is not None else []
+                scores = raw.scores if raw.scores is not None else []
+                rows = zip(boxes, texts, scores)
+                for box, raw_text, raw_score in rows:
+                    text = " ".join(str(raw_text or "").split()).strip()
+                    try:
+                        confidence = float(raw_score)
+                    except (TypeError, ValueError):
+                        confidence = 0.0
+                    if not text or confidence < min_confidence:
+                        continue
+                    try:
+                        center_x = sum(float(point[0]) for point in box) / len(box)
+                        center_y = sum(float(point[1]) for point in box) / len(box)
+                    except Exception:
+                        center_x, center_y = 0.0, 0.0
+                    detected.append((center_y, center_x, text))
+            else:
+                rows = raw[0] if isinstance(raw, tuple) else raw
+                for item in rows or []:
+                    if not isinstance(item, (list, tuple)) or len(item) < 3:
+                        continue
+                    text = " ".join(str(item[1] or "").split()).strip()
+                    try:
+                        confidence = float(item[2])
+                    except (TypeError, ValueError):
+                        confidence = 0.0
+                    if not text or confidence < min_confidence:
+                        continue
+                    box = item[0]
+                    try:
+                        center_x = sum(float(point[0]) for point in box) / len(box)
+                        center_y = sum(float(point[1]) for point in box) / len(box)
+                    except Exception:
+                        center_x, center_y = 0.0, 0.0
+                    detected.append((center_y, center_x, text))
 
             detected.sort(key=lambda row: (row[0], row[1]))
             frame_text = " ".join(row[2] for row in detected).strip()
