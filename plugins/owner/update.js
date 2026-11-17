@@ -147,6 +147,47 @@ function isDependencyFile(rel) {
   return ['package.json', 'package-lock.json', 'npm-shrinkwrap.json'].includes(rel)
 }
 
+async function ensureLirikPythonDependencies(root, m) {
+  const installerPath = path.join(root, 'scripts', 'install-lirik-deps.js')
+  try {
+    await fs.access(installerPath)
+  } catch {
+    log('Installer dependensi .lirik belum tersedia pada versi repository ini; dilewati.')
+    return false
+  }
+
+  await m.reply('🐍 Memeriksa dan menyiapkan dependensi Python untuk .lirik. Instalasi pertama dapat memerlukan beberapa menit...')
+  await new Promise((resolve, reject) => {
+    let settled = false
+    const child = spawn(process.execPath, [installerPath, '--strict'], {
+      cwd: root,
+      env: process.env,
+      stdio: 'inherit',
+      shell: process.platform === 'win32',
+      windowsHide: true
+    })
+    const finish = (error) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      if (error) reject(error)
+      else resolve()
+    }
+    const timer = setTimeout(() => {
+      child.kill('SIGTERM')
+      setTimeout(() => child.kill('SIGKILL'), 5000).unref?.()
+      finish(new Error('Pemasangan dependensi .lirik melewati batas waktu 35 menit.'))
+    }, 35 * 60 * 1000)
+    timer.unref?.()
+    child.once('error', error => finish(new Error('Installer Python .lirik tidak dapat dijalankan: ' + error.message)))
+    child.once('close', code => code === 0
+      ? finish()
+      : finish(new Error('Installer Python .lirik gagal dengan exit code ' + code +
+        '. Periksa Python 3, modul venv, koneksi internet, dan log server.')))
+  })
+  return true
+}
+
 // Protect runtime files, credentials, and generated state. .env.example is safe
 // to update; real .env files and local variants are not.
 function protectedPath(rel) {
@@ -174,6 +215,7 @@ function protectedPath(rel) {
     p === 'database.json' || p === 'data.json' ||
     p === 'lib/chat.json' ||
     p === '.alvareth-update-state.json' ||
+    p === '.venv-lirik' || p.startsWith('.venv-lirik/') ||
     p.startsWith('.alvareth-bot-data/') ||
     parts.some(part => part === '..')
   )
@@ -723,10 +765,11 @@ async function handleUpdate(m, context = {}) {
       .filter(item => !protectedPath(item.path))
 
     if (!changedPaths.length) {
+      await ensureLirikPythonDependencies(root, m)
       await saveState(headSha)
       await m.reply(
         '✅ Tidak ada file proyek yang perlu diterapkan dari perubahan GitHub sejak versi dasar. ' +
-        'File lain, konfigurasi, sesi, database, dan file lokal tidak disentuh.'
+        'Dependensi Python untuk .lirik sudah diperiksa. File lain, konfigurasi, sesi, database, dan file lokal tidak disentuh.'
       )
       return
     }
@@ -900,6 +943,10 @@ async function handleUpdate(m, context = {}) {
       // failed; a successful retry still requires a worker restart.
       restartNeeded = true
     }
+
+    // Ensure local speech/OCR packages on every manual .update, even when
+    // requirements-lirik.txt and the JavaScript dependency manifest did not change.
+    await ensureLirikPythonDependencies(root, m)
 
     // If local edits conflicted with changed upstream files, keep the old base
     // so the user can resolve the conflict and run .update again. Files that
