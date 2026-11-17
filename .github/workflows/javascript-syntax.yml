@@ -25,6 +25,8 @@ jobs:
             xargs -0 -r -n1 node --check
       - name: Run video analysis and secret storage tests
         run: npm run test:video-analysis
+      - name: Run local lyrics transcription output tests
+        run: npm run test:lirik
       - name: Run Remotion and WebGL render configuration tests
         run: npm run test:render
       - name: Run motion code parser and prompt tests
