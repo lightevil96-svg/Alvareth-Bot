@@ -15,6 +15,26 @@ Pastikan Python 3.10+ dan FFmpeg/FFprobe tersedia, lalu jalankan perintah beriku
 
 Model Whisper akan diunduh otomatis pada penggunaan pertama. Sediakan ruang disk dan koneksi internet saat pertama kali menjalankan fitur.
 
+## YouTube meminta verifikasi akun
+
+Jika YouTube menampilkan pesan "Sign in to confirm you're not a bot", bot akan mencoba provider unduhan cadangan yang sudah tersedia. Jika provider itu juga tidak dapat mengambil video, gunakan cookies YouTube milik sendiri:
+
+1. Di komputer pribadi, buat profil browser khusus yang hanya digunakan untuk YouTube dan login ke akun YouTube milikmu.
+2. Dengan yt-dlp terpasang di komputer tersebut, ekspor cookies ke format Netscape:
+
+       yt-dlp --cookies-from-browser chrome --cookies youtube-cookies.txt --skip-download "https://www.youtube.com/watch?v=VIDEO_ID"
+
+   Ganti chrome sesuai browser yang dipakai. Jangan gunakan profil browser utama yang berisi sesi email, perbankan, atau layanan sensitif.
+3. Unggah file youtube-cookies.txt melalui File Manager TokoPanel ke folder utama bot, di dalam folder .alvareth-bot-data, sehingga path akhirnya:
+   
+       .alvareth-bot-data/youtube-cookies.txt
+
+4. Pastikan file hanya dapat dibaca akun server (izin 600 jika tersedia), lalu restart bot.
+
+Secara default, downloader mencari path tersebut tanpa perlu variabel tambahan. Jika ingin menyimpan file di lokasi lain, isi YTDLP_COOKIES_FILE dengan path absolut, misalnya /home/container/private/youtube-cookies.txt.
+
+Cookies adalah kredensial sesi akun. Jangan kirim file ini ke WhatsApp, jangan commit ke GitHub, jangan tempelkan isinya di chat, dan hapus/rotasi cookies jika pernah terekspos. Cookies dapat kedaluwarsa; ekspor ulang jika YouTube kembali meminta login.
+
 ## Variabel lingkungan opsional
 
 | Variabel | Default | Fungsi |
