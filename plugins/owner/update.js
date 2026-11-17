@@ -4,7 +4,6 @@ import os from 'node:os'
 import crypto from 'node:crypto'
 import { spawn } from 'node:child_process'
 import JSZip from 'jszip'
-import { ensureLirikPythonDependencies } from '../../lib/lirik-python.js'
 
 const REPOSITORY = 'lightevil96-svg/Alvareth-Bot'
 const BRANCH = process.env.AUTO_UPDATE_BRANCH || 'main'
@@ -35,18 +34,6 @@ const isSha = (value) => /^[0-9a-f]{40}$/i.test(String(value || ''))
 
 function log(message) {
   console.log('[Alvareth updater]', message)
-}
-
-async function ensureLirikDependenciesSafely(options) {
-  try {
-    return await ensureLirikPythonDependencies(options)
-  } catch (error) {
-    const detail = String(error?.message || error || 'penyebab tidak diketahui')
-      .replace(/[\r\n]+/g, ' ')
-      .slice(0, 1200)
-    log('Dependensi opsional .lirik belum siap; pembaruan kode tetap dilanjutkan. ' + detail)
-    return { ready: false, installed: false, error: detail }
-  }
 }
 
 function describeFetchCause(error) {
@@ -737,26 +724,10 @@ async function handleUpdate(m, context = {}) {
       .filter(item => !protectedPath(item.path))
 
     if (!changedPaths.length) {
-      const lirikSetup = context.automatic === true
-        ? null
-        : await ensureLirikDependenciesSafely({
-            root,
-            stateDirectory: STATE_DIRECTORY,
-            env: process.env,
-            reply: message => m.reply(message)
-          })
       await saveState(headSha)
       await m.reply(
         '✅ Tidak ada file proyek yang perlu diterapkan dari perubahan GitHub sejak versi dasar. ' +
-        'File lain, konfigurasi, sesi, dan database tidak disentuh.' +
-        (lirikSetup?.ready
-          ? (lirikSetup.installed
-              ? '\n\n🐍 Dependensi .lirik berhasil dipasang dan siap digunakan.'
-              : '\n\n🐍 Dependensi .lirik sudah siap.')
-          : '') +
-        (lirikSetup?.error
-          ? '\n\n⚠️ Pembaruan kode tetap aman, tetapi fitur .lirik belum siap. Updater sudah mencoba memulihkan pip secara otomatis; jalankan .update lagi setelah memperbaiki Python/koneksi server. Detail: ' + lirikSetup.error
-          : '')
+        'File lain, konfigurasi, sesi, dan database tidak disentuh.'
       )
       return
     }
@@ -918,10 +889,7 @@ async function handleUpdate(m, context = {}) {
       await new Promise((resolve, reject) => {
         const child = spawn('npm', ['install', '--omit=dev', '--no-audit', '--no-fund'], {
           cwd: root,
-          env: {
-            ...process.env,
-            ...(context.automatic === true ? { ALVARETH_SKIP_LIRIK_PYTHON_SETUP: 'true' } : {})
-          },
+          env: process.env,
           stdio: 'inherit',
           shell: process.platform === 'win32'
         })
@@ -935,16 +903,6 @@ async function handleUpdate(m, context = {}) {
       restartNeeded = true
     }
 
-    // Python media packages are installed only for an explicit owner .update.
-    // Background checks remain lightweight and never invoke pip.
-    const lirikSetup = context.automatic === true
-      ? null
-      : await ensureLirikDependenciesSafely({
-          root,
-          stateDirectory: STATE_DIRECTORY,
-          env: process.env,
-          reply: message => m.reply(message)
-        })
 
     // If local edits conflicted with changed upstream files, keep the old base
     // so the user can resolve the conflict and run .update again. Files that
@@ -952,13 +910,6 @@ async function handleUpdate(m, context = {}) {
     await saveState(conflicts.length ? baseSha : headSha)
 
     const sections = []
-    if (lirikSetup?.ready) {
-      sections.push(lirikSetup.installed
-        ? 'Dependensi Python .lirik berhasil dipasang dan siap digunakan.'
-        : 'Dependensi Python .lirik sudah siap.')
-    } else if (lirikSetup?.error) {
-      sections.push('⚠️ Pembaruan kode tetap selesai, tetapi fitur .lirik belum siap. Updater sudah mencoba memulihkan pip otomatis. Jalankan .update lagi setelah memperbaiki Python/koneksi server. Detail: ' + lirikSetup.error)
-    }
     if (forceMode) {
       sections.push(
         'Mode paksa aktif: hanya file yang berubah pada commit GitHub diproses; file terlindungi dan file di luar daftar perubahan tidak disentuh.'
