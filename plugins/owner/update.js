@@ -42,7 +42,7 @@ async function ensureLirikDependenciesSafely(options) {
     return await ensureLirikPythonDependencies(options)
   } catch (error) {
     const detail = String(error?.message || error || 'penyebab tidak diketahui')
-      .replace(/[\\r\\n]+/g, ' ')
+      .replace(/[\r\n]+/g, ' ')
       .slice(0, 1200)
     log('Dependensi opsional .lirik belum siap; pembaruan kode tetap dilanjutkan. ' + detail)
     return { ready: false, installed: false, error: detail }
