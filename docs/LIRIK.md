@@ -17,6 +17,7 @@ Perintah ini membuat transkrip lirik dari audio/video menggunakan model lokal:
 - Bot otomatis memilih Python dari .venv-lirik; ALVARETH_LIRIK_PYTHON tetap dapat digunakan untuk override manual.
 
 Server harus menyediakan Python 3.10+ dengan modul venv serta FFmpeg/FFprobe. Pada Debian/Ubuntu, paket sistem yang diperlukan adalah python3-venv, python3-pip, dan ffmpeg. Jika venv tidak tersedia pada hosting, minta penyedia hosting mengaktifkannya.
+Variabel opsional untuk instalasi: ALVARETH_LIRIK_BOOTSTRAP_PYTHON memilih executable Python pembuat venv, sedangkan ALVARETH_LIRIK_VENV mengubah lokasi virtual environment. Default venv adalah .venv-lirik di folder proyek.
 
 Untuk instalasi manual atau pemulihan, jalankan dari folder utama bot:
 
@@ -48,7 +49,7 @@ Cookies adalah kredensial sesi akun. Jangan kirim file ini ke WhatsApp, jangan c
 
 | Variabel | Default | Fungsi |
 |---|---:|---|
-| ALVARETH_LIRIK_PYTHON | python3 | Perintah Python |
+| ALVARETH_LIRIK_PYTHON | otomatis | Python dari .venv-lirik jika tersedia; selain itu python3 |
 | ALVARETH_LIRIK_WHISPER_MODEL | small | Model faster-whisper, misalnya small atau large-v3-turbo |
 | ALVARETH_LIRIK_WHISPER_DEVICE | auto | Perangkat inferensi |
 | ALVARETH_LIRIK_COMPUTE_TYPE | int8 | Tipe komputasi |
