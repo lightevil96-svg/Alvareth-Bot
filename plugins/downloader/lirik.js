@@ -7,7 +7,7 @@ import { promisify } from 'node:util'
 import { fileTypeFromBuffer } from 'file-type'
 import { getQuotedMediaInfo, downloadQuotedMedia } from '../../lib/simple.js'
 import { sendLocalFile } from '../../lib/whatsapp-file-sender.js'
-import { downloadYoutubeVideoYtDlp, cleanupDownload } from '../../lib/scrape/youtube.js'
+import { downloadYoutubeVideoBest, cleanupDownload } from '../../lib/scrape/youtube.js'
 import { buildLirikSrt, buildLirikText, normalizeLirikResult } from '../../lib/lirik-output.js'
 
 const execFileAsync = promisify(execFile)
@@ -111,7 +111,7 @@ async function prepareInput(m, conn, jobDirectory, url) {
   if (url) {
     const downloadRoot = path.join(jobDirectory, 'download')
     await fs.mkdir(downloadRoot, { recursive: true, mode: 0o700 })
-    const downloaded = await downloadYoutubeVideoYtDlp(url, 'best', (percent, detail) => {
+    const downloaded = await downloadYoutubeVideoBest(url, (percent, detail) => {
       if (detail) console.log('[LIRIK] [download] ' + String(detail).slice(0, 240))
     }, {
       outputRoot: downloadRoot,
@@ -308,8 +308,25 @@ async function runLirikJob(m, conn, job, url) {
   } catch (error) {
     job.status = 'Gagal: ' + safeError(error)
     console.error('[LIRIK] Job gagal:', error?.stack || error)
-    await safeReply(m, conn, '❌ *Proses .lirik gagal.*\n' + safeError(error) +
-      '\n\nPastikan Python, FFmpeg, dan dependensi pada docs/LIRIK.md sudah terpasang.')
+    const rawError = String(error?.message || error || '')
+    const authRequired = error?.code === 'YOUTUBE_AUTH_REQUIRED' ||
+      /sign in to confirm you.{0,3}re not a bot|confirm you.{0,3}re not a bot/i.test(rawError)
+    const failureMessage = authRequired
+      ? [
+          '❌ *YouTube meminta verifikasi akun.*',
+          'yt-dlp dan provider cadangan tidak berhasil mengakses video ini.',
+          '',
+          'Pasang cookies YouTube milik sendiri di server TokoPanel:',
+          '1. Ekspor cookies dari browser desktop yang sedang login ke YouTube dalam format Netscape cookies.txt.',
+          '2. Unggah sebagai .alvareth-bot-data/youtube-cookies.txt di folder utama bot.',
+          '3. Pastikan file hanya dapat dibaca akun server (izin 600), lalu restart bot.',
+          '',
+          'Alternatif: set YTDLP_COOKIES_FILE ke path absolut file cookies.',
+          'Jangan kirim file cookies ke WhatsApp, GitHub, atau siapa pun.'
+        ].join('\n')
+      : '❌ *Proses .lirik gagal.*\n' + safeError(error) +
+        '\n\nPastikan Python, FFmpeg, dan dependensi pada docs/LIRIK.md sudah terpasang.'
+    await safeReply(m, conn, failureMessage)
     try { await m.react('❌') } catch {}
   } finally {
     if (source?.cleanupDir) await cleanupDownload(source.cleanupDir).catch(() => {})
