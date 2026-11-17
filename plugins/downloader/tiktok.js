@@ -12,6 +12,7 @@ import { Transform } from 'node:stream'
 import { fileTypeFromFile } from 'file-type'
 import {
   getTikTokOutputQualities,
+  compareTikTokResolution,
   getTikTokScaleFilter,
   parseTikTokSlideDurations,
   buildTikTokCaptionCopy,
@@ -1170,8 +1171,9 @@ async function getSaveApiTikTokCandidates(sourceUrl) {
 }
 
 async function prepareBestTikTokVideo(res, sourceUrl = '', targetResolution = null) {
-  // Watermark fallback is intentionally deferred: it may be a lower-resolution
-  // stream and must not prevent the direct TikTok/yt-dlp HD extractors from running.
+  // A provider label such as "HD" is not proof that its file is the best
+  // rendition. Download and inspect every available non-watermarked source,
+  // then keep the highest verified output instead of returning the first one.
   const allCandidates = Array.isArray(res.videoCandidates) && res.videoCandidates.length
     ? res.videoCandidates
     : (res.video ? [{ label: 'video tersedia', url: res.video }] : [])
@@ -1185,8 +1187,29 @@ async function prepareBestTikTokVideo(res, sourceUrl = '', targetResolution = nu
 
   const tempDir = await createTikTokTempDir('video')
   const errors = []
+  let bestPrepared = null
+
+  const considerPrepared = (prepared, label) => {
+    if (!bestPrepared || compareTikTokResolution(prepared, bestPrepared) > 0) {
+      bestPrepared = prepared
+      console.log(
+        '[TikTok] Sumber kualitas terbaik sementara:',
+        label,
+        prepared.width + 'x' + prepared.height
+      )
+      return true
+    }
+    console.log(
+      '[TikTok] Varian ' + label + ' (' + prepared.width + 'x' + prepared.height +
+      ') tidak lebih tinggi daripada sumber terbaik ' +
+      bestPrepared.width + 'x' + bestPrepared.height + '.'
+    )
+    return false
+  }
 
   try {
+    // Inspect every TikWM rendition. "HD" and "Standard" are provider labels;
+    // the actual ffprobe dimensions decide which one wins.
     for (let i = 0; i < candidates.length; i++) {
       const candidate = candidates[i]
       if (!candidate?.url || !/^https?:\/\//i.test(candidate.url)) continue
@@ -1198,35 +1221,37 @@ async function prepareBestTikTokVideo(res, sourceUrl = '', targetResolution = nu
         if (freeBytes < 32 * 1024 * 1024) {
           throw new Error('Ruang disk sementara tersisa kurang dari 32 MB. Kosongkan disk TokoPanel atau atur ALVARETH_TIKTOK_TMPDIR ke lokasi yang memiliki ruang lebih besar.')
         }
-        console.log('\n[TikTok] Memproses varian ' + (candidate.label || ('#' + (i + 1))) + '...')
+        console.log('\n[TikTok] Memeriksa varian ' + (candidate.label || ('#' + (i + 1))) + '...')
         await downloadVideoFile(candidate.url, sourcePath)
         const sourceInfo = await inspectVideoFile(sourcePath)
         console.log('[TikTok] Sumber terverifikasi:', sourceInfo.codec, sourceInfo.width + 'x' + sourceInfo.height, formatDuration(sourceInfo.duration))
         await verifyFirstVideoFrame(sourcePath)
         const normalized = await normalizeVideoToMp4(sourcePath, outputPath, sourceInfo, targetResolution)
-        console.log('[TikTok] Berhasil menyiapkan video dari varian:', candidate.label || ('#' + (i + 1)))
-        return { ...normalized, quality: candidate.label || 'tertinggi yang tersedia', sourceInfo }
+        considerPrepared({
+          ...normalized,
+          quality: candidate.label || 'provider',
+          sourceInfo
+        }, candidate.label || ('provider #' + (i + 1)))
       } catch (error) {
         const detail = (error?.message || String(error)).slice(0, 500)
         errors.push((candidate.label || ('varian #' + (i + 1))) + ': ' + formatTikTokError(error))
-        // Do not retain partial/corrupt files between quality attempts; they can
-        // fill the container disk and make the final watermark fallback fail.
-        await Promise.all([
-          fsp.rm(sourcePath, { force: true }).catch(() => {}),
-          fsp.rm(outputPath, { force: true }).catch(() => {})
-        ])
         console.warn('[TikTok] Varian gagal; file parsial dibuang:', errors[errors.length - 1], '| detail:', detail)
         if (isDiskFullError(error)) {
           throw new Error('Penyimpanan server penuh saat mengunduh/merender TikTok (ENOSPC). Percobaan lain dihentikan agar disk tidak makin penuh. Bersihkan file sementara lama atau atur ALVARETH_TIKTOK_TMPDIR ke direktori dengan ruang kosong.')
         }
+      } finally {
+        await Promise.all([
+          fsp.rm(sourcePath, { force: true }).catch(() => {}),
+          fsp.rm(outputPath, { force: true }).catch(() => {})
+        ])
       }
     }
 
-    // Optional independent resolver. It is only called after TikWM candidates fail,
-    // so normal downloads do not spend external API credits unnecessarily.
+    // If configured, compare SaveAPI renditions even when TikWM succeeded.
+    // A successful low-resolution provider response must not hide a better file.
     if (process.env.SAVEAPI_KEY && sourceUrl && /^https?:\/\//i.test(sourceUrl)) {
       try {
-        console.log('[TikTok] Provider utama gagal; mencoba resolver SaveAPI...')
+        console.log('[TikTok] Membandingkan resolusi dari resolver SaveAPI...')
         const saveCandidates = await getSaveApiTikTokCandidates(sourceUrl)
         for (let i = 0; i < saveCandidates.length; i++) {
           const candidate = saveCandidates[i]
@@ -1237,30 +1262,32 @@ async function prepareBestTikTokVideo(res, sourceUrl = '', targetResolution = nu
             const sourceInfo = await inspectVideoFile(sourcePath)
             await verifyFirstVideoFrame(sourcePath)
             const normalized = await normalizeVideoToMp4(sourcePath, outputPath, sourceInfo, targetResolution)
-            console.log('[TikTok] SaveAPI berhasil; resolusi terverifikasi:', sourceInfo.width + 'x' + sourceInfo.height)
-            return { ...normalized, quality: 'SaveAPI ' + sourceInfo.width + 'x' + sourceInfo.height, sourceInfo }
+            considerPrepared({
+              ...normalized,
+              quality: 'SaveAPI ' + sourceInfo.width + 'x' + sourceInfo.height,
+              sourceInfo
+            }, 'SaveAPI ' + sourceInfo.width + 'x' + sourceInfo.height)
           } catch (error) {
             errors.push(candidate.label + ': ' + formatTikTokError(error))
+            if (isDiskFullError(error)) throw error
+          } finally {
             await Promise.all([
               fsp.rm(sourcePath, { force: true }).catch(() => {}),
               fsp.rm(outputPath, { force: true }).catch(() => {})
             ])
-            if (isDiskFullError(error)) throw error
           }
         }
         if (!saveCandidates.length) errors.push('SaveAPI: tidak ada varian video langsung pada respons.')
       } catch (error) {
         errors.push('SaveAPI: ' + formatTikTokError(error))
-        console.warn('[TikTok] SaveAPI fallback gagal:', error?.stack || error)
+        console.warn('[TikTok] SaveAPI comparison failed:', error?.stack || error)
         if (isDiskFullError(error)) {
-          throw new Error('Disk server penuh saat fallback SaveAPI TikTok. Bersihkan penyimpanan atau atur ALVARETH_TIKTOK_TMPDIR ke lokasi lain.')
+          throw new Error('Disk server penuh saat pemeriksaan SaveAPI TikTok. Bersihkan penyimpanan atau atur ALVARETH_TIKTOK_TMPDIR ke lokasi lain.')
         }
       }
     }
 
-    // Before treating provider URLs as a video, check TikTok's page state for
-    // a photo post. A slideshow must use its individual image URLs, not FFmpeg
-    // or yt-dlp. This runs only after all provider video candidates failed.
+    // Confirm the media type before asking other extractors for another rendition.
     const photoPage = await getTikTokPhotoPost(sourceUrl).catch(error => {
       console.warn('[TikTok] Pengecekan metadata foto langsung gagal:', error?.response?.status || error?.message || error)
       return null
@@ -1273,32 +1300,36 @@ async function prepareBestTikTokVideo(res, sourceUrl = '', targetResolution = nu
       throw photoError
     }
 
-    // TikWM URLs can occasionally return truncated/corrupt H.264 data.
-    // First try the official TikTok embed page to obtain a fresh signed CDN URL.
+    // Compare the official TikTok embed rendition even when a provider file
+    // already works; it can expose a higher-quality signed CDN stream.
     if (sourceUrl && /^https?:\/\//i.test(sourceUrl)) {
       try {
-        console.log('[TikTok] Varian TikWM gagal; mencoba URL CDN dari embed TikTok resmi...')
+        console.log('[TikTok] Membandingkan kualitas dari TikTok Embed resmi...')
         const normalized = await prepareFromTikTokEmbed(sourceUrl, tempDir, res?.videoId, targetResolution)
-        console.log('[TikTok] Berhasil mendapatkan video melalui embed TikTok.')
-        return { ...normalized, quality: 'TikTok embed fallback' }
+        considerPrepared({
+          ...normalized,
+          quality: 'TikTok embed fallback'
+        }, 'TikTok Embed')
       } catch (error) {
         errors.push('embed TikTok: ' + formatTikTokError(error))
-        console.warn('[TikTok] Embed fallback gagal:', error?.stack || error)
+        console.warn('[TikTok] Embed comparison failed:', error?.stack || error)
+        if (isDiskFullError(error)) {
+          throw new Error('Disk server penuh saat pemeriksaan embed TikTok. Bersihkan penyimpanan atau atur ALVARETH_TIKTOK_TMPDIR ke lokasi lain.')
+        }
+      } finally {
         await Promise.all([
           fsp.rm(path.join(tempDir, 'embed-source.bin'), { force: true }).catch(() => {}),
           fsp.rm(path.join(tempDir, 'embed-fallback.mp4'), { force: true }).catch(() => {})
         ])
-        if (isDiskFullError(error)) {
-          throw new Error('Disk server penuh saat fallback embed TikTok. Bersihkan penyimpanan atau atur ALVARETH_TIKTOK_TMPDIR ke lokasi lain.')
-        }
       }
+
       let fallback = null
       try {
-        console.log('[TikTok] Embed fallback gagal; mencoba fallback yt-dlp resmi...')
-        fallback = await downloadYoutubeVideoYtDlp(sourceUrl, 1080, (percent, detail) => {
+        console.log('[TikTok] Memeriksa resolusi tertinggi melalui yt-dlp (tanpa batas resolusi)...')
+        fallback = await downloadYoutubeVideoYtDlp(sourceUrl, targetResolution || 'best', (percent, detail) => {
           if (Number.isFinite(Number(percent))) {
             const value = Math.max(0, Math.min(100, Number(percent)))
-            terminalProgress('Fallback yt-dlp', value, 0, NaN, String(detail || '').slice(0, 140))
+            terminalProgress('Pemeriksaan yt-dlp', value, 0, NaN, String(detail || '').slice(0, 140))
           } else if (detail) console.log('[TikTok] yt-dlp:', String(detail).slice(0, 200))
         }, { outputRoot: tempDir })
         const fileInfo = await fsp.stat(fallback.path)
@@ -1309,40 +1340,60 @@ async function prepareBestTikTokVideo(res, sourceUrl = '', targetResolution = nu
         await verifyFirstVideoFrame(fallback.path)
         const normalizedPath = path.join(tempDir, 'yt-dlp-fallback.mp4')
         const normalized = await normalizeVideoToMp4(fallback.path, normalizedPath, sourceInfo, targetResolution)
-        console.log('[TikTok] Berhasil mengunduh TikTok memakai yt-dlp; resolusi terverifikasi:', sourceInfo.width + 'x' + sourceInfo.height)
-        return { ...normalized, quality: 'yt-dlp ' + sourceInfo.width + 'x' + sourceInfo.height, sourceInfo }
+        considerPrepared({
+          ...normalized,
+          quality: 'yt-dlp ' + sourceInfo.width + 'x' + sourceInfo.height,
+          sourceInfo
+        }, 'yt-dlp ' + sourceInfo.width + 'x' + sourceInfo.height)
       } catch (error) {
-        errors.push('yt-dlp fallback: ' + formatTikTokError(error))
-        console.warn('[TikTok] Fallback yt-dlp gagal:', error?.stack || error)
+        errors.push('yt-dlp: ' + formatTikTokError(error))
+        console.warn('[TikTok] Pemeriksaan yt-dlp gagal:', error?.stack || error)
         if (isDiskFullError(error)) {
-          throw new Error('Disk server penuh saat fallback yt-dlp. Bersihkan penyimpanan TokoPanel atau atur ALVARETH_TIKTOK_TMPDIR ke lokasi lain yang memiliki ruang cukup.')
+          throw new Error('Disk server penuh saat pemeriksaan yt-dlp TikTok. Bersihkan penyimpanan atau atur ALVARETH_TIKTOK_TMPDIR ke lokasi lain yang memiliki ruang cukup.')
         }
       } finally {
         if (fallback?.outputDir) await cleanupYtDlpDownload(fallback.outputDir).catch(() => {})
       }
     }
 
-    // Last resort only: accept the watermark stream only when it is genuinely HD.
-    if (watermarkCandidate?.url && /^https?:\/\//i.test(watermarkCandidate.url)) {
+    // Only use a watermarked rendition if every clean source failed.
+    if (!bestPrepared && watermarkCandidate?.url && /^https?:\/\//i.test(watermarkCandidate.url)) {
       const sourcePath = path.join(tempDir, 'watermark-source.bin')
       const outputPath = path.join(tempDir, 'watermark-fallback.mp4')
       try {
-        console.log('[TikTok] Semua sumber HD gagal; memeriksa fallback watermark sebagai pilihan terakhir...')
+        console.log('[TikTok] Semua sumber tanpa watermark gagal; memeriksa fallback watermark...')
         await downloadVideoFile(watermarkCandidate.url, sourcePath)
         const sourceInfo = await inspectVideoFile(sourcePath)
         await verifyFirstVideoFrame(sourcePath)
         const normalized = await normalizeVideoToMp4(sourcePath, outputPath, sourceInfo, targetResolution)
-        console.log('[TikTok] Fallback watermark HD berhasil diverifikasi:', sourceInfo.width + 'x' + sourceInfo.height)
-        return { ...normalized, quality: 'HD watermark fallback', sourceInfo }
+        bestPrepared = {
+          ...normalized,
+          quality: 'HD watermark fallback',
+          sourceInfo
+        }
+        console.log('[TikTok] Fallback watermark berhasil diverifikasi:', sourceInfo.width + 'x' + sourceInfo.height)
       } catch (error) {
         errors.push('watermark fallback: ' + formatTikTokError(error))
         console.warn('[TikTok] Watermark fallback dilewati:', error?.message || error)
         if (isDiskFullError(error)) {
           throw new Error('Disk server penuh saat fallback watermark TikTok. Bersihkan penyimpanan atau atur ALVARETH_TIKTOK_TMPDIR ke lokasi lain.')
         }
+      } finally {
+        await Promise.all([
+          fsp.rm(sourcePath, { force: true }).catch(() => {}),
+          fsp.rm(outputPath, { force: true }).catch(() => {})
+        ])
       }
     }
 
+    if (bestPrepared) {
+      console.log(
+        '[TikTok] Mengirim resolusi tertinggi yang berhasil diverifikasi:',
+        bestPrepared.width + 'x' + bestPrepared.height,
+        '(' + bestPrepared.quality + ')'
+      )
+      return bestPrepared
+    }
     throw new Error('Semua sumber TikTok gagal. Detail per tahap:\n- ' + errors.join('\n- '))
   } finally {
     await fsp.rm(tempDir, { recursive: true, force: true }).catch(() => {})

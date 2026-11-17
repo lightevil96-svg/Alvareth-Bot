@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import {
   getTikTokOutputQualities,
+  compareTikTokResolution,
   getTikTokScaleFilter,
   parseTikTokSlideDurations
 } from '../lib/tiktok-workflow.js'
@@ -15,6 +16,21 @@ test('TikTok quality options are limited to source resolution and lower standard
   assert.deepEqual(getTikTokOutputQualities(576, 1024), [576, 480, 360])
   assert.deepEqual(getTikTokOutputQualities(1920, 1080), [1080, 720, 480, 360])
   assert.deepEqual(getTikTokOutputQualities(0, 1080), [])
+})
+
+test('TikTok resolution comparison selects the highest actual dimensions without a 567p ceiling', () => {
+  assert.ok(compareTikTokResolution(
+    { width: 1080, height: 1920 },
+    { width: 1008, height: 567 }
+  ) > 0)
+  assert.ok(compareTikTokResolution(
+    { width: 2160, height: 3840 },
+    { width: 1080, height: 1920 }
+  ) > 0)
+  assert.equal(compareTikTokResolution(
+    { width: 1920, height: 1080 },
+    { width: 1080, height: 1920 }
+  ), 0)
 })
 
 test('TikTok scale filter preserves portrait and landscape orientation without upscaling', () => {
