@@ -37,6 +37,18 @@ function log(message) {
   console.log('[Alvareth updater]', message)
 }
 
+async function ensureLirikDependenciesSafely(options) {
+  try {
+    return await ensureLirikPythonDependencies(options)
+  } catch (error) {
+    const detail = String(error?.message || error || 'penyebab tidak diketahui')
+      .replace(/[\r\n]+/g, ' ')
+      .slice(0, 1200)
+    log('Dependensi opsional .lirik belum siap; pembaruan kode tetap dilanjutkan. ' + detail)
+    return { ready: false, installed: false, error: detail }
+  }
+}
+
 function describeFetchCause(error) {
   const parts = []
   let current = error
@@ -727,7 +739,7 @@ async function handleUpdate(m, context = {}) {
     if (!changedPaths.length) {
       const lirikSetup = context.automatic === true
         ? null
-        : await ensureLirikPythonDependencies({
+        : await ensureLirikDependenciesSafely({
             root,
             stateDirectory: STATE_DIRECTORY,
             env: process.env,
@@ -741,6 +753,9 @@ async function handleUpdate(m, context = {}) {
           ? (lirikSetup.installed
               ? '\n\n🐍 Dependensi .lirik berhasil dipasang dan siap digunakan.'
               : '\n\n🐍 Dependensi .lirik sudah siap.')
+          : '') +
+        (lirikSetup?.error
+          ? '\n\n⚠️ Pembaruan kode tetap aman, tetapi fitur .lirik belum siap. Updater sudah mencoba memulihkan pip secara otomatis; jalankan .update lagi setelah memperbaiki Python/koneksi server. Detail: ' + lirikSetup.error
           : '')
       )
       return
@@ -924,7 +939,7 @@ async function handleUpdate(m, context = {}) {
     // Background checks remain lightweight and never invoke pip.
     const lirikSetup = context.automatic === true
       ? null
-      : await ensureLirikPythonDependencies({
+      : await ensureLirikDependenciesSafely({
           root,
           stateDirectory: STATE_DIRECTORY,
           env: process.env,
@@ -941,6 +956,8 @@ async function handleUpdate(m, context = {}) {
       sections.push(lirikSetup.installed
         ? 'Dependensi Python .lirik berhasil dipasang dan siap digunakan.'
         : 'Dependensi Python .lirik sudah siap.')
+    } else if (lirikSetup?.error) {
+      sections.push('⚠️ Pembaruan kode tetap selesai, tetapi fitur .lirik belum siap. Updater sudah mencoba memulihkan pip otomatis. Jalankan .update lagi setelah memperbaiki Python/koneksi server. Detail: ' + lirikSetup.error)
     }
     if (forceMode) {
       sections.push(

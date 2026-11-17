@@ -24,6 +24,7 @@ test('manual setup creates a private venv, installs requirements, and skips unch
   const calls = []
   const replies = []
   let importsReady = false
+  let pipReady = false
 
   const run = async (command, args, options) => {
     calls.push({ command, args, options })
@@ -36,7 +37,15 @@ test('manual setup creates a private venv, installs requirements, and skips unch
       if (!importsReady) throw new Error('Python modules are missing')
       return
     }
-    if (args[0] === '-m' && args[1] === 'pip') {
+    if (args[0] === '-m' && args[1] === 'pip' && args[2] === '--version') {
+      if (!pipReady) throw new Error('No module named pip')
+      return
+    }
+    if (args[0] === '-m' && args[1] === 'ensurepip') {
+      pipReady = true
+      return
+    }
+    if (args[0] === '-m' && args[1] === 'pip' && args[2] === 'install') {
       importsReady = true
       return
     }
@@ -51,17 +60,18 @@ test('manual setup creates a private venv, installs requirements, and skips unch
   assert.equal(first.installed, true)
   assert.equal(first.pythonPath, pythonPath)
   assert.equal(calls.filter(call => call.args[0] === '-m' && call.args[1] === 'venv').length, 1)
-  assert.equal(calls.filter(call => call.args[0] === '-m' && call.args[1] === 'pip').length, 1)
+  assert.equal(calls.filter(call => call.args[0] === '-m' && call.args[1] === 'ensurepip').length, 1)
+  assert.equal(calls.filter(call => call.args[0] === '-m' && call.args[1] === 'pip' && call.args[2] === 'install').length, 1)
   assert.equal(replies.length, 2)
 
   const second = await ensureLirikPythonDependencies({ root, stateDirectory, env: {}, run })
   assert.equal(second.installed, false)
-  assert.equal(calls.filter(call => call.args[0] === '-m' && call.args[1] === 'pip').length, 1)
+  assert.equal(calls.filter(call => call.args[0] === '-m' && call.args[1] === 'pip' && call.args[2] === 'install').length, 1)
 
   await fs.appendFile(path.join(root, 'requirements-lirik.txt'), '# dependency revision\n')
   const third = await ensureLirikPythonDependencies({ root, stateDirectory, env: {}, run })
   assert.equal(third.installed, true)
-  assert.equal(calls.filter(call => call.args[0] === '-m' && call.args[1] === 'pip').length, 2)
+  assert.equal(calls.filter(call => call.args[0] === '-m' && call.args[1] === 'pip' && call.args[2] === 'install').length, 2)
 })
 
 test('configured ALVARETH_LIRIK_PYTHON is respected without creating a second venv', async t => {
@@ -69,13 +79,22 @@ test('configured ALVARETH_LIRIK_PYTHON is respected without creating a second ve
   const stateDirectory = path.join(root, 'private-state')
   const calls = []
   let importsReady = false
+  let pipReady = false
   const run = async (command, args) => {
     calls.push({ command, args })
     if (args[0] === '-c') {
       if (!importsReady) throw new Error('Python modules are missing')
       return
     }
-    if (args[0] === '-m' && args[1] === 'pip') {
+    if (args[0] === '-m' && args[1] === 'pip' && args[2] === '--version') {
+      if (!pipReady) throw new Error('No module named pip')
+      return
+    }
+    if (args[0] === '-m' && args[1] === 'ensurepip') {
+      pipReady = true
+      return
+    }
+    if (args[0] === '-m' && args[1] === 'pip' && args[2] === 'install') {
       importsReady = true
       return
     }
@@ -102,4 +121,58 @@ test('transcription resolves the managed venv by default and honors an explicit 
     await resolveLirikPythonExecutable({ root, env: { ALVARETH_LIRIK_PYTHON: '/custom/python' } }),
     '/custom/python'
   )
+})
+
+
+test('manual setup bootstraps pip from the official PyPA host when ensurepip is unavailable', async t => {
+  const root = await createProject(t)
+  const stateDirectory = path.join(root, 'private-state')
+  const pythonPath = getLirikVenvPythonPath(root, 'linux')
+  const calls = []
+  let pipReady = false
+  let importsReady = false
+  const run = async (command, args) => {
+    calls.push({ command, args })
+    if (args[0] === '-m' && args[1] === 'venv') {
+      await fs.mkdir(path.dirname(pythonPath), { recursive: true })
+      await fs.writeFile(pythonPath, '')
+      return
+    }
+    if (args[0] === '-c') {
+      if (!importsReady) throw new Error('Python modules are missing')
+      return
+    }
+    if (args[0] === '-m' && args[1] === 'pip' && args[2] === '--version') {
+      if (!pipReady) throw new Error('No module named pip')
+      return
+    }
+    if (args[0] === '-m' && args[1] === 'ensurepip') throw new Error('No module named ensurepip')
+    if (args[0].endsWith('get-pip.py')) {
+      pipReady = true
+      return
+    }
+    if (args[0] === '-m' && args[1] === 'pip' && args[2] === 'install') {
+      importsReady = true
+      return
+    }
+    throw new Error('Unexpected command: ' + command + ' ' + args.join(' '))
+  }
+  let requestedUrl = ''
+  const fetchImpl = async url => {
+    requestedUrl = String(url)
+    return {
+      ok: true,
+      status: 200,
+      url: 'https://bootstrap.pypa.io/get-pip.py',
+      headers: { get: () => '32' },
+      arrayBuffer: async () => Buffer.from('# official get-pip bootstrap test')
+    }
+  }
+
+  const result = await ensureLirikPythonDependencies({ root, stateDirectory, env: {}, run, fetchImpl })
+  assert.equal(result.ready, true)
+  assert.equal(result.installed, true)
+  assert.equal(requestedUrl, 'https://bootstrap.pypa.io/get-pip.py')
+  assert.ok(calls.some(call => call.args[0].endsWith('get-pip.py')))
+  assert.ok(calls.some(call => call.args[0] === '-m' && call.args[1] === 'pip' && call.args[2] === 'install'))
 })
