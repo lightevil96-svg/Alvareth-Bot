@@ -1,0 +1,15 @@
+node_modules/
+.venv*/
+__pycache__/
+*.py[cod]
+.git/
+.env
+.env.*
+!.env.example
+.alvareth-bot-data/
+sessions/
+auth_info/
+auth_info_baileys/
+.baileys_auth_info/
+tmp/
+logs/

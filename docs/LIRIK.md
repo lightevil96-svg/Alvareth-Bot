@@ -9,11 +9,21 @@ Perintah ini membuat transkrip lirik dari audio/video menggunakan model lokal:
 
 ## Persiapan server
 
-Pastikan Python 3.10+ dan FFmpeg/FFprobe tersedia, lalu jalankan perintah berikut di folder utama bot:
+**Instalasi otomatis melalui perintah .update:**
 
-    python3 -m pip install -r requirements-lirik.txt
+- Saat .update menerapkan versi baru, updater membuat virtual environment .venv-lirik dan memasang faster-whisper, RapidOCR, serta OpenCV.
+- Jika tidak ada pembaruan kode, .update tetap memeriksa dan memperbaiki instalasi Python.
+- Saat npm install dijalankan, postinstall juga mencoba menyiapkan dependensi .lirik.
+- Bot otomatis memilih Python dari .venv-lirik; ALVARETH_LIRIK_PYTHON tetap dapat digunakan untuk override manual.
 
-Model Whisper akan diunduh otomatis pada penggunaan pertama. Sediakan ruang disk dan koneksi internet saat pertama kali menjalankan fitur.
+Server harus menyediakan Python 3.10+ dengan modul venv serta FFmpeg/FFprobe. Pada Debian/Ubuntu, paket sistem yang diperlukan adalah python3-venv, python3-pip, dan ffmpeg. Jika venv tidak tersedia pada hosting, minta penyedia hosting mengaktifkannya.
+Variabel opsional untuk instalasi: ALVARETH_LIRIK_BOOTSTRAP_PYTHON memilih executable Python pembuat venv, sedangkan ALVARETH_LIRIK_VENV mengubah lokasi virtual environment. Default venv adalah .venv-lirik di folder proyek.
+
+Untuk instalasi manual atau pemulihan, jalankan dari folder utama bot:
+
+    node scripts/install-lirik-deps.js --strict
+
+Model Whisper akan diunduh otomatis pada penggunaan pertama saat transkripsi dijalankan. Instalasi paket Python pertama kali dapat memerlukan beberapa menit dan ruang disk tambahan.
 
 ## YouTube meminta verifikasi akun
 
@@ -39,7 +49,7 @@ Cookies adalah kredensial sesi akun. Jangan kirim file ini ke WhatsApp, jangan c
 
 | Variabel | Default | Fungsi |
 |---|---:|---|
-| ALVARETH_LIRIK_PYTHON | python3 | Perintah Python |
+| ALVARETH_LIRIK_PYTHON | otomatis | Python dari .venv-lirik jika tersedia; selain itu python3 |
 | ALVARETH_LIRIK_WHISPER_MODEL | small | Model faster-whisper, misalnya small atau large-v3-turbo |
 | ALVARETH_LIRIK_WHISPER_DEVICE | auto | Perangkat inferensi |
 | ALVARETH_LIRIK_COMPUTE_TYPE | int8 | Tipe komputasi |
