@@ -7,6 +7,7 @@ import {
   parseTikTokSlideDurations
 } from '../lib/tiktok-workflow.js'
 import { extractTikTokLivePhotoVideoUrl } from '../lib/tiktok-live-photo.js'
+import { buildTikTokProviderFallback } from '../lib/scrape/tikwm.js'
 
 test('TikTok quality options are limited to source resolution and lower standard tiers', () => {
   assert.deepEqual(getTikTokOutputQualities(1080, 1920), [1080, 720, 480, 360])
@@ -160,4 +161,38 @@ test('TikTok downloads send caption-free MP4s and a single menu for the initial 
   assert.doesNotMatch(download, /sendTikTokCaptionCopyButton/)
   assert.match(sendMenu, /sendTikTokVideoQualityMenu[\s\S]*caption: res\.caption/)
   assert.match(plugin, /const buttons = buildTikTokVideoMenuButtons\(menuOptions\)[\s\S]*nativeFlow: buttons/)
+})
+
+
+test('TikTok provider fallback preserves canonical video links when TikWM has no media data', () => {
+  const url = 'https://www.tiktok.com/@creator/video/1234567890123456789?lang=en'
+  const result = buildTikTokProviderFallback(url)
+
+  assert.equal(result.type, 'video')
+  assert.equal(result.isPhotoPost, false)
+  assert.equal(result.videoId, '1234567890123456789')
+  assert.equal(result.sourceUrl, url)
+  assert.deepEqual(result.videoCandidates, [])
+  assert.equal(result.providerFallback, true)
+})
+
+test('TikTok provider fallback marks canonical photo links as photos, never video candidates', () => {
+  const result = buildTikTokProviderFallback('https://www.tiktok.com/@creator/photo/1234567890123456789')
+
+  assert.equal(result.type, 'image')
+  assert.equal(result.isPhotoPost, true)
+  assert.equal(result.video, null)
+  assert.deepEqual(result.videoCandidates, [])
+  assert.deepEqual(result.images, [])
+})
+
+test('TikTok provider fallback rejects unresolved short links and non-TikTok URLs', () => {
+  assert.equal(buildTikTokProviderFallback('https://vt.tiktok.com/ZSptkEoRP/'), null)
+  assert.equal(buildTikTokProviderFallback('https://example.com/video/1234567890123456789'), null)
+})
+
+test('TikTok plugin dispatches metadata-only provider fallback and protects photo posts', async () => {
+  const plugin = await readFile(new URL('../plugins/downloader/tiktok.js', import.meta.url), 'utf8')
+  assert.match(plugin, /res\.providerFallback === true/)
+  assert.match(plugin, /\(res\.isPhotoPost \|\| res\.type === 'image'\) && !hasPhotoPost/)
 })
