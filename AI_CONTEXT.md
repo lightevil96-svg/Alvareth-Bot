@@ -9,6 +9,8 @@
 
 ## Pembaruan terbaru
 
+- 2026-11-18 — `.ytmp4` now opens a quality picker when no quality is supplied, downloads the selected highest available resolution (or 360p), re-encodes it to H.264/yuv420p + AAC MP4 with faststart, validates the result, and sends every file size as a playable WhatsApp video through the shared disk-streaming sender. `.play` video choices use this same renderer; its audio choices continue through `.ytmp3` MP3 encoding. Added real VP9/Opus-to-H.264/AAC regression coverage. Live YouTube extraction and playback on the owner's WhatsApp/TokoPanel server still require a smoke test.
+
 - 2026-11-18 — Fixed `.rvo` quoted-media handling by using the shared Baileys raw-payload/cache resolver and downloader. Ordinary quoted photos, videos, audio, stickers and documents are re-sent with a safe filename and original caption; View Once media remains intentionally blocked. Added plugin/helper regression tests and wired them into `npm test`.
 
 - 2026-11-17 — Removed the audio/video transcription command `.lirik` and its Faster-Whisper, RapidOCR, OpenCV, Python bootstrap, and updater hooks. `.update` no longer creates a virtual environment or runs pip. The separate `.lyrics <judul>` online song-lyrics lookup and `.tebaklirik` game remain available.
