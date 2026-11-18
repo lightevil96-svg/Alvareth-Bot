@@ -5,6 +5,7 @@ import {
   getQuotedStanzaId,
   resolveQuotedMediaInfo,
   downloadQuotedMedia,
+  isQuotedViewOnce,
   cloneMessageForMediaCache
 } from '../lib/simple.js'
 
@@ -184,4 +185,27 @@ test('Prefer cached original media even when the quoted preview has its own medi
   const resolved = await resolveQuotedMediaInfo(m, conn)
   assert.deepEqual(resolved?.media?.mediaKey, originalKey)
   assert.deepEqual(await downloadQuotedMedia(m, conn), imageBuffer)
+})
+
+
+test('View Once wrappers are detected without treating them as ordinary media', () => {
+  for (const wrapper of ['viewOnceMessage', 'viewOnceMessageV2', 'viewOnceMessageV2Extension']) {
+    const m = refMessage({
+      [wrapper]: {
+        message: {
+          imageMessage: { mimetype: 'image/jpeg', mediaKey: Buffer.from('view-once-key') }
+        }
+      }
+    })
+    assert.equal(isQuotedViewOnce(m), true, wrapper)
+    assert.equal(getQuotedMediaInfo(m)?.type, 'imageMessage', wrapper)
+  }
+
+  const legacy = refMessage({
+    imageMessage: { mimetype: 'image/jpeg', viewOnce: true }
+  })
+  assert.equal(isQuotedViewOnce(legacy), true)
+  assert.equal(isQuotedViewOnce(refMessage({
+    imageMessage: { mimetype: 'image/jpeg', mediaKey: Buffer.from('ordinary-key') }
+  })), false)
 })

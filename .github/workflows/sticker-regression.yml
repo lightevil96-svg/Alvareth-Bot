@@ -5,8 +5,10 @@ on:
     branches: [main]
     paths:
       - 'plugins/sticker/**'
+      - 'plugins/tools/rvo.js'
       - 'lib/simple.js'
       - 'tests/quoted-media.test.js'
+      - 'tests/rvo.test.js'
       - 'tests/sticker-engine.test.js'
       - 'package.json'
       - 'lib/hermes-agent.js'
@@ -17,8 +19,10 @@ on:
   pull_request:
     paths:
       - 'plugins/sticker/**'
+      - 'plugins/tools/rvo.js'
       - 'lib/simple.js'
       - 'tests/quoted-media.test.js'
+      - 'tests/rvo.test.js'
       - 'tests/sticker-engine.test.js'
       - 'package.json'
       - 'lib/hermes-agent.js'

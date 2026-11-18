@@ -1,3 +1,12 @@
+## 2026-11-18 — Fix .rvo quoted-media handling
+
+- **Symptom:** `.rvo` reported that the user must reply to media because the plugin depended on `m.quoted`, its optional `download()` method, and a MIME field that can be absent after Baileys normalization.
+- **Root cause:** the plugin bypassed the repository's shared quoted-media resolver. `handler.js` preserves the original WhatsApp payload, and `lib/simple.js` already resolves quoted media from raw `contextInfo.quotedMessage`, wrapper messages, and the message cache.
+- **Fix:** `plugins/tools/rvo.js` now uses `getQuotedMediaInfo()`, `resolveQuotedMediaInfo()`, and `downloadQuotedMedia()`; it falls back to the media message type when MIME is absent, sanitizes the output filename, and preserves the source caption. The existing View Once restriction is intentionally preserved through the shared `isQuotedViewOnce()` detector; View Once media is rejected before download.
+- **Regression coverage:** added tests for raw quoted media, missing MIME/filename, no-reply behavior, and View Once wrappers; added `npm run test:rvo` to `npm test` and the existing media regression workflow.
+- **Files:** `plugins/tools/rvo.js`, `lib/simple.js`, `tests/rvo.test.js`, `tests/quoted-media.test.js`, `package.json`, `.github/workflows/sticker-regression.yml`, `AI_CONTEXT.md`, and this changelog.
+- **Verification:** GitHub Actions media regression and repository syntax checks are expected to run after this commit. A live WhatsApp/TokoPanel test has not been performed from this environment.
+
 ## 2026-11-17 — Remove audio/video transcription feature .lirik
 
 - **Request:** Remove the local audio/video lyric transcription feature after repeated Python/pip, Faster-Whisper, RapidOCR, and OpenCV installation failures.
