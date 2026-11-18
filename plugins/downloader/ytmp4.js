@@ -1,61 +1,121 @@
-import fs from 'node:fs'
+import fs from 'node:fs/promises'
 import yts from 'yt-search'
 import {
   downloadYoutubeVideo,
   downloadYoutubeVideoBest,
+  renderYoutubeVideoForWhatsApp,
   cleanupDownload
 } from '../../lib/scrape/youtube.js'
+import { sendLocalFile } from '../../lib/whatsapp-file-sender.js'
 
-const MAX_INLINE_VIDEO_BYTES = 50 * 1024 * 1024
 const ALLOWED_QUALITIES = new Set([144, 240, 360, 480, 720, 1080, 1440, 2160])
 
 function cleanFilename(value) {
   return String(value || 'video')
-    .replace(/[\\/:*?"<>|]/g, '')
-    .replace(/[\r\n]+/g, ' ')
+    .replace(/[\\\\/:*?"<>|]/g, '')
+    .replace(/[\\r\\n]+/g, ' ')
     .trim()
     .slice(0, 160) || 'video'
+}
+
+async function resolveYoutubeUrl(query) {
+  if (/^https?:\\/\\//i.test(query)) return query
+  const search = await yts(query)
+  const video = search.videos?.[0]
+  if (!video?.url) throw new Error('Video tidak ditemukan.')
+  return video.url
+}
+
+async function sendQualityMenu(m, conn, url, usedPrefix, command) {
+  const prefix = usedPrefix || '.'
+  const commandName = command || 'ytmp4'
+  const bestId = `${prefix}${commandName} ${url}|best`
+  const economyId = `${prefix}${commandName} ${url}|360`
+  const menu = await conn.sendMessage(m.chat, {
+    text: [
+      '🎬 *PILIH KUALITAS VIDEO*',
+      '',
+      '✨ Kualitas tertinggi: resolusi maksimum yang tersedia (HD/4K jika tersedia).',
+      '📦 Hemat data: target 360p.',
+      '',
+      '⚙️ Semua hasil dirender ulang menjadi MP4 H.264 + AAC agar kompatibel dengan pemutar WhatsApp.'
+    ].join('\\n'),
+    footer: 'Alvareth Bot • YouTube Downloader',
+    optionText: 'Pilih Kualitas',
+    optionTitle: 'Kualitas Video',
+    nativeFlow: [{
+      text: 'Pilih kualitas video',
+      sections: [{
+        title: '🎬 VIDEO MP4',
+        rows: [
+          {
+            title: '✨ Kualitas Tertinggi (HD)',
+            description: 'Resolusi maksimum yang tersedia • H.264/AAC',
+            id: bestId
+          },
+          {
+            title: '📦 Hemat Data (360p)',
+            description: 'Lebih ringan untuk kuota • H.264/AAC',
+            id: economyId
+          }
+        ]
+      }]
+    }],
+    interactiveAsTemplate: false
+  }, { quoted: m, noAlvarethPreview: true })
+
+  if (!menu?.key?.id) throw new Error('WhatsApp tidak mengembalikan ID menu kualitas.')
+  return menu
 }
 
 let handler = async (m, { conn, text, usedPrefix, command }) => {
   const rawInput = String(text || '').trim()
   if (!rawInput) {
     throw `Contoh:
+${usedPrefix || '.'}${command} https://youtu.be/dQw4w9WgXcQ
 ${usedPrefix || '.'}${command} https://youtu.be/dQw4w9WgXcQ|best
 ${usedPrefix || '.'}${command} https://youtu.be/dQw4w9WgXcQ|360
 
-Kualitas: |best = resolusi tertinggi yang tersedia, |360 = hemat data.`
+Tanpa pilihan kualitas, bot menampilkan tombol kualitas tertinggi dan hemat data.`
   }
 
-  const [queryPart, qualityPart = '360'] = rawInput.split('|')
-  const query = String(queryPart || '').trim()
-  const qualityToken = String(qualityPart || '360').trim().toLowerCase()
+  const separator = rawInput.indexOf('|')
+  const query = String(separator >= 0 ? rawInput.slice(0, separator) : rawInput).trim()
+  const qualityToken = String(separator >= 0 ? rawInput.slice(separator + 1) : '').trim().toLowerCase()
+  const hasExplicitQuality = separator >= 0
   const useBest = ['best', 'max', 'highest', 'hd'].includes(qualityToken)
-  const numericQuality = Number(qualityToken)
+  const numericQuality = Number(qualityToken || '360')
   const targetQuality = ALLOWED_QUALITIES.has(numericQuality) ? numericQuality : 360
   if (!query) throw new Error('Judul video atau URL YouTube tidak boleh kosong.')
+  if (hasExplicitQuality && !useBest && !ALLOWED_QUALITIES.has(numericQuality)) {
+    throw new Error('Kualitas tidak dikenal. Gunakan |best atau resolusi 144, 240, 360, 480, 720, 1080, 1440, atau 2160.')
+  }
 
-  await m.react('🕒')
   let result
+  let videoSent = false
 
   try {
-    let url = query
-    if (!/^https?:\/\//i.test(query)) {
-      const search = await yts(query)
-      const video = search.videos?.[0]
-      if (!video) throw new Error('Video tidak ditemukan.')
-      url = video.url
+    const url = await resolveYoutubeUrl(query)
+
+    // A plain .ytmp4 request opens the quality picker. Interactive selections
+    // call this same command with |best or |360 and continue to the downloader.
+    if (!hasExplicitQuality) {
+      await sendQualityMenu(m, conn, url, usedPrefix, command)
+      await m.react('🎚️').catch(() => {})
+      return
     }
 
-    // Use format metadata to choose the actual highest available resolution.
-    // "best" is not translated to a guessed 720p/1080p target.
+    await m.react('🕒').catch(() => {})
     result = useBest
       ? await downloadYoutubeVideoBest(url)
       : await downloadYoutubeVideo(url, targetQuality)
 
-    const buffer = fs.readFileSync(result.path)
-    if (!buffer.length) throw new Error('File video hasil unduhan kosong.')
-    const size = fs.statSync(result.path).size
+    // Always transcode the selected source before WhatsApp upload. This removes
+    // unsupported VP9/AV1 streams and prevents large files becoming documents.
+    result = await renderYoutubeVideoForWhatsApp(result)
+    const stats = await fs.stat(result.path)
+    if (!stats.isFile() || stats.size <= 0) throw new Error('File video hasil render kosong.')
+
     const actualQuality = result.quality || (useBest ? 'Auto' : targetQuality)
     const qualityLabel = typeof actualQuality === 'number' && actualQuality > 0
       ? actualQuality + 'p'
@@ -66,36 +126,39 @@ Kualitas: |best = resolusi tertinggi yang tersedia, |360 = hemat data.`
       result.fps ? '🎞️ Frame rate: ' + result.fps + ' FPS' : '',
       useBest ? '✨ Mode: kualitas tertinggi yang tersedia' : '📦 Mode: hemat data',
       result.downloader === 'api-fallback' ? '📡 Sumber: API cadangan' : '',
-      '📁 Format: MP4'
-    ].filter(Boolean).join('\n')
+      '⚙️ Render: H.264 + AAC',
+      '📁 Format: MP4 kompatibel WhatsApp'
+    ].filter(Boolean).join('\\n')
 
     const qualitySuffix = typeof actualQuality === 'number' && actualQuality > 0
       ? '-' + actualQuality + 'p'
       : ''
     const fileName = cleanFilename(result.title) + qualitySuffix + '.mp4'
-    const sent = size > MAX_INLINE_VIDEO_BYTES
-      ? await conn.sendMessage(m.chat, {
-          document: buffer,
-          mimetype: 'video/mp4',
-          fileName,
-          caption
-        }, { quoted: m, noAlvarethPreview: true })
-      : await conn.sendMessage(m.chat, {
-          video: buffer,
-          mimetype: 'video/mp4',
-          fileName,
-          caption
-        }, { quoted: m, noAlvarethPreview: true })
+    const delivery = await sendLocalFile(conn, m.chat, result.path, {
+      jobId: String(m.key?.id || Date.now()).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 24),
+      mimetype: 'video/mp4',
+      fileName,
+      caption,
+      seconds: result.duration,
+      quoted: m
+    })
 
-    if (!sent?.key?.id) throw new Error('WhatsApp tidak mengembalikan ID pesan video.')
-    await m.react('✅')
-    console.log('[YTMP4] Terkirim ke', m.chat, '| kualitas', actualQuality, '| best=', useBest)
+    if (!delivery?.messageId) throw new Error('WhatsApp tidak mengonfirmasi pengiriman video.')
+    videoSent = true
+    await m.react('✅').catch(() => {})
+    console.log('[YTMP4] Video kompatibel WhatsApp terkirim ke', m.chat,
+      '| kualitas', actualQuality, '| best=', useBest, '| codec H.264/AAC')
   } catch (error) {
     console.error('[YTMP4]', error?.stack || error)
-    await m.react('❌')
-    await conn.sendMessage(m.chat, {
-      text: '❌ Gagal mengunduh/mengirim video: ' + String(error?.message || error)
-    }, { quoted: m, noAlvarethPreview: true })
+    if (!videoSent) {
+      await m.react('❌').catch(() => {})
+      await conn.sendMessage(m.chat, {
+        text: '❌ Gagal mengunduh, merender, atau mengirim video: ' +
+          String(error?.message || error).replace(/[\\r\\n]+/g, ' ').slice(0, 600)
+      }, { quoted: m, noAlvarethPreview: true }).catch(sendError => {
+        console.error('[YTMP4] Gagal mengirim notifikasi error:', sendError?.message || sendError)
+      })
+    }
   } finally {
     if (result?.outputDir) await cleanupDownload(result.outputDir).catch(() => {})
   }
