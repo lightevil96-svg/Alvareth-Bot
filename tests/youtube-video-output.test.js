@@ -25,8 +25,8 @@ async function createQualityHelpers() {
     extractBetween(source, 'function getVideoFormats(info) {', 'function pickBestVideo(info) {'),
     extractBetween(source, 'function getAudioBitrate(format) {', 'function pickAudioForBitrate(info, targetBitrate = 320) {'),
     extractBetween(source, 'function getAudioFormats(info) {', 'function selectYtDlpFormats(info) {'),
-    extractBetween(source, 'export function selectYtDlpFormats(info) {', 'function formatInventorySummary('),
-    extractBetween(source, 'export function validateYoutubeBestFallbackQuality(', 'export async function downloadYoutubeVideoBest(')
+    extractBetween(source, 'function selectYtDlpFormats(info) {', 'function formatInventorySummary('),
+    extractBetween(source, 'function validateYoutubeBestFallbackQuality(', 'export async function downloadYoutubeVideoBest(')
   ]
   const code = sections.join('\n') +
     '\nreturn { selectYtDlpFormats, validateYoutubeBestFallbackQuality };'
