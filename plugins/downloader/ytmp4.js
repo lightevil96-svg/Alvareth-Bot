@@ -12,14 +12,14 @@ const ALLOWED_QUALITIES = new Set([144, 240, 360, 480, 720, 1080, 1440, 2160])
 
 function cleanFilename(value) {
   return String(value || 'video')
+    .replace(/[\\/:*?"<>|]/g, '')
     .replace(/[\r\n]+/g, ' ')
-    .replace(/[\\r\\n]+/g, ' ')
     .trim()
     .slice(0, 160) || 'video'
 }
 
 async function resolveYoutubeUrl(query) {
-  if (/^https?:\/\/i.test(query)) return query
+  if (/^https?:\/\//i.test(query)) return query
   const search = await yts(query)
   const video = search.videos?.[0]
   if (!video?.url) throw new Error('Video tidak ditemukan.')
