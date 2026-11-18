@@ -12,14 +12,14 @@ const ALLOWED_QUALITIES = new Set([144, 240, 360, 480, 720, 1080, 1440, 2160])
 
 function cleanFilename(value) {
   return String(value || 'video')
-    .replace(/[\\\\/:*?"<>|]/g, '')
+    .replace(/[\r\n]+/g, ' ')
     .replace(/[\\r\\n]+/g, ' ')
     .trim()
     .slice(0, 160) || 'video'
 }
 
 async function resolveYoutubeUrl(query) {
-  if (/^https?:\\/\\//i.test(query)) return query
+  if (/^https?:\/\/i.test(query)) return query
   const search = await yts(query)
   const video = search.videos?.[0]
   if (!video?.url) throw new Error('Video tidak ditemukan.')
@@ -39,7 +39,7 @@ async function sendQualityMenu(m, conn, url, usedPrefix, command) {
       '📦 Hemat data: target 360p.',
       '',
       '⚙️ Semua hasil dirender ulang menjadi MP4 H.264 + AAC agar kompatibel dengan pemutar WhatsApp.'
-    ].join('\\n'),
+    ].join('\n'),
     footer: 'Alvareth Bot • YouTube Downloader',
     optionText: 'Pilih Kualitas',
     optionTitle: 'Kualitas Video',
@@ -128,7 +128,7 @@ Tanpa pilihan kualitas, bot menampilkan tombol kualitas tertinggi dan hemat data
       result.downloader === 'api-fallback' ? '📡 Sumber: API cadangan' : '',
       '⚙️ Render: H.264 + AAC',
       '📁 Format: MP4 kompatibel WhatsApp'
-    ].filter(Boolean).join('\\n')
+    ].filter(Boolean).join('\n')
 
     const qualitySuffix = typeof actualQuality === 'number' && actualQuality > 0
       ? '-' + actualQuality + 'p'
@@ -154,7 +154,7 @@ Tanpa pilihan kualitas, bot menampilkan tombol kualitas tertinggi dan hemat data
       await m.react('❌').catch(() => {})
       await conn.sendMessage(m.chat, {
         text: '❌ Gagal mengunduh, merender, atau mengirim video: ' +
-          String(error?.message || error).replace(/[\\r\\n]+/g, ' ').slice(0, 600)
+          String(error?.message || error).replace(/[\r\n]+/g, ' ').slice(0, 600)
       }, { quoted: m, noAlvarethPreview: true }).catch(sendError => {
         console.error('[YTMP4] Gagal mengirim notifikasi error:', sendError?.message || sendError)
       })
