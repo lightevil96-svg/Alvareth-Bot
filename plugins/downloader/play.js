@@ -72,8 +72,8 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
       '',
       '🎧 Audio terbaik: sumber audio tertinggi yang tersedia, MP3 320 kbps.',
       '🎧 Audio hemat: MP3 128 kbps, ukuran file lebih kecil.',
-      '🎬 Video terbaik: resolusi tertinggi yang tersedia (HD/4K jika tersedia).',
-      '🎬 Video hemat: target 360p untuk menghemat data.'
+      '🎬 Video terbaik: resolusi tertinggi yang tersedia (HD/4K jika tersedia), lalu dirender ke H.264/AAC.',
+      '🎬 Video hemat: target 360p, juga dirender ke H.264/AAC agar bisa diputar di WhatsApp.'
     ].join('\n')
 
     const pickerMessage = await conn.sendMessage(m.chat, {
@@ -105,7 +105,7 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
               rows: [
                 {
                   title: '✨ Kualitas Tertinggi (HD)',
-                  description: 'Resolusi maksimum yang tersedia',
+                  description: 'Resolusi maksimum • dirender ke MP4 H.264/AAC',
                   id: videoBest
                 },
                 {
