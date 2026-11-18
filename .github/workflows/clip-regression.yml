@@ -1,22 +1,29 @@
-name: YouTube Clip WhatsApp progress regression
+name: YouTube media and WhatsApp playback regression
 
 on:
   push:
     branches: [main]
     paths:
       - 'plugins/downloader/clip.js'
+      - 'plugins/downloader/ytmp4.js'
+      - 'plugins/downloader/play.js'
       - 'plugins/downloader/clip-progress.js'
       - 'lib/scrape/youtube.js'
       - 'tests/clip-progress.test.js'
+      - 'tests/youtube-video-output.test.js'
       - 'tests/clip-policy.test.js'
+      - 'tests/youtube-video-output.test.js'
       - 'package.json'
       - '.github/workflows/clip-regression.yml'
   pull_request:
     paths:
       - 'plugins/downloader/clip.js'
+      - 'plugins/downloader/ytmp4.js'
+      - 'plugins/downloader/play.js'
       - 'plugins/downloader/clip-progress.js'
       - 'lib/scrape/youtube.js'
       - 'tests/clip-progress.test.js'
+      - 'tests/youtube-video-output.test.js'
       - 'package.json'
 
 jobs:
@@ -30,5 +37,5 @@ jobs:
           node-version: 22
       - name: Install FFmpeg and FFprobe for real media regression
         run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
-      - name: Check syntax and clip quality behavior
-        run: npm run test:clip
+      - name: Check YouTube clip and WhatsApp video playback
+        run: npm run test:clip && npm run test:youtube-video
