@@ -124,7 +124,11 @@ Tanpa pilihan kualitas, bot menampilkan tombol kualitas tertinggi dan hemat data
       '🎬 *' + cleanFilename(result.title || 'Video YouTube') + '*',
       '📺 Kualitas: ' + qualityLabel,
       result.fps ? '🎞️ Frame rate: ' + result.fps + ' FPS' : '',
-      useBest ? '✨ Mode: kualitas tertinggi yang tersedia' : '📦 Mode: hemat data',
+      useBest
+        ? (result.qualityVerified === false
+          ? '⚠️ Mode: kualitas tertinggi yang dilaporkan API cadangan (belum terverifikasi ke YouTube)'
+          : '✨ Mode: kualitas tertinggi YouTube terverifikasi')
+        : '📦 Mode: hemat data',
       result.downloader === 'api-fallback' ? '📡 Sumber: API cadangan' : '',
       '⚙️ Render: H.264 + AAC',
       '📁 Format: MP4 kompatibel WhatsApp'
