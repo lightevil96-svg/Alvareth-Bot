@@ -5,13 +5,32 @@ import { readFile, mkdtemp, rm, stat } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { extractSelectedCommandId } from '../lib/interactive-command.js'
-import { selectYtDlpFormats, validateYoutubeBestFallbackQuality } from '../lib/scrape/youtube.js'
 
 function extractBetween(source, startMarker, endMarker) {
   const start = source.indexOf(startMarker)
   const end = source.indexOf(endMarker, start)
   assert.ok(start >= 0 && end > start, 'Missing source section: ' + startMarker)
   return source.slice(start, end).trim().replace(/^export /, '')
+}
+
+async function createQualityHelpers() {
+  const source = await readFile(new URL('../lib/scrape/youtube.js', import.meta.url), 'utf8')
+  const sections = [
+    extractBetween(source, 'function getHeight(format) {', 'function getFps(format) {'),
+    extractBetween(source, 'function getFps(format) {', 'function getWidth(format) {'),
+    extractBetween(source, 'function getWidth(format) {', 'function getFormatPixels(format) {'),
+    extractBetween(source, 'function getFormatPixels(format) {', 'function getVideoBitrate(format) {'),
+    extractBetween(source, 'function getVideoBitrate(format) {', 'function compareVideoFormats(a, b) {'),
+    extractBetween(source, 'function compareVideoFormats(a, b) {', 'export async function getYoutubeInfo('),
+    extractBetween(source, 'function getVideoFormats(info) {', 'function pickBestVideo(info) {'),
+    extractBetween(source, 'function getAudioBitrate(format) {', 'function pickAudioForBitrate(info, targetBitrate = 320) {'),
+    extractBetween(source, 'function getAudioFormats(info) {', 'function selectYtDlpFormats(info) {'),
+    extractBetween(source, 'export function selectYtDlpFormats(info) {', 'function formatInventorySummary('),
+    extractBetween(source, 'export function validateYoutubeBestFallbackQuality(', 'export async function downloadYoutubeVideoBest(')
+  ]
+  const code = sections.join('\n') +
+    '\nreturn { selectYtDlpFormats, validateYoutubeBestFallbackQuality };'
+  return new Function(code)()
 }
 
 async function createYoutubeHelpers() {
@@ -55,7 +74,8 @@ test('WhatsApp video transcode forces H.264, yuv420p, AAC and faststart', async 
 })
 
 
-test('highest-quality inventory selects the best video stream and pairs separate audio', () => {
+test('highest-quality inventory selects the best video stream and pairs separate audio', async () => {
+  const { selectYtDlpFormats } = await createQualityHelpers()
   const selection = selectYtDlpFormats({
     formats: [
       {
@@ -93,28 +113,32 @@ test('highest-quality inventory selects the best video stream and pairs separate
   assert.equal(selection.selector, '137+140')
 })
 
-test('highest-quality API fallback rejects 360p when YouTube maximum is unknown', () => {
+test('highest-quality API fallback rejects 360p when YouTube maximum is unknown', async () => {
+  const { validateYoutubeBestFallbackQuality } = await createQualityHelpers()
   assert.throws(
     () => validateYoutubeBestFallbackQuality({ ytDlpTopHeight: 0, fallbackHeight: 360 }),
     /yt-dlp belum berhasil memverifikasi daftar resolusi YouTube/
   )
 })
 
-test('highest-quality API fallback rejects a downgrade below verified YouTube metadata', () => {
+test('highest-quality API fallback rejects a downgrade below verified YouTube metadata', async () => {
+  const { validateYoutubeBestFallbackQuality } = await createQualityHelpers()
   assert.throws(
     () => validateYoutubeBestFallbackQuality({ ytDlpTopHeight: 1080, fallbackHeight: 360 }),
     /metadata YouTube menemukan 1080p/
   )
 })
 
-test('360p is accepted only when yt-dlp confirms 360p is the maximum', () => {
+test('360p is accepted only when yt-dlp confirms 360p is the maximum', async () => {
+  const { validateYoutubeBestFallbackQuality } = await createQualityHelpers()
   assert.deepEqual(
     validateYoutubeBestFallbackQuality({ ytDlpTopHeight: 360, fallbackHeight: 360 }),
     { qualityVerified: true, sourceMaxQuality: 360 }
   )
 })
 
-test('higher API-only fallback is labelled unverified instead of claiming a YouTube maximum', () => {
+test('higher API-only fallback is labelled unverified instead of claiming a YouTube maximum', async () => {
+  const { validateYoutubeBestFallbackQuality } = await createQualityHelpers()
   assert.deepEqual(
     validateYoutubeBestFallbackQuality({ ytDlpTopHeight: 0, fallbackHeight: 720 }),
     { qualityVerified: false, sourceMaxQuality: 720 }
