@@ -62,8 +62,9 @@ let handler = async (m, { conn }) => {
     throw '❌ Fitur pengiriman media tidak tersedia pada koneksi bot.'
   }
 
-  const extension = mimetype.split('/')[1]?.split(';')[0]?.replace(/[^a-z0-9.+-]/gi, '') ||
-    defaults.extension || 'bin'
+  const extension = info.mime
+    ? info.mime.split('/')[1]?.split(';')[0]?.replace(/[^a-z0-9.+-]/gi, '') || defaults.extension || 'bin'
+    : defaults.extension || 'bin'
   const filename = safeFilename(info.media?.fileName, extension)
   await conn.sendFile(m.chat, Buffer.from(media), filename, info.caption || '', m)
 }

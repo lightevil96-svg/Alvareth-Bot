@@ -5,7 +5,7 @@
 - **Fix:** `plugins/tools/rvo.js` now uses `getQuotedMediaInfo()`, `resolveQuotedMediaInfo()`, and `downloadQuotedMedia()`; it falls back to the media message type when MIME is absent, sanitizes the output filename, and preserves the source caption. The existing View Once restriction is intentionally preserved through the shared `isQuotedViewOnce()` detector; View Once media is rejected before download.
 - **Regression coverage:** added tests for raw quoted media, missing MIME/filename, no-reply behavior, and View Once wrappers; added `npm run test:rvo` to `npm test` and the existing media regression workflow.
 - **Files:** `plugins/tools/rvo.js`, `lib/simple.js`, `tests/rvo.test.js`, `tests/quoted-media.test.js`, `package.json`, `.github/workflows/sticker-regression.yml`, `AI_CONTEXT.md`, and this changelog.
-- **Verification:** GitHub Actions media regression and repository syntax checks are expected to run after this commit. A live WhatsApp/TokoPanel test has not been performed from this environment.
+- **Verification:** the first GitHub Actions run passed repository-wide JavaScript syntax checks and WhatsApp media-delivery regression, while the new RVO test caught a MIME-less image filename fallback mismatch (`.jpeg` versus `.jpg`). The fallback now uses the extension associated with the detected WhatsApp media type; the media regression rerun is pending. A live WhatsApp/TokoPanel test has not been performed from this environment.
 
 ## 2026-11-17 — Remove audio/video transcription feature .lirik
 
