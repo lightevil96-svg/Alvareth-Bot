@@ -5,6 +5,7 @@ import { readFile, mkdtemp, rm, stat } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { extractSelectedCommandId } from '../lib/interactive-command.js'
+import { selectYtDlpFormats, validateYoutubeBestFallbackQuality } from '../lib/scrape/youtube.js'
 
 function extractBetween(source, startMarker, endMarker) {
   const start = source.indexOf(startMarker)
@@ -51,6 +52,73 @@ test('WhatsApp video transcode forces H.264, yuv420p, AAC and faststart', async 
   assert.ok(hasPair('-movflags', '+faststart'))
   assert.ok(hasPair('-map', '0:v:0'))
   assert.ok(args.includes('0:a:0?'))
+})
+
+
+test('highest-quality inventory selects the best video stream and pairs separate audio', () => {
+  const selection = selectYtDlpFormats({
+    formats: [
+      {
+        format_id: '18',
+        width: 640,
+        height: 360,
+        fps: 30,
+        vcodec: 'avc1.42001E',
+        acodec: 'mp4a.40.2',
+        ext: 'mp4',
+        protocol: 'https'
+      },
+      {
+        format_id: '137',
+        width: 1920,
+        height: 1080,
+        fps: 30,
+        vcodec: 'avc1.640028',
+        acodec: 'none',
+        ext: 'mp4',
+        protocol: 'https'
+      },
+      {
+        format_id: '140',
+        vcodec: 'none',
+        acodec: 'mp4a.40.2',
+        abr: 128,
+        ext: 'm4a'
+      }
+    ]
+  })
+
+  assert.equal(selection.video.height, 1080)
+  assert.equal(selection.video.width, 1920)
+  assert.equal(selection.selector, '137+140')
+})
+
+test('highest-quality API fallback rejects 360p when YouTube maximum is unknown', () => {
+  assert.throws(
+    () => validateYoutubeBestFallbackQuality({ ytDlpTopHeight: 0, fallbackHeight: 360 }),
+    /yt-dlp belum berhasil memverifikasi daftar resolusi YouTube/
+  )
+})
+
+test('highest-quality API fallback rejects a downgrade below verified YouTube metadata', () => {
+  assert.throws(
+    () => validateYoutubeBestFallbackQuality({ ytDlpTopHeight: 1080, fallbackHeight: 360 }),
+    /metadata YouTube menemukan 1080p/
+  )
+})
+
+test('360p is accepted only when yt-dlp confirms 360p is the maximum', () => {
+  assert.deepEqual(
+    validateYoutubeBestFallbackQuality({ ytDlpTopHeight: 360, fallbackHeight: 360 }),
+    { qualityVerified: true, sourceMaxQuality: 360 }
+  )
+})
+
+test('higher API-only fallback is labelled unverified instead of claiming a YouTube maximum', () => {
+  assert.deepEqual(
+    validateYoutubeBestFallbackQuality({ ytDlpTopHeight: 0, fallbackHeight: 720 }),
+    { qualityVerified: false, sourceMaxQuality: 720 }
+  )
 })
 
 test('VP9/Opus source is rendered into a playable H.264/AAC MP4', async t => {
@@ -113,10 +181,11 @@ test('VP9/Opus source is rendered into a playable H.264/AAC MP4', async t => {
 })
 
 test('.ytmp4 offers highest quality and .play routes its video choice through the same renderer', async () => {
-  const [ytmp4, play, ytmp3] = await Promise.all([
+  const [ytmp4, play, ytmp3, youtube] = await Promise.all([
     readFile(new URL('../plugins/downloader/ytmp4.js', import.meta.url), 'utf8'),
     readFile(new URL('../plugins/downloader/play.js', import.meta.url), 'utf8'),
-    readFile(new URL('../plugins/downloader/ytmp3.js', import.meta.url), 'utf8')
+    readFile(new URL('../plugins/downloader/ytmp3.js', import.meta.url), 'utf8'),
+    readFile(new URL('../lib/scrape/youtube.js', import.meta.url), 'utf8')
   ])
 
   assert.ok(ytmp4.includes('if (!hasExplicitQuality)'))
@@ -124,6 +193,10 @@ test('.ytmp4 offers highest quality and .play routes its video choice through th
   assert.ok(ytmp4.includes('id: bestId'))
   assert.ok(ytmp4.includes('renderYoutubeVideoForWhatsApp(result)'))
   assert.ok(ytmp4.includes('sendLocalFile(conn, m.chat, result.path'))
+  assert.ok(ytmp4.includes('kualitas tertinggi YouTube terverifikasi'))
+  assert.ok(ytmp4.includes('belum terverifikasi ke YouTube'))
+  assert.ok(youtube.includes("probeYtDlpFormats(binaryPath, normalizedUrl, 'ytmp4 kualitas tertinggi'"))
+  assert.ok(youtube.includes('validateYoutubeBestFallbackQuality({'))
   assert.ok(!ytmp4.includes('MAX_INLINE_VIDEO_BYTES'))
   assert.ok(!ytmp4.includes('document: buffer'))
 
