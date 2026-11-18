@@ -1,3 +1,12 @@
+## 2026-11-18 — Make .ytmp4 and .play video output WhatsApp-playable
+
+- **Symptom:** The 360p YouTube download played in WhatsApp, while the highest-quality MP4 was rejected by the client with a video-file error. The same video choice from `.play` used the same failing path.
+- **Root cause:** Both yt-dlp and the Qbyte fallback could preserve VP9/AV1 or other source video codecs. The fallback merger used `-c:v copy`, and the yt-dlp path only merged streams into an MP4 container; changing the container/extension did not convert the video codec. In addition, `.ytmp4` sent files larger than 50 MB as documents instead of video messages.
+- **Fix:** A plain `.ytmp4 URL` now opens a native-flow quality picker for the highest available resolution or 360p. A selected `|best` uses the existing source-format ranking without a guessed resolution cap. Every selected result is then rendered with FFmpeg to H.264/yuv420p + AAC, tagged as avc1, and written with `+faststart`; FFprobe and file-signature checks validate the result before upload. All output sizes use the shared disk-streaming WhatsApp video sender, so large files remain video messages instead of silently becoming documents. The `.play` video options route through this same renderer; audio options continue through `.ytmp3`, which already encodes MP3.
+- **Regression coverage:** Added `tests/youtube-video-output.test.js` for the transcode arguments, a real VP9/Opus-to-H.264/AAC conversion when FFmpeg codecs are available, quality-picker routing, and native-flow command extraction. Added `npm run test:youtube-video` to `npm test` and the YouTube media regression workflow.
+- **Files:** `lib/scrape/youtube.js`, `plugins/downloader/ytmp4.js`, `plugins/downloader/play.js`, `tests/youtube-video-output.test.js`, `package.json`, `.github/workflows/clip-regression.yml`, `AI_CONTEXT.md`, and this changelog.
+- **Verification:** Automated test run is pending CI. Live YouTube extraction and playback on the owner's WhatsApp/TokoPanel server have not been performed from this environment; a restart and real-device smoke test are still required.
+
 ## 2026-11-18 — Fix .rvo quoted-media handling
 
 - **Symptom:** `.rvo` reported that the user must reply to media because the plugin depended on `m.quoted`, its optional `download()` method, and a MIME field that can be absent after Baileys normalization.
