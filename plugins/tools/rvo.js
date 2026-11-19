@@ -27,10 +27,12 @@ function safeFilename(value, extension) {
 }
 
 let handler = async (m, { conn }) => {
-  // Keep View Once protection: .rvo only re-sends ordinary media.
-  if (isQuotedViewOnce(m)) {
-    throw '⚠️ Itu media Lihat Sekali. Minta pengirim mengirim ulang sebagai media biasa.'
-  }
+  // .rvo (read view once) memang dibuat untuk membaca media Lihat Sekali:
+  // resolver bersama di lib/simple.js sudah membuka wrapper viewOnceMessage /
+  // viewOnceMessageV2 / ephemeral dan mengunduh media dari mediaKey-nya.
+  // isQuotedViewOnce hanya dipakai untuk pesan error yang lebih jelas bila
+  // media Lihat Sekali itu sudah tidak bisa diunduh lagi, bukan untuk menolak.
+  const wasViewOnce = isQuotedViewOnce(m)
 
   // Read the raw quoted payload first, then prefer a complete cached original
   // when the WhatsApp reply preview contains only a thumbnail or partial fields.
@@ -51,10 +53,16 @@ let handler = async (m, { conn }) => {
     media = await downloadQuotedMedia(m, conn)
   } catch (error) {
     console.error('[RVO] Download media gagal:', error?.stack || error)
+    if (wasViewOnce) {
+      throw '❌ Gagal mengunduh media Lihat Sekali. Media itu mungkin sudah dibuka sehingga WhatsApp tidak lagi menyediakannya — minta pengirim mengirim ulang sebagai media biasa.'
+    }
     throw '❌ Gagal mengunduh media. Coba balas media biasa yang masih tersedia.'
   }
 
   if (!media || !(Buffer.isBuffer(media) || media instanceof Uint8Array) || media.length === 0) {
+    if (wasViewOnce) {
+      throw '❌ Media Lihat Sekali tidak dapat diunduh (mungkin sudah dibuka/kedaluwarsa). Minta pengirim mengirim ulang sebagai media biasa.'
+    }
     throw '❌ Data media tidak valid atau tidak dapat diunduh. Coba kirim ulang media tersebut.'
   }
 

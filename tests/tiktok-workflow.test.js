@@ -1,6 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
+import { spawnSync } from 'node:child_process'
+import { readFile, mkdtemp, rm } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import {
   getTikTokOutputQualities,
   compareTikTokResolution,
@@ -135,6 +138,77 @@ test('Live Photo extractor reads official live_photo_info and direct image.video
   }), null)
 })
 
+test('Live Photo extractor reads the canonical nested live_photo.video shape', () => {
+  const nestedLiveVideo = 'https://cdn.example/nested-live-photo.mp4'
+  // Official LivePhotoStruct: live_photo_info.live_photo.video.play_addr.
+  // The previous extractor only followed a fixed key list and returned
+  // null for this shape, so real Live Photo posts were reported as
+  // having no motion clip at all.
+  assert.equal(extractTikTokLivePhotoVideoUrl({
+    imageURL: { urlList: ['https://cdn.example/still-1.jpeg'] },
+    live_photo_info: {
+      is_live_photo: true,
+      live_photo: {
+        video: { play_addr: { url_list: [nestedLiveVideo] } }
+      }
+    }
+  }), nestedLiveVideo)
+  assert.equal(extractTikTokLivePhotoVideoUrl({
+    live_photo_info: {
+      is_live_photo: true,
+      live_photo: {
+        video: { download_no_watermark_addr: { url_list: ['https://cdn.example/nested-dl.mp4'] } }
+      }
+    }
+  }), 'https://cdn.example/nested-dl.mp4')
+  // A still image stored beside the clip (image first in the object)
+  // must not win over the video.
+  assert.equal(extractTikTokLivePhotoVideoUrl({
+    live_photo_info: {
+      is_live_photo: true,
+      live_photo: {
+        image: { display_image: { url_list: ['https://cdn.example/still-first.jpeg'] } },
+        video: { play_addr: { url_list: ['https://cdn.example/live-after-still.mp4'] } }
+      }
+    }
+  }), 'https://cdn.example/live-after-still.mp4')
+  // Only a still image and no clip at all means null, not the still URL.
+  assert.equal(extractTikTokLivePhotoVideoUrl({
+    live_photo_info: {
+      is_live_photo: true,
+      live_photo: {
+        image: { url_list: ['https://cdn.example/only-still.jpeg'] }
+      }
+    }
+  }), null)
+})
+
+test('Still photos render as moving video and Live Photo output is motion-checked', async () => {
+  const plugin = await readFile(new URL('../plugins/downloader/tiktok.js', import.meta.url), 'utf8')
+  const stillRenderer = plugin
+    .split('async function renderTikTokStillPhotoVideo')[1]
+    .split('async function sendTikTokSinglePhotoVideo')[0]
+  assert.match(stillRenderer, /zoompan/)
+  assert.match(stillRenderer, /scale=1440:2560:force_original_aspect_ratio=increase,crop=1440:2560/)
+  assert.match(stillRenderer, /'-loop', '1', '-framerate', '30'/)
+  assert.match(stillRenderer, /duration = Math\.min\(audioDuration, 60\)/)
+
+  const motionCheck = plugin
+    .split('async function videoHasMotion')[1]
+    .split('async function renderTikTokStillPhotoVideo')[0]
+  assert.match(motionCheck, /-f', 'rawvideo', '-pix_fmt', 'rgb24'/)
+  assert.match(motionCheck, /total \/ frames\[0\]\.length >= 1\.0/)
+
+  const sender = plugin
+    .split('async function sendTikTokSinglePhotoVideo')[1]
+    .split('async function sendTikTokPhotoAlbum')[0]
+  assert.match(sender, /videoHasMotion\(outputPath, liveRendered\.duration\)/)
+  assert.match(sender, /renderTikTokStillPhotoVideo\(imageUrl, audioUrl, outputPath, durationSeconds\)/)
+  assert.match(sender, /Foto diam berhasil dijadikan video bergerak \(efek zoom\)/)
+  assert.match(sender, /bukan klip Live Photo asli/)
+  assert.match(sender, /mode = 'still'/)
+})
+
 test('TikTok photo menu always offers select-one-photo and all-photo video actions', async () => {
   const plugin = await readFile(new URL('../plugins/downloader/tiktok.js', import.meta.url), 'utf8')
   const menu = plugin
@@ -158,11 +232,19 @@ test('TikTok photo menu always offers select-one-photo and all-photo video actio
   assert.match(menu, /title: '3\. Semua foto → video'/)
   assert.match(selectedMenu, /images\.map\(\(_image, index\) => index\)/)
   assert.doesNotMatch(selectedMenu, /filter\(index => Boolean\(liveVideos\[index\]\)\)/)
+  // Still photos are no longer refused: every row offers video, with the
+  // still-photo rows honestly labelled as a zoom effect, not Live Photo.
+  assert.match(selectedMenu, /efek zoom/)
   assert.match(slideshow, /res\.liveVideos\?\.\[0\]/)
   assert.match(custom, /res\.liveVideos\?\.\[0\]/)
   assert.match(selected, /res\.liveVideos\?\.\[photoIndex - 1\]/)
   assert.match(selected, /sendTikTokSinglePhotoVideo/)
-  assert.match(plugin, /tidak akan membuat video statis/)
+  assert.match(selected, /imageUrl: res\.images\[photoIndex - 1\]/)
+  assert.match(slideshow, /imageUrl: res\.images\[0\]/)
+  assert.match(custom, /imageUrl: res\.images\[0\]/)
+  assert.doesNotMatch(plugin, /tidak akan membuat video statis/)
+  assert.doesNotMatch(plugin, /tidak memiliki klip gerak Live Photo asli\. Bot hanya menemukan gambar diam/)
+  assert.doesNotMatch(plugin, /tidak memiliki klip gerak Live Photo asli\. Pilih foto yang ditandai Live Photo/)
   assert.doesNotMatch(plugin, /renderSinglePhotoWithMusic/)
 })
 
@@ -211,4 +293,105 @@ test('TikTok plugin dispatches metadata-only provider fallback and protects phot
   const plugin = await readFile(new URL('../plugins/downloader/tiktok.js', import.meta.url), 'utf8')
   assert.match(plugin, /res\.providerFallback === true/)
   assert.match(plugin, /\(res\.isPhotoPost \|\| res\.type === 'image'\) && !hasPhotoPost/)
+})
+
+test('Ken Burns still-photo render actually moves (frames differ over time)', async t => {
+  if (spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' }).error) {
+    t.skip('ffmpeg is not installed')
+    return
+  }
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'tiktok-kenburns-test-'))
+  try {
+    const still = path.join(dir, 'still.jpg')
+    const out = path.join(dir, 'out.mp4')
+    const makeStill = spawnSync('ffmpeg', [
+      '-hide_banner', '-loglevel', 'error', '-y',
+      '-f', 'lavfi', '-i', 'testsrc=duration=1:size=720x1280:rate=30',
+      '-frames:v', '1', still
+    ], { stdio: 'ignore' })
+    assert.equal(makeStill.status, 0, 'test still image must be created')
+
+    const duration = 5
+    const totalFrames = duration * 30
+    const render = spawnSync('ffmpeg', [
+      '-hide_banner', '-loglevel', 'error', '-y',
+      '-loop', '1', '-framerate', '30', '-t', String(duration), '-i', still,
+      '-vf', 'scale=1440:2560:force_original_aspect_ratio=increase,crop=1440:2560,' +
+        "zoompan=z='1+0.15*on/" + totalFrames + "':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=720x1280:fps=30,format=yuv420p",
+      '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22', '-pix_fmt', 'yuv420p',
+      '-an', '-movflags', '+faststart', out
+    ], { stdio: 'ignore' })
+    assert.equal(render.status, 0, 'Ken Burns render must succeed')
+
+    const frames = []
+    for (const at of ['0.5', '2.5', '4.5']) {
+      const frame = path.join(dir, 'frame-' + at + '.png')
+      const grab = spawnSync('ffmpeg', [
+        '-hide_banner', '-loglevel', 'error', '-y',
+        '-ss', at, '-i', out, '-frames:v', '1', frame
+      ], { stdio: 'ignore' })
+      assert.equal(grab.status, 0, 'frame at ' + at + 's must be extractable')
+      frames.push(await readFile(frame))
+    }
+    assert.ok(!frames[0].equals(frames[1]), 'frames at 0.5s and 2.5s must differ (video moves)')
+    assert.ok(!frames[1].equals(frames[2]), 'frames at 2.5s and 4.5s must differ (video keeps moving)')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('Motion check method: a one-frame video scores ~0, a moving video scores >1', async t => {
+  if (spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' }).error) {
+    t.skip('ffmpeg is not installed')
+    return
+  }
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'tiktok-motion-check-test-'))
+  const meanAbsDiff = async (video, firstAt, secondAt) => {
+    const frames = []
+    for (const at of [firstAt, secondAt]) {
+      const frame = path.join(dir, 'frame-' + at + '.raw')
+      assert.equal(spawnSync('ffmpeg', [
+        '-hide_banner', '-loglevel', 'error', '-y',
+        '-ss', at, '-i', video, '-frames:v', '1',
+        '-f', 'rawvideo', '-pix_fmt', 'rgb24', frame
+      ], { stdio: 'ignore' }).status, 0)
+      frames.push(await readFile(frame))
+    }
+    assert.equal(frames[0].length, frames[1].length)
+    let total = 0
+    for (let index = 0; index < frames[0].length; index++) {
+      total += Math.abs(frames[0][index] - frames[1][index])
+    }
+    return total / frames[0].length
+  }
+  try {
+    const still = path.join(dir, 'still.jpg')
+    const held = path.join(dir, 'still-video.mp4')
+    assert.equal(spawnSync('ffmpeg', [
+      '-hide_banner', '-loglevel', 'error', '-y',
+      '-f', 'lavfi', '-i', 'testsrc=duration=1:size=720x1280:rate=30',
+      '-frames:v', '1', still
+    ], { stdio: 'ignore' }).status, 0)
+    // One JPEG frame held for 3 seconds: a valid MP4 that never moves.
+    // This is the class of source the old code sent as "Live Photo".
+    assert.equal(spawnSync('ffmpeg', [
+      '-hide_banner', '-loglevel', 'error', '-y',
+      '-loop', '1', '-framerate', '30', '-t', '3', '-i', still,
+      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-an', held
+    ], { stdio: 'ignore' }).status, 0)
+
+    const heldScore = await meanAbsDiff(held, '0.6', '2.1')
+    assert.ok(heldScore < 1.0, 'held still video must score below the motion threshold, got ' + heldScore)
+
+    const moving = path.join(dir, 'moving.mp4')
+    assert.equal(spawnSync('ffmpeg', [
+      '-hide_banner', '-loglevel', 'error', '-y',
+      '-f', 'lavfi', '-i', 'testsrc=duration=3:size=720x1280:rate=30',
+      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-an', moving
+    ], { stdio: 'ignore' }).status, 0)
+    const movingScore = await meanAbsDiff(moving, '0.5', '2.5')
+    assert.ok(movingScore >= 1.0, 'moving video must score at or above the motion threshold, got ' + movingScore)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
 })

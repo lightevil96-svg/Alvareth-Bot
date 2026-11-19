@@ -171,6 +171,13 @@ test('voxel 3D prompt matches the blocky Minecraft-like reference style', () => 
   assert.match(prompt, /voiceProfile to "male"/)
   assert.match(prompt, /useCurrentFrame/)
   assert.match(prompt, /jangan memakai useFrame/i)
+  assert.match(prompt, /spring\(\)/)
+  assert.match(prompt, /Easing/)
+  assert.match(prompt, /easeInOutCubic/)
+  assert.match(prompt, /CameraMotionBlur/)
+  assert.match(prompt, /@remotion\/motion-blur/)
+  assert.match(prompt, /jangan memakai interpolate linear mentah/i)
+  assert.match(prompt, /sine cepat/i)
 })
 
 test('buildMotionPrompt requires a downloadable ZIP and forbids source code in chat', () => {

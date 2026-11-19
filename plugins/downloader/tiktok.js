@@ -722,36 +722,201 @@ async function renderTikTokPhotoSlideshow(images, audioUrl, slideDurations, outp
   }
 }
 
+// A rendered video only counts as moving when its frames actually change.
+// A single-frame MP4 source passes ffprobe and the first-frame check, so
+// sample two frames apart in time and compare their pixels (raw RGB mean
+// absolute difference, not PNG bytes: lossy re-encoding alone shifts a
+// few pixel values even when nothing moves).
+async function videoHasMotion(filePath, durationSeconds) {
+  const duration = Number(durationSeconds)
+  if (!Number.isFinite(duration) || duration <= 0.5) return false
+  const tempDir = await createTikTokTempDir('motion-check')
+  try {
+    const frames = []
+    for (const at of [Math.max(0.1, duration * 0.2), Math.max(0.2, duration * 0.7)]) {
+      const framePath = path.join(tempDir, 'frame-' + frames.length + '.raw')
+      await new Promise((resolve, reject) => {
+        const child = spawn('ffmpeg', [
+          '-hide_banner', '-loglevel', 'error', '-y',
+          '-ss', String(at), '-i', filePath, '-frames:v', '1',
+          '-f', 'rawvideo', '-pix_fmt', 'rgb24', framePath
+        ], { stdio: ['ignore', 'ignore', 'pipe'] })
+        let stderr = ''
+        const timer = setTimeout(() => {
+          child.kill('SIGKILL')
+          reject(new Error('Pemeriksaan gerak video melewati 20 detik.'))
+        }, 20000)
+        child.stderr.on('data', chunk => { stderr = (stderr + chunk.toString()).slice(-1000) })
+        child.once('error', error => { clearTimeout(timer); reject(error) })
+        child.once('close', code => {
+          clearTimeout(timer)
+          if (code === 0) resolve()
+          else reject(new Error('Gagal mengambil frame video: ' + stderr.trim().slice(-300)))
+        })
+      })
+      frames.push(await fsp.readFile(framePath))
+    }
+    // Mean absolute per-byte difference on raw RGB frames: a held still
+    // image re-encoded by x264 measures ~0.001, real motion measures >10,
+    // so a threshold of 1.0 separates still from moving with wide margin.
+    // (PNG byte comparison is too strict: lossy re-encoding alone changes
+    // a few pixel values even when nothing moves.)
+    if (frames[0].length !== frames[1].length) return true
+    let total = 0
+    for (let index = 0; index < frames[0].length; index++) {
+      total += Math.abs(frames[0][index] - frames[1][index])
+    }
+    return total / frames[0].length >= 1.0
+  } catch (error) {
+    // Fail open: a broken motion check must not block a render that the
+    // loop/zoom filters already built to move.
+    console.warn('[TikTok] Pemeriksaan gerak video gagal, hasil tetap dikirim:', error?.message || error)
+    return true
+  } finally {
+    await fsp.rm(tempDir, { recursive: true, force: true }).catch(() => {})
+  }
+}
+
+// Still photo -> moving video (Ken Burns): a slow zoom-in over the whole
+// duration plus the original audio. This is honestly labelled as an effect
+// on a still photo in the caption, never as an original Live Photo clip.
+async function renderTikTokStillPhotoVideo(imageUrl, audioUrl, outputPath, requestedDurationSeconds = 0) {
+  if (!/^https?:\/\//i.test(String(imageUrl || ''))) {
+    throw new Error('URL foto TikTok tidak tersedia untuk dijadikan video.')
+  }
+  const tempDir = await createTikTokTempDir('still-photo-render')
+  const imagePath = path.join(tempDir, 'still-photo.img')
+  const audioPath = path.join(tempDir, 'original-audio.bin')
+  let hasAudio = false
+  let duration = 0
+
+  try {
+    const imageBuffer = await downloadToBuffer(imageUrl, 20 * 1024 * 1024)
+    await fsp.writeFile(imagePath, imageBuffer)
+    const detected = await fileTypeFromFile(imagePath)
+    if (!detected?.mime?.startsWith('image/')) {
+      throw new Error('File foto TikTok bukan gambar yang valid.')
+    }
+
+    if (audioUrl) {
+      try {
+        const audioBuffer = await downloadToBuffer(audioUrl, 30 * 1024 * 1024)
+        await fsp.writeFile(audioPath, audioBuffer)
+        const audioDuration = await getMediaDuration(audioPath)
+        if (audioDuration > 0) {
+          hasAudio = true
+          duration = Math.min(audioDuration, 60)
+        }
+      } catch (error) {
+        console.warn('[TikTok] Gagal mengambil musik asli foto diam:', error?.message || error)
+      }
+    }
+    if (!duration) {
+      const requested = Number(requestedDurationSeconds)
+      duration = Number.isFinite(requested) && requested >= 1
+        ? Math.min(requested, 60)
+        : 5
+    }
+
+    const totalFrames = Math.max(30, Math.round(duration * 30))
+    const args = [
+      '-hide_banner', '-loglevel', 'error', '-y',
+      '-loop', '1', '-framerate', '30', '-t', String(duration), '-i', imagePath
+    ]
+    if (hasAudio) args.push('-i', audioPath)
+    args.push(
+      '-map', '0:v:0',
+      ...(hasAudio ? ['-map', '1:a:0'] : []),
+      '-vf', 'scale=1440:2560:force_original_aspect_ratio=increase,crop=1440:2560,' +
+        "zoompan=z='1+0.15*on/" + totalFrames + "':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=720x1280:fps=30,format=yuv420p",
+      '-c:v', 'libx264',
+      '-preset', 'veryfast',
+      '-threads:v', '2',
+      '-crf', '22',
+      '-pix_fmt', 'yuv420p',
+      ...(hasAudio ? ['-c:a', 'aac', '-b:a', '128k', '-shortest'] : ['-an']),
+      '-movflags', '+faststart',
+      outputPath
+    )
+    await runFfmpeg(args, { durationSeconds: duration, label: 'Render foto diam + efek zoom' })
+    const info = await fsp.stat(outputPath)
+    if (info.size < 4096 || info.size > MAX_VIDEO_BYTES) {
+      throw new Error('Hasil video foto diam tidak valid atau melebihi batas 150 MB.')
+    }
+    const outputInfo = await inspectVideoFile(outputPath)
+    await verifyFirstVideoFrame(outputPath)
+    return {
+      buffer: await fsp.readFile(outputPath),
+      size: info.size,
+      duration: outputInfo.duration || duration,
+      hasAudio
+    }
+  } finally {
+    await fsp.rm(tempDir, { recursive: true, force: true }).catch(() => {})
+  }
+}
+
 async function sendTikTokSinglePhotoVideo(conn, m, {
-  liveVideoUrl, audioUrl, title, author, photoIndex = 1, photoCount = 1
+  liveVideoUrl, imageUrl, audioUrl, title, author, photoIndex = 1, photoCount = 1, durationSeconds = 0
 }) {
   const tempDir = await createTikTokTempDir('live-photo-output')
   const outputPath = path.join(tempDir, 'tiktok-live-photo.mp4')
   try {
-    const rendered = await renderTikTokLivePhotoWithMusic(liveVideoUrl, audioUrl, outputPath)
+    let rendered = null
+    let mode = 'live'
+    if (liveVideoUrl) {
+      try {
+        const liveRendered = await renderTikTokLivePhotoWithMusic(liveVideoUrl, audioUrl, outputPath)
+        // A single-frame MP4 source passes ffprobe and the first-frame
+        // check, so verify the rendered output actually moves before
+        // sending it as a Live Photo video.
+        const moves = await videoHasMotion(outputPath, liveRendered.duration)
+        if (moves) {
+          rendered = liveRendered
+        } else {
+          console.warn('[TikTok] Klip Live Photo foto ke-' + photoIndex + ' ternyata diam; fallback ke efek zoom foto diam.')
+        }
+      } catch (error) {
+        console.warn('[TikTok] Render Live Photo foto ke-' + photoIndex + ' gagal, fallback ke efek zoom foto diam:', error?.message || error)
+      }
+    }
+    if (!rendered) {
+      if (!imageUrl) {
+        throw new Error('Foto ini tidak memiliki klip gerak Live Photo asli dan URL foto diamnya tidak tersedia, jadi tidak ada bahan untuk dijadikan video.')
+      }
+      mode = 'still'
+      rendered = await renderTikTokStillPhotoVideo(imageUrl, audioUrl, outputPath, durationSeconds)
+    }
+    const isLive = mode === 'live'
     const videoCaption = [
-      '🎞️ *ALVARETH TIKTOK LIVE PHOTO*',
+      isLive ? '🎞️ *ALVARETH TIKTOK LIVE PHOTO*' : '🖼️ *ALVARETH TIKTOK FOTO → VIDEO*',
       '',
-      '✅ *Klip gerak asli berhasil dijadikan video*',
+      isLive
+        ? '✅ *Klip gerak asli berhasil dijadikan video*'
+        : '✅ *Foto diam berhasil dijadikan video bergerak (efek zoom)*',
       '',
       '🖼️ *Foto:* ' + photoIndex + ' dari ' + photoCount,
       '📝 *Judul:* ' + String(title || 'TikTok Photo Post'),
       '👤 *Kreator:* ' + String(author || 'Unknown'),
       '⏱️ *Durasi:* ' + Math.round(rendered.duration) + ' detik',
-      '🔁 Gerakan asli Live Photo diulang sampai musik selesai.',
+      isLive
+        ? '🔁 Gerakan asli Live Photo diulang sampai musik selesai.'
+        : '🔍 Foto di-zoom perlahan selama video berjalan (bukan klip Live Photo asli).',
       rendered.hasAudio
         ? '🎵 Musik asli diputar satu kali tanpa restart.'
-        : '🔇 Musik asli tidak tersedia; klip Live Photo tetap bergerak.',
+        : (isLive
+          ? '🔇 Musik asli tidak tersedia; klip Live Photo tetap bergerak.'
+          : '🔇 Musik asli tidak tersedia; video dibuat tanpa suara.'),
       '',
       '✨ _Downloaded by Alvareth Bot_ ✨'
     ].join('\n')
     await sendMessageWithReconnect(conn, m.chat, {
       video: rendered.buffer,
       mimetype: 'video/mp4',
-      fileName: safeFilename(title + '-live-photo-' + photoIndex),
+      fileName: safeFilename(title + (isLive ? '-live-photo-' : '-foto-video-') + photoIndex),
       caption: videoCaption
     }, { quoted: m, noAlvarethPreview: true })
-    return rendered
+    return { ...rendered, mode }
   } finally {
     await fsp.rm(tempDir, { recursive: true, force: true }).catch(() => {})
   }
@@ -794,7 +959,7 @@ async function sendTikTokPhotoPostMenu(conn, m, { url, images, liveVideos = [], 
   }, {
     header: '',
     title: '2. Pilih satu foto untuk dijadikan video',
-    description: 'Pilih foto tertentu; video dibuat hanya jika klip gerak Live Photo tersedia',
+    description: 'Foto Live Photo memakai klip gerak asli; foto diam dibuat bergerak (efek zoom)',
     id: usedPrefix + 'ttfotopilih ' + url
   }]
 
@@ -808,8 +973,8 @@ async function sendTikTokPhotoPostMenu(conn, m, { url, images, liveVideos = [], 
   }
 
   const livePhotoStatus = livePhotoCount > 0
-    ? '🎞️ Live Photo terdeteksi: ' + livePhotoCount + ' klip gerak asli.'
-    : 'ℹ️ Klip gerak Live Photo belum terbaca. Pilihan video hanya akan berhasil jika sumber menyediakan klip gerak asli.'
+    ? '🎞️ Live Photo terdeteksi: ' + livePhotoCount + ' klip gerak asli. Foto biasa tetap bisa dijadikan video bergerak (efek zoom).'
+    : 'ℹ️ Klip gerak Live Photo belum terbaca. Foto biasa tetap bisa dijadikan video bergerak (efek zoom) lewat menu "Pilih satu foto" atau slideshow.'
   await sendMessageWithReconnect(conn, m.chat, {
     text: 'Pilih tindakan untuk postingan foto TikTok (' + images.length + ' foto).\n\n' + livePhotoStatus,
     footer: global.namebot || 'Alvareth Bot',
@@ -929,13 +1094,13 @@ async function sendPhotoToVideoActionMenus(conn, m, { url, images, liveVideos = 
         title: (hasMotion ? '🎞️ Live Photo ' : '🖼️ Foto ') + (index + 1) + ' → Video',
         description: hasMotion
           ? 'Klip gerak asli tersedia; ulangi sampai musik selesai'
-          : 'Klip gerak belum terdeteksi; foto diam tidak akan dipaksakan menjadi Live Photo',
+          : 'Foto diam dijadikan video bergerak (efek zoom) + musik asli',
         id: usedPrefix + 'ttfoto2video ' + url + ' ' + (index + 1)
       }
     })
     try {
       await sendMessageWithReconnect(conn, m.chat, {
-        text: 'Pilih foto yang ingin dijadikan video. Hanya foto dengan klip gerak Live Photo asli yang dapat menghasilkan video bergerak.',
+        text: 'Pilih foto yang ingin dijadikan video. Foto Live Photo memakai klip gerak asli; foto biasa dibuat bergerak dengan efek zoom halus + musik asli.',
         footer: global.namebot || 'Alvareth Bot',
         optionText: 'Pilih Foto',
         optionTitle: '🎞️ Pilih Foto → Video',
@@ -1559,12 +1724,11 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
     if (isSlideshowCommand) {
       if (!hasPhotoPost) throw new Error('Tautan ini bukan postingan foto/slideshow TikTok.')
       if (res.images.length === 1) {
-        const liveVideoUrl = res.liveVideos?.[0]
-        if (!liveVideoUrl) {
-          throw new Error('Foto ini tidak memiliki klip gerak Live Photo asli. Bot hanya menemukan gambar diam, jadi tidak akan membuat video statis.')
-        }
+        // Satu foto tanpa klip Live Photo tetap dirender: foto diam
+        // dijadikan video bergerak dengan efek zoom (bukan Live Photo).
         await sendTikTokSinglePhotoVideo(conn, m, {
-          liveVideoUrl,
+          liveVideoUrl: res.liveVideos?.[0],
+          imageUrl: res.images[0],
           audioUrl: res.audio,
           title,
           author: uploader,
@@ -1616,17 +1780,18 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
     if (isSlideshowCustomCommand) {
       if (!hasPhotoPost) throw new Error('Tautan ini bukan postingan foto/slideshow TikTok.')
       if (res.images.length === 1) {
-        const liveVideoUrl = res.liveVideos?.[0]
-        if (!liveVideoUrl) {
-          throw new Error('Foto ini tidak memiliki klip gerak Live Photo asli. Bot hanya menemukan gambar diam, jadi tidak akan membuat video statis.')
-        }
+        // Durasi custom tetap dihormati untuk foto diam (efek zoom);
+        // untuk Live Photo, durasi mengikuti klip/musik seperti biasa.
+        const customDurations = actionTail ? parseTikTokSlideDurations(actionTail, 1) : [0]
         await sendTikTokSinglePhotoVideo(conn, m, {
-          liveVideoUrl,
+          liveVideoUrl: res.liveVideos?.[0],
+          imageUrl: res.images[0],
           audioUrl: res.audio,
           title,
           author: uploader,
           photoIndex: 1,
-          photoCount: 1
+          photoCount: 1,
+          durationSeconds: customDurations[0] || 0
         })
         await reactSafe(conn, m, '✅')
         return
@@ -1683,11 +1848,11 @@ let handler = async (m, { conn, text, usedPrefix, command }) => {
       }
 
       const liveVideoUrl = res.liveVideos?.[photoIndex - 1]
-      if (!liveVideoUrl) {
-        throw new Error('Foto ke-' + photoIndex + ' tidak memiliki klip gerak Live Photo asli. Pilih foto yang ditandai Live Photo pada menu.')
-      }
+      // Foto diam tidak lagi ditolak: tanpa klip Live Photo, foto
+      // dijadikan video bergerak dengan efek zoom + musik asli.
       await sendTikTokSinglePhotoVideo(conn, m, {
         liveVideoUrl,
+        imageUrl: res.images[photoIndex - 1],
         audioUrl: res.audio,
         title,
         author: uploader,

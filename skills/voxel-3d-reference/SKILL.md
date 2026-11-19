@@ -73,6 +73,15 @@ For each beat, direct:
 
 Use deterministic frame-addressable animation from Remotion's current frame. Mouth movement follows the actual voice envelope and only the active speaker talks. Listeners hold a deliberate expression/eye-line. Use firm blocky limb motion (not rubbery), voxel steps and jumps, and solve hands against actual prop/fixture anchors. Never fake contact by moving the fixture to the hand.
 
+## 5b. Smooth motion — film-like, not slideshow
+
+The reference moves like film at 30 fps because every move is eased, not because of a higher frame rate. Enforce this in every scene:
+- Use Remotion `spring()` and `Easing` (`easeInOutCubic`, `easeOutBack` for overshoot) for all character and camera motion. Never drive a character or the camera with a raw linear `interpolate`, and never bob a whole character with a fast sine wobble.
+- Build each action as anticipation, action, follow-through with a small overshoot, then settle into a held pose. Add light squash-and-stretch on jumps and landings, and secondary motion that lags the main action (hair slab, scarf, chicken comb, tree leaves).
+- Move limbs on arcs around their pivots (hips/shoulders) with counter-swinging arms; keep the body bob small and tied to the step cycle.
+- Ease the camera in and out of every dolly, pan and orbit so it accelerates and settles instead of moving at constant speed. Hold still between beats; do not keep everything moving all the time.
+- Apply true motion blur to the fast-moving 3D layer only: add `@remotion/motion-blur` (same version as the other Remotion packages) and wrap the moving Three.js scene in `<CameraMotionBlur shutterAngle={180} samples={5}>`. Keep subtitles, counters and UI cards outside the blur so text stays crisp.
+
 Use motivated coverage: establishing wide, medium/two-shot, close-up reaction, and insert for small story-critical actions (for example a finger pressing a big red button). Cut fast on the comedy beats. Camera moves (push, track, pan, crane, orbit) must support a beat. Avoid repeated eye-level framing, random drift, constant zoom, and universal cut intervals. Check projected crop bounds in the final 9:16 frame.
 
 Voiceover is the engine of the comedy: Bahasa Indonesia, energetic male first-person storyteller (`voiceProfile: "male"`, id-ID-ArdiNeural), short punchy sentences, fast rhythm, a surprising hook inside the first 3 seconds, a pause right before each punchline, and a question to the audience at the end. The audio pipeline produces the TTS voiceover only; do not ask for a background-music file or any audio asset in the project.
@@ -110,6 +119,7 @@ Check:
 - no z-fighting on overlapping boxes, no missing face, no swallowed prop;
 - face readability, subtitle safe area, camera crop, and motivated shot changes;
 - mouth sync, stable holds, no jitter, no perpetual bobbing, no pose pop;
+- eased arcs, spring overshoot and settled holds — no raw linear motion, no fast sine wobble, motion blur on the fast 3D layer only with text outside the blur staying crisp;
 - the final rendered movie, not only code or one preview frame.
 
 Report observed facts separately from inferred causes. A clean render or passing numeric check does not by itself prove visual fidelity.
