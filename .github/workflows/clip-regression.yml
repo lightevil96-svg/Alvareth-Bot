@@ -26,6 +26,9 @@ on:
       - 'tests/clip-progress.test.js'
       - 'tests/youtube-video-output.test.js'
       - 'package.json'
+      - 'skills/clip-editor/**'
+      - 'docs/CLIP_EDITOR_SKILL.md'
+      - '.github/workflows/clip-regression.yml'
 
 jobs:
   clip-progress:

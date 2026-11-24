@@ -8,6 +8,7 @@
 ## Rules for every task
 
 - Inspect current source and call sites before editing. Treat documentation as context, not proof that code still behaves that way.
+- For any video clipping, Shorts/Reels/TikTok editing, subtitle, or video-repurposing task, read `skills/clip-editor/SKILL.md` and the relevant files under `skills/clip-editor/references/` before planning. Validate every generated plan with `npm run test:skills-clip` or the bundled validator.
 - **Default workflow for this repository: make requested fixes directly on `main`**. Do not create a feature branch or PR unless the user explicitly asks for one. Confirm the current `main` state before writing, preserve unrelated changes, and commit each coherent fix directly to `main`.
 - Fix root causes. When behavior is shared by plugins, inspect common layers such as `handler.js` and `lib/simple.js` before adding one-off workarounds.
 - For quoted media in any plugin, use `getQuotedMediaInfo(m)` and `downloadQuotedMedia(m, conn)` from `lib/simple.js` (or improve those shared helpers). Do not classify replies from `m.quoted.mimetype` alone; check the normalized media message type and preserve the raw Baileys payload/wrapper context.
