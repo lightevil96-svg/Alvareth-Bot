@@ -3,11 +3,13 @@
 > **Tujuan:** orientasi singkat untuk AI/developer yang melanjutkan proyek.
 > **Repository:** https://github.com/lightevil96-svg/Alvareth-Bot
 > **Branch produksi:** `main`
-> **Ditinjau:** 2026-11-10
+> **Ditinjau:** 2026-11-24
 >
 > Baca `AGENTS.md` terlebih dahulu, lalu file ini dan `docs/AI_CHANGELOG.md`. Catatan membantu orientasi, tetapi kode saat ini tetap menjadi sumber kebenaran.
 
 ## Pembaruan terbaru
+
+- 2026-11-24 — Added the agent-facing `skills/clip-editor/` workflow: evidence-based 100-point clip scoring, VTuber/gameplay guidance, subtitle/audio and rights/QC checklists, strict clip-plan schema/example, and a dependency-free validator with regression tests. `.analisis` remains an analysis ZIP handoff only; a separate agent runtime must render and inspect MP4 outputs.
 
 - 2026-11-19 — Fixed `.rvo` and TikTok photo-to-video. `.rvo` now reads View Once media (the `isQuotedViewOnce` block was removed; the shared resolver already unwraps view-once wrappers) and explains clearly if an opened/expired View Once clip can no longer be downloaded. TikTok's Live Photo extractor now walks the whole `live_photo_info` subtree, so the canonical `live_photo.video.play_addr.url_list` shape is found, image URLs are never returned as clips, and still photos render as moving video with an honest Ken Burns zoom effect + original audio instead of being refused; rendered Live Photo output is motion-checked (raw-RGB mean abs diff, threshold 1.0) and falls back to the still-photo zoom render when the clip is static or fails. `npm run test:rvo` passes 6/6, `npm run test:tiktok` passes 25/25, full `npm test` exits 0. Live WhatsApp verification still pending.
 
@@ -89,6 +91,15 @@ Alvareth Bot adalah bot WhatsApp Multi-Device berbasis Node.js, ES Modules, Bail
 | `docs/AI_CHANGELOG.md` | Riwayat perubahan, hasil tes, akar masalah dan pencegahannya |
 
 `package.json` memakai `"type": "module"`. README mensyaratkan Node.js 22+; workflow sintaks GitHub memakai Node 20. Periksa versi di lingkungan yang benar-benar menjalankan bot sebelum mendiagnosis masalah runtime.
+
+## Video Intelligence dan Clip Editor
+
+- `plugins/owner/analisis.js` dan `lib/video-analysis.js` menghasilkan artefak analisis; `.analisis` **tidak** menjalankan skill editing dan tidak merender MP4 final.
+- Skill agent untuk editing berada di `skills/clip-editor/SKILL.md`; baca juga referensi di `skills/clip-editor/references/` dan kontrak `templates/clip-plan.schema.json`.
+- ZIP analisis tidak menyertakan source video. Agent wajib mencocokkan SHA-256 pada manifest/analysis result dengan source asli sebelum menggunakan ulang timestamp.
+- Output plan wajib melewati `node skills/clip-editor/scripts/validate-clip-plan.mjs <clip-plan.json>`; tes: `npm run test:skills-clip`.
+- Hasil `ASR_RAW` dan mapping `UNKNOWN/CANDIDATE` tetap provisional. Cutroom face tracking tidak diasumsikan dapat melacak avatar VTuber.
+- Validator hanya memeriksa plan; bukan renderer dan bukan bukti video berhasil dirender. Gunakan FFmpeg/Remotion yang benar-benar tersedia, lalu periksa hasil aktual dengan QC checklist. Jangan mengeksekusi script dari ZIP yang belum dipercaya.
 
 ## 2. Mulai bekerja dengan benar
 

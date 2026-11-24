@@ -122,3 +122,19 @@ Run the focused test suite:
     npm run test:video-analysis
 
 The GitHub Actions JavaScript syntax workflow also runs the focused tests without calling external model APIs. Live Gemini, Cutroom inference, WhatsApp button behavior and media delivery still require testing with the deployment's own credentials and sample footage.
+
+
+## Agent editing handoff
+
+The analysis ZIP is a data handoff, not a rendered clip package. Use [Clip Editor Skill](../skills/clip-editor/SKILL.md) to consume the original source plus these artifacts. The skill ranks moments with an explicit rubric, creates a validated `clip-plan.json`, guides subtitle/framing/audio decisions, and requires technical and editorial QC after rendering.
+
+The ZIP intentionally excludes the original source video. Before applying timestamps, the editing agent must compare the source SHA-256 against `manifest.json` and `analysis-result.json`. If they differ, old time ranges are not trusted until re-analyzed or reconciled.
+
+Validate a generated plan from the repository root:
+
+```bash
+node skills/clip-editor/scripts/validate-clip-plan.mjs path/to/clip-plan.json
+npm run test:skills-clip
+```
+
+The validator checks plan structure, durations, source bounds, evidence windows, score totals, output aspect ratio, captions, and rights status. It does not render MP4 or prove that an edit is correct. The agent must use a renderer available in its own runtime and inspect the actual output. The WhatsApp `.analisis` command is not automatically connected to this skill.

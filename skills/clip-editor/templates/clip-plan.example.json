@@ -1,0 +1,86 @@
+{
+  "schema_version": "1.0",
+  "project": {
+    "title": "VTuber best moments",
+    "target_platform": "youtube-shorts",
+    "language": "id",
+    "requested_clip_count": 1,
+    "style_notes": "Fast but readable pacing; keep the original stream context."
+  },
+  "source": {
+    "file_name": "stream-source.mp4",
+    "duration_seconds": 180,
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "width": 1920,
+    "height": 1080,
+    "fps": 30
+  },
+  "rights": {
+    "status": "permission_granted",
+    "notes": "Example only: replace with the actual permission or licence status."
+  },
+  "output": {
+    "aspect_ratio": "9:16",
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "container": "mp4",
+    "video_codec": "h264",
+    "pixel_format": "yuv420p",
+    "audio_codec": "aac",
+    "audio_sample_rate": 48000
+  },
+  "clips": [
+    {
+      "id": "clip-001",
+      "title": "Reaksi tak terduga",
+      "start_seconds": 42.5,
+      "end_seconds": 68.5,
+      "score": 88,
+      "score_breakdown": {
+        "hook": 18,
+        "payoff": 18,
+        "context": 14,
+        "emotion": 13,
+        "clarity": 9,
+        "audio": 7,
+        "visual": 5,
+        "originality": 4
+      },
+      "editorial_rationale": "Momen memiliki pemicu yang jelas, reaksi yang dapat dipahami tanpa menonton seluruh stream, dan payoff yang utuh.",
+      "hook": "Pernyataan pembuka yang membuat penonton ingin tahu kelanjutannya.",
+      "setup": "Konteks singkat sebelum reaksi.",
+      "payoff": "Reaksi atau jawaban yang menyelesaikan momen.",
+      "evidence": [
+        {
+          "kind": "highlight",
+          "start_seconds": 48.2,
+          "end_seconds": 55.8,
+          "note": "Ganti dengan timestamp highlight yang benar-benar diperiksa pada source."
+        }
+      ],
+      "edit": {
+        "framing": "vertical_9_16",
+        "pacing": "Potong jeda kosong; pertahankan jeda komedi dan keseluruhan payoff.",
+        "caption_preset": "vtuber_dynamic",
+        "captions": {
+          "enabled": true,
+          "language": "id",
+          "source": "transcript.json",
+          "word_level_timing": false,
+          "max_lines": 2,
+          "safe_margin_percent": 10
+        },
+        "audio": {
+          "keep_original": true,
+          "noise_reduction": "light",
+          "music": "none",
+          "music_ducking_db": 18
+        },
+        "effects": ["Punch-in halus saat payoff; tanpa efek berulang."],
+        "overlay_notes": "Jangan menutupi avatar atau HUD."
+      },
+      "notes": ["Contoh ini bukan hasil analisis video yang nyata."]
+    }
+  ]
+}

@@ -1,3 +1,13 @@
+## 2026-11-24 — Add agent-facing Clip Editor skill and plan validator
+
+- **Request:** Make Alvareth's video editing skill substantially more useful to an AI agent that must edit source footage, not only summarize highlights.
+- **Finding:** The repository had a Video Intelligence handoff through `.analisis`, and visual style skills under `skills/`, but no dedicated end-to-end clip-editing skill. The analysis ZIP excludes the source video and does not render a final MP4.
+- **Change:** Added `skills/clip-editor/SKILL.md` plus focused references for weighted highlight scoring, Shorts pacing/framing, VTuber/gameplay handling, subtitle/audio integrity, and technical QC/usage rights. Added a strict clip-plan JSON Schema and example, plus a dependency-free Node validator and regression suite. Documented the handoff in README, Video Analysis docs, and AI context; wired the tests into `npm test` and the clip regression workflow.
+- **Safety and correctness:** Skill requires SHA-256 matching before reusing analysis timestamps, treats ZIP contents as untrusted data, preserves `ASR_RAW`/speaker uncertainty, flags unclear rights as a publication blocker, and explicitly distinguishes a plan from a rendered/inspected MP4. It does not falsely claim that `.analisis` automatically invokes the skill.
+- **Files:** `skills/clip-editor/**`, `docs/CLIP_EDITOR_SKILL.md`, `README.md`, `docs/VIDEO_ANALYSIS.md`, `AI_CONTEXT.md`, `docs/AI_CHANGELOG.md`, `package.json`, `.github/workflows/clip-regression.yml`.
+- **Verification:** Added `npm run test:skills-clip` covering valid plans, bad source ranges, duplicate IDs, score mismatch, ratio mismatch, evidence bounds, rights warnings, empty plans, and source-duration overrides. CI is configured to run this suite; its post-commit result and a real render on the deployment runtime remain to be verified.
+- **Limitations:** This change adds the reusable agent skill and validator, not a new WhatsApp rendering command or a hosted render service. Actual rendering depends on the AI agent's available FFmpeg/Remotion runtime.
+
 ## 2026-11-19 — Fix .rvo View Once rejection and TikTok still-photo / Live Photo video
 
 - **Symptom (owner report, 2026-11-19):** `.rvo` selalu error `⚠️ Itu media Lihat Sekali. Minta pengirim mengirim ulang sebagai media biasa.` sehingga tidak bisa dipakai sama sekali. `.tiktok` saat render foto menolak foto biasa dengan `Foto ke-1 tidak memiliki klip gerak Live Photo asli. Pilih foto yang ditandai Live Photo pada menu.`; dan foto Live Photo yang berhasil dirender hasilnya diam saja, tidak bergerak.

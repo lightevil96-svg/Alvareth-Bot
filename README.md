@@ -237,6 +237,15 @@ Alvareth includes an owner-only, private-chat `.analisis` command. Reply to a vi
 The default engine uses Gemini Files API and standard `generateContent` endpoint using `gemini-3.8-flash` by default; it requires `GEMINI_API_KEY`. An optional Cutroom sidecar adds faster-whisper transcription, pyannote diarization, face tracking, and LR-ASD active-speaker candidates. Cutroom must be deployed separately and should remain on localhost/private network because its upstream API is unauthenticated by default. FFprobe is optional for source-duration metadata. Transcript output remains `ASR_RAW`; speaker-to-face matches remain `CANDIDATE` or `UNKNOWN` until a human reviews the source. Setup, limits, artifacts, and security notes are in [Video Analysis](docs/VIDEO_ANALYSIS.md).
 
 
+
+## Agent skill untuk editing video
+
+AI agent dapat menggunakan [Clip Editor Skill](skills/clip-editor/SKILL.md) untuk mengubah source video atau paket export `.analisis` menjadi rencana klip, hasil render, subtitle, dan laporan QC. Skill ini mencakup viral scoring berbasis bukti, preset Shorts, aturan khusus VTuber/gameplay, schema `clip-plan.json`, dan validator.
+
+Panduan: [docs/CLIP_EDITOR_SKILL.md](docs/CLIP_EDITOR_SKILL.md). Validasi plan dengan `node skills/clip-editor/scripts/validate-clip-plan.mjs path/to/clip-plan.json` atau jalankan `npm run test:skills-clip`.
+
+**Batas integrasi saat ini:** `.analisis` tetap hanya menghasilkan ZIP handoff; fitur WhatsApp tersebut belum memanggil Clip Editor Skill dan belum merender MP4 final secara otomatis. Agent harus memperoleh source video asli, mencocokkan SHA-256, membuat dan memvalidasi plan, menjalankan renderer yang tersedia, lalu melakukan QC.
+
 ## Asisten WhatsApp otomatis (`.asisten`)
 
 Fitur khusus owner untuk membalas pesan teks dari kontak yang dipilih ketika owner tidak tersedia. Model Groq: `openai/gpt-oss-120b`.
