@@ -170,9 +170,12 @@ async function encodeAnimatedWithFfmpeg(input, { maxSeconds = VIDEO_SECONDS, max
   // berubah; di atas 10 (eksperimen .sa 720p/30fps) ditambah langkah 30/24/
   // 20/15/12 supaya penurunan fps bertahap, bukan langsung jatuh ke 10.
   // Mode fixedFps (.sa saat ini): fps MUTLAK — tidak naik, tidak turun.
-  // Tangga profil hanya menurunkan kualitas pada fps tetap = maxFps.
+  // Tangga profil hanya menurunkan kualitas pada fps tetap = maxFps,
+  // sampai kualitas 1, supaya stiker tidak pernah melebihi maxBytes
+  // (500 KB untuk .sa). Bila kualitas 1 pun tidak muat, mesin menolak
+  // (lihat fallback di bawah) alih-alih mengirim stiker yang terlalu besar.
   const profiles = fixedFps
-    ? [55, 45, 35, 28, 22, 18, 12].map(quality => ({ fps: maxFps, quality }))
+    ? [55, 45, 35, 28, 22, 18, 12, 8, 5, 3, 1].map(quality => ({ fps: maxFps, quality }))
     : maxFps > 10
     ? [
         { fps: 30, quality: 55 },

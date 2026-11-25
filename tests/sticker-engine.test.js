@@ -460,3 +460,104 @@ test('Mode fixedFps: fps mutlak 20 dari sumber 30 fps maupun 60 fps', async t =>
     await rm(directory, { recursive: true, force: true })
   }
 })
+
+test('Mode fixedFps: kualitas turun sampai 1 supaya muat 500 KB, fps tetap 20', async t => {
+  const version = spawnSync('ffmpeg', ['-version'], { encoding: 'utf8' })
+  if (version.error?.code === 'ENOENT') {
+    t.skip('FFmpeg tidak tersedia pada runner ini.')
+    return
+  }
+
+  const directory = await mkdtemp(join(tmpdir(), 'alvareth-sticker-test-'))
+  const inputPath = join(directory, 'input.mp4')
+  try {
+    const generated = spawnSync('ffmpeg', [
+      '-hide_banner', '-loglevel', 'error',
+      // Klip 10 detik yang ramai: di fps 20, kualitas 12 masih ~619 KB,
+      // jadi tangga kualitas harus turun sampai 1 (~479 KB) supaya muat.
+      '-f', 'lavfi', '-i', 'testsrc2=size=160x160:rate=30',
+      '-t', '10',
+      '-c:v', 'libx264',
+      '-pix_fmt', 'yuv420p',
+      '-movflags', '+faststart',
+      '-y', inputPath
+    ], { encoding: 'utf8', timeout: 30_000 })
+
+    if (generated.error || generated.status !== 0) {
+      t.skip('Runner FFmpeg tidak memiliki encoder H.264 untuk membuat fixture video.')
+      return
+    }
+
+    const input = await readFile(inputPath)
+    const output = await createStickerFromBuffer(input, {
+      mimeHint: 'video/mp4',
+      mediaType: 'videoMessage',
+      maxVideoSeconds: 30,
+      maxStickerBytes: 500 * 1024,
+      size: 360,
+      maxFps: 20,
+      fixedFps: true,
+      packname: 'Alvareth 20fps Test',
+      author: 'Sticker Test'
+    })
+
+    const info = animatedWebpInfo(Buffer.from(output))
+    assert.equal(info.width, 360, `lebar kanvas harus 360, dapat ${info.width}`)
+    assert.ok(info.durationMs >= 9900 && info.durationMs <= 10100, `stiker harus ~10 detik, dapat ${info.durationMs} ms`)
+    // 10 detik pada 20 fps = tepat 200 frame, tidak kurang tidak lebih.
+    assert.equal(info.frames, 200, `stiker harus tepat 200 frame, dapat ${info.frames}`)
+    const fps = info.frames / (info.durationMs / 1000)
+    assert.ok(fps >= 19 && fps <= 21, `stiker harus tepat 20 fps, dapat ${fps.toFixed(1)} fps`)
+    assert.ok(output.length <= stickerLimits.maxStickerBytes, `stiker harus <= 500 KB, dapat ${output.length} byte`)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test('Mode fixedFps: menolak bila kualitas 1 pun tidak muat batas', async t => {
+  const version = spawnSync('ffmpeg', ['-version'], { encoding: 'utf8' })
+  if (version.error?.code === 'ENOENT') {
+    t.skip('FFmpeg tidak tersedia pada runner ini.')
+    return
+  }
+
+  const directory = await mkdtemp(join(tmpdir(), 'alvareth-sticker-test-'))
+  const inputPath = join(directory, 'input.mp4')
+  try {
+    const generated = spawnSync('ffmpeg', [
+      '-hide_banner', '-loglevel', 'error',
+      '-f', 'lavfi', '-i', 'testsrc2=size=160x160:rate=30',
+      '-t', '2',
+      '-c:v', 'libx264',
+      '-pix_fmt', 'yuv420p',
+      '-movflags', '+faststart',
+      '-y', inputPath
+    ], { encoding: 'utf8', timeout: 30_000 })
+
+    if (generated.error || generated.status !== 0) {
+      t.skip('Runner FFmpeg tidak memiliki encoder H.264 untuk membuat fixture video.')
+      return
+    }
+
+    const input = await readFile(inputPath)
+    // Batas 10 KB mustahil dipenuhi (kualitas 1 untuk klip 2 detik saja
+    // ~92 KB): mesin harus menolak, bukan mengirim stiker di atas batas.
+    await assert.rejects(
+      () => createStickerFromBuffer(input, {
+        mimeHint: 'video/mp4',
+        mediaType: 'videoMessage',
+        maxVideoSeconds: 30,
+        targetBytes: 10 * 1024,
+        maxStickerBytes: 10 * 1024,
+        size: 360,
+        maxFps: 20,
+        fixedFps: true,
+        packname: 'Alvareth 20fps Test',
+        author: 'Sticker Test'
+      }),
+      /Batas maksimal stiker adalah 10 KB/
+    )
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})

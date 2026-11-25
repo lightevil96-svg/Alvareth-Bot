@@ -1,3 +1,11 @@
+## 2026-11-25 — `.sa`: 500 KB is now a hard cap; quality steps down to 1, fps stays 20
+
+- **Request (owner, 2026-11-25 ~21:17 WIB):** "Bikin agar fps nya dipertahankan di 20 dan kualitas nya diturunkan agar tidak lebih dari 500kb."
+- **Change (`.sa`-only; shared `.s` unchanged):** `MAX_STICKER_BYTES` 25 MB → 500 KB in `lib/sticker-audio.js`, so the engine's hard cap (`maxBytes`) is now 500 KB and the 25 MB fallback is gone. The `fixedFps` quality ladder is extended down to quality 1 (55/45/35/28/22/18/12/8/5/3/1) at a fixed 20 fps. When even quality 1 cannot fit 500 KB the engine refuses with "Batas maksimal stiker adalah 500 KB; potong video atau pilih video yang lebih sederhana." instead of sending an oversized sticker.
+- **Files:** `lib/sticker-audio.js`, `plugins/sticker/sticker-engine.js`, `tests/sticker-audio.test.js`, `tests/sticker-engine.test.js`, `AI_CONTEXT.md`, `docs/AI_CHANGELOG.md`.
+- **Verification:** Engine suite passes 13/13 — new: a busy 10 s clip at fixed 20 fps fits 500 KB (200 frames, 20.0 fps) only after the quality ladder reaches quality 1, and a call with an impossible 10 KB cap is refused with "Batas maksimal stiker adalah 10 KB". `npm run test:stickeraudio` passes 16/16, full `npm test` exits 0.
+- **Limitations / unverified:** quality has a floor. Measured on a very busy synthetic clip (`testsrc2`) at 360p/20fps: a 10 s clip fits at quality 1 (~479 KB), but a 12 s clip is still ~571 KB at quality 1 and would be refused. Real phone videos compress much better than `testsrc2` (large static areas), so the practical limit is longer — the live test decides. Live test still unverified.
+
 ## 2026-11-25 — `.sa`: fps mutlak 20 (tidak kurang, tidak lebih)
 
 - **Request (owner, 2026-11-25 ~19:57 WIB):** "Fps nya 20 gak boleh kurang dan gak boleh lebih, kamu ubah sekarang untuk fps nya mutlak 20 fps."
