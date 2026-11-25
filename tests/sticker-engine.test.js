@@ -352,3 +352,57 @@ test('Opsi size 720 + maxFps 30 (eksperimen .sa) menghasilkan stiker 720x720 ~30
     await rm(directory, { recursive: true, force: true })
   }
 })
+
+test('Opsi size 360 + maxFps 30 (eksperimen .sa saat ini) muat 500 KB pada 30 fps', async t => {
+  const version = spawnSync('ffmpeg', ['-version'], { encoding: 'utf8' })
+  if (version.error?.code === 'ENOENT') {
+    t.skip('FFmpeg tidak tersedia pada runner ini.')
+    return
+  }
+
+  const directory = await mkdtemp(join(tmpdir(), 'alvareth-sticker-test-'))
+  const inputPath = join(directory, 'input.mp4')
+  try {
+    const generated = spawnSync('ffmpeg', [
+      '-hide_banner', '-loglevel', 'error',
+      // Sumber HARUS 30 fps (lihat catatan pada tes 720p): encoder
+      // libwebp_anim menggabungkan frame duplikat, jadi fps stiker tidak
+      // pernah melebihi fps video sumber.
+      '-f', 'lavfi', '-i', 'testsrc2=size=160x160:rate=30',
+      '-t', '2',
+      '-c:v', 'libx264',
+      '-pix_fmt', 'yuv420p',
+      '-movflags', '+faststart',
+      '-y', inputPath
+    ], { encoding: 'utf8', timeout: 30_000 })
+
+    if (generated.error || generated.status !== 0) {
+      t.skip('Runner FFmpeg tidak memiliki encoder H.264 untuk membuat fixture video.')
+      return
+    }
+
+    const input = await readFile(inputPath)
+    // Tanpa targetBytes: target kompresi default 480 KB (seperti .sa
+    // sekarang) — stiker pendek 360p harus muat 500 KB pada 30 fps.
+    const output = await createStickerFromBuffer(input, {
+      mimeHint: 'video/mp4',
+      mediaType: 'videoMessage',
+      maxVideoSeconds: 30,
+      maxStickerBytes: 25 * 1024 * 1024,
+      size: 360,
+      maxFps: 30,
+      packname: 'Alvareth 360p Test',
+      author: 'Sticker Test'
+    })
+
+    assert.ok(output.length <= stickerLimits.maxStickerBytes, `stiker 360p harus <= 500 KB, dapat ${output.length} byte`)
+    const info = animatedWebpInfo(Buffer.from(output))
+    assert.equal(info.width, 360, `lebar kanvas harus 360, dapat ${info.width}`)
+    assert.equal(info.height, 360, `tinggi kanvas harus 360, dapat ${info.height}`)
+    assert.ok(info.durationMs >= 1900 && info.durationMs <= 2100, `stiker harus ~2 detik, dapat ${info.durationMs} ms`)
+    const fps = info.frames / (info.durationMs / 1000)
+    assert.ok(fps >= 28 && fps <= 32, `stiker harus ~30 fps, dapat ${fps.toFixed(1)} fps (${info.frames} frame)`)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})

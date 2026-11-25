@@ -9,6 +9,8 @@
 
 ## Pembaruan terbaru
 
+- 2026-11-25 — EXPERIMENT: `.sa` stickers now render at 360x360 and 30 fps, replacing the same-day 720p experiment (`.sa`-only; shared `.s` stays 512x512, 10 fps, 500 KB target). `STICKER_SIZE` 360; the 25 MB compression target is removed, so `.sa` compresses toward 500 KB first again (25 MB only as fallback). A short 360p clip fits 500 KB at 30 fps (~281 KB measured); long busy clips still step down fps. Outside WhatsApp's spec — live test decides. Engine 10/10, `npm run test:stickeraudio` 16/16, full `npm test` exits 0.
+
 - 2026-11-25 — Raised `.sa` max duration 30 s → 1 hour (`.sa`-only; shared `.s` stays 10 s): `MAX_VIDEO_SECONDS` / `MAX_SOUND_SECONDS` 3600, plus `formatDurationSeconds()` so messages read "Maksimal 1 jam". `npm run test:stickeraudio` passes 16/16, full `npm test` exits 0. Note: a real 1-hour video still hits the 25 MB input cap, 2 MB audio cap, 25 MB sticker cap and 90 s encode timeout — those were deliberately not raised.
 
 - 2026-11-25 — EXPERIMENT: `.sa` stickers now render at 720x720 and up to 30 fps (`.sa`-only; shared `.s` stays 512x512, 10 fps, 500 KB target). New `size` / `maxFps` / `targetBytes` options on the sticker engine; `.sa` uses the 25 MB cap as its compression target because 720p/30fps cannot fit 500 KB. Outside WhatsApp's spec — WhatsApp may downscale or reject; live test decides. Engine 9/9, `npm run test:stickeraudio` 15/15, full `npm test` exits 0. Note: `libwebp_anim` merges duplicate frames, so a sticker's fps never exceeds its source video's fps — a 30 fps sticker needs a 30 fps source video.

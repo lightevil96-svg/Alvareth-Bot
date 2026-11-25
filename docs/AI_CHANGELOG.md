@@ -1,3 +1,11 @@
+## 2026-11-25 — Experiment: `.sa` stickers at 360x360 and 30 fps (replaces 720p)
+
+- **Request (owner, 2026-11-25 ~18:40 WIB):** "Sekarang coba 360p 30fps."
+- **Change (`.sa`-only; shared `.s` stays 512x512, 10 fps, 500 KB target):** `STICKER_SIZE` 720 → 360 in `lib/sticker-audio.js`, and the `targetBytes` override (25 MB) is removed — `.sa` compresses toward 500 KB first again, with the 25 MB cap only as the fallback. Rationale: at 360p a short sticker fits 500 KB at 30 fps (measured: a 2 s `testsrc2` clip encodes to ~281 KB at 360x360/30fps/q55), while a busy 30 s clip at 360p/30fps/q55 is ~4.8 MB, so long clips still step down fps or use the fallback. The 720p experiment (same-day commit `02f3e17a`) is superseded.
+- **Files:** `lib/sticker-audio.js`, `plugins/sticker/stickeraudio.js`, `tests/sticker-audio.test.js`, `tests/sticker-engine.test.js`, `AI_CONTEXT.md`, `docs/AI_CHANGELOG.md`.
+- **Verification:** Engine suite passes 10/10 — new: a 2 s `testsrc2` video at 360x360 with `size: 360, maxFps: 30` (no `targetBytes`, so the default 480 KB target applies) produces a 360x360 sticker at ~30 fps (60 frames, ~2 s) within 500 KB. `npm run test:stickeraudio` passes 16/16, full `npm test` exits 0.
+- **Limitations / unverified:** 360x360 is still outside WhatsApp's spec (512x512) — WhatsApp may upscale the sticker or reject it; the live test decides. Long/busy clips still drop fps to fit 500 KB, or go out above 500 KB via the fallback.
+
 ## 2026-11-25 — Raise `.sa` max duration from 30 s to 1 hour
 
 - **Request (owner, 2026-11-25 ~18:28 WIB):** "Langsung ubah cepat aja, maksimal durasi nya bikin 1 jam."
