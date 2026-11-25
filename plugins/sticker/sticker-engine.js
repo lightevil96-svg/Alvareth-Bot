@@ -172,8 +172,7 @@ async function encodeAnimatedWithFfmpeg(input, { maxSeconds = VIDEO_SECONDS, max
   // Mode fixedFps (.sa saat ini): fps MUTLAK — tidak naik, tidak turun.
   // Tangga profil hanya menurunkan kualitas pada fps tetap = maxFps,
   // sampai kualitas 1, supaya stiker tidak pernah melebihi maxBytes
-  // (500 KB untuk .sa). Bila kualitas 1 pun tidak muat, mesin menolak
-  // (lihat fallback di bawah) alih-alih mengirim stiker yang terlalu besar.
+  // (500 KB untuk .sa).
   const profiles = fixedFps
     ? [55, 45, 35, 28, 22, 18, 12, 8, 5, 3, 1].map(quality => ({ fps: maxFps, quality }))
     : maxFps > 10
@@ -197,28 +196,20 @@ async function encodeAnimatedWithFfmpeg(input, { maxSeconds = VIDEO_SECONDS, max
         { fps: 4, quality: 22 }
       ]
 
-  for (const profile of profiles) {
-    const filter =
-      'fps=' + profile.fps + ',' + stickerFilter(size)
-    try {
-      let output
+  // Hasil per kualitas dari percobaan terakhir — dipakai untuk
+  // memperkirakan ukuran kanvas berikutnya bila harus mengecil.
+  const bytesByQuality = new Map()
+
+  // Satu kali jalan tangga kualitas pada satu ukuran kanvas. Mengembalikan
+  // output pertama yang muat targetBytes, atau null (yang terkecil tetap
+  // disimpan di `smallest` untuk keputusan fallback pemanggil).
+  const trySize = async (trySizeValue, tryProfiles) => {
+    for (const profile of tryProfiles) {
+      const filter =
+        'fps=' + profile.fps + ',' + stickerFilter(trySizeValue)
       try {
-        output = await runFfmpeg(input, [
-          '-map', '0:v:0',
-          '-t', String(maxSeconds),
-          '-vf', filter,
-          '-an', '-sn', '-dn',
-          '-c:v', encoder,
-          '-lossless', '0',
-          '-quality', String(profile.quality),
-          '-preset', 'picture',
-          '-loop', '0',
-          '-threads', '1'
-        ])
-      } catch (error) {
-        // Some FFmpeg builds expose libwebp but not the animation alias.
-        if (encoder === 'libwebp_anim' && /Unknown encoder|Encoder .* not found/i.test(error.message)) {
-          encoder = 'libwebp'
+        let output
+        try {
           output = await runFfmpeg(input, [
             '-map', '0:v:0',
             '-t', String(maxSeconds),
@@ -231,23 +222,64 @@ async function encodeAnimatedWithFfmpeg(input, { maxSeconds = VIDEO_SECONDS, max
             '-loop', '0',
             '-threads', '1'
           ])
-        } else {
-          throw error
+        } catch (error) {
+          // Some FFmpeg builds expose libwebp but not the animation alias.
+          if (encoder === 'libwebp_anim' && /Unknown encoder|Encoder .* not found/i.test(error.message)) {
+            encoder = 'libwebp'
+            output = await runFfmpeg(input, [
+              '-map', '0:v:0',
+              '-t', String(maxSeconds),
+              '-vf', filter,
+              '-an', '-sn', '-dn',
+              '-c:v', encoder,
+              '-lossless', '0',
+              '-quality', String(profile.quality),
+              '-preset', 'picture',
+              '-loop', '0',
+              '-threads', '1'
+            ])
+          } else {
+            throw error
+          }
         }
-      }
 
-      if (!isWebp(output)) throw new Error('Output FFmpeg bukan WebP animasi yang valid.')
-      if (!smallest || output.length < smallest.length) smallest = output
-      // Kompresi dulu menuju targetBytes (480 KB untuk .s): profil pertama
-      // yang muat langsung dipakai. maxBytes hanya batas darurat — dipakai
-      // kalau profil terkecil pun masih di atas target, bukan alasan untuk
-      // melewati kompresi. Untuk eksperimen .sa 720p/30fps, targetBytes-nya
-      // adalah 25 MB, karena 720p/30fps tidak mungkin muat 500 KB — jadi
-      // profil tertinggi yang muat 25 MB langsung dipakai.
-      if (output.length <= targetBytes) return output
-    } catch (error) {
-      lastError = error
-      if (/FFmpeg tidak ditemukan|Tidak dapat menjalankan FFmpeg|Unknown encoder/i.test(error.message)) break
+        if (!isWebp(output)) throw new Error('Output FFmpeg bukan file WebP yang valid.')
+        if (!smallest || output.length < smallest.length) smallest = output
+        bytesByQuality.set(profile.quality, output.length)
+        // Kompresi dulu menuju targetBytes (480 KB): profil pertama yang
+        // muat langsung dipakai. maxBytes hanya batas keras — dipakai
+        // kalau profil terkecil pun masih di atas target.
+        if (output.length <= targetBytes) return output
+      } catch (error) {
+        lastError = error
+        if (/FFmpeg tidak ditemukan|Tidak dapat menjalankan FFmpeg|Unknown encoder/i.test(error.message)) break
+      }
+    }
+    return null
+  }
+
+  const fitted = await trySize(size, profiles)
+  if (fitted) return fitted
+  if (smallest && smallest.length <= maxBytes) return smallest
+
+  // Mode fixedFps (.sa): bila kualitas 1 di ukuran penuh pun tidak muat,
+  // kanvas mengecil (fps tetap 20) sampai muat — daripada menolak video
+  // yang panjang/ramai. Ukuran berikutnya diperkirakan dari hasil kualitas
+  // 12 (atau dari yang terkecil bila 12 tidak sempat dicoba): biaya
+  // per-frame kira-kira sebanding dengan luas kanvas.
+  if (fixedFps) {
+    const estimateSize = (fromSize, bytes) => {
+      if (!Number.isFinite(bytes) || bytes <= 0) return null
+      return Math.floor(fromSize * Math.sqrt(targetBytes / bytes) / 8) * 8
+    }
+    let nextSize = estimateSize(size, bytesByQuality.get(12) ?? (smallest ? smallest.length * 1.3 : null))
+    for (let attempt = 0; attempt < 2 && nextSize !== null && nextSize >= 160 && nextSize < size; attempt++) {
+      const fittedSmaller = await trySize(nextSize, [35, 22, 12, 8, 5, 1].map(quality => ({ fps: maxFps, quality })))
+      if (fittedSmaller) return fittedSmaller
+      if (smallest && smallest.length <= maxBytes) return smallest
+      const prevSize = nextSize
+      nextSize = estimateSize(prevSize, bytesByQuality.get(12) ?? (smallest ? smallest.length * 1.3 : null))
+      if (nextSize === null || nextSize >= prevSize) break
     }
   }
 

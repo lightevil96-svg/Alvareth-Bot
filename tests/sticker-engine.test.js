@@ -561,3 +561,59 @@ test('Mode fixedFps: menolak bila kualitas 1 pun tidak muat batas', async t => {
     await rm(directory, { recursive: true, force: true })
   }
 })
+
+test('Mode fixedFps: ukuran mengecil bila kualitas 1 di 360p tidak muat 500 KB', async t => {
+  const version = spawnSync('ffmpeg', ['-version'], { encoding: 'utf8' })
+  if (version.error?.code === 'ENOENT') {
+    t.skip('FFmpeg tidak tersedia pada runner ini.')
+    return
+  }
+
+  const directory = await mkdtemp(join(tmpdir(), 'alvareth-sticker-test-'))
+  const inputPath = join(directory, 'input.mp4')
+  try {
+    const generated = spawnSync('ffmpeg', [
+      '-hide_banner', '-loglevel', 'error',
+      // Klip 12 detik yang ramai: di 360p/20fps kualitas 1 masih ~571 KB,
+      // jadi mesin harus mengecilkan kanvas supaya muat 500 KB.
+      '-f', 'lavfi', '-i', 'testsrc2=size=160x160:rate=30',
+      '-t', '12',
+      '-c:v', 'libx264',
+      '-pix_fmt', 'yuv420p',
+      '-movflags', '+faststart',
+      '-y', inputPath
+    ], { encoding: 'utf8', timeout: 30_000 })
+
+    if (generated.error || generated.status !== 0) {
+      t.skip('Runner FFmpeg tidak memiliki encoder H.264 untuk membuat fixture video.')
+      return
+    }
+
+    const input = await readFile(inputPath)
+    const output = await createStickerFromBuffer(input, {
+      mimeHint: 'video/mp4',
+      mediaType: 'videoMessage',
+      maxVideoSeconds: 30,
+      maxStickerBytes: 500 * 1024,
+      size: 360,
+      maxFps: 20,
+      fixedFps: true,
+      packname: 'Alvareth 20fps Test',
+      author: 'Sticker Test'
+    })
+
+    const info = animatedWebpInfo(Buffer.from(output))
+    assert.ok(info.width < 360, `kanvas harus mengecil dari 360, dapat ${info.width}`)
+    assert.ok(info.width >= 160, `kanvas tidak boleh di bawah 160, dapat ${info.width}`)
+    assert.equal(info.width % 8, 0, `lebar kanvas harus kelipatan 8, dapat ${info.width}`)
+    assert.equal(info.width, info.height, `kanvas harus persegi, dapat ${info.width}x${info.height}`)
+    assert.ok(info.durationMs >= 11900 && info.durationMs <= 12100, `stiker harus ~12 detik, dapat ${info.durationMs} ms`)
+    // 12 detik pada 20 fps = tepat 240 frame, tidak kurang tidak lebih.
+    assert.equal(info.frames, 240, `stiker harus tepat 240 frame, dapat ${info.frames}`)
+    const fps = info.frames / (info.durationMs / 1000)
+    assert.ok(fps >= 19 && fps <= 21, `stiker harus tepat 20 fps, dapat ${fps.toFixed(1)} fps`)
+    assert.ok(output.length <= stickerLimits.maxStickerBytes, `stiker harus <= 500 KB, dapat ${output.length} byte`)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})

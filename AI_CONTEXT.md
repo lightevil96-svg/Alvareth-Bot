@@ -9,6 +9,8 @@
 
 ## Pembaruan terbaru
 
+- 2026-11-26 — `.sa`: when quality 1 at 360p cannot fit 500 KB, the canvas now shrinks (fps stays 20) instead of refusing — fixes Light's live failure (975 KB at quality 1). Only when even 160 px cannot fit does the bot refuse (`.sa`-only; shared `.s` unchanged). Engine 14/14, `npm run test:stickeraudio` 16/16, full `npm test` exits 0.
+
 - 2026-11-25 — `.sa`: 500 KB is now a HARD cap — fps stays 20, quality steps down to 1 to fit it; when even quality 1 cannot fit, the bot refuses instead of sending an oversized sticker (`.sa`-only; shared `.s` unchanged). The 25 MB fallback is gone. Engine 13/13, `npm run test:stickeraudio` 16/16, full `npm test` exits 0.
 
 - 2026-11-25 — `.sa`: fps now ABSOLUTE 20 — never less, never more (`fixedFps`, `.sa`-only; shared `.s` unchanged). `MAX_FPS` 30 → 20; only WebP quality steps down to fit the size. Holds for sources at/above 20 fps; a source below 20 fps still follows the source (encoder merges duplicated frames). Engine 11/11, `npm run test:stickeraudio` 16/16, full `npm test` exits 0.

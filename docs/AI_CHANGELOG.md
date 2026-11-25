@@ -1,3 +1,12 @@
+## 2026-11-26 — `.sa`: canvas shrinks when quality 1 at 360p cannot fit 500 KB
+
+- **Report (owner, 2026-11-26 01:37 WIB, live test):** `.sa` on his video failed with "Hasil stiker video masih 975 KB setelah kompresi. Batas maksimal stiker adalah 500 KB; potong video atau pilih video yang lebih sederhana." — the hard 500 KB cap refused the video because even quality 1 at 360p/20fps was 975 KB.
+- **Root cause:** at a fixed 20 fps the frame count sets a floor: quality alone cannot shrink a long/busy video below 500 KB (measured: a very busy 12 s synthetic clip is still ~571 KB at quality 1; Light's video was 975 KB at quality 1). The only remaining levers that keep fps 20 and ≤ 500 KB are a smaller canvas or a shorter clip.
+- **Change (`.sa`-only, `fixedFps` mode; shared `.s` unchanged):** `encodeAnimatedWithFfmpeg` now tries smaller canvases when quality 1 at the full size cannot fit: the next size is estimated from the quality-12 result (per-frame cost scales roughly with canvas area), up to 2 attempts (min 160 px), each with a short quality ladder (35/22/12/8/5/1) at a fixed 20 fps. The sticker is returned as soon as one fits 500 KB; only when even the smallest canvas cannot fit does the engine refuse. Measured first: the 12 s busy clip fits at 288p/quality 1 (~436 KB, 240 frames, 20.0 fps).
+- **Files:** `plugins/sticker/sticker-engine.js`, `lib/sticker-audio.js`, `tests/sticker-engine.test.js`, `AI_CONTEXT.md`, `docs/AI_CHANGELOG.md`.
+- **Verification:** Engine suite passes 14/14 — new: a busy 12 s clip that is ~571 KB at quality 1 in 360p now comes out ≤ 500 KB at a smaller canvas (240 frames, 20.0 fps, square canvas below 360 px). `npm run test:stickeraudio` passes 16/16, full `npm test` exits 0.
+- **Limitations / unverified:** a very long video may still be refused even at 160 px; the canvas the user gets back is smaller than 360p for long/busy videos (fps stays 20, size stays ≤ 500 KB). Live test on Light's video still unverified.
+
 ## 2026-11-25 — `.sa`: 500 KB is now a hard cap; quality steps down to 1, fps stays 20
 
 - **Request (owner, 2026-11-25 ~21:17 WIB):** "Bikin agar fps nya dipertahankan di 20 dan kualitas nya diturunkan agar tidak lebih dari 500kb."
