@@ -62,6 +62,7 @@
     "awesome-phonenumber": "^5.10.0",
     "axios": "^1.4.0",
     "baileys": "npm:@itsliaaa/baileys@0.5.6",
+    "better-sqlite3": "^13.2.0",
     "bing-translate-api": "^4.0.2",
     "brat-canvas": "^1.0.30",
     "canvas": "^2.11.2",
