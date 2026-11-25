@@ -9,6 +9,8 @@
 
 ## Pembaruan terbaru
 
+- 2026-11-25 — REVERTED to the 360p/30fps version at the owner's request: `keepSourceFps` (commit `fb928d0`) removed; `.sa` fps steps down again to fit 500 KB (30→24→20→15→12→10→8→6→5→4). Size stays 360x360, cap 30 fps. Engine 10/10, `npm run test:stickeraudio` 16/16, full `npm test` exits 0.
+
 - 2026-11-25 — `.sa`: fps now follows the source video (capped at 30 fps) and is never compressed — only WebP quality steps down (55 → 12) to fit the size (`keepSourceFps`, `.sa`-only; shared `.s` unchanged). A busy 6 s clip still goes out above 500 KB at 30 fps rather than dropping fps. Engine 11/11, `npm run test:stickeraudio` 16/16, full `npm test` exits 0.
 
 - 2026-11-25 — EXPERIMENT: `.sa` stickers now render at 360x360 and 30 fps, replacing the same-day 720p experiment (`.sa`-only; shared `.s` stays 512x512, 10 fps, 500 KB target). `STICKER_SIZE` 360; the 25 MB compression target is removed, so `.sa` compresses toward 500 KB first again (25 MB only as fallback). A short 360p clip fits 500 KB at 30 fps (~281 KB measured); long busy clips still step down fps. Outside WhatsApp's spec — live test decides. Engine 10/10, `npm run test:stickeraudio` 16/16, full `npm test` exits 0.

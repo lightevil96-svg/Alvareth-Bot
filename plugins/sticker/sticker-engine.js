@@ -160,7 +160,7 @@ async function encodeStillWithFfmpeg(input) {
   throw new Error('Gambar terlalu besar untuk dikompres menjadi stiker WhatsApp.')
 }
 
-async function encodeAnimatedWithFfmpeg(input, { maxSeconds = VIDEO_SECONDS, maxBytes = ANIMATED_TARGET_BYTES, targetBytes = ANIMATED_TARGET_BYTES, size = 512, maxFps = 10, keepSourceFps = false } = {}) {
+async function encodeAnimatedWithFfmpeg(input, { maxSeconds = VIDEO_SECONDS, maxBytes = ANIMATED_TARGET_BYTES, targetBytes = ANIMATED_TARGET_BYTES, size = 512, maxFps = 10 } = {}) {
   let smallest = null
   let lastError = null
   let encoder = 'libwebp_anim'
@@ -169,12 +169,7 @@ async function encodeAnimatedWithFfmpeg(input, { maxSeconds = VIDEO_SECONDS, max
   // masih 10, tangganya persis seperti semula supaya output default tidak
   // berubah; di atas 10 (eksperimen .sa 720p/30fps) ditambah langkah 30/24/
   // 20/15/12 supaya penurunan fps bertahap, bukan langsung jatuh ke 10.
-  // Mode keepSourceFps (.sa saat ini): fps TIDAK dikompres — fps mengikuti
-  // video sumber (dibatasi maxFps) dan hanya kualitas yang turun supaya
-  // muat target.
-  const profiles = keepSourceFps
-    ? [55, 45, 35, 28, 22, 18, 12].map(quality => ({ fps: maxFps, quality }))
-    : maxFps > 10
+  const profiles = maxFps > 10
     ? [
         { fps: 30, quality: 55 },
         { fps: 24, quality: 55 },
@@ -392,13 +387,12 @@ export async function createStickerFromBuffer(input, options = {}) {
   const maxFps = Number.isFinite(requestedFps) && requestedFps > 0
     ? requestedFps
     : 10
-  const keepSourceFps = options.keepSourceFps === true
   if (isVideo || detected?.ext === 'gif' || detected?.ext === 'apng') {
     const requestedSeconds = Number(options.maxVideoSeconds)
     const maxVideoSeconds = Number.isFinite(requestedSeconds) && requestedSeconds > 0
       ? requestedSeconds
       : VIDEO_SECONDS
-    webpBuffer = await encodeAnimatedWithFfmpeg(buffer, { maxSeconds: maxVideoSeconds, maxBytes: maxStickerBytes, targetBytes, size, maxFps, keepSourceFps })
+    webpBuffer = await encodeAnimatedWithFfmpeg(buffer, { maxSeconds: maxVideoSeconds, maxBytes: maxStickerBytes, targetBytes, size, maxFps })
   } else {
     try {
       webpBuffer = await encodeImageWithSharp(buffer)

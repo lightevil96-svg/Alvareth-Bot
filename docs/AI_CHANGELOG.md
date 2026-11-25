@@ -1,3 +1,11 @@
+## 2026-11-25 — Reverted: back to the 360p/30fps version (fps compressed again)
+
+- **Request (owner, 2026-11-25 ~19:23 WIB):** "Ubah ke versi sebelumnya aja yang 360p 30 fps."
+- **Change:** reverted commit `fb928d0` (keepSourceFps) in full — the code files are byte-identical to the 360p commit `95fdcc7` again (verified with `git diff 385536f` on the five code/test files, empty). `.sa` returns to the fps ladder: fps steps down 30→24→20→15→12→10→8→6→5→4 (with quality) to fit 500 KB; the `keepSourceFps` engine option, the limits flag, the plugin pass-through and its tests are removed. Size stays 360x360, cap 30 fps, compress-first toward 500 KB with the 25 MB fallback.
+- **Files:** `plugins/sticker/sticker-engine.js`, `lib/sticker-audio.js`, `plugins/sticker/stickeraudio.js`, `tests/sticker-audio.test.js`, `tests/sticker-engine.test.js`, `AI_CONTEXT.md`, `docs/AI_CHANGELOG.md`.
+- **Verification:** Engine suite passes 10/10 (back to the 360p suite: the 2 s clip at 360x360/30fps fits 500 KB at ~30 fps), `npm run test:stickeraudio` passes 16/16, full `npm test` exits 0.
+- **Limitations / unverified:** long/busy clips drop fps again to fit 500 KB; live test decides.
+
 ## 2026-11-25 — `.sa`: fps follows the source video; only quality is compressed
 
 - **Request (owner, 2026-11-25 ~19:01 WIB):** "fps nya itu gak dikompres cukup kualitas nya aja yang dikompres kalau fps nya ikutin video aslinya."
