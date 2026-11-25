@@ -151,6 +151,7 @@ test('Batas stiker audio .sa: video dan suara maksimal 1 jam', () => {
   assert.equal(stickerAudioLimits.maxStickerBytes, 25 * 1024 * 1024)
   assert.equal(stickerAudioLimits.stickerSize, 360)
   assert.equal(stickerAudioLimits.maxFps, 30)
+  assert.equal(stickerAudioLimits.keepSourceFps, true)
   assert.equal(stickerAudioLimits.maxInputBytes, 25 * 1024 * 1024)
 })
 

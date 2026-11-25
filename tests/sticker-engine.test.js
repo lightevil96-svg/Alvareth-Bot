@@ -406,3 +406,62 @@ test('Opsi size 360 + maxFps 30 (eksperimen .sa saat ini) muat 500 KB pada 30 fp
     await rm(directory, { recursive: true, force: true })
   }
 })
+
+test('Mode keepSourceFps: fps mengikuti video sumber, hanya kualitas yang turun', async t => {
+  const version = spawnSync('ffmpeg', ['-version'], { encoding: 'utf8' })
+  if (version.error?.code === 'ENOENT') {
+    t.skip('FFmpeg tidak tersedia pada runner ini.')
+    return
+  }
+
+  const directory = await mkdtemp(join(tmpdir(), 'alvareth-sticker-test-'))
+  const inputPath = join(directory, 'input.mp4')
+  try {
+    const generated = spawnSync('ffmpeg', [
+      '-hide_banner', '-loglevel', 'error',
+      '-f', 'lavfi', '-i', 'testsrc2=size=160x160:rate=30',
+      '-t', '6',
+      '-c:v', 'libx264',
+      '-pix_fmt', 'yuv420p',
+      '-movflags', '+faststart',
+      '-y', inputPath
+    ], { encoding: 'utf8', timeout: 30_000 })
+
+    if (generated.error || generated.status !== 0) {
+      t.skip('Runner FFmpeg tidak memiliki encoder H.264 untuk membuat fixture video.')
+      return
+    }
+
+    const input = await readFile(inputPath)
+    const baseOptions = {
+      mimeHint: 'video/mp4',
+      mediaType: 'videoMessage',
+      maxVideoSeconds: 30,
+      maxStickerBytes: 25 * 1024 * 1024,
+      size: 360,
+      packname: 'Alvareth FPS Test',
+      author: 'Sticker Test'
+    }
+
+    // Tanpa keepSourceFps, mesin menurunkan fps sampai muat 500 KB.
+    const dropped = await createStickerFromBuffer(input, baseOptions)
+    const droppedInfo = animatedWebpInfo(Buffer.from(dropped))
+    const droppedFps = droppedInfo.frames / (droppedInfo.durationMs / 1000)
+    assert.ok(droppedFps >= 9 && droppedFps <= 11, `stiker default harus ~10 fps, dapat ${droppedFps.toFixed(1)} fps`)
+
+    // Dengan keepSourceFps (.sa saat ini), fps tetap 30 dan hanya kualitas
+    // yang turun: klip 6 detik yang ramai ini tidak muat 500 KB di kualitas
+    // mana pun, jadi yang dikirim adalah profil kualitas terendah — di atas
+    // 500 KB tapi tetap 30 fps, di bawah batas darurat 25 MB.
+    const kept = await createStickerFromBuffer(input, { ...baseOptions, maxFps: 30, keepSourceFps: true })
+    const keptInfo = animatedWebpInfo(Buffer.from(kept))
+    assert.equal(keptInfo.width, 360, `lebar kanvas harus 360, dapat ${keptInfo.width}`)
+    assert.ok(keptInfo.durationMs >= 5900 && keptInfo.durationMs <= 6100, `stiker harus ~6 detik, dapat ${keptInfo.durationMs} ms`)
+    const keptFps = keptInfo.frames / (keptInfo.durationMs / 1000)
+    assert.ok(keptFps >= 28 && keptFps <= 32, `stiker keepSourceFps harus ~30 fps, dapat ${keptFps.toFixed(1)} fps (${keptInfo.frames} frame)`)
+    assert.ok(kept.length > stickerLimits.maxStickerBytes, `stiker keepSourceFps harus melewati 500 KB bila tidak muat (kualitas terendah), dapat ${kept.length} byte`)
+    assert.ok(kept.length <= 25 * 1024 * 1024, `stiker keepSourceFps harus <= 25 MB, dapat ${kept.length} byte`)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})

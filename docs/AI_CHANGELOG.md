@@ -1,3 +1,11 @@
+## 2026-11-25 — `.sa`: fps follows the source video; only quality is compressed
+
+- **Request (owner, 2026-11-25 ~19:01 WIB):** "fps nya itu gak dikompres cukup kualitas nya aja yang dikompres kalau fps nya ikutin video aslinya."
+- **Change (`.sa`-only; shared `.s` unchanged):** engine gains a `keepSourceFps` option; `stickerAudioLimits.keepSourceFps = true` and the plugin passes it through. When on, the profile sweep is quality-only at a fixed fps = `maxFps` (30): qualities 55/45/35/28/22/18/12, first profile ≤ 500 KB wins, otherwise the smallest profile (≤ 25 MB). The fps is never stepped down. Measured on a busy 6 s `testsrc2` clip at 360p: fps 30 q55 = 889 KB, q12 = 551 KB (still above 500 KB, so the fallback sends the lowest-quality 30 fps encode); the default path on the same clip returns 10 fps at 306 KB.
+- **Files:** `plugins/sticker/sticker-engine.js`, `lib/sticker-audio.js`, `plugins/sticker/stickeraudio.js`, `tests/sticker-audio.test.js`, `tests/sticker-engine.test.js`, `AI_CONTEXT.md`, `docs/AI_CHANGELOG.md`.
+- **Verification:** Engine suite passes 11/11 — new: on a busy 6 s `testsrc2` clip at 360p the default path returns ~10 fps (306 KB, fits 500 KB) while `keepSourceFps` returns ~30 fps (180 frames, ~6 s) at the lowest quality, above 500 KB but within 25 MB. `npm run test:stickeraudio` passes 16/16, full `npm test` exits 0.
+- **Limitations / unverified:** quality alone cannot shrink a long/busy clip to 500 KB (frame count dominates: even q12 on a 6 s busy clip is ~551 KB), so long clips now go out above 500 KB at 30 fps instead of dropping fps — the 500 KB spec trade-off is now the other way round. Live test decides whether WhatsApp accepts a 360p sticker above 500 KB.
+
 ## 2026-11-25 — Experiment: `.sa` stickers at 360x360 and 30 fps (replaces 720p)
 
 - **Request (owner, 2026-11-25 ~18:40 WIB):** "Sekarang coba 360p 30fps."

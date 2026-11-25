@@ -224,6 +224,7 @@ let handler = async (m, { conn, args = [], usedPrefix = '.', command = 'sa' }) =
       maxStickerBytes: stickerAudioLimits.maxStickerBytes,
       size: stickerAudioLimits.stickerSize,
       maxFps: stickerAudioLimits.maxFps,
+      keepSourceFps: stickerAudioLimits.keepSourceFps,
       packname,
       author
     })
