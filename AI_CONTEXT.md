@@ -9,6 +9,8 @@
 
 ## Pembaruan terbaru
 
+- 2026-11-25 — Fixed `.sa` 25 MB cap disabling compression: the engine compresses toward 500 KB first, as before, and 25 MB is only the fallback cap when even the smallest profile doesn't fit (owner: "kok gak dikompres kayak sebelumnya?"). Engine 8/8, `npm run test:stickeraudio` 15/15, full `npm test` exits 0. A sticker over 500 KB may still be rejected by WhatsApp; live test decides.
+
 - 2026-11-25 — Raised `.sa` sticker file cap 500 KB → 25 MB (`.sa`-only; shared `.s` default stays 500 KB): new `maxStickerBytes` option on the sticker engine + `MAX_FFMPEG_OUTPUT_BYTES` 6 MB → 25 MB. This exceeds WhatsApp's official 500 KB spec — a sticker over 500 KB may be rejected by WhatsApp; live test decides. `npm run test:stickeraudio` passes 15/15, engine 7/7, full `npm test` exits 0.
 
 - 2026-11-25 — Raised `.sa` video/audio cap 10 s → 30 s (`.sa`-only; shared `.s` default stays 10 s): new `maxVideoSeconds` option on the sticker engine + `MAX_SOUND_SECONDS` 30; the sticker cap for `.sa` is now 25 MB (see above), shared `.s` still 500 KB. `npm run test:stickeraudio` passes 15/15, full `npm test` exits 0. Live test of a 30 s video still pending.

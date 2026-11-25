@@ -211,7 +211,11 @@ async function encodeAnimatedWithFfmpeg(input, { maxSeconds = VIDEO_SECONDS, max
 
       if (!isWebp(output)) throw new Error('Output FFmpeg bukan WebP animasi yang valid.')
       if (!smallest || output.length < smallest.length) smallest = output
-      if (output.length <= maxBytes) return output
+      // Kompresi dulu seperti biasa: profil pertama yang muat 500 KB langsung
+      // dipakai. maxBytes (25 MB untuk .sa) hanya batas darurat — dipakai
+      // kalau profil terkecil pun masih di atas 500 KB, bukan alasan untuk
+      // melewati kompresi.
+      if (output.length <= ANIMATED_TARGET_BYTES) return output
     } catch (error) {
       lastError = error
       if (/FFmpeg tidak ditemukan|Tidak dapat menjalankan FFmpeg|Unknown encoder/i.test(error.message)) break
@@ -225,7 +229,7 @@ async function encodeAnimatedWithFfmpeg(input, { maxSeconds = VIDEO_SECONDS, max
       : Math.ceil(maxBytes / 1024) + ' KB'
     throw new Error(
       'Hasil stiker video masih ' + Math.ceil(smallest.length / 1024) +
-      ' KB setelah kompresi. Batas aman sebelum metadata adalah ' + limitText + '; potong video atau pilih video yang lebih sederhana.'
+      ' KB setelah kompresi. Batas maksimal stiker adalah ' + limitText + '; potong video atau pilih video yang lebih sederhana.'
     )
   }
   if (lastError) throw lastError

@@ -1,3 +1,12 @@
+## 2026-11-25 — Fix `.sa` 25 MB cap disabling compression (compress-first, 25 MB as fallback)
+
+- **Symptom (owner, 2026-11-25 ~12:35 WIB):** "Maksimal nya udah diperluas tapi kok gak dikompres kayak sebelumnya?" — after the 25 MB raise, `.sa` stickers came out uncompressed.
+- **Root cause:** `encodeAnimatedWithFfmpeg` returned the first profile whose output fit `maxBytes`. With `maxBytes = 25 MB` the top profile (fps 10) always fit immediately, so the engine never tried lower profiles. The 25 MB value was wired as the compression *target* instead of a fallback *cap*.
+- **Change:** The engine now always compresses toward the 480 KB target first (same profiles, same first-fit behavior as before) and only falls back to the smallest profile when it still exceeds 500 KB but fits `maxBytes` (25 MB for `.sa`); only if even the smallest profile exceeds `maxBytes` does it throw, with the message now naming the hard cap ("Batas maksimal stiker adalah …"). Static stickers unchanged (100 KB). No change to `lib/sticker-audio.js` or the plugin — the fix is entirely in `plugins/sticker/sticker-engine.js`.
+- **Files:** `plugins/sticker/sticker-engine.js`, `tests/sticker-engine.test.js`, `AI_CONTEXT.md`, `docs/AI_CHANGELOG.md`.
+- **Verification:** Engine suite passes 8/8 — updated: a 12 s `testsrc2` video still encodes to ≤ 500 KB with `maxStickerBytes: 25 MB` (compression restored); new: a busy 30 s `testsrc2` (320×320) is rejected at the default cap ("Batas maksimal stiker adalah 500 KB") but sent as a ~690 KB, ~30 s sticker with the 25 MB cap. A scratch experiment with a noise fixture confirmed the same fallback at 2.3 MB (default rejects at smallest 1925 KB). `npm run test:stickeraudio` passes 15/15, full `npm test` exits 0. Note: the engine suite now takes ~90 s (the 30 s fixture encodes all five profiles twice).
+- **Limitations / unverified:** Same as the 25 MB change: stickers over 500 KB exceed WhatsApp's published spec and may be rejected by WhatsApp; live test on the owner's phone still pending.
+
 ## 2026-11-25 — Raise `.sa` sticker file cap from 500 KB to 25 MB
 
 - **Request:** Owner asked why the sticker cap is 500 KB, then said to change it to 25 MB max.

@@ -186,7 +186,7 @@ test('Video 12 detik: default dipangkas 10 detik, opsi maxVideoSeconds 30 memper
   }
 })
 
-test('Opsi maxStickerBytes 25 MB membiarkan stiker di atas 500 KB lolos', async t => {
+test('Opsi maxStickerBytes 25 MB tidak mematikan kompresi', async t => {
   const version = spawnSync('ffmpeg', ['-version'], { encoding: 'utf8' })
   if (version.error?.code === 'ENOENT') {
     t.skip('FFmpeg tidak tersedia pada runner ini.')
@@ -223,12 +223,65 @@ test('Opsi maxStickerBytes 25 MB membiarkan stiker di atas 500 KB lolos', async 
     const capped = await createStickerFromBuffer(input, baseOptions)
     assert.ok(capped.length <= stickerLimits.maxStickerBytes, `stiker default harus <= 500 KB, dapat ${capped.length} byte`)
 
-    // Opsi .sa: profil pertama (fps 10) langsung dipakai meski di atas 500 KB.
-    // maxVideoSeconds 30 supaya klip 12 detik tidak terpotong default 10 detik.
+    // Opsi .sa: tetap dikompres seperti biasa (muat 500 KB), bukan profil
+    // pertama yang langsung dipakai. maxVideoSeconds 30 supaya klip 12 detik
+    // tidak terpotong default 10 detik.
     const big = await createStickerFromBuffer(input, { ...baseOptions, maxVideoSeconds: 30, maxStickerBytes: 25 * 1024 * 1024 })
-    assert.ok(big.length > stickerLimits.maxStickerBytes, `stiker 25 MB harus boleh di atas 500 KB, dapat ${big.length} byte`)
+    assert.ok(big.length <= stickerLimits.maxStickerBytes, `stiker 25 MB harus tetap dikompres sampai <= 500 KB bila muat, dapat ${big.length} byte`)
     const bigMs = animatedWebpDurationMs(Buffer.from(big))
     assert.ok(bigMs >= 11500 && bigMs <= 12500, `stiker 25 MB harus tetap ~12 detik, dapat ${bigMs} ms`)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test('Opsi maxStickerBytes 25 MB hanya jadi batas darurat bila profil terkecil pun di atas 500 KB', async t => {
+  const version = spawnSync('ffmpeg', ['-version'], { encoding: 'utf8' })
+  if (version.error?.code === 'ENOENT') {
+    t.skip('FFmpeg tidak tersedia pada runner ini.')
+    return
+  }
+
+  const directory = await mkdtemp(join(tmpdir(), 'alvareth-sticker-test-'))
+  const inputPath = join(directory, 'input.mp4')
+  try {
+    const generated = spawnSync('ffmpeg', [
+      '-hide_banner', '-loglevel', 'error',
+      '-f', 'lavfi', '-i', 'testsrc2=size=320x320:rate=12',
+      '-t', '30',
+      '-c:v', 'libx264',
+      '-pix_fmt', 'yuv420p',
+      '-movflags', '+faststart',
+      '-y', inputPath
+    ], { encoding: 'utf8', timeout: 30_000 })
+
+    if (generated.error || generated.status !== 0) {
+      t.skip('Runner FFmpeg tidak memiliki encoder H.264 untuk membuat fixture video.')
+      return
+    }
+
+    const input = await readFile(inputPath)
+    const baseOptions = {
+      mimeHint: 'video/mp4',
+      mediaType: 'videoMessage',
+      maxVideoSeconds: 30,
+      packname: 'Alvareth Size Test',
+      author: 'Sticker Test'
+    }
+
+    // Klip 30 detik yang ramai: profil terkecil pun masih di atas 500 KB,
+    // jadi batas default menolaknya.
+    await assert.rejects(
+      () => createStickerFromBuffer(input, baseOptions),
+      /Batas maksimal stiker adalah 500 KB/
+    )
+
+    // Dengan batas .sa 25 MB, profil terkecil yang sama dikirim, bukan ditolak.
+    const big = await createStickerFromBuffer(input, { ...baseOptions, maxStickerBytes: 25 * 1024 * 1024 })
+    assert.ok(big.length > stickerLimits.maxStickerBytes, `stiker darurat harus di atas 500 KB, dapat ${big.length} byte`)
+    assert.ok(big.length <= 25 * 1024 * 1024, `stiker darurat harus <= 25 MB, dapat ${big.length} byte`)
+    const bigMs = animatedWebpDurationMs(Buffer.from(big))
+    assert.ok(bigMs >= 29000 && bigMs <= 31000, `stiker darurat harus tetap ~30 detik, dapat ${bigMs} ms`)
   } finally {
     await rm(directory, { recursive: true, force: true })
   }
