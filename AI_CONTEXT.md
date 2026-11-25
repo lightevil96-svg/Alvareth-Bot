@@ -9,7 +9,9 @@
 
 ## Pembaruan terbaru
 
-- 2026-11-25 — Raised `.sa` video/audio cap 10 s → 30 s (`.sa`-only; shared `.s` default stays 10 s): new `maxVideoSeconds` option on the sticker engine + `MAX_SOUND_SECONDS` 30; WhatsApp's 500 KB sticker cap still binds. `npm run test:stickeraudio` passes 15/15, full `npm test` exits 0. Live test of a 30 s video still pending.
+- 2026-11-25 — Raised `.sa` sticker file cap 500 KB → 25 MB (`.sa`-only; shared `.s` default stays 500 KB): new `maxStickerBytes` option on the sticker engine + `MAX_FFMPEG_OUTPUT_BYTES` 6 MB → 25 MB. This exceeds WhatsApp's official 500 KB spec — a sticker over 500 KB may be rejected by WhatsApp; live test decides. `npm run test:stickeraudio` passes 15/15, engine 7/7, full `npm test` exits 0.
+
+- 2026-11-25 — Raised `.sa` video/audio cap 10 s → 30 s (`.sa`-only; shared `.s` default stays 10 s): new `maxVideoSeconds` option on the sticker engine + `MAX_SOUND_SECONDS` 30; the sticker cap for `.sa` is now 25 MB (see above), shared `.s` still 500 KB. `npm run test:stickeraudio` passes 15/15, full `npm test` exits 0. Live test of a 30 s video still pending.
 
 - 2026-11-25 — Fixed Baileys 0.5.6 startup crash (`Cannot find package 'better-sqlite3'` from `@itsliaaa/starforge`): added `better-sqlite3` `^13.2.0` to dependencies — v13.2.0 ships prebuilt binaries in the package, so `npm install` needs no build tools. `npm run test:stickeraudio` passes 12/12, full `npm test` exits 0. Bot must be restarted via `.update force` on TokoPanel and `.sa` retested live.
 

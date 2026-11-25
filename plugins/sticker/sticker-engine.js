@@ -4,7 +4,7 @@ import webp from 'node-webpmux'
 import { fileTypeFromBuffer } from 'file-type'
 
 const MAX_INPUT_BYTES = 25 * 1024 * 1024
-const MAX_FFMPEG_OUTPUT_BYTES = 6 * 1024 * 1024
+const MAX_FFMPEG_OUTPUT_BYTES = 25 * 1024 * 1024
 const MAX_STICKER_BYTES = 500 * 1024
 const MAX_STATIC_STICKER_BYTES = 100 * 1024
 const ANIMATED_TARGET_BYTES = 480 * 1024
@@ -157,7 +157,7 @@ async function encodeStillWithFfmpeg(input) {
   throw new Error('Gambar terlalu besar untuk dikompres menjadi stiker WhatsApp.')
 }
 
-async function encodeAnimatedWithFfmpeg(input, { maxSeconds = VIDEO_SECONDS } = {}) {
+async function encodeAnimatedWithFfmpeg(input, { maxSeconds = VIDEO_SECONDS, maxBytes = ANIMATED_TARGET_BYTES } = {}) {
   let smallest = null
   let lastError = null
   let encoder = 'libwebp_anim'
@@ -211,18 +211,21 @@ async function encodeAnimatedWithFfmpeg(input, { maxSeconds = VIDEO_SECONDS } = 
 
       if (!isWebp(output)) throw new Error('Output FFmpeg bukan WebP animasi yang valid.')
       if (!smallest || output.length < smallest.length) smallest = output
-      if (output.length <= ANIMATED_TARGET_BYTES) return output
+      if (output.length <= maxBytes) return output
     } catch (error) {
       lastError = error
       if (/FFmpeg tidak ditemukan|Tidak dapat menjalankan FFmpeg|Unknown encoder/i.test(error.message)) break
     }
   }
 
-  if (smallest && smallest.length <= ANIMATED_TARGET_BYTES) return smallest
+  if (smallest && smallest.length <= maxBytes) return smallest
   if (smallest) {
+    const limitText = maxBytes >= 1024 * 1024
+      ? (maxBytes / 1024 / 1024) + ' MB'
+      : Math.ceil(maxBytes / 1024) + ' KB'
     throw new Error(
       'Hasil stiker video masih ' + Math.ceil(smallest.length / 1024) +
-      ' KB setelah kompresi. Batas aman sebelum metadata adalah 480 KB; potong video atau pilih video yang lebih sederhana.'
+      ' KB setelah kompresi. Batas aman sebelum metadata adalah ' + limitText + '; potong video atau pilih video yang lebih sederhana.'
     )
   }
   if (lastError) throw lastError
@@ -342,12 +345,16 @@ export async function createStickerFromBuffer(input, options = {}) {
   }
 
   let webpBuffer
+  const requestedBytes = Number(options.maxStickerBytes)
+  const maxStickerBytes = Number.isFinite(requestedBytes) && requestedBytes > 0
+    ? requestedBytes
+    : MAX_STICKER_BYTES
   if (isVideo || detected?.ext === 'gif' || detected?.ext === 'apng') {
     const requestedSeconds = Number(options.maxVideoSeconds)
     const maxVideoSeconds = Number.isFinite(requestedSeconds) && requestedSeconds > 0
       ? requestedSeconds
       : VIDEO_SECONDS
-    webpBuffer = await encodeAnimatedWithFfmpeg(buffer, { maxSeconds: maxVideoSeconds })
+    webpBuffer = await encodeAnimatedWithFfmpeg(buffer, { maxSeconds: maxVideoSeconds, maxBytes: maxStickerBytes })
   } else {
     try {
       webpBuffer = await encodeImageWithSharp(buffer)
@@ -363,10 +370,13 @@ export async function createStickerFromBuffer(input, options = {}) {
 
   const finalBuffer = await attachStickerExif(webpBuffer, options.packname, options.author)
   const isAnimatedOutput = isAnimatedWebp(webpBuffer)
-  const finalLimit = isAnimatedOutput ? MAX_STICKER_BYTES : MAX_STATIC_STICKER_BYTES
+  const finalLimit = isAnimatedOutput ? maxStickerBytes : MAX_STATIC_STICKER_BYTES
   if (finalBuffer.length > finalLimit) {
+    const finalLimitText = finalLimit >= 1024 * 1024
+      ? (finalLimit / 1024 / 1024) + ' MB'
+      : Math.ceil(finalLimit / 1024) + ' KB'
     throw new Error(isAnimatedOutput
-      ? 'File stiker animasi akhir melebihi batas 500 KB setelah metadata ditambahkan.'
+      ? 'File stiker animasi akhir melebihi batas ' + finalLimitText + ' setelah metadata ditambahkan.'
       : 'File stiker foto akhir melebihi batas 100 KB setelah metadata ditambahkan.')
   }
 

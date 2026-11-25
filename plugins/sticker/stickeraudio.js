@@ -220,6 +220,7 @@ let handler = async (m, { conn, args = [], usedPrefix = '.', command = 'sa' }) =
       mimeHint: kind === 'video' ? (mime || 'video/mp4') : 'video/mp4',
       mediaType: 'videoMessage',
       maxVideoSeconds: stickerAudioLimits.maxVideoSeconds,
+      maxStickerBytes: stickerAudioLimits.maxStickerBytes,
       packname,
       author
     })

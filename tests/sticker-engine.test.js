@@ -185,3 +185,51 @@ test('Video 12 detik: default dipangkas 10 detik, opsi maxVideoSeconds 30 memper
     await rm(directory, { recursive: true, force: true })
   }
 })
+
+test('Opsi maxStickerBytes 25 MB membiarkan stiker di atas 500 KB lolos', async t => {
+  const version = spawnSync('ffmpeg', ['-version'], { encoding: 'utf8' })
+  if (version.error?.code === 'ENOENT') {
+    t.skip('FFmpeg tidak tersedia pada runner ini.')
+    return
+  }
+
+  const directory = await mkdtemp(join(tmpdir(), 'alvareth-sticker-test-'))
+  const inputPath = join(directory, 'input.mp4')
+  try {
+    const generated = spawnSync('ffmpeg', [
+      '-hide_banner', '-loglevel', 'error',
+      '-f', 'lavfi', '-i', 'testsrc2=size=160x160:rate=12',
+      '-t', '12',
+      '-c:v', 'libx264',
+      '-pix_fmt', 'yuv420p',
+      '-movflags', '+faststart',
+      '-y', inputPath
+    ], { encoding: 'utf8', timeout: 30_000 })
+
+    if (generated.error || generated.status !== 0) {
+      t.skip('Runner FFmpeg tidak memiliki encoder H.264 untuk membuat fixture video.')
+      return
+    }
+
+    const input = await readFile(inputPath)
+    const baseOptions = {
+      mimeHint: 'video/mp4',
+      mediaType: 'videoMessage',
+      packname: 'Alvareth Size Test',
+      author: 'Sticker Test'
+    }
+
+    // Default: mesin menurunkan profil sampai muat 500 KB.
+    const capped = await createStickerFromBuffer(input, baseOptions)
+    assert.ok(capped.length <= stickerLimits.maxStickerBytes, `stiker default harus <= 500 KB, dapat ${capped.length} byte`)
+
+    // Opsi .sa: profil pertama (fps 10) langsung dipakai meski di atas 500 KB.
+    // maxVideoSeconds 30 supaya klip 12 detik tidak terpotong default 10 detik.
+    const big = await createStickerFromBuffer(input, { ...baseOptions, maxVideoSeconds: 30, maxStickerBytes: 25 * 1024 * 1024 })
+    assert.ok(big.length > stickerLimits.maxStickerBytes, `stiker 25 MB harus boleh di atas 500 KB, dapat ${big.length} byte`)
+    const bigMs = animatedWebpDurationMs(Buffer.from(big))
+    assert.ok(bigMs >= 11500 && bigMs <= 12500, `stiker 25 MB harus tetap ~12 detik, dapat ${bigMs} ms`)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
