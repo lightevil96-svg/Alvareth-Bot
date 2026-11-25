@@ -9,6 +9,8 @@
 
 ## Pembaruan terbaru
 
+- 2026-11-25 — Raised `.sa` video/audio cap 10 s → 30 s (`.sa`-only; shared `.s` default stays 10 s): new `maxVideoSeconds` option on the sticker engine + `MAX_SOUND_SECONDS` 30; WhatsApp's 500 KB sticker cap still binds. `npm run test:stickeraudio` passes 15/15, full `npm test` exits 0. Live test of a 30 s video still pending.
+
 - 2026-11-25 — Fixed Baileys 0.5.6 startup crash (`Cannot find package 'better-sqlite3'` from `@itsliaaa/starforge`): added `better-sqlite3` `^13.2.0` to dependencies — v13.2.0 ships prebuilt binaries in the package, so `npm install` needs no build tools. `npm run test:stickeraudio` passes 12/12, full `npm test` exits 0. Bot must be restarted via `.update force` on TokoPanel and `.sa` retested live.
 
 - 2026-11-25 — Fixed `.sa` to send a NATIVE WhatsApp sound sticker: upgraded `@itsliaaa/baileys` 0.3.18-final → 0.5.6, whose proto carries `StickerMessage.audioMessage` (field 26) — the encoding WhatsApp itself uses — and `.sa` now sends one sticker message with its audio attached (speaker icon, tap to play), falling back to sticker + separate audio if the native send fails. `npm run test:stickeraudio` passes 12/12, full `npm test` exits 0. Live WhatsApp test after restart still pending, including the Baileys upgrade's effect on the live socket.

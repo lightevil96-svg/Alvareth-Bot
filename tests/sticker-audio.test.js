@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import sharp from 'sharp'
@@ -78,6 +78,35 @@ async function makeTestAudio(directory) {
   return readFile(inputPath)
 }
 
+async function makeLongTestAudio(directory, seconds = 35) {
+  const inputPath = join(directory, 'long.ogg')
+  const generated = spawnSync('ffmpeg', [
+    '-hide_banner', '-loglevel', 'error',
+    '-f', 'lavfi', '-i', `sine=frequency=660:duration=${seconds}`,
+    '-t', String(seconds),
+    '-c:a', 'libopus', '-b:a', '64k',
+    '-y', inputPath
+  ], { encoding: 'utf8', timeout: 30_000 })
+  if (generated.error || generated.status !== 0) {
+    throw new Error('Gagal membuat fixture audio panjang: ' + (generated.stderr || generated.error?.message || ''))
+  }
+  return readFile(inputPath)
+}
+
+async function probeOggDurationSeconds(directory, buffer) {
+  const probePath = join(directory, 'probe.ogg')
+  await writeFile(probePath, buffer)
+  const probed = spawnSync('ffprobe', [
+    '-v', 'error', '-show_entries', 'format=duration',
+    '-of', 'csv=p=0', probePath
+  ], { encoding: 'utf8', timeout: 30_000 })
+  const seconds = Number((probed.stdout || '').trim())
+  if (!Number.isFinite(seconds)) {
+    throw new Error('ffprobe tidak bisa membaca durasi Ogg: ' + (probed.stderr || ''))
+  }
+  return seconds
+}
+
 test('Argumen .sa mengikuti format packname|author seperti .s', () => {
   assert.deepEqual(parseStickerAudioArgs('Ibuki - Arisu Soft'), {
     packname: 'Ibuki - Arisu Soft',
@@ -115,8 +144,9 @@ test('Klasifikasi sumber: reply video, gambar + reply audio, dan penolakan', () 
   assert.equal(classifyStickerAudioSource({}), 'unsupported')
 })
 
-test('Batas stiker audio mengikuti batas stiker video', () => {
-  assert.equal(stickerAudioLimits.maxSoundSeconds, 10)
+test('Batas stiker audio .sa: video dan suara maksimal 30 detik', () => {
+  assert.equal(stickerAudioLimits.maxSoundSeconds, 30)
+  assert.equal(stickerAudioLimits.maxVideoSeconds, 30)
   assert.equal(stickerAudioLimits.maxInputBytes, 25 * 1024 * 1024)
 })
 
@@ -199,6 +229,20 @@ test('Audio video bersuara diekstrak jadi Ogg Opus', async t => {
     assert.ok(audio.length > 0)
     assert.equal(audio.subarray(0, 4).toString('ascii'), 'OggS')
     assert.ok(audio.length <= stickerAudioLimits.maxAudioOutputBytes)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test('Audio panjang dipangkas ke batas 30 detik .sa', async t => {
+  if (!ffmpegAvailable(t)) return
+  const directory = await mkdtemp(join(tmpdir(), 'alvareth-sticker-audio-test-'))
+  try {
+    const audio = await makeLongTestAudio(directory, 35)
+    const normalized = await normalizeAudioBuffer(audio)
+    assert.equal(normalized.subarray(0, 4).toString('ascii'), 'OggS')
+    const seconds = await probeOggDurationSeconds(directory, normalized)
+    assert.ok(seconds >= 29 && seconds <= 31, `durasi audio harus ~30 detik, dapat ${seconds}`)
   } finally {
     await rm(directory, { recursive: true, force: true })
   }
@@ -292,6 +336,70 @@ test('Plugin .sa: reply video bersuara mengirim stiker + audio (fallback v1)', a
     assert.equal(Buffer.from(audioMsg.content.audio).subarray(0, 4).toString('ascii'), 'OggS')
     const fallbackNote = sent.find(item => typeof item.content?.text === 'string' && /terpisah/i.test(item.content.text))
     assert.ok(fallbackNote, 'plugin harus jujur kalau native gagal dan audio dikirim terpisah')
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test('Plugin .sa: video 31 detik ditolak dengan batas 30 detik', async t => {
+  if (!ffmpegAvailable(t)) return
+  const directory = await mkdtemp(join(tmpdir(), 'alvareth-sticker-audio-test-'))
+  try {
+    const video = await makeTestVideoWithAudio(directory)
+    const { default: handler } = await import('../plugins/sticker/stickeraudio.js')
+    const sent = []
+    const conn = {
+      async sendMessage(chat, content) {
+        sent.push({ chat, content })
+        return { key: { id: 'test-' + sent.length } }
+      }
+    }
+    const m = {
+      chat: '12345@s.whatsapp.net',
+      key: { id: 'msg-1', remoteJid: '12345@s.whatsapp.net' },
+      mediaType: 'videoMessage',
+      mtype: 'videoMessage',
+      mimetype: 'video/mp4',
+      msg: { seconds: 31, mimetype: 'video/mp4' },
+      quoted: null,
+      download: async () => video
+    }
+    await handler(m, { conn, args: [], usedPrefix: '.', command: 'sa' })
+
+    assert.ok(sent.find(item => typeof item.content?.text === 'string' && /Maksimal 30 detik/i.test(item.content.text)), 'video 31 detik harus ditolak dengan pesan batas 30 detik')
+    assert.equal(sent.find(item => item.content?.sticker), undefined, 'video yang ditolak tidak boleh mengirim stiker')
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test('Plugin .sa: video 30 detik lolos batas dan terkirim', async t => {
+  if (!ffmpegAvailable(t)) return
+  const directory = await mkdtemp(join(tmpdir(), 'alvareth-sticker-audio-test-'))
+  try {
+    const video = await makeTestVideoWithAudio(directory)
+    const { default: handler } = await import('../plugins/sticker/stickeraudio.js')
+    const sent = []
+    const conn = {
+      async sendMessage(chat, content) {
+        sent.push({ chat, content })
+        return { key: { id: 'test-' + sent.length } }
+      }
+    }
+    const m = {
+      chat: '12345@s.whatsapp.net',
+      key: { id: 'msg-1', remoteJid: '12345@s.whatsapp.net' },
+      mediaType: 'videoMessage',
+      mtype: 'videoMessage',
+      mimetype: 'video/mp4',
+      msg: { seconds: 30, mimetype: 'video/mp4' },
+      quoted: null,
+      download: async () => video
+    }
+    await handler(m, { conn, args: [], usedPrefix: '.', command: 'sa' })
+
+    assert.ok(!sent.find(item => typeof item.content?.text === 'string' && /terlalu panjang/i.test(item.content.text)), 'video 30 detik tidak boleh ditolak')
+    assert.ok(sent.find(item => item.content?.sticker), 'video 30 detik harus mengirim stiker')
   } finally {
     await rm(directory, { recursive: true, force: true })
   }

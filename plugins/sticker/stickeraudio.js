@@ -150,9 +150,9 @@ let handler = async (m, { conn, args = [], usedPrefix = '.', command = 'sa' }) =
           directNode?.seconds ??
           safeGet(() => q?.seconds) ?? 0
         )
-        if (Number.isFinite(seconds) && seconds > stickerLimits.maxVideoSeconds) {
+        if (Number.isFinite(seconds) && seconds > stickerAudioLimits.maxVideoSeconds) {
           await react('❌')
-          return sendText('❌ Video terlalu panjang. Maksimal ' + stickerLimits.maxVideoSeconds + ' detik untuk stiker audio.')
+          return sendText('❌ Video terlalu panjang. Maksimal ' + stickerAudioLimits.maxVideoSeconds + ' detik untuk stiker audio.')
         }
       }
     } else {
@@ -219,6 +219,7 @@ let handler = async (m, { conn, args = [], usedPrefix = '.', command = 'sa' }) =
     const stickerBuffer = await createStickerFromBuffer(Buffer.from(stickerSource), {
       mimeHint: kind === 'video' ? (mime || 'video/mp4') : 'video/mp4',
       mediaType: 'videoMessage',
+      maxVideoSeconds: stickerAudioLimits.maxVideoSeconds,
       packname,
       author
     })

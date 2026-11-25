@@ -157,7 +157,7 @@ async function encodeStillWithFfmpeg(input) {
   throw new Error('Gambar terlalu besar untuk dikompres menjadi stiker WhatsApp.')
 }
 
-async function encodeAnimatedWithFfmpeg(input) {
+async function encodeAnimatedWithFfmpeg(input, { maxSeconds = VIDEO_SECONDS } = {}) {
   let smallest = null
   let lastError = null
   let encoder = 'libwebp_anim'
@@ -178,7 +178,7 @@ async function encodeAnimatedWithFfmpeg(input) {
       try {
         output = await runFfmpeg(input, [
           '-map', '0:v:0',
-          '-t', String(VIDEO_SECONDS),
+          '-t', String(maxSeconds),
           '-vf', filter,
           '-an', '-sn', '-dn',
           '-c:v', encoder,
@@ -194,7 +194,7 @@ async function encodeAnimatedWithFfmpeg(input) {
           encoder = 'libwebp'
           output = await runFfmpeg(input, [
             '-map', '0:v:0',
-            '-t', String(VIDEO_SECONDS),
+            '-t', String(maxSeconds),
             '-vf', filter,
             '-an', '-sn', '-dn',
             '-c:v', encoder,
@@ -343,7 +343,11 @@ export async function createStickerFromBuffer(input, options = {}) {
 
   let webpBuffer
   if (isVideo || detected?.ext === 'gif' || detected?.ext === 'apng') {
-    webpBuffer = await encodeAnimatedWithFfmpeg(buffer)
+    const requestedSeconds = Number(options.maxVideoSeconds)
+    const maxVideoSeconds = Number.isFinite(requestedSeconds) && requestedSeconds > 0
+      ? requestedSeconds
+      : VIDEO_SECONDS
+    webpBuffer = await encodeAnimatedWithFfmpeg(buffer, { maxSeconds: maxVideoSeconds })
   } else {
     try {
       webpBuffer = await encodeImageWithSharp(buffer)
