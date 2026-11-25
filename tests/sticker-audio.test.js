@@ -6,12 +6,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import sharp from 'sharp'
 import { fileTypeFromBuffer } from 'file-type'
+import { proto } from 'baileys'
 import {
+  baileysSupportsSoundSticker,
   classifyStickerAudioSource,
   extractAudioFromVideoBuffer,
   makeVideoFromImageAndAudio,
   normalizeAudioBuffer,
   parseStickerAudioArgs,
+  sendNativeSoundSticker,
   stickerAudioLimits
 } from '../lib/sticker-audio.js'
 import { createStickerFromBuffer } from '../plugins/sticker/sticker-engine.js'
@@ -117,6 +120,76 @@ test('Batas stiker audio mengikuti batas stiker video', () => {
   assert.equal(stickerAudioLimits.maxInputBytes, 25 * 1024 * 1024)
 })
 
+test('Proto Baileys yang terpasang membawa audio di StickerMessage (field 26)', () => {
+  // Penjaga regresi untuk upgrade Baileys: di 0.3.18-final field ini
+  // tidak ada dan encode/decode diam-diam membuangnya, jadi .sa hanya
+  // bisa mengirim stiker diam. Di >= 0.4.0 field 26 (tag 0xD2 0x01)
+  // bertahan dan stiker suara native bisa dikirim.
+  assert.equal(baileysSupportsSoundSticker(), true)
+  const encoded = proto.Message.StickerMessage.encode({
+    url: 'https://example.invalid/sticker.webp',
+    mimetype: 'image/webp',
+    audioMessage: {
+      url: 'https://example.invalid/audio.ogg',
+      mimetype: 'audio/ogg; codecs=opus',
+      seconds: 3
+    }
+  }).finish()
+  assert.ok(
+    Buffer.from(encoded).includes(Buffer.from([0xD2, 0x01])),
+    'field 26 (audioMessage) harus ada di bytes hasil encode'
+  )
+  const decoded = proto.Message.StickerMessage.decode(encoded)
+  assert.equal(decoded.audioMessage?.mimetype, 'audio/ogg; codecs=opus')
+  assert.equal(decoded.audioMessage?.seconds, 3)
+})
+
+test('sendNativeSoundSticker: satu pesan stiker membawa audioMessage', async () => {
+  const prepared = []
+  const fakePrepare = async message => {
+    prepared.push(message)
+    if (message.audio) {
+      return { audioMessage: { url: 'https://example.invalid/a.ogg', mimetype: 'audio/ogg; codecs=opus', seconds: 2 } }
+    }
+    return { stickerMessage: { url: 'https://example.invalid/s.webp', mimetype: 'image/webp', isAnimated: true } }
+  }
+  let built = null
+  const fakeBuild = async (chat, content, options) => {
+    built = { chat, content, options }
+    return { key: { id: 'native-1' }, message: content }
+  }
+  const relayed = []
+  const conn = {
+    waUploadToServer: async () => ({ url: 'https://example.invalid', directPath: '/x' }),
+    user: { id: 'bot@s.whatsapp.net' },
+    async relayMessage(chat, message, options) { relayed.push({ chat, message, options }) }
+  }
+  const id = await sendNativeSoundSticker(conn, '123@s.whatsapp.net', {
+    stickerBuffer: Buffer.from('webp'),
+    audioOgg: Buffer.from('OggS'),
+    prepareMedia: fakePrepare,
+    buildMessage: fakeBuild
+  })
+  assert.equal(id, 'native-1')
+  assert.equal(Buffer.from(prepared[0].audio).toString('ascii'), 'OggS', 'audio disiapkan dulu')
+  assert.ok(prepared[1].sticker, 'lalu stiker disiapkan')
+  assert.equal(built.content.stickerMessage.audioMessage?.mimetype, 'audio/ogg; codecs=opus')
+  assert.equal(relayed.length, 1)
+  assert.equal(relayed[0].message.stickerMessage.audioMessage?.seconds, 2)
+  assert.equal(relayed[0].options.messageId, 'native-1')
+})
+
+test('sendNativeSoundSticker: tanpa waUploadToServer langsung gagal (pemicu fallback v1)', async () => {
+  const conn = { async relayMessage() {} }
+  await assert.rejects(
+    sendNativeSoundSticker(conn, '123@s.whatsapp.net', {
+      stickerBuffer: Buffer.from('webp'),
+      audioOgg: Buffer.from('OggS')
+    }),
+    /waUploadToServer/i
+  )
+})
+
 test('Audio video bersuara diekstrak jadi Ogg Opus', async t => {
   if (!ffmpegAvailable(t)) return
   const directory = await mkdtemp(join(tmpdir(), 'alvareth-sticker-audio-test-'))
@@ -181,13 +254,16 @@ test('Gambar + audio digabung jadi MP4 lalu jadi stiker animasi', async t => {
   }
 })
 
-test('Plugin .sa: reply video bersuara mengirim stiker + audio', async t => {
+test('Plugin .sa: reply video bersuara mengirim stiker + audio (fallback v1)', async t => {
   if (!ffmpegAvailable(t)) return
   const directory = await mkdtemp(join(tmpdir(), 'alvareth-sticker-audio-test-'))
   try {
     const video = await makeTestVideoWithAudio(directory)
     const { default: handler } = await import('../plugins/sticker/stickeraudio.js')
     const sent = []
+    // Fake conn ini sengaja tanpa relayMessage/waUploadToServer, jadi
+    // pengiriman native gagal dan plugin menempuh fallback v1
+    // (stiker + audio terpisah) — persis jalur yang diuji di sini.
     const conn = {
       async sendMessage(chat, content) {
         sent.push({ chat, content })
@@ -214,8 +290,8 @@ test('Plugin .sa: reply video bersuara mengirim stiker + audio', async t => {
     assert.ok(audioMsg, 'plugin harus mengirim audio stikernya')
     assert.equal(audioMsg.content.mimetype, 'audio/ogg; codecs=opus')
     assert.equal(Buffer.from(audioMsg.content.audio).subarray(0, 4).toString('ascii'), 'OggS')
-    const betaNote = sent.find(item => typeof item.content?.text === 'string' && /beta/i.test(item.content.text))
-    assert.ok(betaNote, 'plugin harus jujur soal batas beta di pesan balasan')
+    const fallbackNote = sent.find(item => typeof item.content?.text === 'string' && /terpisah/i.test(item.content.text))
+    assert.ok(fallbackNote, 'plugin harus jujur kalau native gagal dan audio dikirim terpisah')
   } finally {
     await rm(directory, { recursive: true, force: true })
   }

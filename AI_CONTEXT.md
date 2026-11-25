@@ -9,6 +9,8 @@
 
 ## Pembaruan terbaru
 
+- 2026-11-25 — Fixed `.sa` to send a NATIVE WhatsApp sound sticker: upgraded `@itsliaaa/baileys` 0.3.18-final → 0.5.6, whose proto carries `StickerMessage.audioMessage` (field 26) — the encoding WhatsApp itself uses — and `.sa` now sends one sticker message with its audio attached (speaker icon, tap to play), falling back to sticker + separate audio if the native send fails. `npm run test:stickeraudio` passes 12/12, full `npm test` exits 0. Live WhatsApp test after restart still pending, including the Baileys upgrade's effect on the live socket.
+
 - 2026-11-25 — Added Sticker Audio (`.sa` / `.stickeraudio`, beta): reply to a sounding video with `.sa` (or send one with caption `.sa`) and the bot returns an animated WebP sticker plus its extracted audio (Opus/Ogg, max 10 s) right after it; replying to audio with an image + `.sa` also works. A native WhatsApp sound sticker (tap the sticker to play sound) cannot be sent via Baileys yet — the Web protobuf has no audio field on `StickerMessage` — so v1 honestly sends sticker + audio separately and says so in chat. `npm run test:stickeraudio` passes 9/9, full `npm test` exits 0. Live WhatsApp verification still pending.
 
 - 2026-11-24 — Added the agent-facing `skills/clip-editor/` workflow: evidence-based 100-point clip scoring, VTuber/gameplay guidance, subtitle/audio and rights/QC checklists, strict clip-plan schema/example, and a dependency-free validator with regression tests. `.analisis` remains an analysis ZIP handoff only; a separate agent runtime must render and inspect MP4 outputs.

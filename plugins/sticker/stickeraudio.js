@@ -6,10 +6,11 @@ import {
   makeVideoFromImageAndAudio,
   normalizeAudioBuffer,
   parseStickerAudioArgs,
+  sendNativeSoundSticker,
   stickerAudioLimits
 } from '../../lib/sticker-audio.js'
 
-// Sticker Audio — `.sa` / `.stickeraudio` (beta).
+// Sticker Audio — `.sa` / `.stickeraudio`.
 //
 // Cara pakai (sesuai permintaan pemilik):
 //   - Balas video bersuara dengan `.sa`
@@ -19,13 +20,15 @@ import {
 //   - `.sa Ibuki - Arisu Soft` — teks setelah command jadi nama pack,
 //     sama seperti `.s` (`packname|author`).
 //
-// Hasil v1: stiker animasi WebP dari video/gambar, lalu audionya dikirim
-// terpisah tepat di bawah stiker (maks 10 detik). Stiker suara *native*
-// WhatsApp — satu pesan stiker yang berbunyi saat diketuk, ikon speaker
-// di stiker, beta Android 2.26.47.1 — belum bisa dikirim lewat bot ini:
-// protobuf WhatsApp Web yang dipakai Baileys tidak punya field audio di
-// StickerMessage (dicek di WAProto master, lihat lib/sticker-audio.js).
-// Jadi v1 ini jujur soal batasnya di pesan balasan, bukan pura-pura native.
+// Hasil v2 (native): satu pesan stiker suara — stiker animasi WebP yang
+// membawa audionya di field `stickerMessage.audioMessage` (field 26),
+// jadi penerima melihat ikon speaker di stiker dan mengetuknya untuk
+// bunyi, seperti stiker suara dari aplikasi resmi. Butuh
+// @itsliaaa/baileys >= 0.4.0 (repo kini memakai 0.5.6); pengiriman
+// lewat sendNativeSoundSticker() di lib/sticker-audio.js. Kalau
+// pengiriman native gagal (upload error, koneksi tanpa relay/upload),
+// plugin jatuh kembali ke v1 — stiker + audio terpisah — dan
+// mengatakannya di chat, bukan mengirim stiker diam-diam.
 let handler = async (m, { conn, args = [], usedPrefix = '.', command = 'sa' }) => {
   let stage = 'membaca pesan'
   let mediaType = ''
@@ -221,24 +224,34 @@ let handler = async (m, { conn, args = [], usedPrefix = '.', command = 'sa' }) =
     })
 
     stage = 'mengirim stiker audio ke WhatsApp'
-    await conn.sendMessage(m.chat, {
-      sticker: stickerBuffer,
-      mimetype: 'image/webp'
-    })
-
+    let sentNative = false
     if (audioOgg) {
+      try {
+        await sendNativeSoundSticker(conn, m.chat, { stickerBuffer, audioOgg })
+        sentNative = true
+      } catch (error) {
+        console.warn('[STICKER-AUDIO] Stiker suara native gagal, fallback ke stiker + audio terpisah:', error?.message || error)
+      }
+    }
+    if (!sentNative) {
       await conn.sendMessage(m.chat, {
-        audio: audioOgg,
-        mimetype: 'audio/ogg; codecs=opus',
-        ptt: false
+        sticker: stickerBuffer,
+        mimetype: 'image/webp'
       })
-      await sendText(
-        '🔊 Stiker audio (beta): stiker di atas + audio ' +
-        stickerAudioLimits.maxSoundSeconds + ' detik di bawahnya. ' +
-        'Stiker suara native (ketuk stiker untuk bunyi) belum bisa dikirim lewat Baileys, jadi audionya dikirim terpisah untuk sekarang.'
-      )
-    } else if (audioWarning) {
-      await sendText(audioWarning)
+
+      if (audioOgg) {
+        await conn.sendMessage(m.chat, {
+          audio: audioOgg,
+          mimetype: 'audio/ogg; codecs=opus',
+          ptt: false
+        })
+        await sendText(
+          '🔊 Stiker suara native gagal dikirim kali ini, jadi dikirim sebagai stiker + audio ' +
+          stickerAudioLimits.maxSoundSeconds + ' detik terpisah di bawahnya.'
+        )
+      } else if (audioWarning) {
+        await sendText(audioWarning)
+      }
     }
 
     await react('✨')
@@ -246,6 +259,7 @@ let handler = async (m, { conn, args = [], usedPrefix = '.', command = 'sa' }) =
       kind,
       mediaType,
       mime: mime || null,
+      native: sentNative,
       inputBytes,
       audioBytes: audioOgg ? audioOgg.length : 0,
       outputBytes: stickerBuffer.length

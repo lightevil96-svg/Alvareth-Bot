@@ -61,7 +61,7 @@
     "archiver": "^7.0.1",
     "awesome-phonenumber": "^5.10.0",
     "axios": "^1.4.0",
-    "baileys": "npm:@itsliaaa/baileys@0.3.18-final",
+    "baileys": "npm:@itsliaaa/baileys@0.5.6",
     "bing-translate-api": "^4.0.2",
     "brat-canvas": "^1.0.30",
     "canvas": "^2.11.2",
