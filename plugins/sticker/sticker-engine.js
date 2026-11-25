@@ -115,10 +115,13 @@ function runFfmpeg(input, outputArgs, timeoutMs = 90_000) {
   })
 }
 
-const STICKER_FILTER =
-  'scale=512:512:force_original_aspect_ratio=decrease:flags=lanczos,' +
-  'pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000,' +
-  'format=yuva420p'
+function stickerFilter(size) {
+  return 'scale=' + size + ':' + size + ':force_original_aspect_ratio=decrease:flags=lanczos,' +
+    'pad=' + size + ':' + size + ':(ow-iw)/2:(oh-ih)/2:color=0x00000000,' +
+    'format=yuva420p'
+}
+
+const STICKER_FILTER = stickerFilter(512)
 
 async function encodeStillWithFfmpeg(input) {
   let smallest = null
@@ -157,22 +160,39 @@ async function encodeStillWithFfmpeg(input) {
   throw new Error('Gambar terlalu besar untuk dikompres menjadi stiker WhatsApp.')
 }
 
-async function encodeAnimatedWithFfmpeg(input, { maxSeconds = VIDEO_SECONDS, maxBytes = ANIMATED_TARGET_BYTES } = {}) {
+async function encodeAnimatedWithFfmpeg(input, { maxSeconds = VIDEO_SECONDS, maxBytes = ANIMATED_TARGET_BYTES, targetBytes = ANIMATED_TARGET_BYTES, size = 512, maxFps = 10 } = {}) {
   let smallest = null
   let lastError = null
   let encoder = 'libwebp_anim'
 
-  const profiles = [
-    { fps: 10, quality: 55 },
-    { fps: 8, quality: 45 },
-    { fps: 6, quality: 35 },
-    { fps: 5, quality: 28 },
-    { fps: 4, quality: 22 }
-  ]
+  // Tangga profil: fps tinggi dulu, kualitas turun bertahap. Saat maxFps
+  // masih 10, tangganya persis seperti semula supaya output default tidak
+  // berubah; di atas 10 (eksperimen .sa 720p/30fps) ditambah langkah 30/24/
+  // 20/15/12 supaya penurunan fps bertahap, bukan langsung jatuh ke 10.
+  const profiles = maxFps > 10
+    ? [
+        { fps: 30, quality: 55 },
+        { fps: 24, quality: 55 },
+        { fps: 20, quality: 52 },
+        { fps: 15, quality: 50 },
+        { fps: 12, quality: 48 },
+        { fps: 10, quality: 55 },
+        { fps: 8, quality: 45 },
+        { fps: 6, quality: 35 },
+        { fps: 5, quality: 28 },
+        { fps: 4, quality: 22 }
+      ].filter(profile => profile.fps <= maxFps)
+    : [
+        { fps: 10, quality: 55 },
+        { fps: 8, quality: 45 },
+        { fps: 6, quality: 35 },
+        { fps: 5, quality: 28 },
+        { fps: 4, quality: 22 }
+      ]
 
   for (const profile of profiles) {
     const filter =
-      'fps=' + profile.fps + ',' + STICKER_FILTER
+      'fps=' + profile.fps + ',' + stickerFilter(size)
     try {
       let output
       try {
@@ -211,11 +231,13 @@ async function encodeAnimatedWithFfmpeg(input, { maxSeconds = VIDEO_SECONDS, max
 
       if (!isWebp(output)) throw new Error('Output FFmpeg bukan WebP animasi yang valid.')
       if (!smallest || output.length < smallest.length) smallest = output
-      // Kompresi dulu seperti biasa: profil pertama yang muat 500 KB langsung
-      // dipakai. maxBytes (25 MB untuk .sa) hanya batas darurat — dipakai
-      // kalau profil terkecil pun masih di atas 500 KB, bukan alasan untuk
-      // melewati kompresi.
-      if (output.length <= ANIMATED_TARGET_BYTES) return output
+      // Kompresi dulu menuju targetBytes (480 KB untuk .s): profil pertama
+      // yang muat langsung dipakai. maxBytes hanya batas darurat — dipakai
+      // kalau profil terkecil pun masih di atas target, bukan alasan untuk
+      // melewati kompresi. Untuk eksperimen .sa 720p/30fps, targetBytes-nya
+      // adalah 25 MB, karena 720p/30fps tidak mungkin muat 500 KB — jadi
+      // profil tertinggi yang muat 25 MB langsung dipakai.
+      if (output.length <= targetBytes) return output
     } catch (error) {
       lastError = error
       if (/FFmpeg tidak ditemukan|Tidak dapat menjalankan FFmpeg|Unknown encoder/i.test(error.message)) break
@@ -353,12 +375,24 @@ export async function createStickerFromBuffer(input, options = {}) {
   const maxStickerBytes = Number.isFinite(requestedBytes) && requestedBytes > 0
     ? requestedBytes
     : MAX_STICKER_BYTES
+  const requestedTargetBytes = Number(options.targetBytes)
+  const targetBytes = Number.isFinite(requestedTargetBytes) && requestedTargetBytes > 0
+    ? requestedTargetBytes
+    : ANIMATED_TARGET_BYTES
+  const requestedSize = Number(options.size)
+  const size = Number.isFinite(requestedSize) && requestedSize > 0
+    ? Math.round(requestedSize)
+    : 512
+  const requestedFps = Number(options.maxFps)
+  const maxFps = Number.isFinite(requestedFps) && requestedFps > 0
+    ? requestedFps
+    : 10
   if (isVideo || detected?.ext === 'gif' || detected?.ext === 'apng') {
     const requestedSeconds = Number(options.maxVideoSeconds)
     const maxVideoSeconds = Number.isFinite(requestedSeconds) && requestedSeconds > 0
       ? requestedSeconds
       : VIDEO_SECONDS
-    webpBuffer = await encodeAnimatedWithFfmpeg(buffer, { maxSeconds: maxVideoSeconds, maxBytes: maxStickerBytes })
+    webpBuffer = await encodeAnimatedWithFfmpeg(buffer, { maxSeconds: maxVideoSeconds, maxBytes: maxStickerBytes, targetBytes, size, maxFps })
   } else {
     try {
       webpBuffer = await encodeImageWithSharp(buffer)

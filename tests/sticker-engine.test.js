@@ -111,16 +111,19 @@ test('Oversized input is rejected before conversion', async () => {
   )
 })
 
-// Durasi total WebP animasi (ms) dari jumlah durasi tiap frame ANMF.
-// ffprobe, sharp, dan node-webpmux tidak melaporkan durasi frame WebP
-// animasi, jadi tes ini membaca langsung struktur chunk RIFF WebP: tiap
-// chunk 'ANMF' membawa durasi frame 24-bit (ms) di offset 12 payload-nya.
-function animatedWebpDurationMs(buffer) {
+// Info WebP animasi: ukuran kanvas (dari chunk VP8X), jumlah frame dan
+// durasi total (dari chunk ANMF). ffprobe, sharp, dan node-webpmux tidak
+// melaporkan durasi frame WebP animasi, jadi tes ini membaca langsung
+// struktur chunk RIFF WebP: tiap chunk 'ANMF' membawa durasi frame 24-bit
+// (ms) di offset 12 payload-nya.
+function animatedWebpInfo(buffer) {
   if (!Buffer.isBuffer(buffer) || buffer.length < 12 ||
     buffer.toString('ascii', 0, 4) !== 'RIFF' ||
     buffer.toString('ascii', 8, 12) !== 'WEBP') {
     throw new Error('Buffer bukan file WebP (RIFF/WEBP).')
   }
+  let width = null
+  let height = null
   let totalMs = 0
   let frames = 0
   let offset = 12
@@ -129,6 +132,10 @@ function animatedWebpDurationMs(buffer) {
     const size = buffer.readUInt32LE(offset + 4)
     const payloadStart = offset + 8
     if (payloadStart + size > buffer.length) break
+    if (id === 'VP8X' && size >= 10) {
+      width = buffer.readUIntLE(payloadStart + 4, 3) + 1
+      height = buffer.readUIntLE(payloadStart + 7, 3) + 1
+    }
     if (id === 'ANMF' && size >= 16) {
       totalMs += buffer[payloadStart + 12] |
         (buffer[payloadStart + 13] << 8) |
@@ -138,7 +145,11 @@ function animatedWebpDurationMs(buffer) {
     offset = payloadStart + size + (size % 2)
   }
   if (!frames) throw new Error('WebP animasi tidak punya frame ANMF.')
-  return totalMs
+  return { width, height, frames, durationMs: totalMs }
+}
+
+function animatedWebpDurationMs(buffer) {
+  return animatedWebpInfo(buffer).durationMs
 }
 
 test('Video 12 detik: default dipangkas 10 detik, opsi maxVideoSeconds 30 mempertahankannya', async t => {
@@ -282,6 +293,61 @@ test('Opsi maxStickerBytes 25 MB hanya jadi batas darurat bila profil terkecil p
     assert.ok(big.length <= 25 * 1024 * 1024, `stiker darurat harus <= 25 MB, dapat ${big.length} byte`)
     const bigMs = animatedWebpDurationMs(Buffer.from(big))
     assert.ok(bigMs >= 29000 && bigMs <= 31000, `stiker darurat harus tetap ~30 detik, dapat ${bigMs} ms`)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test('Opsi size 720 + maxFps 30 (eksperimen .sa) menghasilkan stiker 720x720 ~30 fps', async t => {
+  const version = spawnSync('ffmpeg', ['-version'], { encoding: 'utf8' })
+  if (version.error?.code === 'ENOENT') {
+    t.skip('FFmpeg tidak tersedia pada runner ini.')
+    return
+  }
+
+  const directory = await mkdtemp(join(tmpdir(), 'alvareth-sticker-test-'))
+  const inputPath = join(directory, 'input.mp4')
+  try {
+    const generated = spawnSync('ffmpeg', [
+      '-hide_banner', '-loglevel', 'error',
+      // Sumber HARUS 30 fps: filter fps=30 memang menduplikasi frame dari
+      // sumber yang lebih lambat, tapi encoder libwebp_anim menggabungkan
+      // lagi frame duplikat yang identik, jadi fps stiker tidak pernah
+      // melebihi fps video sumber (dibuktikan eksperimen: sumber 12 fps
+      // tetap 24 frame meski difilter fps=30, sumber 30 fps jadi 60 frame).
+      '-f', 'lavfi', '-i', 'testsrc2=size=160x160:rate=30',
+      '-t', '2',
+      '-c:v', 'libx264',
+      '-pix_fmt', 'yuv420p',
+      '-movflags', '+faststart',
+      '-y', inputPath
+    ], { encoding: 'utf8', timeout: 30_000 })
+
+    if (generated.error || generated.status !== 0) {
+      t.skip('Runner FFmpeg tidak memiliki encoder H.264 untuk membuat fixture video.')
+      return
+    }
+
+    const input = await readFile(inputPath)
+    const output = await createStickerFromBuffer(input, {
+      mimeHint: 'video/mp4',
+      mediaType: 'videoMessage',
+      maxVideoSeconds: 30,
+      maxStickerBytes: 25 * 1024 * 1024,
+      targetBytes: 25 * 1024 * 1024,
+      size: 720,
+      maxFps: 30,
+      packname: 'Alvareth 720p Test',
+      author: 'Sticker Test'
+    })
+
+    assert.ok(output.length <= 25 * 1024 * 1024, `stiker 720p harus <= 25 MB, dapat ${output.length} byte`)
+    const info = animatedWebpInfo(Buffer.from(output))
+    assert.equal(info.width, 720, `lebar kanvas harus 720, dapat ${info.width}`)
+    assert.equal(info.height, 720, `tinggi kanvas harus 720, dapat ${info.height}`)
+    assert.ok(info.durationMs >= 1900 && info.durationMs <= 2100, `stiker harus ~2 detik, dapat ${info.durationMs} ms`)
+    const fps = info.frames / (info.durationMs / 1000)
+    assert.ok(fps >= 28 && fps <= 32, `stiker harus ~30 fps, dapat ${fps.toFixed(1)} fps (${info.frames} frame)`)
   } finally {
     await rm(directory, { recursive: true, force: true })
   }

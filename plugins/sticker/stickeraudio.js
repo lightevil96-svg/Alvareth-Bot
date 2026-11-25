@@ -221,6 +221,9 @@ let handler = async (m, { conn, args = [], usedPrefix = '.', command = 'sa' }) =
       mediaType: 'videoMessage',
       maxVideoSeconds: stickerAudioLimits.maxVideoSeconds,
       maxStickerBytes: stickerAudioLimits.maxStickerBytes,
+      targetBytes: stickerAudioLimits.targetBytes,
+      size: stickerAudioLimits.stickerSize,
+      maxFps: stickerAudioLimits.maxFps,
       packname,
       author
     })
