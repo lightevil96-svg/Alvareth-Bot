@@ -9,6 +9,8 @@
 
 ## Pembaruan terbaru
 
+- 2026-11-25 — `.sa`: fps now ABSOLUTE 20 — never less, never more (`fixedFps`, `.sa`-only; shared `.s` unchanged). `MAX_FPS` 30 → 20; only WebP quality steps down to fit the size. Holds for sources at/above 20 fps; a source below 20 fps still follows the source (encoder merges duplicated frames). Engine 11/11, `npm run test:stickeraudio` 16/16, full `npm test` exits 0.
+
 - 2026-11-25 — REVERTED to the 360p/30fps version at the owner's request: `keepSourceFps` (commit `fb928d0`) removed; `.sa` fps steps down again to fit 500 KB (30→24→20→15→12→10→8→6→5→4). Size stays 360x360, cap 30 fps. Engine 10/10, `npm run test:stickeraudio` 16/16, full `npm test` exits 0.
 
 - 2026-11-25 — `.sa`: fps now follows the source video (capped at 30 fps) and is never compressed — only WebP quality steps down (55 → 12) to fit the size (`keepSourceFps`, `.sa`-only; shared `.s` unchanged). A busy 6 s clip still goes out above 500 KB at 30 fps rather than dropping fps. Engine 11/11, `npm run test:stickeraudio` 16/16, full `npm test` exits 0.

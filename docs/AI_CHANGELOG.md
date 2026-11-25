@@ -1,3 +1,11 @@
+## 2026-11-25 — `.sa`: fps mutlak 20 (tidak kurang, tidak lebih)
+
+- **Request (owner, 2026-11-25 ~19:57 WIB):** "Fps nya 20 gak boleh kurang dan gak boleh lebih, kamu ubah sekarang untuk fps nya mutlak 20 fps."
+- **Change (`.sa`-only; shared `.s` unchanged):** engine gains a `fixedFps` option; `MAX_FPS` 30 → 20 and `stickerAudioLimits.fixedFps = true`, passed through by the plugin. When on, the profile sweep is quality-only at a fixed fps = 20 (qualities 55/45/35/28/22/18/12, first ≤ 500 KB wins, otherwise the smallest ≤ 25 MB); the fps never steps up or down. Measured first: a 2 s clip at 360p/20fps/q55 is ~188 KB from both a 30 fps and a 60 fps source (exactly 40 frames, 20.0 fps); a busy 6 s clip fits 500 KB at q35 (~488 KB) on fixed 20 fps.
+- **Files:** `plugins/sticker/sticker-engine.js`, `lib/sticker-audio.js`, `plugins/sticker/stickeraudio.js`, `tests/sticker-audio.test.js`, `tests/sticker-engine.test.js`, `AI_CONTEXT.md`, `docs/AI_CHANGELOG.md`.
+- **Verification:** Engine suite passes 11/11 — new: a 2 s clip from both a 30 fps and a 60 fps source produces exactly 40 frames (~2 s, 20.0 fps) at 360x360 within 500 KB. `npm run test:stickeraudio` passes 16/16, full `npm test` exits 0.
+- **Limitations / unverified:** "mutlak 20" holds for sources at or above 20 fps. A source below 20 fps (measured: 10 fps → 10 fps, 20 frames) cannot reach 20 fps with the `fps=` filter alone, because `libwebp_anim` merges the duplicated frames back into longer durations — only frame interpolation (`minterpolate`) could force it, at much higher encode cost, so that was not added. Live test decides.
+
 ## 2026-11-25 — Reverted: back to the 360p/30fps version (fps compressed again)
 
 - **Request (owner, 2026-11-25 ~19:23 WIB):** "Ubah ke versi sebelumnya aja yang 360p 30 fps."
