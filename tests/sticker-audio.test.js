@@ -11,6 +11,7 @@ import {
   baileysSupportsSoundSticker,
   classifyStickerAudioSource,
   extractAudioFromVideoBuffer,
+  formatDurationSeconds,
   makeVideoFromImageAndAudio,
   normalizeAudioBuffer,
   parseStickerAudioArgs,
@@ -144,9 +145,9 @@ test('Klasifikasi sumber: reply video, gambar + reply audio, dan penolakan', () 
   assert.equal(classifyStickerAudioSource({}), 'unsupported')
 })
 
-test('Batas stiker audio .sa: video dan suara maksimal 30 detik', () => {
-  assert.equal(stickerAudioLimits.maxSoundSeconds, 30)
-  assert.equal(stickerAudioLimits.maxVideoSeconds, 30)
+test('Batas stiker audio .sa: video dan suara maksimal 1 jam', () => {
+  assert.equal(stickerAudioLimits.maxSoundSeconds, 3600)
+  assert.equal(stickerAudioLimits.maxVideoSeconds, 3600)
   assert.equal(stickerAudioLimits.maxStickerBytes, 25 * 1024 * 1024)
   assert.equal(stickerAudioLimits.targetBytes, 25 * 1024 * 1024)
   assert.equal(stickerAudioLimits.stickerSize, 720)
@@ -238,7 +239,14 @@ test('Audio video bersuara diekstrak jadi Ogg Opus', async t => {
   }
 })
 
-test('Audio panjang dipangkas ke batas 30 detik .sa', async t => {
+test('formatDurationSeconds: 3600 detik jadi 1 jam', () => {
+  assert.equal(formatDurationSeconds(3600), '1 jam')
+  assert.equal(formatDurationSeconds(3660), '1 jam 1 menit')
+  assert.equal(formatDurationSeconds(90), '1 menit 30 detik')
+  assert.equal(formatDurationSeconds(45), '45 detik')
+})
+
+test('Audio 35 detik tidak dipangkas di bawah batas 1 jam .sa, tapi pemangkas eksplisit tetap jalan', async t => {
   if (!ffmpegAvailable(t)) return
   const directory = await mkdtemp(join(tmpdir(), 'alvareth-sticker-audio-test-'))
   try {
@@ -246,7 +254,11 @@ test('Audio panjang dipangkas ke batas 30 detik .sa', async t => {
     const normalized = await normalizeAudioBuffer(audio)
     assert.equal(normalized.subarray(0, 4).toString('ascii'), 'OggS')
     const seconds = await probeOggDurationSeconds(directory, normalized)
-    assert.ok(seconds >= 29 && seconds <= 31, `durasi audio harus ~30 detik, dapat ${seconds}`)
+    assert.ok(seconds >= 34 && seconds <= 36, `durasi audio harus ~35 detik, dapat ${seconds}`)
+    // Pemangkasnya sendiri masih jalan bila diminta eksplisit.
+    const trimmed = await normalizeAudioBuffer(audio, { maxSeconds: 30 })
+    const trimmedSeconds = await probeOggDurationSeconds(directory, trimmed)
+    assert.ok(trimmedSeconds >= 29 && trimmedSeconds <= 31, `durasi audio harus ~30 detik bila maxSeconds 30, dapat ${trimmedSeconds}`)
   } finally {
     await rm(directory, { recursive: true, force: true })
   }
@@ -345,7 +357,7 @@ test('Plugin .sa: reply video bersuara mengirim stiker + audio (fallback v1)', a
   }
 })
 
-test('Plugin .sa: video 31 detik ditolak dengan batas 30 detik', async t => {
+test('Plugin .sa: video 3601 detik ditolak dengan batas 1 jam', async t => {
   if (!ffmpegAvailable(t)) return
   const directory = await mkdtemp(join(tmpdir(), 'alvareth-sticker-audio-test-'))
   try {
@@ -364,20 +376,20 @@ test('Plugin .sa: video 31 detik ditolak dengan batas 30 detik', async t => {
       mediaType: 'videoMessage',
       mtype: 'videoMessage',
       mimetype: 'video/mp4',
-      msg: { seconds: 31, mimetype: 'video/mp4' },
+      msg: { seconds: 3601, mimetype: 'video/mp4' },
       quoted: null,
       download: async () => video
     }
     await handler(m, { conn, args: [], usedPrefix: '.', command: 'sa' })
 
-    assert.ok(sent.find(item => typeof item.content?.text === 'string' && /Maksimal 30 detik/i.test(item.content.text)), 'video 31 detik harus ditolak dengan pesan batas 30 detik')
+    assert.ok(sent.find(item => typeof item.content?.text === 'string' && /Maksimal 1 jam/i.test(item.content.text)), 'video 3601 detik harus ditolak dengan pesan batas 1 jam')
     assert.equal(sent.find(item => item.content?.sticker), undefined, 'video yang ditolak tidak boleh mengirim stiker')
   } finally {
     await rm(directory, { recursive: true, force: true })
   }
 })
 
-test('Plugin .sa: video 30 detik lolos batas dan terkirim', async t => {
+test('Plugin .sa: video 3600 detik lolos batas dan terkirim', async t => {
   if (!ffmpegAvailable(t)) return
   const directory = await mkdtemp(join(tmpdir(), 'alvareth-sticker-audio-test-'))
   try {
@@ -396,14 +408,14 @@ test('Plugin .sa: video 30 detik lolos batas dan terkirim', async t => {
       mediaType: 'videoMessage',
       mtype: 'videoMessage',
       mimetype: 'video/mp4',
-      msg: { seconds: 30, mimetype: 'video/mp4' },
+      msg: { seconds: 3600, mimetype: 'video/mp4' },
       quoted: null,
       download: async () => video
     }
     await handler(m, { conn, args: [], usedPrefix: '.', command: 'sa' })
 
-    assert.ok(!sent.find(item => typeof item.content?.text === 'string' && /terlalu panjang/i.test(item.content.text)), 'video 30 detik tidak boleh ditolak')
-    assert.ok(sent.find(item => item.content?.sticker), 'video 30 detik harus mengirim stiker')
+    assert.ok(!sent.find(item => typeof item.content?.text === 'string' && /terlalu panjang/i.test(item.content.text)), 'video 3600 detik tidak boleh ditolak')
+    assert.ok(sent.find(item => item.content?.sticker), 'video 3600 detik harus mengirim stiker')
   } finally {
     await rm(directory, { recursive: true, force: true })
   }

@@ -1,3 +1,11 @@
+## 2026-11-25 — Raise `.sa` max duration from 30 s to 1 hour
+
+- **Request (owner, 2026-11-25 ~18:28 WIB):** "Langsung ubah cepat aja, maksimal durasi nya bikin 1 jam."
+- **Change (`.sa`-only; shared `.s` stays 10 s):** `MAX_VIDEO_SECONDS` and `MAX_SOUND_SECONDS` 30 → 3600 in `lib/sticker-audio.js` (the audio helpers clamp to the constant, so extract/normalize/image+audio all follow). New exported `formatDurationSeconds()` so bot messages read "Maksimal 1 jam" instead of "Maksimal 3600 detik" (also used in the usage line and the v1-fallback note).
+- **Files:** `lib/sticker-audio.js`, `plugins/sticker/stickeraudio.js`, `tests/sticker-audio.test.js`, `AI_CONTEXT.md`, `docs/AI_CHANGELOG.md`.
+- **Verification:** `npm run test:stickeraudio` passes 16/16 — updated: limits are 3600/3600; a 35 s audio is no longer trimmed under the 1-hour limit but an explicit `maxSeconds: 30` still trims to ~30 s; the plugin rejects a fake 3601 s video with "Maksimal 1 jam" and accepts a 3600 s video; new `formatDurationSeconds` test (3600 → "1 jam", 3660 → "1 jam 1 menit", 90 → "1 menit 30 detik"). Full `npm test` exits 0.
+- **Limitations / unverified:** The duration number alone does not make a real 1-hour video work: a 1-hour phone video is hundreds of MB, so it is rejected first at the 25 MB input cap, and the audio (2 MB cap), sticker (25 MB cap) and 90 s per-profile FFmpeg timeout would block it after that. Raising those caps was deliberately NOT done — they protect the bot's memory and responsiveness. A 1-hour sound sticker is also far outside WhatsApp's spec (animation ≤ 10 s). Live test pending.
+
 ## 2026-11-25 — Experiment: `.sa` stickers at 720x720 and 30 fps
 
 - **Request (owner, 2026-11-25 ~18:11 WIB):** "Coba kamu ubah aku mau eksperimen dulu kalau kamu ubah ke 720p dan 30fps."

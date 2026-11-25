@@ -3,6 +3,7 @@ import { createStickerFromBuffer, stickerLimits } from './sticker-engine.js'
 import {
   classifyStickerAudioSource,
   extractAudioFromVideoBuffer,
+  formatDurationSeconds,
   makeVideoFromImageAndAudio,
   normalizeAudioBuffer,
   parseStickerAudioArgs,
@@ -48,7 +49,7 @@ let handler = async (m, { conn, args = [], usedPrefix = '.', command = 'sa' }) =
   const usage = 'Balas video bersuara dengan *' + usedPrefix + command + '*, ' +
     'atau kirim video bersuara dengan caption *' + usedPrefix + command + '*. ' +
     'Bisa juga balas audio dengan gambar + *' + usedPrefix + command + '*. ' +
-    'Maksimal ' + stickerAudioLimits.maxSoundSeconds + ' detik.'
+    'Maksimal ' + formatDurationSeconds(stickerAudioLimits.maxSoundSeconds) + '.'
 
   try {
     stage = 'membaca media yang direply'
@@ -152,7 +153,7 @@ let handler = async (m, { conn, args = [], usedPrefix = '.', command = 'sa' }) =
         )
         if (Number.isFinite(seconds) && seconds > stickerAudioLimits.maxVideoSeconds) {
           await react('❌')
-          return sendText('❌ Video terlalu panjang. Maksimal ' + stickerAudioLimits.maxVideoSeconds + ' detik untuk stiker audio.')
+          return sendText('❌ Video terlalu panjang. Maksimal ' + formatDurationSeconds(stickerAudioLimits.maxVideoSeconds) + ' untuk stiker audio.')
         }
       }
     } else {
@@ -252,7 +253,7 @@ let handler = async (m, { conn, args = [], usedPrefix = '.', command = 'sa' }) =
         })
         await sendText(
           '🔊 Stiker suara native gagal dikirim kali ini, jadi dikirim sebagai stiker + audio ' +
-          stickerAudioLimits.maxSoundSeconds + ' detik terpisah di bawahnya.'
+          formatDurationSeconds(stickerAudioLimits.maxSoundSeconds) + ' terpisah di bawahnya.'
         )
       } else if (audioWarning) {
         await sendText(audioWarning)
