@@ -36,6 +36,12 @@ npm start
 
 Nomor WhatsApp di `.env` menggunakan angka internasional saja tanpa tanda `+` atau spasi. Jangan commit `.env`, sesi WhatsApp, atau database runtime.
 
+## YouTube cookies untuk perintah .clip
+
+Jika yt-dlp menampilkan verifikasi akun/bot YouTube, ekspor cookies dari browser yang sedang login ke akun YouTube milik sendiri dalam format Netscape `cookies.txt`. Unggah file itu secara privat ke server, disarankan sebagai `.alvareth-bot-data/youtube-cookies.txt` (folder ini tidak masuk Git), atau atur `YTDLP_COOKIES_FILE` ke path absolut file tersebut. Jangan kirim cookies melalui WhatsApp, chat, atau commit ke GitHub. File `cookies.example.txt` hanya contoh format dan bukan kredensial yang dapat dipakai.
+
+Ukuran sumber Qbyte tidak dibatasi oleh aplikasi jika `ALVARETH_CLIP_QBYTE_MAX_SOURCE_BYTES=0`. Nilai ini menghilangkan batas ukuran internal; kapasitas disk, jaringan, batas penyedia unduhan, dan waktu proses server tetap berlaku. yt-dlp/Qbyte hanya dapat memilih resolusi tertinggi yang benar-benar mereka sediakan.
+
 ## Login WhatsApp dengan pairing code atau QR
 
 - Metode awal default adalah **pairing code** (`WA_LOGIN_METHOD=pairing`). Isi `BOT_NUMBER` dengan nomor akun WhatsApp yang akan ditautkan, termasuk kode negara dan hanya angka, misalnya `62812xxxxxxxx`.
