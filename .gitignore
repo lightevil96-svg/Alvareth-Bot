@@ -27,6 +27,7 @@ assets/pingcanvas/
 **/video-analysis/.gemini-api-key-*.tmp
 .alvareth-bot-data/
 youtube-cookies.txt
+cookies.txt
 *.cookies.txt
 
 # Local Python caches and virtual environments
