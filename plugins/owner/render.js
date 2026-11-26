@@ -3,7 +3,7 @@ import path from 'node:path'
 import { homedir } from 'node:os'
 import { fileTypeFromBuffer } from 'file-type'
 import { downloadContentFromMessage } from 'baileys'
-import { downloadQuotedMedia, resolveQuotedMediaInfo } from '../../lib/simple.js'
+import { downloadQuotedMedia, getMediaInfoFromMessageContent, resolveQuotedMediaInfo } from '../../lib/simple.js'
 import { wasBotSentMessage } from '../../lib/auto-download.js'
 import {
   findHtmlTemplate,
@@ -103,8 +103,70 @@ function isTemplatePhotoEvent(m) {
   return mtype === 'imagemessage' || mediaType === 'imagemessage'
 }
 
-async function downloadIncomingImage(m, conn) {
+export async function downloadIncomingImage(m, conn) {
+  // Resolve the media payload from the raw inbound message, never from the
+  // smsg getters (m.msg / m.download). This Baileys fork's protobuf conversion
+  // can drop the serializer getters — handler.js itself warns not to rely on
+  // them — so m.msg can be undefined for a real photo and the old code threw
+  // "Cannot destructure property 'mediaKey' of 'undefined'" from
+  // downloadContentFromMessage on all four live photos. The same resolver
+  // downloadQuotedMedia relies on (getMediaInfoFromMessageContent) reads the
+  // payload straight from rawMessage.message / message instead.
+  const candidates = []
+  const seen = new Set()
+  const addCandidate = media => {
+    if (media && typeof media === 'object' && !seen.has(media)) {
+      seen.add(media)
+      candidates.push(media)
+    }
+  }
+  for (const source of [m?.rawMessage, m]) {
+    try {
+      const info = source ? getMediaInfoFromMessageContent(source) : null
+      if (info?.type === 'imageMessage') addCandidate(info.media)
+    } catch {}
+  }
+
+  // Fallback: the stored original message (same pattern downloadQuotedMedia
+  // uses for quoted previews that only carry a thumbnail). A payload that
+  // exists but has no URL or directPath is just as unusable as no payload.
+  const hasUsableCandidate = candidates.some(media => media?.url || media?.directPath)
+  if (!hasUsableCandidate && m?.key?.id && typeof conn?.loadMessage === 'function') {
+    try {
+      const cached = await Promise.resolve(conn.loadMessage(m.key.id))
+      const info = cached?.key?.id === m.key.id ? getMediaInfoFromMessageContent(cached) : null
+      if (info?.type === 'imageMessage') addCandidate(info.media)
+    } catch (error) {
+      console.warn('[RENDER] Cache pesan foto tidak dapat dibaca:', error?.message || error)
+    }
+  }
+
   let lastError
+  for (const media of candidates) {
+    if (typeof conn?.downloadM === 'function') {
+      try {
+        const buffer = await conn.downloadM(media, 'image')
+        if ((Buffer.isBuffer(buffer) || buffer instanceof Uint8Array) && buffer.length) {
+          return Buffer.from(buffer)
+        }
+      } catch (error) { lastError = error }
+    }
+    // downloadContentFromMessage destructures its first argument, so never
+    // call it without a payload that carries a URL or directPath.
+    if (media.url || media.directPath) {
+      try {
+        const stream = await downloadContentFromMessage(media, 'image')
+        const chunks = []
+        for await (const chunk of stream) chunks.push(Buffer.from(chunk))
+        const buffer = Buffer.concat(chunks)
+        if (buffer.length) return buffer
+      } catch (error) { lastError = error }
+    }
+  }
+
+  // Last resort: the serializer's own download method when it exists. It can
+  // resolve the small thumbnail instead of the original in self-chat, so it
+  // stays behind the raw-payload candidates above.
   if (typeof m?.download === 'function') {
     try {
       const buffer = await m.download()
@@ -113,21 +175,15 @@ async function downloadIncomingImage(m, conn) {
       }
     } catch (error) { lastError = error }
   }
-  if (typeof conn?.downloadM === 'function' && m?.msg) {
-    try {
-      const buffer = await conn.downloadM(m.msg, 'image')
-      if ((Buffer.isBuffer(buffer) || buffer instanceof Uint8Array) && buffer.length) {
-        return Buffer.from(buffer)
-      }
-    } catch (error) { lastError = error }
-  }
-  try {
-    const stream = await downloadContentFromMessage(m.msg, 'image')
-    const chunks = []
-    for await (const chunk of stream) chunks.push(Buffer.from(chunk))
-    const buffer = Buffer.concat(chunks)
-    if (buffer.length) return buffer
-  } catch (error) { lastError = error }
+
+  console.error('[RENDER] Foto template gagal diunduh:', JSON.stringify({
+    mtype: typeof m?.mtype === 'string' ? m.mtype : null,
+    hasRawMessage: Boolean(m?.rawMessage?.message),
+    candidates: candidates.length,
+    candidateHasUrl: candidates.some(media => Boolean(media?.url || media?.directPath)),
+    hasDownloadMethod: typeof m?.download === 'function',
+    lastError: lastError?.message || String(lastError || '')
+  }))
   throw new Error('Foto tidak dapat diunduh dari WhatsApp' +
     (lastError?.message ? ': ' + String(lastError.message).slice(0, 250) : '.'))
 }
