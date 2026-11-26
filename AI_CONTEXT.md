@@ -9,6 +9,8 @@
 
 ## Pembaruan terbaru
 
+- 2026-11-26 — `.clip`: five ordered downloaders, range-aware first — (1) yt-dlp `-g` + FFmpeg input seek (only the requested duration is fetched), (2) yt-dlp `--download-sections`, (3) Piped direct URLs + seek, (4) Cobalt API, (5) Qbyte last. `npm run test:clip` 41/41; live YouTube/Piped/Cobalt smoke test on TokoPanel still needed.
+
 - 2026-11-26 — `.sa`: when quality 1 at 360p cannot fit 500 KB, the canvas now shrinks (fps stays 20) instead of refusing — fixes Light's live failure (975 KB at quality 1). Only when even 160 px cannot fit does the bot refuse (`.sa`-only; shared `.s` unchanged). Engine 14/14, `npm run test:stickeraudio` 16/16, full `npm test` exits 0.
 
 - 2026-11-25 — `.sa`: 500 KB is now a HARD cap — fps stays 20, quality steps down to 1 to fit it; when even quality 1 cannot fit, the bot refuses instead of sending an oversized sticker (`.sa`-only; shared `.s` unchanged). The 25 MB fallback is gone. Engine 13/13, `npm run test:stickeraudio` 16/16, full `npm test` exits 0.
