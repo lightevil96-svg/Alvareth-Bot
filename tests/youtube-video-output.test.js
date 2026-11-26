@@ -22,7 +22,7 @@ async function createQualityHelpers() {
     extractBetween(source, 'function getFormatPixels(format) {', 'function getVideoBitrate(format) {'),
     extractBetween(source, 'function getVideoBitrate(format) {', 'function compareVideoFormats(a, b) {'),
     extractBetween(source, 'function compareVideoFormats(a, b) {', 'export async function getYoutubeInfo('),
-    extractBetween(source, 'function getVideoFormats(info) {', 'function pickBestVideo(info, maxBytes = Infinity) {'),
+    extractBetween(source, 'function getVideoFormats(info) {', 'function pickBestVideo(info) {'),
     extractBetween(source, 'function getAudioBitrate(format) {', 'function pickAudioForBitrate(info, targetBitrate = 320) {'),
     extractBetween(source, 'function getAudioFormats(info) {', 'function selectYtDlpFormats(info) {'),
     extractBetween(source, 'function selectYtDlpFormats(info) {', 'function formatInventorySummary('),

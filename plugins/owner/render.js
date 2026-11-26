@@ -3,7 +3,14 @@ import path from 'node:path'
 import { homedir } from 'node:os'
 import { fileTypeFromBuffer } from 'file-type'
 import { downloadContentFromMessage } from 'baileys'
-import { getQuotedMediaInfo, downloadQuotedMedia } from '../../lib/simple.js'
+import { downloadQuotedMedia, resolveQuotedMediaInfo } from '../../lib/simple.js'
+import { wasBotSentMessage } from '../../lib/auto-download.js'
+import {
+  findHtmlTemplate,
+  ensureRenderBrowser,
+  renderHtmlTemplate,
+  MAX_TEMPLATE_PHOTO_BYTES
+} from '../../lib/html-template-render.js'
 import { createRenderSessionKey as sessionKey, getCurrentRenderDocument as getCurrentDocument, isRenderDocumentEvent } from '../../lib/render-message.js'
 import { sendLocalFile } from '../../lib/whatsapp-file-sender.js'
 import { isWhatsAppConnectionClosedError, isWhatsAppSocketOpen, sendWithWhatsAppReconnect } from '../../lib/whatsapp-connection.js'
@@ -30,6 +37,8 @@ const MAX_VIDEO_BYTES = 300 * 1024 * 1024
 const MAX_ARCHIVE_ENTRIES = 200
 const MAX_ARCHIVE_FILE_BYTES = 100 * 1024 * 1024
 const MAX_ARCHIVE_UNPACKED_BYTES = 250 * 1024 * 1024
+const MAX_TEMPLATE_ARCHIVE_BYTES = 100 * 1024 * 1024
+const PHOTO_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp'])
 const MAX_OUTPUT_BYTES = 500 * 1024 * 1024
 
 // Session dipisahkan berdasarkan chat dan pengirim agar paket ZIP pengguna lain
@@ -55,6 +64,72 @@ function acquireRenderUpdateLock(session) {
   session.updateLockHeld = true
   global.__alvarethRenderJobs = Math.max(0, Number(global.__alvarethRenderJobs) || 0) + 1
   return true
+}
+
+async function evictOldestIdleRenderSession() {
+  while (pendingSessions.size >= MAX_PENDING_SESSIONS) {
+    const oldest = [...pendingSessions.entries()]
+      // Never evict a completed output that is waiting for the owner to send it.
+      .filter(([, item]) => !item.processing && !item.outputPath)
+      .sort((a, b) => a[1].createdAt - b[1].createdAt)[0]
+    if (!oldest) throw new Error('Antrean render penuh. Selesaikan atau batalkan sesi sebelumnya terlebih dahulu.')
+    pendingSessions.delete(oldest[0])
+    await removeSession(oldest[1])
+  }
+}
+
+function formatTemplatePhotoRequest(manifest) {
+  const lines = [
+    '🎬 Template diterima: ' + manifest.title,
+    'Ukuran: ' + manifest.width + 'x' + manifest.height + ' · ' + manifest.fps + ' fps · durasi ' + manifest.duration + ' detik',
+    '',
+    'Bot membutuhkan ' + manifest.requiredPhotos + ' foto:'
+  ]
+  manifest.photoDescriptions.forEach((description, index) => {
+    lines.push((index + 1) + '. ' + description)
+  })
+  lines.push(
+    '',
+    'Kirim semua foto sekaligus sebagai foto (bukan dokumen) di chat ini. Bot langsung merender MP4 kualitas tertinggi begitu foto terakhir diterima.',
+    'Gunakan *.render status* untuk melihat foto yang sudah diterima, atau *.render cancel* untuk membatalkan.'
+  )
+  return lines.join('\n')
+}
+
+function isTemplatePhotoEvent(m) {
+  if (!m || wasBotSentMessage(m)) return false
+  const mtype = String(m?.mtype || '').toLowerCase()
+  const mediaType = String(m?.mediaType || '').toLowerCase()
+  return mtype === 'imagemessage' || mediaType === 'imagemessage'
+}
+
+async function downloadIncomingImage(m, conn) {
+  let lastError
+  if (typeof m?.download === 'function') {
+    try {
+      const buffer = await m.download()
+      if ((Buffer.isBuffer(buffer) || buffer instanceof Uint8Array) && buffer.length) {
+        return Buffer.from(buffer)
+      }
+    } catch (error) { lastError = error }
+  }
+  if (typeof conn?.downloadM === 'function' && m?.msg) {
+    try {
+      const buffer = await conn.downloadM(m.msg, 'image')
+      if ((Buffer.isBuffer(buffer) || buffer instanceof Uint8Array) && buffer.length) {
+        return Buffer.from(buffer)
+      }
+    } catch (error) { lastError = error }
+  }
+  try {
+    const stream = await downloadContentFromMessage(m.msg, 'image')
+    const chunks = []
+    for await (const chunk of stream) chunks.push(Buffer.from(chunk))
+    const buffer = Buffer.concat(chunks)
+    if (buffer.length) return buffer
+  } catch (error) { lastError = error }
+  throw new Error('Foto tidak dapat diunduh dari WhatsApp' +
+    (lastError?.message ? ': ' + String(lastError.message).slice(0, 250) : '.'))
 }
 
 function toSafeNumber(value) {
@@ -634,6 +709,23 @@ const handler = async (m, { conn, text }) => {
         ' file hasil render yang masih tersimpan tetapi metadata sesinya hilang. Gunakan *.render recover* agar dapat dikirim tanpa render ulang.')
     }
     if (!session) return safeReply(m, 'Tidak ada sesi render aktif.')
+    if (session.kind === 'html-template' && !session.processing && !session.outputPath) {
+      const manifest = session.manifest || {}
+      const received = Array.isArray(session.photos) ? session.photos.length : 0
+      const needed = Number(manifest.requiredPhotos || 0)
+      if (received < needed) {
+        const missing = (manifest.photoDescriptions || []).slice(received)
+          .map((description, index) => (received + index + 1) + '. ' + description)
+        return safeReply(m, [
+          '📸 Menunggu foto untuk template ' + String(manifest.title || 'HTML') + '.',
+          'Foto diterima: ' + received + '/' + needed,
+          missing.length ? 'Masih kurang:\n' + missing.join('\n') : '',
+          'Kirim foto sebagai foto (bukan dokumen) di chat ini.'
+        ].filter(Boolean).join('\n'))
+      }
+      return safeReply(m, '❌ Render template terakhir gagal: ' + safeError(session.progress?.detail || 'Kesalahan tidak diketahui.') +
+        '\n\nFoto dan paket template masih tersimpan. Ketik *.render retry* untuk mencoba lagi, atau *.render cancel* untuk membatalkan.')
+    }
     if (session.processing && session.deliveryWaiting) {
       const now = Date.now()
       const waitingSince = Number(session.deliveryWaitingSince) || now
@@ -791,8 +883,45 @@ const handler = async (m, { conn, text }) => {
     return safeReply(m, '🛑 Sesi render dibatalkan dan file sementara dibersihkan.')
   }
 
+  if (action === 'retry') {
+    const session = pendingSessions.get(key)
+    if (!session || session.kind !== 'html-template') {
+      return safeReply(m, 'Tidak ada render template yang bisa diulang. Reply paket template *.zip* dengan *.render* untuk memulai sesi baru.')
+    }
+    if (session.processing) return safeReply(m, '⏳ Render template masih berjalan. Periksa kembali dengan *.render status*.')
+    if (session.outputPath) {
+      return safeReply(m, 'Hasil render sebelumnya masih tersimpan. Gunakan *.render send* untuk mengirimnya atau *.render cancel* untuk menghapusnya.')
+    }
+    const received = Array.isArray(session.photos) ? session.photos.length : 0
+    if (received !== Number(session.manifest?.requiredPhotos || 0) || !session.packageDirectory) {
+      return safeReply(m, 'Foto template belum lengkap. Kirim foto yang kurang sesuai *.render status*, atau mulai ulang dengan reply ZIP template.')
+    }
+    if (global.__alvarethUpdateRunning) {
+      return safeReply(m, '⏳ Update sedang berlangsung. Paket dan foto template tetap tersimpan; coba *.render retry* setelah update selesai.')
+    }
+    acquireRenderUpdateLock(session)
+    if (global.__alvarethUpdateRunning) {
+      releaseRenderUpdateLock(session)
+      return safeReply(m, '⏳ Update baru saja dimulai. Paket dan foto template tetap tersimpan; coba *.render retry* setelah update selesai.')
+    }
+    session.processing = true
+    session.processingStartedAt = Date.now()
+    session.cancelRequested = false
+    session.abortController = new AbortController()
+    await safeReact(m, '🎬')
+    await safeReply(m, '🔁 Mengulang render template dari foto yang sudah diterima. Tidak perlu mengirim foto lagi.')
+    void processTemplateRenderJob({ conn, m, key, session }).catch(async error => {
+      console.error('[RENDER] Retry render template gagal:', error?.stack || error)
+      session.processing = false
+      session.abortController = null
+      await safeReply(m, '❌ Render template gagal: ' + safeError(error) +
+        '\n\nFoto dan paket template masih tersimpan. Ketik *.render retry* untuk mencoba lagi.')
+    })
+    return
+  }
+
   if (action) {
-    return safeReply(m, 'Format: reply video dengan *.render*. Perintah lain: *.render status*, *.render send*, *.render recover*, dan *.render cancel*.')
+    return safeReply(m, 'Format: reply video dengan *.render* (paket render.sh), atau reply paket template *.zip* dengan *.render* (manifest.json + render.html). Perintah lain: *.render status*, *.render send*, *.render recover*, *.render retry*, dan *.render cancel*.')
   }
 
   if (global.__alvarethUpdateRunning) {
@@ -815,13 +944,22 @@ const handler = async (m, { conn, text }) => {
     await removeSession(previous)
   }
 
-  const mediaInfo = getQuotedMediaInfo(m)
+  const mediaInfo = await resolveQuotedMediaInfo(m, conn)
   const mediaType = String(mediaInfo?.type || '').toLowerCase()
   const mime = String(mediaInfo?.mime || '').toLowerCase()
   const isVideo = /^(?:video|ptv)message$/.test(mediaType) || mime.startsWith('video/')
 
+  const quotedFileName = String(mediaInfo?.media?.fileName || mediaInfo?.media?.file_name || mediaInfo?.media?.filename || '')
+  const isQuotedZip = mediaType === 'documentmessage' &&
+    (/\.zip$/i.test(quotedFileName) ||
+      /application\/(?:zip|x-zip-compressed)|application\/x-zip/i.test(mime))
+
+  if (isQuotedZip) {
+    return startTemplateRenderSession({ m, conn, key, mediaInfo, quotedFileName })
+  }
+
   if (!mediaInfo || !isVideo) {
-    return safeReply(m, 'Kirim video ke chat ini, lalu reply video tersebut dengan *.render*. Setelah itu bot akan meminta paket render *.zip*.')
+    return safeReply(m, 'Kirim video ke chat ini, lalu reply video tersebut dengan *.render*. Setelah itu bot akan meminta paket render *.zip*.\n\nAtau kirim paket template *.zip* (manifest.json + render.html), lalu reply ZIP tersebut dengan *.render* — bot akan meminta foto yang dibutuhkan, lalu merender MP4 setelah semua foto diterima.')
   }
 
   const declaredSize = toSafeNumber(mediaInfo.media?.fileLength)
@@ -854,17 +992,10 @@ const handler = async (m, { conn, text }) => {
     const videoPath = path.join(sessionDirectory, 'source-video.' + extension)
     await fs.writeFile(videoPath, videoBuffer, { mode: 0o600, flag: 'wx' })
 
-    while (pendingSessions.size >= MAX_PENDING_SESSIONS) {
-      const oldest = [...pendingSessions.entries()]
-        // Never evict a completed output that is waiting for the owner to send it.
-        .filter(([, item]) => !item.processing && !item.outputPath)
-        .sort((a, b) => a[1].createdAt - b[1].createdAt)[0]
-      if (!oldest) throw new Error('Antrean render penuh. Selesaikan atau batalkan sesi sebelumnya terlebih dahulu.')
-      pendingSessions.delete(oldest[0])
-      await removeSession(oldest[1])
-    }
+    await evictOldestIdleRenderSession()
 
     pendingSessions.set(key, {
+      kind: 'video',
       directory: sessionDirectory,
       videoPath,
       originalName: String(mediaInfo.media?.fileName || 'video.' + extension).slice(0, 120),
@@ -902,6 +1033,19 @@ const handler = async (m, { conn, text }) => {
 handler.all = async function (m) {
   // A document can belong to another ZIP workflow such as .motion.
   if (m?.__alvarethMotionZipHandled || m?.__alvarethRenderZipHandled) return
+
+  // Photos for an HTML template session arrive as ordinary image messages,
+  // often as one album sent at once. Collect them here; documents below
+  // belong to the video + render.sh flow.
+  if (isTemplatePhotoEvent(m)) {
+    const key = sessionKey(m)
+    const session = key ? pendingSessions.get(key) : null
+    if (session?.kind === 'html-template' && !session.outputPath) {
+      await collectTemplatePhoto.call(this, m, key, session)
+      return
+    }
+  }
+
   if (!isRenderDocumentEvent(m)) return
 
   try {
@@ -1182,7 +1326,290 @@ async function processRenderJob({ conn, m, document, key, session }) {
 }
 
 
-handler.help = ['render', 'render status', 'render send', 'render recover', 'render cancel']
+async function collectTemplatePhoto(m, key, session) {
+  if (!session || session.kind !== 'html-template') return
+  const messageId = String(m?.key?.id || '')
+  if (messageId && Array.isArray(session.receivedMessageIds) && session.receivedMessageIds.includes(messageId)) return
+
+  if (session.processing) {
+    return safeReply(m, '⏳ Render template sedang berjalan. Tunggu sampai selesai.')
+  }
+
+  const manifest = session.manifest || {}
+  const needed = Number(manifest.requiredPhotos || 0)
+  const received = Array.isArray(session.photos) ? session.photos.length : 0
+  if (received >= needed) return
+
+  const conn = m.conn || this
+  let imageBuffer
+  try {
+    imageBuffer = await downloadIncomingImage(m, conn)
+  } catch (error) {
+    return safeReply(m, '❌ Foto gagal diunduh: ' + safeError(error) + '. Kirim ulang foto tersebut.')
+  }
+  if (imageBuffer.length > MAX_TEMPLATE_PHOTO_BYTES) {
+    return safeReply(m, '❌ Foto melebihi batas ' + formatBytes(MAX_TEMPLATE_PHOTO_BYTES) + '. Kirim foto yang lebih kecil.')
+  }
+
+  let detected = null
+  try {
+    detected = await fileTypeFromBuffer(imageBuffer.subarray(0, Math.min(imageBuffer.length, 4100)))
+  } catch {}
+  const extension = String(detected?.ext || '').toLowerCase()
+  if (!detected || !PHOTO_EXTENSIONS.has(extension)) {
+    return safeReply(m, '❌ File yang dikirim bukan foto JPG/PNG/WebP. Kirim ulang sebagai foto biasa.')
+  }
+
+  const photoIndex = received + 1
+  const photoPath = path.join(session.photoDirectory, 'photo-' + photoIndex + '.' + extension)
+  try {
+    await fs.writeFile(photoPath, imageBuffer, { mode: 0o600, flag: 'wx' })
+  } catch (error) {
+    console.error('[RENDER] Gagal menyimpan foto template:', error?.message || error)
+    return safeReply(m, '❌ Foto gagal disimpan di server. Kirim ulang foto tersebut.')
+  }
+  if (messageId) session.receivedMessageIds.push(messageId)
+  session.photos.push({ index: photoIndex, path: photoPath, size: imageBuffer.length })
+  session.progress = {
+    percent: Math.round((photoIndex / needed) * 100),
+    stage: 'Menunggu foto',
+    detail: 'Foto diterima: ' + photoIndex + '/' + needed,
+    updatedAt: Date.now()
+  }
+
+  if (photoIndex < needed) {
+    await safeReact(m, '✅')
+    return
+  }
+
+  session.processing = true
+  session.processingStartedAt = Date.now()
+  session.cancelRequested = false
+  session.abortController = new AbortController()
+  await safeReact(m, '⚙️')
+  await safeReply(
+    m,
+    '📸 Semua ' + needed + ' foto diterima. ⚙️ Render template mulai diproses di background. Fitur bot lain tetap dapat digunakan; tidak ada batas waktu otomatis. Gunakan *.render cancel* untuk menghentikan.'
+  )
+  void processTemplateRenderJob({ conn, m, key, session }).catch(async error => {
+    console.error('[RENDER] Background worker template gagal:', error?.stack || error)
+    session.processing = false
+    session.abortController = null
+    if (session.cancelRequested) {
+      if (pendingSessions.get(key) === session) pendingSessions.delete(key)
+      await safeReact(m, '🛑')
+      await safeReply(m, '🛑 Render dibatalkan. Proses render dihentikan.')
+      await removeSession(session)
+      return
+    }
+    const progress = createRenderTerminalProgressReporter(session)
+    progress.update(session.progress?.percent || 0, 'Render gagal', safeError(error), true)
+    await safeReact(m, '❌')
+    await safeReply(
+      m,
+      '❌ Render template gagal: ' + safeError(error) +
+      '\n\nFoto dan paket template masih tersimpan. Ketik *.render retry* untuk mencoba lagi tanpa mengirim foto ulang, atau *.render cancel* untuk membatalkan.'
+    )
+    await progress.close()
+  })
+}
+
+async function startTemplateRenderSession({ m, conn, key, mediaInfo, quotedFileName }) {
+  const declaredSize = toSafeNumber(mediaInfo?.media?.fileLength)
+  if (declaredSize > MAX_TEMPLATE_ARCHIVE_BYTES) {
+    return safeReply(m, 'Ukuran ZIP template ' + formatBytes(declaredSize) + ' melebihi batas ' + formatBytes(MAX_TEMPLATE_ARCHIVE_BYTES) + '.')
+  }
+
+  let sessionDirectory
+  try {
+    const archiveBuffer = await downloadDocument(conn, mediaInfo.media, {
+      label: 'ZIP',
+      maxBytes: MAX_TEMPLATE_ARCHIVE_BYTES
+    })
+    if (!Buffer.isBuffer(archiveBuffer) || !archiveBuffer.length) {
+      throw new Error('File ZIP template gagal diunduh dari WhatsApp.')
+    }
+    if (!hasZipSignature(archiveBuffer)) {
+      throw new Error('File yang direply bukan arsip ZIP yang valid.')
+    }
+
+    const root = await ensureRenderRoot()
+    sessionDirectory = await fs.mkdtemp(path.join(root, 'alvareth-render-'))
+    await fs.chmod(sessionDirectory, 0o700).catch(() => {})
+    const packageDirectory = path.join(sessionDirectory, 'package')
+    await fs.mkdir(packageDirectory, { recursive: true, mode: 0o700 })
+
+    const extracted = await extractRenderArchive(archiveBuffer, packageDirectory, {
+      maxEntries: MAX_ARCHIVE_ENTRIES,
+      maxFileBytes: MAX_ARCHIVE_FILE_BYTES,
+      maxTotalBytes: MAX_ARCHIVE_UNPACKED_BYTES
+    })
+
+    // A render.sh package belongs to the video-first flow, not the template
+    // flow. Tell the owner instead of failing on a missing manifest.
+    let scriptPath = null
+    try {
+      scriptPath = await findRenderScript(packageDirectory)
+    } catch (error) {
+      if (!/tidak memiliki file render\.sh/.test(String(error?.message || ''))) throw error
+    }
+    if (scriptPath) {
+      throw new Error('ZIP ini berisi render.sh, jadi alurnya berbeda: kirim video dulu, reply video dengan *.render*, lalu kirim ZIP ini. Paket template HTML harus berisi manifest.json + render.html, bukan render.sh.')
+    }
+
+    const template = await findHtmlTemplate(packageDirectory)
+    const photoDirectory = path.join(sessionDirectory, 'photos')
+    await fs.mkdir(photoDirectory, { recursive: true, mode: 0o700 })
+
+    await evictOldestIdleRenderSession()
+    const manifest = template.manifest
+    pendingSessions.set(key, {
+      kind: 'html-template',
+      directory: sessionDirectory,
+      packageDirectory,
+      entryPath: template.entryPath,
+      audioPath: template.audioPath,
+      manifest,
+      photoDirectory,
+      photos: [],
+      receivedMessageIds: [],
+      createdAt: Date.now(),
+      processing: false,
+      progress: {
+        percent: 0,
+        stage: 'Menunggu foto',
+        detail: 'Template ' + manifest.title + ' membutuhkan ' + manifest.requiredPhotos + ' foto.',
+        updatedAt: Date.now()
+      },
+      updateLockHeld: true,
+      abortController: null,
+      cancelRequested: false,
+      deliveryWaiting: false,
+      deliveryWaitingSince: null,
+      deliveryStartedAt: null,
+      outputPath: null,
+      outputFileName: null,
+      outputSize: 0
+    })
+    global.__alvarethRenderJobs = Math.max(0, Number(global.__alvarethRenderJobs) || 0) + 1
+    console.log('[RENDER] Sesi template dibuat:', {
+      fileName: quotedFileName,
+      template: manifest.id,
+      extractedFiles: extracted.files.length,
+      extractedBytes: formatBytes(extracted.totalBytes),
+      requiredPhotos: manifest.requiredPhotos
+    })
+    return safeReply(m, formatTemplatePhotoRequest(manifest))
+  } catch (error) {
+    if (sessionDirectory) await fs.rm(sessionDirectory, { recursive: true, force: true }).catch(() => {})
+    console.error('[RENDER] Gagal menyiapkan template:', error?.stack || error)
+    return safeReply(m, '❌ Paket template gagal disiapkan: ' + safeError(error))
+  }
+}
+
+async function processTemplateRenderJob({ conn, m, key, session }) {
+  const progress = createRenderTerminalProgressReporter(session)
+  try {
+    progress.update(1, 'Menyiapkan browser render', '', true)
+    throwIfRenderCancelled(session)
+    const browserExecutable = await ensureRenderBrowser({
+      signal: session.abortController?.signal,
+      onLog: message => console.log(String(message).replace(/\n$/, ''))
+    })
+    throwIfRenderCancelled(session)
+
+    const manifest = session.manifest
+    progress.update(
+      5,
+      'Merender template HTML',
+      manifest.title + ' · ' + manifest.width + 'x' + manifest.height + ' · ' + manifest.fps + ' fps · ' + manifest.totalFrames + ' frame',
+      true
+    )
+    const outputPath = path.join(session.directory, 'render-result.mp4')
+    const photoPaths = session.photos.map(photo => photo.path)
+    const result = await renderHtmlTemplate({
+      browserExecutable,
+      packageDir: session.packageDirectory,
+      entryPath: session.entryPath,
+      manifest,
+      photoPaths,
+      audioPath: session.audioPath,
+      outputPath,
+      signal: session.abortController?.signal,
+      onLog: message => console.log(String(message).replace(/\n$/, '')),
+      onProgress: value => {
+        const percent = 5 + Math.round(Number(value.percent || 0) * 0.85)
+        progress.update(percent, 'Merender template HTML',
+          'Frame ' + Number(value.frame || 0) + '/' + Number(value.totalFrames || 0) +
+          ' · ' + Number(value.percent || 0) + '%')
+      }
+    })
+    throwIfRenderCancelled(session)
+    console.log('[RENDER] Template selesai dirender:', {
+      template: manifest.id,
+      frames: result.frames,
+      size: formatBytes(result.bytes)
+    })
+
+    progress.update(92, 'Memvalidasi hasil render', '', true)
+    if (result.bytes > MAX_OUTPUT_BYTES) {
+      throw new Error('Ukuran hasil render ' + formatBytes(result.bytes) + ' melebihi batas pengiriman ' + formatBytes(MAX_OUTPUT_BYTES) + '.')
+    }
+    session.outputPath = outputPath
+    session.outputFileName = 'render-result.mp4'
+    session.outputSize = result.bytes
+    await fs.chmod(outputPath, 0o600).catch(() => {})
+
+    // Photos and the extracted package are no longer needed once the final
+    // video lives directly in the session directory.
+    await fs.rm(session.packageDirectory, { recursive: true, force: true }).catch(() => {})
+    await fs.rm(session.photoDirectory, { recursive: true, force: true }).catch(() => {})
+    session.packageDirectory = null
+    session.photoDirectory = null
+
+    throwIfRenderCancelled(session)
+    await runTrackedRenderDelivery({ m, key, session, progressReporter: progress })
+  } catch (error) {
+    console.error('[RENDER] Proses render template gagal:', error?.stack || error)
+    const cancelled = error?.code === 'RENDER_SCRIPT_CANCELLED' ||
+      session.cancelRequested || session.abortController?.signal.aborted
+    if (cancelled) {
+      progress.update(
+        session.progress?.percent || 0,
+        'Dibatalkan',
+        'Render dihentikan atas permintaan pengguna.',
+        true
+      )
+      session.processing = false
+      session.abortController = null
+      if (pendingSessions.get(key) === session) pendingSessions.delete(key)
+      await safeReact(m, '🛑')
+      await safeReply(m, '🛑 Render dibatalkan. Proses render dan proses turunannya telah dihentikan.')
+      await removeSession(session)
+      return
+    }
+
+    progress.update(
+      session.progress?.percent || 0,
+      'Render gagal',
+      safeError(error),
+      true
+    )
+    session.processing = false
+    session.abortController = null
+    await safeReact(m, '❌')
+    await safeReply(
+      m,
+      '❌ Render template gagal: ' + safeError(error) +
+      '\n\nFoto dan paket template masih tersimpan. Ketik *.render retry* untuk mencoba lagi tanpa mengirim foto ulang, atau *.render cancel* untuk membatalkan.'
+    )
+  } finally {
+    await progress.close()
+  }
+}
+
+
+handler.help = ['render', 'render status', 'render send', 'render recover', 'render retry', 'render cancel']
 handler.tags = ['owner']
 handler.command = /^render$/i
 handler.rowner = true
