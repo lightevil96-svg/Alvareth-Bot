@@ -1,0 +1,5 @@
+# Netscape HTTP Cookie File
+# TEMPLATE ONLY — bukan cookies login yang valid.
+# Ekspor cookies.txt dari browser yang login ke YouTube milik sendiri.
+# Ganti file ini di server dengan hasil ekspor asli.
+# Jangan commit atau bagikan file cookies asli.
