@@ -27,11 +27,11 @@ test('clip has no application-level duration or output-file size cap', () => {
   assert.doesNotMatch(clipPipeline, /end\s*-\s*start\s*>\s*15\s*\*\s*60/)
 })
 
-test('Qbyte fallback enforces a 256 MB per-stream safety cap', () => {
+test('Qbyte fallback enforces a configurable 512 MB default per-stream safety cap', () => {
   assert.match(clipPipeline, /'clip-api-video', outputDir, qbyteMaxBytes/)
   assert.match(clipPipeline, /'clip-api-audio', outputDir, qbyteMaxBytes/)
   assert.match(clipPipeline, /ALVARETH_CLIP_QBYTE_MAX_SOURCE_BYTES/)
-  assert.match(clipPipeline, /256 \* 1024 \* 1024/)
+  assert.match(clipPipeline, /512 \* 1024 \* 1024/)
   assert.doesNotMatch(clipPipeline, /videoFormats\.slice\(0, 12\)/)
 })
 
