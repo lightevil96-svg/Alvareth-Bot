@@ -49,7 +49,7 @@ test('clip FFmpeg and Qbyte HTTP calls do not set application deadlines', () => 
   assert.match(clipPipeline, /runClipFfmpeg\(ffmpegArgs, 0, options\?\.onProgress, duration\)/)
   assert.match(clipPipeline, /getClipYoutubeInfo\(normalizedUrl, options\?\.onProgress\)/)
   assert.match(youtubeSource, /return await getYoutubeInfo\(url, 0\)/)
-  assert.match(clipPipeline, /const qbyteMaxBytes = Number\(process\.env\.ALVARETH_CLIP_QBYTE_MAX_SOURCE_BYTES/)
+  assert.match(clipPipeline, /const configuredQbyteMaxBytes = Number\(process\.env\.ALVARETH_CLIP_QBYTE_MAX_SOURCE_BYTES/)
   assert.doesNotMatch(clipPipeline, /videoFormats\.slice\(0, 12\)/)
 })
 
@@ -200,8 +200,8 @@ test('clip source validation rejects every audio-only candidate instead of sendi
 })
 
 test('Qbyte fallback inspects metadata and downloads only one best video/audio pair', () => {
-  assert.match(clipPipeline, /const videoFormat = pickBestVideo\(info\)/)
-  assert.match(clipPipeline, /const audioFormat = pickBestAudio\(info\)/)
+  assert.match(clipPipeline, /const videoFormat = pickBestVideo\(info, qbyteMaxBytes\)/)
+  assert.match(clipPipeline, /const audioFormat = pickBestAudio\(info, qbyteMaxBytes\)/)
   assert.match(clipPipeline, /downloadFormat\([\s\S]*?videoFormat[\s\S]*?qbyteMaxBytes/)
   assert.match(clipPipeline, /downloadFormat\([\s\S]*?audioFormat[\s\S]*?qbyteMaxBytes/)
   assert.match(clipPipeline, /actualStream\.height < qbyteTopHeight \* 0\.90/)
