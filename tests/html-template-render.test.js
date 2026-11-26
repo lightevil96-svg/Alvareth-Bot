@@ -4,12 +4,14 @@ import { execFile } from 'node:child_process'
 import { mkdtemp, mkdir, writeFile, readFile, rm, chmod, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import WebSocket, { WebSocketServer } from 'ws'
 import {
   parseHtmlTemplateManifest,
   findHtmlTemplate,
   findRenderBrowser,
   buildHtmlTemplateFfmpegArgs,
-  renderHtmlTemplate
+  renderHtmlTemplate,
+  CdpClient
 } from '../lib/html-template-render.js'
 
 const UPLOADED_MANIFEST = {
@@ -247,4 +249,37 @@ test('renderHtmlTemplate renders a fixture template to MP4 at manifest size and 
   assert.equal(stream.r_frame_rate, '10/1')
   assert.ok(Number(probeResult.format.duration) >= 0.9, 'duration should be about 1s, got ' + probeResult.format.duration)
   assert.ok(await readFile(outputPath).then(buffer => buffer.length > 0))
+})
+
+test('CdpClient berbicara CDP lewat paket ws tanpa WebSocket global', async t => {
+  // Regression for the live failure 2026-11-27: the panel runs Node.js older
+  // than 22, so the global WebSocket client did not exist and the render
+  // failed before Chromium even started. The transport now uses the `ws`
+  // package (already a direct dependency). This test proves the request /
+  // response + event flow over a fake CDP server, with no global WebSocket
+  // involved at all.
+  const server = new WebSocketServer({ host: '127.0.0.1', port: 0 })
+  t.after(() => server.close())
+  await new Promise(resolve => server.once('listening', resolve))
+  const port = server.address().port
+  server.on('connection', socket => {
+    socket.on('message', raw => {
+      const request = JSON.parse(String(raw))
+      socket.send(JSON.stringify({ id: request.id, result: { ok: true, method: request.method } }))
+      socket.send(JSON.stringify({ method: 'Page.loadEventFired', params: {} }))
+    })
+  })
+
+  const socket = new WebSocket('ws://127.0.0.1:' + port)
+  t.after(() => { try { socket.close() } catch {} })
+  await new Promise((resolve, reject) => {
+    socket.onopen = () => resolve()
+    socket.onerror = () => reject(new Error('gagal terhubung ke server CDP palsu'))
+  })
+  const cdp = new CdpClient(socket)
+  const result = await cdp.send('Runtime.evaluate', { expression: '1+1' })
+  assert.equal(result.ok, true)
+  assert.equal(result.method, 'Runtime.evaluate')
+  const event = await cdp.waitEvent('Page.loadEventFired', 5000)
+  assert.equal(event.method, 'Page.loadEventFired')
 })

@@ -1,3 +1,12 @@
+## 2026-11-27 — `.render` template: pakai paket `ws`, bukan WebSocket global Node 22+
+
+- **Report (owner, 2026-11-27 01:16 WIB, live test):** foto sudah diterima (perbaikan unduhan bekerja), tapi render gagal: "❌ Render template gagal: Render template membutuhkan Node.js 22 atau lebih baru (WebSocket global tidak tersedia)."
+- **Root cause:** `renderHtmlTemplate` memakai WebSocket global bawaan Node.js 22+ untuk berbicara CDP dengan Chromium. Server TokoPanel menjalankan Node.js lebih lama dari 22, jadi WebSocket global tidak ada dan render gagal sebelum Chromium sempat dipakai. (Panel tidak memberi tahu versi Node-nya; pesan error ini hanya membuktikan < 22.)
+- **Change:** transport CDP kini memakai paket `ws` — sudah dependency langsung (`"ws": "^8.13.0"`, dipakai Baileys), jadi tidak ada dependency baru dan renderer jalan di Node.js 18+. `CdpClient` diekspor untuk tes; handler `onmessage`-nya menormalisasi `event.data` (string atau Buffer) sebelum `JSON.parse`; guard Node 22 dihapus beserta pesan errornya.
+- **Files:** `lib/html-template-render.js`, `tests/html-template-render.test.js`, `AI_CONTEXT.md`, `docs/AI_CHANGELOG.md`.
+- **Verification:** tes baru `CdpClient berbicara CDP lewat paket ws tanpa WebSocket global` lolos (request/response + event lewat server CDP palsu); modul dimuat dengan `globalThis.WebSocket` dihapus; render end-to-end fixture live 10/10 dengan chrome-headless-shell yang diunduh ulang (catatan: `/tmp/anna-proto` hilang karena VM restart, browser tes diunduh ulang ke `/tmp/chrome-headless-shell`). `npm run test:htmlrender` 13/13 (+1 skip fixture browser), full `npm test` exits 0.
+- **Limitations / unverified:** uji live ulang masih diperlukan — foto Light sudah tersimpan di bot, jadi setelah `.update` cukup ketik `.render retry` tanpa kirim foto ulang. Versi Node panel tetap belum diketahui persisnya; `ws` + `fetch` global butuh Node 18+, dan bot (Baileys 0.5.6) sudah berjalan di panel, jadi itu aman.
+
 ## 2026-11-27 — `.render` template: perbaiki unduhan foto ("Cannot destructure property 'mediaKey'")
 
 - **Report (owner, 2026-11-27 01:02 WIB, live test):** keempat foto template ditolak dengan "❌ Foto gagal diunduh: Foto tidak dapat diunduh dari WhatsApp: Cannot destructure property 'mediaKey' of 'undefined' as it is undefined."
