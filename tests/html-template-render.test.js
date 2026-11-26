@@ -1,9 +1,14 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { execFile } from 'node:child_process'
-import { mkdtemp, mkdir, writeFile, readFile, rm, chmod, stat } from 'node:fs/promises'
+import { execFile, spawnSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import { mkdtemp, mkdir, writeFile, readFile, rm, chmod, stat, symlink, readlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import http from 'node:http'
+import { createHash } from 'node:crypto'
+import { gzipSync } from 'node:zlib'
+import { promisify } from 'node:util'
 import WebSocket, { WebSocketServer } from 'ws'
 import {
   parseHtmlTemplateManifest,
@@ -11,8 +16,20 @@ import {
   findRenderBrowser,
   buildHtmlTemplateFfmpegArgs,
   renderHtmlTemplate,
-  CdpClient
+  CdpClient,
+  ensureChromeSharedLibraries,
+  detectLinuxPackageArchive,
+  parseDebianPackagesIndex,
+  parseLddMissingLibraries,
+  parseLoaderMissingLibrary,
+  extractDeb
 } from '../lib/html-template-render.js'
+
+const execFileAsync = promisify(execFile)
+const HAS_AR_TAR = spawnSync('ar', ['--version']).status === 0 &&
+  spawnSync('tar', ['--version']).status === 0
+const HAS_DPKG_DEB = spawnSync('dpkg-deb', ['--version']).status === 0
+const REAL_LIBATK_LINK = '/lib/x86_64-linux-gnu/libatk-1.0.so.0'
 
 const UPLOADED_MANIFEST = {
   id: 'anna-yanami-lo-gueh-end',
@@ -282,4 +299,302 @@ test('CdpClient berbicara CDP lewat paket ws tanpa WebSocket global', async t =>
   assert.equal(result.method, 'Runtime.evaluate')
   const event = await cdp.waitEvent('Page.loadEventFired', 5000)
   assert.equal(event.method, 'Page.loadEventFired')
+})
+
+// --- System shared libraries for Chromium (live failure 2026-11-27:
+// chrome-headless-shell exited 127 on the panel because libatk-1.0.so.0
+// does not exist in the container) ---
+
+test('parseDebianPackagesIndex reads Filename + SHA256 and ignores continuation lines', () => {
+  const index = parseDebianPackagesIndex([
+    'Package: libatk1.0-0',
+    'Version: 2.48.4-1',
+    'Filename: pool/main/liba/libatk1.0-0/libatk1.0-0_2.48.4-1_amd64.deb',
+    'SHA256: ' + 'a'.repeat(64),
+    'Description: ATK accessibility toolkit',
+    ' This continuation line mentions Filename: pool/evil/x.deb',
+    ' and must not be mistaken for a field.',
+    '',
+    'Package: libglib2.0-0',
+    'Version: 2.74.6-2',
+    'Filename: pool/main/g/glib2.0/libglib2.0-0_2.74.6-2_amd64.deb',
+    ''
+  ].join('\n'))
+  assert.equal(index.size, 2)
+  assert.equal(index.get('libatk1.0-0').filename, 'pool/main/liba/libatk1.0-0/libatk1.0-0_2.48.4-1_amd64.deb')
+  assert.equal(index.get('libatk1.0-0').sha256, 'a'.repeat(64))
+  assert.equal(index.get('libatk1.0-0').version, '2.48.4-1')
+  assert.equal(index.get('libglib2.0-0').sha256, null)
+})
+
+test('detectLinuxPackageArchive picks Debian/Ubuntu suites and defaults to bookworm', () => {
+  assert.deepEqual(detectLinuxPackageArchive('ID=debian\nVERSION_ID="12"\n'), {
+    base: 'https://deb.debian.org/debian', suite: 'bookworm', kind: 'debian'
+  })
+  assert.deepEqual(detectLinuxPackageArchive('ID=debian\nVERSION_ID="11"\n'), {
+    base: 'https://deb.debian.org/debian', suite: 'bullseye', kind: 'debian'
+  })
+  assert.deepEqual(detectLinuxPackageArchive('ID=ubuntu\nVERSION_ID="22.04"\n'), {
+    base: 'https://archive.ubuntu.com/ubuntu', suite: 'jammy', kind: 'ubuntu'
+  })
+  assert.deepEqual(detectLinuxPackageArchive('ID=ubuntu\nVERSION_ID="24.04"\n'), {
+    base: 'https://archive.ubuntu.com/ubuntu', suite: 'noble', kind: 'ubuntu'
+  })
+  assert.deepEqual(detectLinuxPackageArchive('ID=arch\n'), {
+    base: 'https://deb.debian.org/debian', suite: 'bookworm', kind: 'debian'
+  })
+  assert.deepEqual(detectLinuxPackageArchive(''), {
+    base: 'https://deb.debian.org/debian', suite: 'bookworm', kind: 'debian'
+  })
+})
+
+test('parseLddMissingLibraries and parseLoaderMissingLibrary read loader output', () => {
+  assert.deepEqual(parseLddMissingLibraries([
+    '	linux-vdso.so.1 (0x00007fff00000000)',
+    '	libatk-1.0.so.0 => not found',
+    '	libc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007f0000000000)',
+    '	libatk-bridge-2.0.so.0 => not found',
+    '	libatk-1.0.so.0 => not found',
+    ''
+  ].join('\n')), ['libatk-1.0.so.0', 'libatk-bridge-2.0.so.0'])
+  assert.equal(parseLoaderMissingLibrary(
+    '/home/container/.alvareth-bot-data/render-browser/chrome-headless-shell/linux-158.0.8127.88/chrome-headless-shell-linux64/chrome-headless-shell: error while loading shared libraries: libatk-1.0.so.0: cannot open shared object file: No such file or directory\n'),
+    'libatk-1.0.so.0')
+  assert.equal(parseLoaderMissingLibrary('some other error'), '')
+})
+
+async function buildSyntheticDeb(t, { packageName, version, files }) {
+  const work = await mkdtemp(path.join(tmpdir(), 'alvareth-deb-build-'))
+  t.after(() => rm(work, { recursive: true, force: true }))
+  const root = path.join(work, 'root')
+  await mkdir(root, { recursive: true })
+  for (const file of files) {
+    const target = path.join(root, file.path)
+    await mkdir(path.dirname(target), { recursive: true })
+    if (file.symlinkTo) await symlink(file.symlinkTo, target)
+    else await writeFile(target, file.content)
+  }
+  const controlDir = path.join(work, 'control')
+  await mkdir(controlDir, { recursive: true })
+  await writeFile(path.join(controlDir, 'control'),
+    'Package: ' + packageName + '\nVersion: ' + version + '\nArchitecture: amd64\n' +
+    'Maintainer: test <test@example.invalid>\nDescription: synthetic test package\n')
+  await writeFile(path.join(work, 'debian-binary'), '2.0\n')
+  await execFileAsync('tar', ['-czf', path.join(work, 'control.tar.gz'), '-C', controlDir, '.'])
+  await execFileAsync('tar', ['-cJf', path.join(work, 'data.tar.xz'), '-C', root, '.'])
+  const debPath = path.join(work, packageName + '.deb')
+  await execFileAsync('ar', ['rcs', debPath,
+    path.join(work, 'debian-binary'),
+    path.join(work, 'control.tar.gz'),
+    path.join(work, 'data.tar.xz')], { cwd: work })
+  return { debPath, bytes: await readFile(debPath) }
+}
+
+async function startPackageServer(t, { indexText, debs }) {
+  const indexGz = gzipSync(Buffer.from(indexText, 'utf8'))
+  const hits = []
+  const server = http.createServer((req, res) => {
+    const url = new URL(req.url, 'http://127.0.0.1')
+    hits.push(url.pathname)
+    if (url.pathname === '/dists/bookworm/main/binary-amd64/Packages.gz') {
+      res.writeHead(200, { 'Content-Type': 'application/octet-stream' })
+      res.end(indexGz)
+      return
+    }
+    const deb = debs[url.pathname]
+    if (deb) {
+      res.writeHead(200, { 'Content-Type': 'application/octet-stream' })
+      res.end(deb)
+      return
+    }
+    res.writeHead(404)
+    res.end('not found')
+  })
+  t.after(() => server.close())
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+  return { base: 'http://127.0.0.1:' + server.address().port, hits }
+}
+
+async function writeFakeLdd(t, directory) {
+  const fake = path.join(directory, 'ldd')
+  await writeFile(fake, [
+    '#!/bin/sh',
+    'FOUND=0',
+    'OLD_IFS="$IFS"; IFS=":"',
+    'for d in $LD_LIBRARY_PATH; do',
+    '  if [ -n "$d" ] && [ -e "$d/libatk-1.0.so.0" ]; then FOUND=1; break; fi',
+    'done',
+    'IFS="$OLD_IFS"',
+    'if [ "$FOUND" = "1" ]; then',
+    '  echo "	libatk-1.0.so.0 => /fake/libs/libatk-1.0.so.0 (0x00007f0000000000)"',
+    'else',
+    '  echo "	libatk-1.0.so.0 => not found"',
+    'fi',
+    'echo "	libc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007f0000000000)"',
+    'exit 0',
+    ''
+  ].join('\n'))
+  await chmod(fake, 0o755)
+  return fake
+}
+
+test('extractDeb extracts a synthetic .deb', { skip: !HAS_AR_TAR }, async t => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'alvareth-deb-test-'))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const { debPath } = await buildSyntheticDeb(t, {
+    packageName: 'libatk1.0-0',
+    version: '2.48.4-1',
+    files: [
+      { path: 'usr/lib/x86_64-linux-gnu/libatk-1.0.so.0.248.4', content: 'fake-libatk' },
+      { path: 'usr/lib/x86_64-linux-gnu/libatk-1.0.so.0', symlinkTo: 'libatk-1.0.so.0.248.4' }
+    ]
+  })
+  const dest = path.join(directory, 'extracted')
+  const method = await extractDeb(debPath, dest, { env: process.env })
+  assert.ok(method === 'dpkg-deb' || method === 'ar+tar', 'unexpected extractor: ' + method)
+  assert.equal(await readFile(path.join(dest, 'usr/lib/x86_64-linux-gnu/libatk-1.0.so.0.248.4'), 'utf8'), 'fake-libatk')
+  assert.equal(await readlink(path.join(dest, 'usr/lib/x86_64-linux-gnu/libatk-1.0.so.0')), 'libatk-1.0.so.0.248.4')
+})
+
+test('ensureChromeSharedLibraries installs a missing library from a local package server', {
+  skip: !liveBrowser || !HAS_AR_TAR || !HAS_DPKG_DEB || !existsSync(REAL_LIBATK_LINK)
+}, async t => {
+  // Regression for the live failure 2026-11-27: the panel container has no
+  // libatk, so chrome-headless-shell exited 127 before doing anything.
+  // Here a fake `ldd` reports libatk as missing, a local HTTP server plays
+  // the role of deb.debian.org, and the .deb carries the REAL system
+  // libatk — afterwards the real loader must resolve libatk from the
+  // installed libs dir.
+  const directory = await mkdtemp(path.join(tmpdir(), 'alvareth-libs-test-'))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const dataDir = path.join(directory, 'data')
+  const osReleasePath = path.join(directory, 'os-release')
+  await writeFile(osReleasePath, 'ID=debian\nVERSION_ID="12"\nNAME="Debian GNU/Linux"\n')
+
+  const realTarget = await readlink(REAL_LIBATK_LINK)
+  const realLib = await readFile(path.join(path.dirname(REAL_LIBATK_LINK), realTarget))
+  const { bytes: debBytes } = await buildSyntheticDeb(t, {
+    packageName: 'libatk1.0-0',
+    version: '2.48.4-1',
+    files: [
+      { path: 'usr/lib/x86_64-linux-gnu/' + realTarget, content: realLib },
+      { path: 'usr/lib/x86_64-linux-gnu/libatk-1.0.so.0', symlinkTo: realTarget }
+    ]
+  })
+  const sha256 = createHash('sha256').update(debBytes).digest('hex')
+  const debFilename = 'pool/main/liba/libatk1.0-0/libatk1.0-0_2.48.4-1_amd64.deb'
+  const server = await startPackageServer(t, {
+    indexText: [
+      'Package: libatk1.0-0',
+      'Version: 2.48.4-1',
+      'Filename: ' + debFilename,
+      'SHA256: ' + sha256,
+      ''
+    ].join('\n'),
+    debs: { ['/' + debFilename]: debBytes }
+  })
+  const fakeLdd = await writeFakeLdd(t, directory)
+
+  const result = await ensureChromeSharedLibraries(liveBrowser, {
+    dataDir,
+    archiveBase: server.base,
+    lddCommand: fakeLdd,
+    osReleasePath,
+    onLog: () => {}
+  })
+  assert.deepEqual(result.installed, ['libatk-1.0.so.0'])
+  assert.equal(result.needed, true)
+  assert.ok(server.hits.includes('/dists/bookworm/main/binary-amd64/Packages.gz'))
+  assert.ok(server.hits.includes('/' + debFilename))
+
+  const libsDir = path.join(dataDir, 'render-browser', 'libs')
+  assert.equal(result.libsDir, libsDir)
+  const installedLib = await readFile(path.join(libsDir, 'libatk-1.0.so.0'))
+  assert.ok(installedLib.equals(realLib), 'installed libatk must be the real library bytes')
+  assert.equal(await readlink(path.join(libsDir, 'libatk-1.0.so.0')), realTarget)
+
+  // The loader itself must now pick the installed copy over the system one.
+  const { stdout } = await execFileAsync('ldd', [liveBrowser], {
+    env: { ...process.env, LD_LIBRARY_PATH: result.ldLibraryPath }
+  })
+  const line = stdout.split('\n').find(item => item.includes('libatk-1.0.so.0'))
+  assert.ok(line && line.includes(libsDir), 'ldd should resolve libatk from the libs dir, got: ' + String(line))
+})
+
+test('ensureChromeSharedLibraries is a no-op when nothing is missing', {
+  skip: !liveBrowser
+}, async t => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'alvareth-libs-noop-'))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const fakeLdd = path.join(directory, 'ldd')
+  await writeFile(fakeLdd, '#!/bin/sh\necho "	libc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007f0000000000)"\nexit 0\n')
+  await chmod(fakeLdd, 0o755)
+  const osReleasePath = path.join(directory, 'os-release')
+  await writeFile(osReleasePath, 'ID=debian\nVERSION_ID="12"\n')
+
+  const result = await ensureChromeSharedLibraries(liveBrowser, {
+    dataDir: path.join(directory, 'data'),
+    lddCommand: fakeLdd,
+    osReleasePath,
+    onLog: () => {}
+  })
+  assert.deepEqual(result.installed, [])
+  assert.equal(result.needed, false)
+})
+
+test('ensureChromeSharedLibraries falls back to the --version probe when ldd is unavailable', {
+  skip: !HAS_AR_TAR
+}, async t => {
+  // The fake browser exits 127 with the exact loader error until the
+  // library file exists in LD_LIBRARY_PATH; ldd is pointed at a path
+  // that does not exist, so the probe loop must do the discovery.
+  const directory = await mkdtemp(path.join(tmpdir(), 'alvareth-libs-probe-'))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const fakeChrome = path.join(directory, 'chrome-headless-shell')
+  await writeFile(fakeChrome, [
+    '#!/bin/sh',
+    'FOUND=0',
+    'OLD_IFS="$IFS"; IFS=":"',
+    'for d in $LD_LIBRARY_PATH; do',
+    '  if [ -n "$d" ] && [ -e "$d/libatk-1.0.so.0" ]; then FOUND=1; break; fi',
+    'done',
+    'IFS="$OLD_IFS"',
+    'if [ "$FOUND" = "1" ]; then echo "HeadlessChrome 158.0.8127.88"; exit 0; fi',
+    'echo "fake-chrome: error while loading shared libraries: libatk-1.0.so.0: cannot open shared object file: No such file or directory" >&2',
+    'exit 127',
+    ''
+  ].join('\n'))
+  await chmod(fakeChrome, 0o755)
+  const osReleasePath = path.join(directory, 'os-release')
+  await writeFile(osReleasePath, 'ID=debian\nVERSION_ID="12"\n')
+
+  const { bytes: debBytes } = await buildSyntheticDeb(t, {
+    packageName: 'libatk1.0-0',
+    version: '2.48.4-1',
+    files: [{ path: 'usr/lib/x86_64-linux-gnu/libatk-1.0.so.0', content: 'dummy-libatk' }]
+  })
+  const sha256 = createHash('sha256').update(debBytes).digest('hex')
+  const debFilename = 'pool/main/liba/libatk1.0-0/libatk1.0-0_2.48.4-1_amd64.deb'
+  const server = await startPackageServer(t, {
+    indexText: [
+      'Package: libatk1.0-0',
+      'Version: 2.48.4-1',
+      'Filename: ' + debFilename,
+      'SHA256: ' + sha256,
+      ''
+    ].join('\n'),
+    debs: { ['/' + debFilename]: debBytes }
+  })
+
+  const result = await ensureChromeSharedLibraries(fakeChrome, {
+    dataDir: path.join(directory, 'data'),
+    archiveBase: server.base,
+    lddCommand: '/nonexistent/ldd',
+    osReleasePath,
+    onLog: () => {}
+  })
+  assert.deepEqual(result.installed, ['libatk-1.0.so.0'])
+  assert.equal(result.needed, true)
+  assert.equal(
+    await readFile(path.join(result.libsDir, 'libatk-1.0.so.0'), 'utf8'), 'dummy-libatk')
 })
