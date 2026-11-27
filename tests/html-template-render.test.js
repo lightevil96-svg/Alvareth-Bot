@@ -126,10 +126,39 @@ test('parseHtmlTemplateManifest rejects bad entry, dimensions, fps, duration and
   assert.throws(() => parseHtmlTemplateManifest({ ...FIXTURE_MANIFEST, duration: 0 }), /durasi/)
   assert.throws(() => parseHtmlTemplateManifest({ ...FIXTURE_MANIFEST, duration: 301 }), /durasi/)
   assert.throws(() => parseHtmlTemplateManifest({ ...FIXTURE_MANIFEST, requiredPhotos: 13 }), /Jumlah foto/)
-  assert.throws(() => parseHtmlTemplateManifest({ ...FIXTURE_MANIFEST, photoDescriptions: ['satu'] }), /tepat 2 deskripsi/)
   assert.throws(() => parseHtmlTemplateManifest({ ...FIXTURE_MANIFEST, audioFile: '../lagu.mp3' }), /tidak boleh keluar/)
   assert.throws(() => parseHtmlTemplateManifest('bukan json'), /bukan JSON/)
   assert.throws(() => parseHtmlTemplateManifest({ ...FIXTURE_MANIFEST, id: 'bad id!' }), /id template/)
+})
+
+test('parseHtmlTemplateManifest fills missing photo descriptions with defaults instead of rejecting', () => {
+  // Regression for the live failure 2026-11-27: a template with
+  // requiredPhotos 6 but fewer descriptions was refused outright
+  // ("photoDescriptions harus berisi tepat 6 deskripsi foto"). The
+  // descriptions are only the labels the bot shows when asking for photos,
+  // so incomplete ones are padded with "Foto #N", extras are dropped, and
+  // empty/over-long/non-string entries fall back to the default label.
+  const short = parseHtmlTemplateManifest({
+    ...FIXTURE_MANIFEST,
+    requiredPhotos: 6,
+    photoDescriptions: ['Sampul', 'Kartu A']
+  })
+  assert.deepEqual(short.photoDescriptions, [
+    'Sampul', 'Kartu A', 'Foto #3', 'Foto #4', 'Foto #5', 'Foto #6'
+  ])
+
+  const missing = parseHtmlTemplateManifest({ ...FIXTURE_MANIFEST, requiredPhotos: 2, photoDescriptions: undefined })
+  assert.deepEqual(missing.photoDescriptions, ['Foto #1', 'Foto #2'])
+
+  const messy = parseHtmlTemplateManifest({
+    ...FIXTURE_MANIFEST,
+    requiredPhotos: 2,
+    photoDescriptions: ['', 'x'.repeat(201), 'Kelebihan']
+  })
+  assert.deepEqual(messy.photoDescriptions, ['Foto #1', 'Foto #2'])
+
+  const none = parseHtmlTemplateManifest({ ...FIXTURE_MANIFEST, requiredPhotos: 0, photoDescriptions: ['abaikan'] })
+  assert.deepEqual(none.photoDescriptions, [])
 })
 
 test('findHtmlTemplate locates manifest + entry and rejects render.sh packages', async t => {

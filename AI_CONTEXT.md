@@ -9,6 +9,8 @@
 
 ## Pembaruan terbaru
 
+- 2026-11-27 — `.render` template: paket dengan `requiredPhotos` 6 tapi deskripsi foto kurang tidak lagi ditolak — deskripsi hanya label saat bot meminta foto, jadi yang hilang dipadatkan dengan `Foto #N` default, kelebihan dibuang, entri kosong/terlalu panjang diganti default. `test:htmlrender` 22/22. Setelah `.update`, ulangi `.render` pada ZIP yang sama; bot akan meminta 6 foto.
+
 - 2026-11-27 — `.render` template: Chromium gagal start di panel karena library sistem hilang (exit 127, `libatk-1.0.so.0` tidak ada di container) — bot kini memasang sendiri library yang hilang sebelum render: cek `ldd` + probe `--version`, unduh `.deb` penyedianya dari arsip Debian/Ubuntu (SHA256 dicek), ekstrak `.so`-nya ke `render-browser/libs`, dan jalankan Chromium dengan `LD_LIBRARY_PATH` ke sana; sekali per library, tersimpan di data dir. 7 tes baru (termasuk end-to-end dengan libatk asli + server paket lokal), `test:htmlrender` 21/21. Setelah `.update`, cukup `.render retry` (foto sudah tersimpan).
 
 - 2026-11-27 — `.render` template: transport CDP kini pakai paket `ws` (sudah dependency, dipakai Baileys), bukan WebSocket global Node 22+ — panel menjalankan Node lebih lama dari 22 sehingga render live gagal sebelum Chromium dipakai. Tes CDP baru via server palsu + render fixture live 10/10, `test:htmlrender` 13/13, full `npm test` exits 0. Setelah `.update`, cukup `.render retry` (foto sudah tersimpan).
